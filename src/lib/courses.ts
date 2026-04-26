@@ -1,6 +1,7 @@
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 
 export type CourseStatus = "draft" | "published" | "archived";
+export type LessonType = "text" | "video" | "pdf" | "quiz" | "assignment";
 
 export type Course = {
   id: string;
@@ -20,6 +21,80 @@ export type CreateCourseInput = {
   status: Exclude<CourseStatus, "archived">;
   tenantId: string;
   title: string;
+};
+
+export type CourseSection = {
+  id: string;
+  course_id: string;
+  tenant_id: string;
+  title: string;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type Lesson = {
+  id: string;
+  section_id: string;
+  course_id: string;
+  tenant_id: string;
+  title: string;
+  lesson_type: LessonType;
+  content: string | null;
+  video_url: string | null;
+  resource_url: string | null;
+  sort_order: number;
+  is_preview: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CourseSectionWithLessons = CourseSection & {
+  lessons: Lesson[];
+};
+
+export type CourseSectionInput = {
+  courseId: string;
+  sortOrder?: number;
+  tenantId: string;
+  title: string;
+};
+
+export type UpdateCourseSectionInput = {
+  courseId: string;
+  sectionId: string;
+  tenantId: string;
+  title: string;
+};
+
+export type DeleteCourseSectionInput = {
+  courseId: string;
+  sectionId: string;
+  tenantId: string;
+};
+
+export type LessonInput = {
+  content: string;
+  courseId: string;
+  isPreview: boolean;
+  lessonType: LessonType;
+  resourceUrl: string;
+  sectionId: string;
+  sortOrder?: number;
+  tenantId: string;
+  title: string;
+  videoUrl: string;
+};
+
+export type UpdateLessonInput = LessonInput & {
+  lessonId: string;
+};
+
+export type DeleteLessonInput = {
+  courseId: string;
+  lessonId: string;
+  sectionId: string;
+  tenantId: string;
 };
 
 function createSlug(title: string) {
@@ -112,4 +187,196 @@ export async function getCourseById(params: {
   }
 
   return (data as Course | null) ?? null;
+}
+
+export async function getCourseStructure(courseId: string, tenantId: string) {
+  const supabase = getSupabaseClient();
+  const { data: sectionsData, error: sectionsError } = await supabase
+    .from("course_sections")
+    .select("id,course_id,tenant_id,title,sort_order,created_at,updated_at")
+    .eq("tenant_id", tenantId)
+    .eq("course_id", courseId)
+    .order("sort_order", { ascending: true })
+    .order("created_at", { ascending: true });
+
+  if (sectionsError) {
+    throw sectionsError;
+  }
+
+  const { data: lessonsData, error: lessonsError } = await supabase
+    .from("lessons")
+    .select(
+      "id,section_id,course_id,tenant_id,title,lesson_type,content,video_url,resource_url,sort_order,is_preview,created_at,updated_at",
+    )
+    .eq("tenant_id", tenantId)
+    .eq("course_id", courseId)
+    .order("sort_order", { ascending: true })
+    .order("created_at", { ascending: true });
+
+  if (lessonsError) {
+    throw lessonsError;
+  }
+
+  const sections = (sectionsData ?? []) as CourseSection[];
+  const lessons = (lessonsData ?? []) as Lesson[];
+  const lessonsBySection = lessons.reduce<Record<string, Lesson[]>>(
+    (accumulator, lesson) => {
+      accumulator[lesson.section_id] = accumulator[lesson.section_id] ?? [];
+      accumulator[lesson.section_id].push(lesson);
+      return accumulator;
+    },
+    {},
+  );
+
+  return sections.map((section) => ({
+    ...section,
+    lessons: lessonsBySection[section.id] ?? [],
+  })) as CourseSectionWithLessons[];
+}
+
+export async function createCourseSection(input: CourseSectionInput) {
+  const title = input.title.trim();
+
+  if (!title) {
+    throw new Error("Section title is required.");
+  }
+
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from("course_sections")
+    .insert({
+      course_id: input.courseId,
+      sort_order: input.sortOrder ?? 0,
+      tenant_id: input.tenantId,
+      title,
+    })
+    .select("id,course_id,tenant_id,title,sort_order,created_at,updated_at")
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  return data as CourseSection;
+}
+
+export async function updateCourseSection(input: UpdateCourseSectionInput) {
+  const title = input.title.trim();
+
+  if (!title) {
+    throw new Error("Section title is required.");
+  }
+
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from("course_sections")
+    .update({ title })
+    .eq("tenant_id", input.tenantId)
+    .eq("course_id", input.courseId)
+    .eq("id", input.sectionId)
+    .select("id,course_id,tenant_id,title,sort_order,created_at,updated_at")
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  return data as CourseSection;
+}
+
+export async function deleteCourseSection(input: DeleteCourseSectionInput) {
+  const supabase = getSupabaseClient();
+  const { error } = await supabase
+    .from("course_sections")
+    .delete()
+    .eq("tenant_id", input.tenantId)
+    .eq("course_id", input.courseId)
+    .eq("id", input.sectionId);
+
+  if (error) {
+    throw error;
+  }
+}
+
+export async function createLesson(input: LessonInput) {
+  const title = input.title.trim();
+
+  if (!title) {
+    throw new Error("Lesson title is required.");
+  }
+
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from("lessons")
+    .insert({
+      content: input.content.trim() || null,
+      course_id: input.courseId,
+      is_preview: input.isPreview,
+      lesson_type: input.lessonType,
+      resource_url: input.resourceUrl.trim() || null,
+      section_id: input.sectionId,
+      sort_order: input.sortOrder ?? 0,
+      tenant_id: input.tenantId,
+      title,
+      video_url: input.videoUrl.trim() || null,
+    })
+    .select(
+      "id,section_id,course_id,tenant_id,title,lesson_type,content,video_url,resource_url,sort_order,is_preview,created_at,updated_at",
+    )
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  return data as Lesson;
+}
+
+export async function updateLesson(input: UpdateLessonInput) {
+  const title = input.title.trim();
+
+  if (!title) {
+    throw new Error("Lesson title is required.");
+  }
+
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from("lessons")
+    .update({
+      content: input.content.trim() || null,
+      is_preview: input.isPreview,
+      lesson_type: input.lessonType,
+      resource_url: input.resourceUrl.trim() || null,
+      title,
+      video_url: input.videoUrl.trim() || null,
+    })
+    .eq("tenant_id", input.tenantId)
+    .eq("course_id", input.courseId)
+    .eq("section_id", input.sectionId)
+    .eq("id", input.lessonId)
+    .select(
+      "id,section_id,course_id,tenant_id,title,lesson_type,content,video_url,resource_url,sort_order,is_preview,created_at,updated_at",
+    )
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  return data as Lesson;
+}
+
+export async function deleteLesson(input: DeleteLessonInput) {
+  const supabase = getSupabaseClient();
+  const { error } = await supabase
+    .from("lessons")
+    .delete()
+    .eq("tenant_id", input.tenantId)
+    .eq("course_id", input.courseId)
+    .eq("section_id", input.sectionId)
+    .eq("id", input.lessonId);
+
+  if (error) {
+    throw error;
+  }
 }
