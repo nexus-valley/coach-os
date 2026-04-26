@@ -39,7 +39,7 @@ export default function Home() {
               analytics &mdash; built for serious coaches and academies.
             </p>
             <div className="mt-10 flex flex-col gap-3 sm:flex-row">
-              <Button href="/app" size="lg">
+              <Button href="/signup" size="lg">
                 Start Building
               </Button>
               <Button href="/app" size="lg" variant="secondary">
