@@ -1,20 +1,21 @@
 import Link from "next/link";
 
 type AppShellProps = {
+  activeItem?: string;
   children: React.ReactNode;
 };
 
 const navItems = [
-  "Dashboard",
-  "Courses",
-  "Cohorts",
-  "Students",
-  "CRM",
-  "Community",
-  "Payments",
-  "Automations",
-  "Analytics",
-  "Settings",
+  { href: "/app", label: "Dashboard" },
+  { href: "/app/courses", label: "Courses" },
+  { href: "#", label: "Cohorts" },
+  { href: "#", label: "Students" },
+  { href: "#", label: "CRM" },
+  { href: "#", label: "Community" },
+  { href: "#", label: "Payments" },
+  { href: "#", label: "Automations" },
+  { href: "#", label: "Analytics" },
+  { href: "#", label: "Settings" },
 ];
 
 const iconMap: Record<string, string> = {
@@ -30,7 +31,7 @@ const iconMap: Record<string, string> = {
   Students: "SD",
 };
 
-export function AppShell({ children }: AppShellProps) {
+export function AppShell({ activeItem = "Dashboard", children }: AppShellProps) {
   return (
     <div className="min-h-screen bg-zinc-950 text-white">
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.16),transparent_32rem),linear-gradient(135deg,rgba(39,39,42,0.55),transparent_34rem)]" />
@@ -49,18 +50,18 @@ export function AppShell({ children }: AppShellProps) {
 
           <nav className="mt-10 space-y-1">
             {navItems.map((item) => {
-              const active = item === "Dashboard";
+              const active = item.label === activeItem;
 
               return (
-                <a
+                <Link
                   className={[
                     "flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-medium transition",
                     active
                       ? "bg-white text-zinc-950 shadow-lg shadow-black/20"
                       : "text-zinc-300 hover:bg-white/10 hover:text-white",
                   ].join(" ")}
-                  href="#"
-                  key={item}
+                  href={item.href}
+                  key={item.label}
                 >
                   <span
                     className={[
@@ -70,10 +71,10 @@ export function AppShell({ children }: AppShellProps) {
                         : "bg-white/10 text-zinc-300",
                     ].join(" ")}
                   >
-                    {iconMap[item]}
+                    {iconMap[item.label]}
                   </span>
-                  {item}
-                </a>
+                  {item.label}
+                </Link>
               );
             })}
           </nav>
@@ -105,22 +106,24 @@ export function AppShell({ children }: AppShellProps) {
         <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-white/10 bg-zinc-950/90 px-3 py-3 backdrop-blur-xl lg:hidden">
           <div className="grid grid-cols-5 gap-1">
             {navItems.slice(0, 5).map((item) => {
-              const active = item === "Dashboard";
+              const active = item.label === activeItem;
 
               return (
-                <a
+                <Link
                   className={[
                     "flex flex-col items-center justify-center gap-1 rounded-2xl px-2 py-2 text-[11px] font-medium",
                     active
                       ? "bg-white text-zinc-950"
                       : "text-zinc-400 hover:bg-white/10 hover:text-white",
                   ].join(" ")}
-                  href="#"
-                  key={item}
+                  href={item.href}
+                  key={item.label}
                 >
-                  <span className="text-[10px] font-bold">{iconMap[item]}</span>
-                  <span className="max-w-full truncate">{item}</span>
-                </a>
+                  <span className="text-[10px] font-bold">
+                    {iconMap[item.label]}
+                  </span>
+                  <span className="max-w-full truncate">{item.label}</span>
+                </Link>
               );
             })}
           </div>
