@@ -327,7 +327,7 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
   if (loading) {
     return (
       <div className="mx-auto max-w-7xl">
-        <Card className="h-72 animate-pulse border-white/10 bg-white/[0.06]">
+        <Card className="h-72 animate-pulse border-white/10 bg-white/6">
           <span className="sr-only">Loading student</span>
         </Card>
       </div>
@@ -363,7 +363,7 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
       </Link>
 
       <section className="mt-6 grid gap-6 xl:grid-cols-[1fr_0.42fr]">
-        <Card className="border-white/10 bg-white/[0.06] p-6 text-white shadow-2xl shadow-black/10 sm:p-8">
+        <Card className="border-white/10 bg-white/6 p-6 text-white shadow-2xl shadow-black/10 sm:p-8">
           <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <Badge className="border-white/15 bg-white/10 text-white">
@@ -379,7 +379,7 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
           <div className="mt-8 grid gap-4 border-t border-white/10 pt-6 sm:grid-cols-2 lg:grid-cols-4">
             <div>
               <p className="text-sm text-zinc-500">Email</p>
-              <p className="mt-2 break-words font-semibold">
+              <p className="mt-2 wrap-break-word font-semibold">
                 {student.email || "Not added"}
               </p>
             </div>
@@ -444,7 +444,7 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
       ) : null}
 
       <section className="mt-6">
-        <Card className="border-white/10 bg-white/[0.06] p-6 text-white shadow-2xl shadow-black/10 sm:p-8">
+        <Card className="border-white/10 bg-white/6 p-6 text-white shadow-2xl shadow-black/10 sm:p-8">
           <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-start">
             <div>
               <Badge className="border-white/15 bg-white/10 text-white">
@@ -540,7 +540,7 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
         {["Payments", "Activity timeline", "Support notes"].map(
           (title, index) => (
           <Card
-            className="border-white/10 bg-white/[0.06] p-6 text-white shadow-2xl shadow-black/10"
+            className="border-white/10 bg-white/6 p-6 text-white shadow-2xl shadow-black/10"
             key={title}
           >
             <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-sm font-bold text-zinc-950">
