@@ -17,6 +17,13 @@ import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
 import { getCoursesForTenant, type Course } from "@/src/lib/courses";
 import {
+  addStudentToCohort,
+  getCohortsForStudent,
+  getCohortsForTenant,
+  type CohortWithCourse,
+  type StudentCohortMembership,
+} from "@/src/lib/cohorts";
+import {
   createEnrollment,
   deleteEnrollment,
   getEnrollmentsForStudent,
@@ -93,6 +100,8 @@ function createFormFromStudent(student: Student): StudentFormState {
 export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
   const router = useRouter();
   const [actionError, setActionError] = useState("");
+  const [cohortOpen, setCohortOpen] = useState(false);
+  const [cohorts, setCohorts] = useState<CohortWithCourse[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
   const [deleteEnrollmentTarget, setDeleteEnrollmentTarget] =
     useState<EnrollmentWithRelations | null>(null);
@@ -108,9 +117,13 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
     useState<PaymentFormState>(emptyPaymentForm);
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [payments, setPayments] = useState<PaymentWithRelations[]>([]);
+  const [selectedCohortId, setSelectedCohortId] = useState("");
   const [selectedCourseId, setSelectedCourseId] = useState("");
   const [selectedEnrollmentId, setSelectedEnrollmentId] = useState("");
   const [student, setStudent] = useState<Student | null>(null);
+  const [studentCohorts, setStudentCohorts] = useState<
+    StudentCohortMembership[]
+  >([]);
   const [tenant, setTenant] = useState<Tenant | null>(null);
 
   const availableCourses = useMemo(
@@ -122,6 +135,17 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
           ),
       ),
     [courses, enrollments],
+  );
+
+  const availableCohorts = useMemo(
+    () =>
+      cohorts.filter(
+        (cohort) =>
+          !studentCohorts.some(
+            (membership) => membership.cohort_id === cohort.id,
+          ),
+      ),
+    [cohorts, studentCohorts],
   );
 
   const selectedEnrollment = enrollments.find(
@@ -147,7 +171,9 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
         const [
           currentStudent,
           tenantCourses,
+          tenantCohorts,
           studentEnrollments,
+          studentCohortMemberships,
           studentPayments,
         ] =
           await Promise.all([
@@ -156,7 +182,12 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
               tenantId: currentTenant.id,
             }),
             getCoursesForTenant(currentTenant.id),
+            getCohortsForTenant(currentTenant.id),
             getEnrollmentsForStudent({
+              studentId,
+              tenantId: currentTenant.id,
+            }),
+            getCohortsForStudent({
               studentId,
               tenantId: currentTenant.id,
             }),
@@ -170,7 +201,9 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
         setTenant(currentTenant);
         setStudent(currentStudent);
         setCourses(tenantCourses);
+        setCohorts(tenantCohorts);
         setEnrollments(currentStudent ? studentEnrollments : []);
+        setStudentCohorts(currentStudent ? studentCohortMemberships : []);
         setPayments(currentStudent ? studentPayments : []);
 
         if (currentStudent) {
@@ -181,6 +214,14 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
               (course) =>
                 !studentEnrollments.some(
                   (enrollment) => enrollment.course_id === course.id,
+                ),
+            )?.id ?? "",
+          );
+          setSelectedCohortId(
+            tenantCohorts.find(
+              (cohort) =>
+                !studentCohortMemberships.some(
+                  (membership) => membership.cohort_id === cohort.id,
                 ),
             )?.id ?? "",
           );
@@ -231,6 +272,30 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
     );
   }
 
+  async function refreshCohorts() {
+    if (!tenant) {
+      return;
+    }
+
+    const [tenantCohorts, studentCohortMemberships] = await Promise.all([
+      getCohortsForTenant(tenant.id),
+      getCohortsForStudent({
+        studentId,
+        tenantId: tenant.id,
+      }),
+    ]);
+    setCohorts(tenantCohorts);
+    setStudentCohorts(studentCohortMemberships);
+    setSelectedCohortId(
+      tenantCohorts.find(
+        (cohort) =>
+          !studentCohortMemberships.some(
+            (membership) => membership.cohort_id === cohort.id,
+          ),
+      )?.id ?? "",
+    );
+  }
+
   async function refreshPayments() {
     if (!tenant) {
       return;
@@ -260,6 +325,21 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
       setSelectedEnrollmentId(studentEnrollments[0]?.id ?? "");
     } catch (caught) {
       setActionError(getErrorMessage(caught, "Unable to load payment context."));
+    }
+  }
+
+  async function openCohortPanel() {
+    setActionError("");
+    setCohortOpen(true);
+
+    if (!tenant) {
+      return;
+    }
+
+    try {
+      await refreshCohorts();
+    } catch (caught) {
+      setActionError(getErrorMessage(caught, "Unable to load cohorts."));
     }
   }
 
@@ -329,6 +409,32 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
       await refreshEnrollments();
     } catch (caught) {
       setActionError(getErrorMessage(caught, "Unable to create enrollment."));
+    } finally {
+      setMutating(false);
+    }
+  }
+
+  async function handleAddToCohort(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!tenant || !selectedCohortId) {
+      setActionError("Select a cohort before adding this student.");
+      return;
+    }
+
+    setMutating(true);
+    setActionError("");
+
+    try {
+      await addStudentToCohort({
+        cohortId: selectedCohortId,
+        studentId,
+        tenantId: tenant.id,
+      });
+      setCohortOpen(false);
+      await refreshCohorts();
+    } catch (caught) {
+      setActionError(getErrorMessage(caught, "Unable to add student to cohort."));
     } finally {
       setMutating(false);
     }
@@ -539,6 +645,14 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
             </Button>
             <Button
               className="border-slate-700! bg-white/10! text-white! hover:bg-white/15!"
+              onClick={openCohortPanel}
+              type="button"
+              variant="secondary"
+            >
+              Add to Cohort
+            </Button>
+            <Button
+              className="border-slate-700! bg-white/10! text-white! hover:bg-white/15!"
               onClick={openPaymentPanel}
               type="button"
               variant="secondary"
@@ -576,7 +690,7 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
               <h3 className="mt-4 text-2xl font-semibold">Enrolled courses</h3>
               <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-400">
                 Connect this student to course products. Payments and cohorts
-                remain separate future modules.
+                are tracked in their own focused sections.
               </p>
             </div>
             <Button onClick={openEnrollmentPanel} type="button">
@@ -648,6 +762,67 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
                   >
                     Delete
                   </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+      </section>
+
+      <section className="mt-6">
+        <Card className="border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/10 sm:p-8">
+          <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-start">
+            <div>
+              <Badge className="border-white/15 bg-white/10 text-white">
+                Cohorts
+              </Badge>
+              <h3 className="mt-4 text-2xl font-semibold">Student batches</h3>
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-400">
+                Place this student into live batches without changing course
+                enrollment or payment records.
+              </p>
+            </div>
+            <Button onClick={openCohortPanel} type="button">
+              Add to Cohort
+            </Button>
+          </div>
+
+          {studentCohorts.length === 0 ? (
+            <div className="mt-8 rounded-3xl border border-dashed border-white/15 bg-[#101214] p-8 text-center">
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-teal-400 text-sm font-bold text-black">
+                CO
+              </div>
+              <h4 className="mt-5 text-xl font-semibold">No cohorts yet</h4>
+              <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-slate-400">
+                Add this student to a cohort once a course batch is ready.
+              </p>
+            </div>
+          ) : (
+            <div className="mt-8 divide-y divide-white/10 overflow-hidden rounded-3xl border border-white/10">
+              {studentCohorts.map((membership) => (
+                <div
+                  className="grid gap-4 bg-[#101214] p-4 lg:grid-cols-[1fr_auto_auto] lg:items-center"
+                  key={membership.id}
+                >
+                  <div>
+                    <p className="font-semibold">
+                      {membership.cohort?.name ?? "Cohort unavailable"}
+                    </p>
+                    <p className="mt-1 text-sm text-slate-400">
+                      {membership.cohort?.course?.title ?? "Course unavailable"}
+                    </p>
+                  </div>
+                  <p className="text-sm text-slate-400">
+                    Added {formatDate(membership.enrolled_at)}
+                  </p>
+                  {membership.cohort ? (
+                    <Link
+                      className="inline-flex h-10 items-center justify-center rounded-full border border-white/10 bg-white/10 px-4 text-sm font-semibold text-white transition hover:bg-white/15"
+                      href={`/app/cohorts/${membership.cohort.id}`}
+                    >
+                      Open
+                    </Link>
+                  ) : null}
                 </div>
               ))}
             </div>
@@ -789,6 +964,72 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
                   type="submit"
                 >
                   {mutating ? "Enrolling..." : "Enroll Student"}
+                </Button>
+              </div>
+            </form>
+          </Card>
+        </div>
+      ) : null}
+
+      {cohortOpen ? (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 px-4 py-4 backdrop-blur-sm sm:items-center">
+          <Card className="w-full max-w-xl border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/40 sm:p-8">
+            <h3 className="text-2xl font-semibold">Add to Cohort</h3>
+            <form className="mt-7 space-y-5" onSubmit={handleAddToCohort}>
+              <label className="block">
+                <span className="text-sm font-medium text-slate-300">
+                  Cohort
+                </span>
+                <select
+                  className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition focus:border-teal-400/40 focus:bg-white/15 focus:ring-4 focus:ring-teal-400/10"
+                  onChange={(event) => setSelectedCohortId(event.target.value)}
+                  required
+                  value={selectedCohortId}
+                >
+                  <option className="text-slate-950" value="">
+                    Select a cohort
+                  </option>
+                  {availableCohorts.map((cohort) => (
+                    <option
+                      className="text-slate-950"
+                      key={cohort.id}
+                      value={cohort.id}
+                    >
+                      {cohort.name} - {cohort.course?.title ?? "No course"}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {cohorts.length === 0 ? (
+                <p className="rounded-2xl border border-amber-400/30 bg-amber-400/10 p-4 text-sm leading-6 text-amber-300">
+                  Create a cohort before assigning this student to a batch.
+                </p>
+              ) : availableCohorts.length === 0 ? (
+                <p className="rounded-2xl border border-teal-400/30 bg-teal-400/10 p-4 text-sm leading-6 text-teal-300">
+                  This student is already assigned to every available cohort.
+                </p>
+              ) : (
+                <p className="rounded-2xl border border-white/10 bg-white/10 p-4 text-sm leading-6 text-slate-400">
+                  Cohorts already connected to this student are hidden from the
+                  selector.
+                </p>
+              )}
+              <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                <Button
+                  className="border-slate-700! bg-white/10! text-white! hover:bg-white/15!"
+                  onClick={() => setCohortOpen(false)}
+                  type="button"
+                  variant="secondary"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  disabled={
+                    mutating || !selectedCohortId || availableCohorts.length === 0
+                  }
+                  type="submit"
+                >
+                  {mutating ? "Adding..." : "Add to Cohort"}
                 </Button>
               </div>
             </form>
