@@ -46,6 +46,24 @@ export async function signUpWithPassword(params: {
   return data.user;
 }
 
+export async function signInWithGoogle() {
+  if (typeof window === "undefined") {
+    throw new Error("Google login is only available in the browser.");
+  }
+
+  const supabase = getSupabaseClient();
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: {
+      redirectTo: window.location.origin + "/app",
+    },
+  });
+
+  if (error) {
+    throw error;
+  }
+}
+
 export async function requireClientSession() {
   const supabase = getSupabaseClient();
   const {
