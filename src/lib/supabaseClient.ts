@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -9,8 +9,24 @@ if (!supabaseUrl || !supabaseAnonKey) {
   );
 }
 
+const supabaseConfig = {
+  anonKey: supabaseAnonKey,
+  url: supabaseUrl,
+};
+
+const globalForSupabase = globalThis as typeof globalThis & {
+  __coachOsSupabaseClient?: SupabaseClient;
+};
+
 export function getSupabaseClient() {
-  return createClient(supabaseUrl as string, supabaseAnonKey as string);
+  if (!globalForSupabase.__coachOsSupabaseClient) {
+    globalForSupabase.__coachOsSupabaseClient = createClient(
+      supabaseConfig.url,
+      supabaseConfig.anonKey,
+    );
+  }
+
+  return globalForSupabase.__coachOsSupabaseClient;
 }
 
 export const supabase = getSupabaseClient();

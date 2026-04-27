@@ -13,7 +13,7 @@ const navItems = [
   { href: "/app/enrollments", label: "Enrollments" },
   { href: "#", label: "CRM" },
   { href: "#", label: "Community" },
-  { href: "#", label: "Payments" },
+  { href: "/app/payments", label: "Payments" },
   { href: "#", label: "Automations" },
   { href: "#", label: "Analytics" },
   { href: "#", label: "Settings" },
@@ -60,7 +60,7 @@ export function AppShell({ activeItem = "Dashboard", children }: AppShellProps) 
                     "flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-medium transition",
                     active
                       ? "bg-white text-zinc-950 shadow-lg shadow-black/20"
-                      : "text-zinc-300 hover:bg-white/10 hover:text-white",
+                      : "text-zinc-200 hover:bg-white/10 hover:text-white",
                   ].join(" ")}
                   href={item.href}
                   key={item.label}
@@ -70,7 +70,7 @@ export function AppShell({ activeItem = "Dashboard", children }: AppShellProps) 
                       "flex h-8 w-8 items-center justify-center rounded-xl text-[10px] font-bold",
                       active
                         ? "bg-zinc-950 text-white"
-                        : "bg-white/10 text-zinc-300",
+                        : "bg-white/10 text-zinc-100",
                     ].join(" ")}
                   >
                     {iconMap[item.label]}
@@ -93,7 +93,7 @@ export function AppShell({ activeItem = "Dashboard", children }: AppShellProps) 
                   CoachOS
                 </h1>
               </div>
-              <div className="hidden items-center gap-3 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-zinc-300 sm:flex">
+              <div className="hidden items-center gap-3 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm text-zinc-100 sm:flex">
                 <span className="h-2 w-2 rounded-full bg-emerald-400" />
                 Workspace ready
               </div>
@@ -116,7 +116,7 @@ export function AppShell({ activeItem = "Dashboard", children }: AppShellProps) 
                     "flex flex-col items-center justify-center gap-1 rounded-2xl px-2 py-2 text-[11px] font-medium",
                     active
                       ? "bg-white text-zinc-950"
-                      : "text-zinc-400 hover:bg-white/10 hover:text-white",
+                      : "text-zinc-200 hover:bg-white/10 hover:text-white",
                   ].join(" ")}
                   href={item.href}
                   key={item.label}

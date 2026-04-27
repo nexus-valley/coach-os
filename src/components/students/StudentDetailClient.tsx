@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 import { EnrollmentStatusBadge } from "@/src/components/enrollments/EnrollmentStatusBadge";
+import { PaymentStatusBadge } from "@/src/components/payments/PaymentStatusBadge";
 import {
   emptyStudentForm,
   StudentFormFields,
@@ -24,6 +25,13 @@ import {
   type EnrollmentWithRelations,
 } from "@/src/lib/enrollments";
 import {
+  createPayment,
+  getPaymentsByStudent,
+  type PaymentMethod,
+  type PaymentStatus,
+  type PaymentWithRelations,
+} from "@/src/lib/payments";
+import {
   deleteStudent as deleteStudentRecord,
   getStudentById,
   updateStudent,
@@ -35,12 +43,36 @@ type StudentDetailClientProps = {
   studentId: string;
 };
 
+type PaymentFormState = {
+  amount: string;
+  notes: string;
+  paymentMethod: PaymentMethod;
+  status: PaymentStatus;
+};
+
+const emptyPaymentForm: PaymentFormState = {
+  amount: "",
+  notes: "",
+  paymentMethod: "UPI",
+  status: "completed",
+};
+
+const paymentMethods: PaymentMethod[] = ["UPI", "Cash", "Bank"];
+const paymentStatuses: PaymentStatus[] = ["completed", "pending", "failed"];
+
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("en", {
     day: "numeric",
     month: "long",
     year: "numeric",
   }).format(new Date(value));
+}
+
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat("en-US", {
+    currency: "USD",
+    style: "currency",
+  }).format(value);
 }
 
 function getErrorMessage(caught: unknown, fallback: string) {
@@ -72,7 +104,12 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
   const [form, setForm] = useState<StudentFormState>(emptyStudentForm);
   const [loading, setLoading] = useState(true);
   const [mutating, setMutating] = useState(false);
+  const [paymentForm, setPaymentForm] =
+    useState<PaymentFormState>(emptyPaymentForm);
+  const [paymentOpen, setPaymentOpen] = useState(false);
+  const [payments, setPayments] = useState<PaymentWithRelations[]>([]);
   const [selectedCourseId, setSelectedCourseId] = useState("");
+  const [selectedEnrollmentId, setSelectedEnrollmentId] = useState("");
   const [student, setStudent] = useState<Student | null>(null);
   const [tenant, setTenant] = useState<Tenant | null>(null);
 
@@ -85,6 +122,10 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
           ),
       ),
     [courses, enrollments],
+  );
+
+  const selectedEnrollment = enrollments.find(
+    (enrollment) => enrollment.id === selectedEnrollmentId,
   );
 
   useEffect(() => {
@@ -103,7 +144,12 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
           return;
         }
 
-        const [currentStudent, tenantCourses, studentEnrollments] =
+        const [
+          currentStudent,
+          tenantCourses,
+          studentEnrollments,
+          studentPayments,
+        ] =
           await Promise.all([
             getStudentById({
               studentId,
@@ -114,6 +160,7 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
               studentId,
               tenantId: currentTenant.id,
             }),
+            getPaymentsByStudent(studentId, currentTenant.id),
           ]);
 
         if (!active) {
@@ -124,9 +171,11 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
         setStudent(currentStudent);
         setCourses(tenantCourses);
         setEnrollments(currentStudent ? studentEnrollments : []);
+        setPayments(currentStudent ? studentPayments : []);
 
         if (currentStudent) {
           setForm(createFormFromStudent(currentStudent));
+          setSelectedEnrollmentId(studentEnrollments[0]?.id ?? "");
           setSelectedCourseId(
             tenantCourses.find(
               (course) =>
@@ -180,6 +229,38 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
           ),
       )?.id ?? "",
     );
+  }
+
+  async function refreshPayments() {
+    if (!tenant) {
+      return;
+    }
+
+    setPayments(await getPaymentsByStudent(studentId, tenant.id));
+  }
+
+  async function openPaymentPanel() {
+    setActionError("");
+    setPaymentOpen(true);
+
+    if (!tenant) {
+      return;
+    }
+
+    try {
+      const [studentEnrollments, studentPayments] = await Promise.all([
+        getEnrollmentsForStudent({
+          studentId,
+          tenantId: tenant.id,
+        }),
+        getPaymentsByStudent(studentId, tenant.id),
+      ]);
+      setEnrollments(studentEnrollments);
+      setPayments(studentPayments);
+      setSelectedEnrollmentId(studentEnrollments[0]?.id ?? "");
+    } catch (caught) {
+      setActionError(getErrorMessage(caught, "Unable to load payment context."));
+    }
   }
 
   async function openEnrollmentPanel() {
@@ -276,6 +357,40 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
       setActionError(
         getErrorMessage(caught, "Unable to update enrollment status."),
       );
+    } finally {
+      setMutating(false);
+    }
+  }
+
+  async function handleCreatePayment(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!tenant || !selectedEnrollment) {
+      setActionError("Select an enrollment before adding a payment.");
+      return;
+    }
+
+    const amount = Number(paymentForm.amount);
+
+    setMutating(true);
+    setActionError("");
+
+    try {
+      await createPayment({
+        amount,
+        course_id: selectedEnrollment.course_id,
+        enrollment_id: selectedEnrollment.id,
+        notes: paymentForm.notes,
+        payment_method: paymentForm.paymentMethod,
+        status: paymentForm.status,
+        student_id: studentId,
+        tenant_id: tenant.id,
+      });
+      setPaymentForm(emptyPaymentForm);
+      setPaymentOpen(false);
+      await refreshPayments();
+    } catch (caught) {
+      setActionError(getErrorMessage(caught, "Unable to add payment."));
     } finally {
       setMutating(false);
     }
@@ -422,6 +537,9 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
             <Button onClick={openEnrollmentPanel} type="button">
               Enroll in Course
             </Button>
+            <Button onClick={openPaymentPanel} type="button" variant="secondary">
+              Add Payment
+            </Button>
             <Button onClick={() => setEditOpen(true)} type="button">
               Edit Student
             </Button>
@@ -537,7 +655,67 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
       </section>
 
       <section className="mt-6 grid gap-4 md:grid-cols-3">
-        {["Payments", "Activity timeline", "Support notes"].map(
+        <Card className="border-white/10 bg-white/6 p-6 text-white shadow-2xl shadow-black/10 md:col-span-3">
+          <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-start">
+            <div>
+              <Badge className="border-white/15 bg-white/10 text-white">
+                Payment History
+              </Badge>
+              <h3 className="mt-4 text-2xl font-semibold">Student payments</h3>
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-400">
+                Track payments connected to this student&apos;s course
+                enrollments.
+              </p>
+            </div>
+            <Button
+              className="bg-white text-zinc-950 hover:bg-zinc-100"
+              onClick={openPaymentPanel}
+              type="button"
+            >
+              Add Payment
+            </Button>
+          </div>
+
+          {payments.length === 0 ? (
+            <div className="mt-8 rounded-3xl border border-dashed border-white/15 bg-zinc-950/30 p-8 text-center">
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-sm font-bold text-zinc-950">
+                PY
+              </div>
+              <h4 className="mt-5 text-xl font-semibold">No payments yet</h4>
+              <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-zinc-400">
+                Add a payment once this student has an enrollment connected to a
+                course.
+              </p>
+            </div>
+          ) : (
+            <div className="mt-8 divide-y divide-white/10 overflow-hidden rounded-3xl border border-white/10">
+              {payments.map((payment) => (
+                <div
+                  className="grid gap-4 bg-zinc-950/30 p-4 lg:grid-cols-[1fr_auto_auto_auto] lg:items-center"
+                  key={payment.id}
+                >
+                  <div>
+                    <p className="font-semibold">
+                      {formatCurrency(payment.amount)}
+                    </p>
+                    <p className="mt-1 text-sm text-zinc-500">
+                      {payment.course?.title ?? "Course unavailable"}
+                    </p>
+                  </div>
+                  <p className="text-sm font-semibold text-zinc-300">
+                    {payment.payment_method}
+                  </p>
+                  <PaymentStatusBadge status={payment.status} />
+                  <p className="text-sm text-zinc-500">
+                    {formatDate(payment.paid_at)}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+
+        {["Activity timeline", "Support notes"].map(
           (title, index) => (
           <Card
             className="border-white/10 bg-white/6 p-6 text-white shadow-2xl shadow-black/10"
@@ -613,6 +791,149 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
                   type="submit"
                 >
                   {mutating ? "Enrolling..." : "Enroll Student"}
+                </Button>
+              </div>
+            </form>
+          </Card>
+        </div>
+      ) : null}
+
+      {paymentOpen ? (
+        <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-black/70 px-4 py-4 backdrop-blur-sm sm:items-center">
+          <Card className="w-full max-w-2xl border-zinc-200 bg-white p-6 text-zinc-950 shadow-2xl shadow-black/40 sm:p-8">
+            <h3 className="text-2xl font-semibold">Add Payment</h3>
+            <form className="mt-7 space-y-5" onSubmit={handleCreatePayment}>
+              <label className="block">
+                <span className="text-sm font-medium text-zinc-700">
+                  Enrollment
+                </span>
+                <select
+                  className="mt-2 h-12 w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 text-sm text-zinc-950 outline-none transition focus:border-zinc-950 focus:bg-white focus:ring-4 focus:ring-zinc-950/10"
+                  onChange={(event) =>
+                    setSelectedEnrollmentId(event.target.value)
+                  }
+                  required
+                  value={selectedEnrollmentId}
+                >
+                  <option className="text-zinc-950" value="">
+                    Select an enrollment
+                  </option>
+                  {enrollments.map((enrollment) => (
+                    <option
+                      className="text-zinc-950"
+                      key={enrollment.id}
+                      value={enrollment.id}
+                    >
+                      {enrollment.course?.title ?? "Course unavailable"}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <div className="grid gap-4 sm:grid-cols-3">
+                <label className="block">
+                  <span className="text-sm font-medium text-zinc-700">
+                    Amount
+                  </span>
+                  <input
+                    className="mt-2 h-12 w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 text-sm text-zinc-950 outline-none transition placeholder:text-zinc-400 focus:border-zinc-950 focus:bg-white focus:ring-4 focus:ring-zinc-950/10"
+                    min="0"
+                    onChange={(event) =>
+                      setPaymentForm((current) => ({
+                        ...current,
+                        amount: event.target.value,
+                      }))
+                    }
+                    placeholder="499"
+                    required
+                    step="0.01"
+                    type="number"
+                    value={paymentForm.amount}
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-sm font-medium text-zinc-700">
+                    Method
+                  </span>
+                  <select
+                    className="mt-2 h-12 w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 text-sm text-zinc-950 outline-none transition focus:border-zinc-950 focus:bg-white focus:ring-4 focus:ring-zinc-950/10"
+                    onChange={(event) =>
+                      setPaymentForm((current) => ({
+                        ...current,
+                        paymentMethod: event.target.value as PaymentMethod,
+                      }))
+                    }
+                    value={paymentForm.paymentMethod}
+                  >
+                    {paymentMethods.map((method) => (
+                      <option className="text-zinc-950" key={method} value={method}>
+                        {method}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="text-sm font-medium text-zinc-700">
+                    Status
+                  </span>
+                  <select
+                    className="mt-2 h-12 w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 text-sm text-zinc-950 outline-none transition focus:border-zinc-950 focus:bg-white focus:ring-4 focus:ring-zinc-950/10"
+                    onChange={(event) =>
+                      setPaymentForm((current) => ({
+                        ...current,
+                        status: event.target.value as PaymentStatus,
+                      }))
+                    }
+                    value={paymentForm.status}
+                  >
+                    {paymentStatuses.map((status) => (
+                      <option className="text-zinc-950" key={status} value={status}>
+                        {status}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              <label className="block">
+                <span className="text-sm font-medium text-zinc-700">Notes</span>
+                <textarea
+                  className="mt-2 min-h-24 w-full resize-none rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm leading-6 text-zinc-950 outline-none transition placeholder:text-zinc-400 focus:border-zinc-950 focus:bg-white focus:ring-4 focus:ring-zinc-950/10"
+                  onChange={(event) =>
+                    setPaymentForm((current) => ({
+                      ...current,
+                      notes: event.target.value,
+                    }))
+                  }
+                  placeholder="Receipt reference, installment notes, or context."
+                  value={paymentForm.notes}
+                />
+              </label>
+
+              {enrollments.length === 0 ? (
+                <p className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-800">
+                  Enroll this student in a course before adding a payment.
+                </p>
+              ) : (
+                <p className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 text-sm leading-6 text-zinc-500">
+                  Course and enrollment are attached automatically from the
+                  selected enrollment.
+                </p>
+              )}
+
+              <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                <Button
+                  onClick={() => setPaymentOpen(false)}
+                  type="button"
+                  variant="secondary"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  disabled={mutating || !selectedEnrollmentId}
+                  type="submit"
+                >
+                  {mutating ? "Adding..." : "Add Payment"}
                 </Button>
               </div>
             </form>
