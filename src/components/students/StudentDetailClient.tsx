@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
+import { EnrollmentStatusBadge } from "@/src/components/enrollments/EnrollmentStatusBadge";
 import {
   emptyStudentForm,
   StudentFormFields,
@@ -13,8 +14,17 @@ import {
 import { Badge } from "@/src/components/ui/Badge";
 import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
+import { getCoursesForTenant, type Course } from "@/src/lib/courses";
 import {
-  deleteStudent,
+  createEnrollment,
+  deleteEnrollment,
+  getEnrollmentsForStudent,
+  updateEnrollmentStatus,
+  type EnrollmentStatus,
+  type EnrollmentWithRelations,
+} from "@/src/lib/enrollments";
+import {
+  deleteStudent as deleteStudentRecord,
   getStudentById,
   updateStudent,
   type Student,
@@ -50,14 +60,32 @@ function createFormFromStudent(student: Student): StudentFormState {
 
 export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
   const router = useRouter();
+  const [actionError, setActionError] = useState("");
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [deleteEnrollmentTarget, setDeleteEnrollmentTarget] =
+    useState<EnrollmentWithRelations | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [enrollOpen, setEnrollOpen] = useState(false);
+  const [enrollments, setEnrollments] = useState<EnrollmentWithRelations[]>([]);
   const [error, setError] = useState("");
   const [form, setForm] = useState<StudentFormState>(emptyStudentForm);
   const [loading, setLoading] = useState(true);
   const [mutating, setMutating] = useState(false);
+  const [selectedCourseId, setSelectedCourseId] = useState("");
   const [student, setStudent] = useState<Student | null>(null);
   const [tenant, setTenant] = useState<Tenant | null>(null);
+
+  const availableCourses = useMemo(
+    () =>
+      courses.filter(
+        (course) =>
+          !enrollments.some(
+            (enrollment) => enrollment.course_id === course.id,
+          ),
+      ),
+    [courses, enrollments],
+  );
 
   useEffect(() => {
     let active = true;
@@ -75,10 +103,18 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
           return;
         }
 
-        const currentStudent = await getStudentById({
-          studentId,
-          tenantId: currentTenant.id,
-        });
+        const [currentStudent, tenantCourses, studentEnrollments] =
+          await Promise.all([
+            getStudentById({
+              studentId,
+              tenantId: currentTenant.id,
+            }),
+            getCoursesForTenant(currentTenant.id),
+            getEnrollmentsForStudent({
+              studentId,
+              tenantId: currentTenant.id,
+            }),
+          ]);
 
         if (!active) {
           return;
@@ -86,9 +122,19 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
 
         setTenant(currentTenant);
         setStudent(currentStudent);
+        setCourses(tenantCourses);
+        setEnrollments(currentStudent ? studentEnrollments : []);
 
         if (currentStudent) {
           setForm(createFormFromStudent(currentStudent));
+          setSelectedCourseId(
+            tenantCourses.find(
+              (course) =>
+                !studentEnrollments.some(
+                  (enrollment) => enrollment.course_id === course.id,
+                ),
+            )?.id ?? "",
+          );
         } else {
           setError("Student not found in this workspace.");
         }
@@ -112,6 +158,47 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
     };
   }, [router, studentId]);
 
+  async function refreshEnrollments() {
+    if (!tenant) {
+      return;
+    }
+
+    const [studentEnrollments, tenantCourses] = await Promise.all([
+      getEnrollmentsForStudent({
+        studentId,
+        tenantId: tenant.id,
+      }),
+      getCoursesForTenant(tenant.id),
+    ]);
+    setEnrollments(studentEnrollments);
+    setCourses(tenantCourses);
+    setSelectedCourseId(
+      tenantCourses.find(
+        (course) =>
+          !studentEnrollments.some(
+            (enrollment) => enrollment.course_id === course.id,
+          ),
+      )?.id ?? "",
+    );
+  }
+
+  async function openEnrollmentPanel() {
+    setActionError("");
+    setEnrollOpen(true);
+
+    if (!tenant) {
+      return;
+    }
+
+    try {
+      await refreshEnrollments();
+    } catch (caught) {
+      setActionError(
+        getErrorMessage(caught, "Unable to load available courses."),
+      );
+    }
+  }
+
   async function handleUpdateStudent(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -121,7 +208,7 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
     }
 
     setMutating(true);
-    setError("");
+    setActionError("");
 
     try {
       const updatedStudent = await updateStudent({
@@ -133,7 +220,84 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
       setForm(createFormFromStudent(updatedStudent));
       setEditOpen(false);
     } catch (caught) {
-      setError(getErrorMessage(caught, "Unable to update student."));
+      setActionError(getErrorMessage(caught, "Unable to update student."));
+    } finally {
+      setMutating(false);
+    }
+  }
+
+  async function handleCreateEnrollment(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!tenant || !selectedCourseId) {
+      setActionError("Select a course before enrolling this student.");
+      return;
+    }
+
+    setMutating(true);
+    setActionError("");
+
+    try {
+      await createEnrollment({
+        courseId: selectedCourseId,
+        status: "active",
+        studentId,
+        tenantId: tenant.id,
+      });
+      setEnrollOpen(false);
+      await refreshEnrollments();
+    } catch (caught) {
+      setActionError(getErrorMessage(caught, "Unable to create enrollment."));
+    } finally {
+      setMutating(false);
+    }
+  }
+
+  async function handleEnrollmentStatusChange(
+    enrollmentId: string,
+    status: EnrollmentStatus,
+  ) {
+    if (!tenant) {
+      setActionError("Workspace context is not available.");
+      return;
+    }
+
+    setMutating(true);
+    setActionError("");
+
+    try {
+      await updateEnrollmentStatus({
+        enrollmentId,
+        status,
+        tenantId: tenant.id,
+      });
+      await refreshEnrollments();
+    } catch (caught) {
+      setActionError(
+        getErrorMessage(caught, "Unable to update enrollment status."),
+      );
+    } finally {
+      setMutating(false);
+    }
+  }
+
+  async function handleDeleteEnrollment() {
+    if (!tenant || !deleteEnrollmentTarget) {
+      return;
+    }
+
+    setMutating(true);
+    setActionError("");
+
+    try {
+      await deleteEnrollment({
+        enrollmentId: deleteEnrollmentTarget.id,
+        tenantId: tenant.id,
+      });
+      setDeleteEnrollmentTarget(null);
+      await refreshEnrollments();
+    } catch (caught) {
+      setActionError(getErrorMessage(caught, "Unable to delete enrollment."));
     } finally {
       setMutating(false);
     }
@@ -146,16 +310,16 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
     }
 
     setMutating(true);
-    setError("");
+    setActionError("");
 
     try {
-      await deleteStudent({
+      await deleteStudentRecord({
         studentId,
         tenantId: tenant.id,
       });
       router.replace("/app/students");
     } catch (caught) {
-      setError(getErrorMessage(caught, "Unable to delete student."));
+      setActionError(getErrorMessage(caught, "Unable to delete student."));
       setMutating(false);
     }
   }
@@ -255,6 +419,9 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
             without the matching workspace id.
           </p>
           <div className="mt-7 flex flex-col gap-3">
+            <Button onClick={openEnrollmentPanel} type="button">
+              Enroll in Course
+            </Button>
             <Button onClick={() => setEditOpen(true)} type="button">
               Edit Student
             </Button>
@@ -270,19 +437,108 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
         </Card>
       </section>
 
-      {error ? (
+      {actionError ? (
         <div className="mt-6 rounded-3xl border border-red-400/30 bg-red-500/10 p-4 text-sm text-red-100">
-          {error}
+          {actionError}
         </div>
       ) : null}
 
-      <section className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {[
-          "Enrollments",
-          "Payments",
-          "Activity timeline",
-          "Support notes",
-        ].map((title, index) => (
+      <section className="mt-6">
+        <Card className="border-white/10 bg-white/[0.06] p-6 text-white shadow-2xl shadow-black/10 sm:p-8">
+          <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-start">
+            <div>
+              <Badge className="border-white/15 bg-white/10 text-white">
+                Enrollments
+              </Badge>
+              <h3 className="mt-4 text-2xl font-semibold">Enrolled courses</h3>
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-400">
+                Connect this student to course products. Payments and cohorts
+                remain separate future modules.
+              </p>
+            </div>
+            <Button
+              className="bg-white text-zinc-950 hover:bg-zinc-100"
+              onClick={openEnrollmentPanel}
+              type="button"
+            >
+              Enroll in Course
+            </Button>
+          </div>
+
+          {enrollments.length === 0 ? (
+            <div className="mt-8 rounded-3xl border border-dashed border-white/15 bg-zinc-950/30 p-8 text-center">
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-sm font-bold text-zinc-950">
+                EN
+              </div>
+              <h4 className="mt-5 text-xl font-semibold">
+                No enrollments yet
+              </h4>
+              <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-zinc-400">
+                Enroll this student into a course to start tracking learning
+                access and completion status.
+              </p>
+            </div>
+          ) : (
+            <div className="mt-8 space-y-3">
+              {enrollments.map((enrollment) => (
+                <div
+                  className="grid gap-4 rounded-2xl border border-white/10 bg-zinc-950/35 p-4 lg:grid-cols-[1fr_auto_auto_auto] lg:items-center"
+                  key={enrollment.id}
+                >
+                  <div>
+                    <p className="font-semibold">
+                      {enrollment.course?.title ?? "Course unavailable"}
+                    </p>
+                    <p className="mt-1 text-sm text-zinc-500">
+                      Enrolled {formatDate(enrollment.enrolled_at)}
+                      {enrollment.completed_at
+                        ? ` | Completed ${formatDate(enrollment.completed_at)}`
+                        : ""}
+                    </p>
+                  </div>
+                  <EnrollmentStatusBadge status={enrollment.status} />
+                  <select
+                    className="h-10 rounded-full border border-white/10 bg-white/10 px-3 text-sm font-semibold text-white outline-none"
+                    disabled={mutating}
+                    onChange={(event) =>
+                      handleEnrollmentStatusChange(
+                        enrollment.id,
+                        event.target.value as EnrollmentStatus,
+                      )
+                    }
+                    value={enrollment.status}
+                  >
+                    {["active", "completed", "paused", "cancelled"].map(
+                      (status) => (
+                        <option
+                          className="text-zinc-950"
+                          key={status}
+                          value={status}
+                        >
+                          {status}
+                        </option>
+                      ),
+                    )}
+                  </select>
+                  <Button
+                    className="text-red-200 hover:bg-red-500/10 hover:text-red-100"
+                    onClick={() => setDeleteEnrollmentTarget(enrollment)}
+                    size="sm"
+                    type="button"
+                    variant="ghost"
+                  >
+                    Delete
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+      </section>
+
+      <section className="mt-6 grid gap-4 md:grid-cols-3">
+        {["Payments", "Activity timeline", "Support notes"].map(
+          (title, index) => (
           <Card
             className="border-white/10 bg-white/[0.06] p-6 text-white shadow-2xl shadow-black/10"
             key={title}
@@ -295,8 +551,74 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
               Placeholder for a future module. No logic is connected here yet.
             </p>
           </Card>
-        ))}
+          ),
+        )}
       </section>
+
+      {enrollOpen ? (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 px-4 py-4 backdrop-blur-sm sm:items-center">
+          <Card className="w-full max-w-xl border-zinc-200 bg-white p-6 text-zinc-950 shadow-2xl shadow-black/40 sm:p-8">
+            <h3 className="text-2xl font-semibold">Enroll in Course</h3>
+            <form className="mt-7 space-y-5" onSubmit={handleCreateEnrollment}>
+              <label className="block">
+                <span className="text-sm font-medium text-zinc-700">
+                  Course
+                </span>
+                <select
+                  className="mt-2 h-12 w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 text-sm text-zinc-950 outline-none transition focus:border-zinc-950 focus:bg-white focus:ring-4 focus:ring-zinc-950/10"
+                  onChange={(event) => setSelectedCourseId(event.target.value)}
+                  required
+                  value={selectedCourseId}
+                >
+                  <option className="text-zinc-950" value="">
+                    Select a course
+                  </option>
+                  {availableCourses.map((course) => (
+                    <option
+                      className="text-zinc-950"
+                      key={course.id}
+                      value={course.id}
+                    >
+                      {course.title}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {courses.length === 0 ? (
+                <p className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-800">
+                  Create a course before enrolling this student.
+                </p>
+              ) : availableCourses.length === 0 ? (
+                <p className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm leading-6 text-emerald-800">
+                  This student is already enrolled in every available course.
+                </p>
+              ) : (
+                <p className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 text-sm leading-6 text-zinc-500">
+                  Enrollment status starts as active. Courses already connected
+                  to this student are hidden from the selector.
+                </p>
+              )}
+              <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                <Button
+                  onClick={() => setEnrollOpen(false)}
+                  type="button"
+                  variant="secondary"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  disabled={
+                    mutating || !selectedCourseId || availableCourses.length === 0
+                  }
+                  type="submit"
+                >
+                  {mutating ? "Enrolling..." : "Enroll Student"}
+                </Button>
+              </div>
+            </form>
+          </Card>
+        </div>
+      ) : null}
 
       {editOpen ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-black/70 px-4 py-4 backdrop-blur-sm sm:items-center">
@@ -352,6 +674,40 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
                 type="button"
               >
                 {mutating ? "Deleting..." : "Delete"}
+              </Button>
+            </div>
+          </Card>
+        </div>
+      ) : null}
+
+      {deleteEnrollmentTarget ? (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 px-4 py-4 backdrop-blur-sm sm:items-center">
+          <Card className="w-full max-w-md border-zinc-200 bg-white p-6 text-zinc-950 shadow-2xl shadow-black/40 sm:p-8">
+            <p className="text-sm font-semibold text-red-600">
+              Confirm delete
+            </p>
+            <h3 className="mt-3 text-2xl font-semibold">
+              Remove enrollment?
+            </h3>
+            <p className="mt-3 text-sm leading-6 text-zinc-500">
+              This removes {student.full_name} from{" "}
+              {deleteEnrollmentTarget.course?.title ?? "this course"}.
+            </p>
+            <div className="mt-7 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <Button
+                onClick={() => setDeleteEnrollmentTarget(null)}
+                type="button"
+                variant="secondary"
+              >
+                Cancel
+              </Button>
+              <Button
+                className="bg-red-600 shadow-red-600/20 hover:bg-red-700"
+                disabled={mutating}
+                onClick={handleDeleteEnrollment}
+                type="button"
+              >
+                {mutating ? "Removing..." : "Remove"}
               </Button>
             </div>
           </Card>

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { EnrollmentStatusBadge } from "@/src/components/enrollments/EnrollmentStatusBadge";
 import { Badge } from "@/src/components/ui/Badge";
 import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
@@ -20,6 +21,10 @@ import {
   type Lesson,
   type LessonType,
 } from "@/src/lib/courses";
+import {
+  getEnrollmentsForCourse,
+  type EnrollmentWithRelations,
+} from "@/src/lib/enrollments";
 import { getCurrentTenant, type Tenant } from "@/src/lib/tenant";
 
 type CourseDetailClientProps = {
@@ -83,6 +88,7 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
   const [actionError, setActionError] = useState("");
   const [course, setCourse] = useState<Course | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
+  const [enrollments, setEnrollments] = useState<EnrollmentWithRelations[]>([]);
   const [error, setError] = useState("");
   const [lessonModal, setLessonModal] = useState<LessonModalState | null>(null);
   const [loading, setLoading] = useState(true);
@@ -109,12 +115,17 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
           return;
         }
 
-        const [currentCourse, currentStructure] = await Promise.all([
+        const [currentCourse, currentStructure, courseEnrollments] =
+          await Promise.all([
           getCourseById({
             courseId,
             tenantId: currentTenant.id,
           }),
           getCourseStructure(courseId, currentTenant.id),
+          getEnrollmentsForCourse({
+            courseId,
+            tenantId: currentTenant.id,
+          }),
         ]);
 
         if (!active) {
@@ -124,6 +135,7 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
         setTenant(currentTenant);
         setCourse(currentCourse);
         setSections(currentCourse ? currentStructure : []);
+        setEnrollments(currentCourse ? courseEnrollments : []);
 
         if (!currentCourse) {
           setError("Course not found in this workspace.");
@@ -589,6 +601,71 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
       </section>
 
       <section className="mt-6 grid gap-4 md:grid-cols-2">
+        <Card className="border-white/10 bg-white/[0.06] p-6 text-white shadow-2xl shadow-black/10 md:col-span-2">
+          <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-start">
+            <div>
+              <Badge className="border-white/15 bg-white/10 text-white">
+                Enrolled Students
+              </Badge>
+              <h3 className="mt-4 text-2xl font-semibold">
+                Course enrollment roster
+              </h3>
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-400">
+                View students connected to this course. Enrollment changes are
+                managed from student profiles and the enrollment overview.
+              </p>
+            </div>
+            <div className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-zinc-300">
+              {enrollments.length} enrolled
+            </div>
+          </div>
+
+          {enrollments.length === 0 ? (
+            <div className="mt-8 rounded-3xl border border-dashed border-white/15 bg-zinc-950/30 p-8 text-center">
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-sm font-bold text-zinc-950">
+                EN
+              </div>
+              <h4 className="mt-5 text-xl font-semibold">
+                No enrolled students yet
+              </h4>
+              <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-zinc-400">
+                Enroll students from their CRM profile or the enrollment
+                overview once records exist.
+              </p>
+            </div>
+          ) : (
+            <div className="mt-8 divide-y divide-white/10 overflow-hidden rounded-3xl border border-white/10">
+              {enrollments.map((enrollment) => (
+                <div
+                  className="grid gap-4 bg-zinc-950/30 p-4 lg:grid-cols-[1fr_1fr_auto_auto] lg:items-center"
+                  key={enrollment.id}
+                >
+                  <div>
+                    <p className="font-semibold">
+                      {enrollment.student?.full_name ?? "Student unavailable"}
+                    </p>
+                    <p className="mt-1 text-sm text-zinc-500">
+                      {enrollment.student?.email ||
+                        enrollment.student?.phone ||
+                        "No contact details"}
+                    </p>
+                  </div>
+                  <p className="text-sm text-zinc-400">
+                    Enrolled {formatDate(enrollment.enrolled_at)}
+                  </p>
+                  <EnrollmentStatusBadge status={enrollment.status} />
+                  <Link
+                    className="text-sm font-semibold text-white transition hover:text-zinc-300"
+                    href={`/app/students/${enrollment.student_id}`}
+                  >
+                    View student
+                  </Link>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+
         {[
           {
             detail:
