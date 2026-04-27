@@ -9,7 +9,7 @@ const navItems = [
   { href: "/app", label: "Dashboard" },
   { href: "/app/courses", label: "Courses" },
   { href: "#", label: "Cohorts" },
-  { href: "#", label: "Students" },
+  { href: "/app/students", label: "Students" },
   { href: "#", label: "CRM" },
   { href: "#", label: "Community" },
   { href: "#", label: "Payments" },
