@@ -7,9 +7,9 @@ type BadgeProps = {
 };
 
 const toneClasses: Record<BadgeTone, string> = {
-  dark: "border-zinc-800 bg-zinc-950 text-white",
-  light: "border-zinc-300 bg-white text-zinc-950 shadow-sm",
-  success: "border-emerald-300 bg-emerald-50 text-emerald-900",
+  dark: "border-white/10 bg-white/10 text-white",
+  light: "border-teal-400/30 bg-teal-400/10 text-teal-300 shadow-sm",
+  success: "border-teal-400/30 bg-teal-400/15 text-teal-300",
 };
 
 export function Badge({ children, className = "", tone = "light" }: BadgeProps) {

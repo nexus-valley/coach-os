@@ -11,12 +11,24 @@ export function EnrollmentStatusBadge({
   }
 
   if (status === "paused") {
-    return <Badge className="border-amber-200 bg-amber-50 text-amber-700">Paused</Badge>;
+    return (
+      <Badge className="border-amber-400/30 bg-amber-400/10 text-amber-300">
+        Paused
+      </Badge>
+    );
   }
 
   if (status === "cancelled") {
-    return <Badge className="border-red-200 bg-red-50 text-red-700">Cancelled</Badge>;
+    return (
+      <Badge className="border-red-500/30 bg-red-500/15 text-red-300">
+        Cancelled
+      </Badge>
+    );
   }
 
-  return <Badge className="border-sky-200 bg-sky-50 text-sky-700">Active</Badge>;
+  return (
+    <Badge className="border-teal-400/30 bg-teal-400/10 text-teal-300">
+      Active
+    </Badge>
+  );
 }

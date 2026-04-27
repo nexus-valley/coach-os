@@ -31,7 +31,7 @@ function StatusBadge({ status }: { status: Course["status"] }) {
   }
 
   return (
-    <Badge className="border-white/10 bg-white/10 text-zinc-200">Draft</Badge>
+    <Badge className="border-white/10 bg-white/10 text-slate-200">Draft</Badge>
   );
 }
 
@@ -140,13 +140,13 @@ export function CoursesPageClient() {
           <h2 className="mt-5 text-3xl font-semibold tracking-normal text-white sm:text-4xl">
             Courses
           </h2>
-          <p className="mt-3 max-w-2xl text-base leading-7 text-zinc-400">
+          <p className="mt-3 max-w-2xl text-base leading-7 text-slate-400">
             Build and organize premium course products for your current
             workspace.
           </p>
         </div>
         <Button
-          className="bg-white text-zinc-950 hover:bg-zinc-100"
+          className="bg-teal-400 text-black hover:bg-teal-300"
           onClick={() => setFormOpen(true)}
           size="lg"
           type="button"
@@ -155,17 +155,17 @@ export function CoursesPageClient() {
         </Button>
       </div>
 
-      <Card className="mt-8 border-white/10 bg-white/[0.06] p-5 text-white shadow-2xl shadow-black/10 sm:p-6">
+      <Card className="mt-8 border-white/10 bg-[#101214] p-5 text-white shadow-2xl shadow-black/10 sm:p-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-sm font-medium text-zinc-400">
+            <p className="text-sm font-medium text-slate-400">
               Current workspace
             </p>
             <p className="mt-1 text-xl font-semibold">
               {tenant?.name ?? "Loading workspace..."}
             </p>
           </div>
-          <div className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-zinc-300">
+          <div className="rounded-full border border-white/10 bg-[#101214] px-4 py-2 text-sm text-slate-300">
             {courses.length} {courses.length === 1 ? "course" : "courses"}
           </div>
         </div>
@@ -181,7 +181,7 @@ export function CoursesPageClient() {
         <section className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {[0, 1, 2].map((item) => (
             <Card
-              className="h-60 animate-pulse border-white/10 bg-white/[0.06]"
+              className="h-60 animate-pulse border-white/10 bg-[#101214]"
               key={item}
             >
               <span className="sr-only">Loading course</span>
@@ -189,15 +189,15 @@ export function CoursesPageClient() {
           ))}
         </section>
       ) : courses.length === 0 ? (
-        <Card className="mt-6 border-white/10 bg-white p-8 text-zinc-950 shadow-2xl shadow-black/20">
+        <Card className="mt-6 border-white/10 bg-[#101214] p-8 text-white shadow-2xl shadow-black/20">
           <div className="mx-auto max-w-2xl text-center">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-zinc-950 text-sm font-bold text-white">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-teal-400 text-sm font-bold text-black">
               CU
             </div>
             <h3 className="mt-6 text-2xl font-semibold">
               No courses created yet
             </h3>
-            <p className="mt-3 text-sm leading-6 text-zinc-500">
+            <p className="mt-3 text-sm leading-6 text-slate-500">
               Create your first draft course to start shaping the learning
               experience. Lessons and section management will arrive in a later
               module.
@@ -215,24 +215,24 @@ export function CoursesPageClient() {
         <section className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {courses.map((course) => (
             <Link href={`/app/courses/${course.id}`} key={course.id}>
-              <Card className="h-full border-white/10 bg-white/[0.06] p-6 text-white shadow-2xl shadow-black/10 transition hover:-translate-y-1 hover:bg-white/[0.09]">
+              <Card className="h-full border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/10 transition hover:-translate-y-1 hover:bg-[#15181b]">
                 <div className="flex h-full min-h-60 flex-col justify-between">
                   <div>
                     <div className="flex items-start justify-between gap-4">
                       <StatusBadge status={course.status} />
-                      <span className="text-xs text-zinc-500">
+                      <span className="text-xs text-slate-500">
                         {formatDate(course.created_at)}
                       </span>
                     </div>
                     <h3 className="mt-6 text-2xl font-semibold leading-tight">
                       {course.title}
                     </h3>
-                    <p className="mt-4 line-clamp-3 text-sm leading-6 text-zinc-400">
+                    <p className="mt-4 line-clamp-3 text-sm leading-6 text-slate-400">
                       {course.description || "No description added yet."}
                     </p>
                   </div>
                   <div className="mt-8 flex items-center justify-between border-t border-white/10 pt-5 text-sm">
-                    <span className="text-zinc-500">/{course.slug}</span>
+                    <span className="text-slate-500">/{course.slug}</span>
                     <span className="font-semibold text-white">Open</span>
                   </div>
                 </div>
@@ -244,16 +244,16 @@ export function CoursesPageClient() {
 
       {formOpen ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 px-4 py-4 backdrop-blur-sm sm:items-center">
-          <Card className="w-full max-w-xl border-zinc-200 bg-white p-6 text-zinc-950 shadow-2xl shadow-black/40 sm:p-8">
+          <Card className="w-full max-w-xl border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/40 sm:p-8">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-sm font-semibold text-zinc-500">
+                <p className="text-sm font-semibold text-slate-500">
                   New course
                 </p>
                 <h3 className="mt-2 text-2xl font-semibold">Create Course</h3>
               </div>
               <button
-                className="flex h-10 w-10 items-center justify-center rounded-full border border-zinc-200 text-sm font-semibold text-zinc-500 transition hover:bg-zinc-50 hover:text-zinc-950"
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 text-sm font-semibold text-slate-500 transition hover:bg-white/10 hover:text-white"
                 onClick={() => setFormOpen(false)}
                 type="button"
               >
@@ -263,11 +263,11 @@ export function CoursesPageClient() {
 
             <form className="mt-7 space-y-5" onSubmit={handleCreateCourse}>
               <label className="block">
-                <span className="text-sm font-medium text-zinc-700">
+                <span className="text-sm font-medium text-slate-300">
                   Course title
                 </span>
                 <input
-                  className="mt-2 h-12 w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 text-sm text-zinc-950 outline-none transition placeholder:text-zinc-400 focus:border-zinc-950 focus:bg-white focus:ring-4 focus:ring-zinc-950/10"
+                  className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition placeholder:text-slate-400 focus:border-teal-400/40 focus:bg-white/15 focus:ring-4 focus:ring-teal-400/10"
                   onChange={(event) => setTitle(event.target.value)}
                   placeholder="Signature coaching program"
                   required
@@ -277,11 +277,11 @@ export function CoursesPageClient() {
               </label>
 
               <label className="block">
-                <span className="text-sm font-medium text-zinc-700">
+                <span className="text-sm font-medium text-slate-300">
                   Description
                 </span>
                 <textarea
-                  className="mt-2 min-h-32 w-full resize-none rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm leading-6 text-zinc-950 outline-none transition placeholder:text-zinc-400 focus:border-zinc-950 focus:bg-white focus:ring-4 focus:ring-zinc-950/10"
+                  className="mt-2 min-h-32 w-full resize-none rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm leading-6 text-white outline-none transition placeholder:text-slate-400 focus:border-teal-400/40 focus:bg-white/15 focus:ring-4 focus:ring-teal-400/10"
                   onChange={(event) => setDescription(event.target.value)}
                   placeholder="Describe the promise, audience, and outcome."
                   value={description}
@@ -289,15 +289,15 @@ export function CoursesPageClient() {
               </label>
 
               <div>
-                <p className="text-sm font-medium text-zinc-700">Status</p>
-                <div className="mt-2 grid grid-cols-2 gap-2 rounded-2xl border border-zinc-200 bg-zinc-50 p-1">
+                <p className="text-sm font-medium text-slate-300">Status</p>
+                <div className="mt-2 grid grid-cols-2 gap-2 rounded-2xl border border-white/10 bg-white/10 p-1">
                   {(["draft", "published"] as const).map((item) => (
                     <button
                       className={[
                         "h-11 rounded-xl text-sm font-semibold transition",
                         status === item
-                          ? "bg-zinc-950 text-white shadow-lg shadow-zinc-950/15"
-                          : "text-zinc-500 hover:bg-white hover:text-zinc-950",
+                          ? "bg-teal-400 text-black shadow-lg shadow-teal-950/30"
+                          : "text-slate-400 hover:bg-white/10 hover:text-white",
                       ].join(" ")}
                       key={item}
                       onClick={() => setStatus(item)}
@@ -311,7 +311,7 @@ export function CoursesPageClient() {
 
               <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end">
                 <Button
-                  className="border-zinc-200"
+                  className="border-white/10"
                   onClick={() => setFormOpen(false)}
                   type="button"
                   variant="secondary"

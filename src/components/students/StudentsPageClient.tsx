@@ -54,11 +54,19 @@ export function StudentStatusBadge({ status }: { status: StudentStatus }) {
   }
 
   if (status === "blocked") {
-    return <Badge className="border-red-200 bg-red-50 text-red-700">Blocked</Badge>;
+    return (
+      <Badge className="border-red-500/20 bg-red-500/20 text-red-400">
+        Blocked
+      </Badge>
+    );
   }
 
   if (status === "lead") {
-    return <Badge className="border-sky-200 bg-sky-50 text-sky-700">Lead</Badge>;
+    return (
+      <Badge className="border-blue-500/20 bg-blue-500/20 text-blue-400">
+        Lead
+      </Badge>
+    );
   }
 
   return <Badge>Inactive</Badge>;
@@ -166,32 +174,27 @@ export function StudentsPageClient() {
           <h2 className="mt-5 text-3xl font-semibold tracking-normal text-white sm:text-4xl">
             Students
           </h2>
-          <p className="mt-3 max-w-2xl text-base leading-7 text-zinc-400">
+          <p className="mt-3 max-w-2xl text-base leading-7 text-slate-400">
             Manage student records, lead sources, contact context, and CRM
             notes for this workspace.
           </p>
         </div>
-        <Button
-          className="bg-white text-zinc-950 hover:bg-zinc-100"
-          onClick={() => setFormOpen(true)}
-          size="lg"
-          type="button"
-        >
+        <Button onClick={() => setFormOpen(true)} size="lg" type="button">
           Add Student
         </Button>
       </div>
 
-      <Card className="mt-8 border-white/10 bg-white/[0.06] p-5 text-white shadow-2xl shadow-black/10 sm:p-6">
+      <Card className="mt-8 border-white/10 bg-[#101214] p-5 text-white shadow-2xl shadow-black/10 sm:p-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-sm font-medium text-zinc-400">
+            <p className="text-sm font-medium text-slate-400">
               Current workspace
             </p>
             <p className="mt-1 text-xl font-semibold">
               {tenant?.name ?? "Loading workspace..."}
             </p>
           </div>
-          <div className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-zinc-300">
+          <div className="rounded-full border border-white/10 bg-white/10 px-4 py-2 text-sm text-white">
             {students.length} {students.length === 1 ? "student" : "students"}
           </div>
         </div>
@@ -207,7 +210,7 @@ export function StudentsPageClient() {
         <section className="mt-6 grid gap-4">
           {[0, 1, 2].map((item) => (
             <Card
-              className="h-24 animate-pulse border-white/10 bg-white/[0.06]"
+              className="h-24 animate-pulse border-white/10 bg-[#101214]"
               key={item}
             >
               <span className="sr-only">Loading student</span>
@@ -215,15 +218,15 @@ export function StudentsPageClient() {
           ))}
         </section>
       ) : students.length === 0 ? (
-        <Card className="mt-6 border-white/10 bg-white p-8 text-zinc-950 shadow-2xl shadow-black/20">
+        <Card className="mt-6 border-white/10 bg-[#101214] p-8 text-white shadow-2xl shadow-black/20">
           <div className="mx-auto max-w-2xl text-center">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-zinc-950 text-sm font-bold text-white">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-teal-400 text-sm font-bold text-black">
               SD
             </div>
             <h3 className="mt-6 text-2xl font-semibold">
               No students added yet
             </h3>
-            <p className="mt-3 text-sm leading-6 text-zinc-500">
+            <p className="mt-3 text-sm leading-6 text-slate-400">
               Add your first student or lead to begin building the CRM layer.
               Enrollment and payment history will connect in later modules.
             </p>
@@ -237,8 +240,8 @@ export function StudentsPageClient() {
           </div>
         </Card>
       ) : (
-        <Card className="mt-6 overflow-hidden border-white/10 bg-white/[0.06] text-white shadow-2xl shadow-black/10">
-          <div className="hidden grid-cols-[1.2fr_1fr_0.8fr_0.7fr_0.8fr_0.7fr] gap-4 border-b border-white/10 px-5 py-4 text-xs font-semibold text-zinc-500 lg:grid">
+        <Card className="mt-6 overflow-hidden border-white/10 bg-[#101214] text-white shadow-2xl shadow-black/10">
+          <div className="hidden grid-cols-[1.2fr_1fr_0.8fr_0.7fr_0.8fr_0.7fr] gap-4 border-b border-white/10 px-5 py-4 text-xs font-semibold text-slate-400 lg:grid">
             <span>Name</span>
             <span>Email</span>
             <span>Phone</span>
@@ -249,7 +252,7 @@ export function StudentsPageClient() {
           <div className="divide-y divide-white/10">
             {students.map((student) => (
               <Link
-                className="grid gap-4 px-5 py-5 transition hover:bg-white/[0.04] lg:grid-cols-[1.2fr_1fr_0.8fr_0.7fr_0.8fr_0.7fr] lg:items-center"
+                className="grid gap-4 px-5 py-5 transition hover:bg-white/10 lg:grid-cols-[1.2fr_1fr_0.8fr_0.7fr_0.8fr_0.7fr] lg:items-center"
                 href={`/app/students/${student.id}`}
                 key={student.id}
               >
@@ -257,21 +260,21 @@ export function StudentsPageClient() {
                   <p className="font-semibold text-white">
                     {student.full_name}
                   </p>
-                  <p className="mt-1 text-sm text-zinc-500 lg:hidden">
+                  <p className="mt-1 text-sm text-slate-400 lg:hidden">
                     {student.email || "No email"}
                   </p>
                 </div>
-                <p className="hidden truncate text-sm text-zinc-400 lg:block">
+                <p className="hidden truncate text-sm text-slate-400 lg:block">
                   {student.email || "No email"}
                 </p>
-                <p className="text-sm text-zinc-400">
+                <p className="text-sm text-slate-400">
                   {student.phone || "No phone"}
                 </p>
                 <StudentStatusBadge status={student.status} />
-                <p className="text-sm text-zinc-400">
+                <p className="text-sm text-slate-400">
                   {student.source || "Direct"}
                 </p>
-                <p className="text-sm text-zinc-500">
+                <p className="text-sm text-slate-400">
                   {formatDate(student.created_at)}
                 </p>
               </Link>
@@ -282,14 +285,14 @@ export function StudentsPageClient() {
 
       {formOpen ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-black/70 px-4 py-4 backdrop-blur-sm sm:items-center">
-          <Card className="w-full max-w-2xl border-zinc-200 bg-white p-6 text-zinc-950 shadow-2xl shadow-black/40 sm:p-8">
+          <Card className="w-full max-w-2xl border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/40 sm:p-8">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-sm font-semibold text-zinc-500">New CRM record</p>
+                <p className="text-sm font-semibold text-slate-400">New CRM record</p>
                 <h3 className="mt-2 text-2xl font-semibold">Add Student</h3>
               </div>
               <button
-                className="flex h-10 w-10 items-center justify-center rounded-full border border-zinc-200 text-sm font-semibold text-zinc-500 transition hover:bg-zinc-50 hover:text-zinc-950"
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 text-sm font-semibold text-slate-400 transition hover:bg-white/10 hover:text-white"
                 onClick={() => setFormOpen(false)}
                 type="button"
               >
@@ -301,7 +304,7 @@ export function StudentsPageClient() {
               <StudentFormFields form={form} setForm={setForm} />
               <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end">
                 <Button
-                  className="border-zinc-200"
+                  className="border-slate-700! bg-white/10! text-white! hover:bg-white/15!"
                   onClick={() => setFormOpen(false)}
                   type="button"
                   variant="secondary"
@@ -330,9 +333,9 @@ export function StudentFormFields({
   return (
     <>
       <label className="block">
-        <span className="text-sm font-medium text-zinc-700">Full name</span>
+        <span className="text-sm font-medium text-slate-300">Full name</span>
         <input
-          className="mt-2 h-12 w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 text-sm text-zinc-950 outline-none transition placeholder:text-zinc-400 focus:border-zinc-950 focus:bg-white focus:ring-4 focus:ring-zinc-950/10"
+          className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition placeholder:text-slate-400 focus:border-teal-400/40 focus:bg-white/15 focus:ring-4 focus:ring-teal-400/10"
           onChange={(event) =>
             setForm((current) => ({ ...current, fullName: event.target.value }))
           }
@@ -345,9 +348,9 @@ export function StudentFormFields({
 
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="block">
-          <span className="text-sm font-medium text-zinc-700">Email</span>
+          <span className="text-sm font-medium text-slate-300">Email</span>
           <input
-            className="mt-2 h-12 w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 text-sm text-zinc-950 outline-none transition placeholder:text-zinc-400 focus:border-zinc-950 focus:bg-white focus:ring-4 focus:ring-zinc-950/10"
+            className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition placeholder:text-slate-400 focus:border-teal-400/40 focus:bg-white/15 focus:ring-4 focus:ring-teal-400/10"
             onChange={(event) =>
               setForm((current) => ({ ...current, email: event.target.value }))
             }
@@ -357,9 +360,9 @@ export function StudentFormFields({
           />
         </label>
         <label className="block">
-          <span className="text-sm font-medium text-zinc-700">Phone</span>
+          <span className="text-sm font-medium text-slate-300">Phone</span>
           <input
-            className="mt-2 h-12 w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 text-sm text-zinc-950 outline-none transition placeholder:text-zinc-400 focus:border-zinc-950 focus:bg-white focus:ring-4 focus:ring-zinc-950/10"
+            className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition placeholder:text-slate-400 focus:border-teal-400/40 focus:bg-white/15 focus:ring-4 focus:ring-teal-400/10"
             onChange={(event) =>
               setForm((current) => ({ ...current, phone: event.target.value }))
             }
@@ -372,9 +375,9 @@ export function StudentFormFields({
 
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="block">
-          <span className="text-sm font-medium text-zinc-700">Status</span>
+          <span className="text-sm font-medium text-slate-300">Status</span>
           <select
-            className="mt-2 h-12 w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 text-sm text-zinc-950 outline-none transition focus:border-zinc-950 focus:bg-white focus:ring-4 focus:ring-zinc-950/10"
+            className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition focus:border-teal-400/40 focus:bg-white/15 focus:ring-4 focus:ring-teal-400/10"
             onChange={(event) =>
               setForm((current) => ({
                 ...current,
@@ -391,9 +394,9 @@ export function StudentFormFields({
           </select>
         </label>
         <label className="block">
-          <span className="text-sm font-medium text-zinc-700">Source</span>
+          <span className="text-sm font-medium text-slate-300">Source</span>
           <input
-            className="mt-2 h-12 w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 text-sm text-zinc-950 outline-none transition placeholder:text-zinc-400 focus:border-zinc-950 focus:bg-white focus:ring-4 focus:ring-zinc-950/10"
+            className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition placeholder:text-slate-400 focus:border-teal-400/40 focus:bg-white/15 focus:ring-4 focus:ring-teal-400/10"
             onChange={(event) =>
               setForm((current) => ({ ...current, source: event.target.value }))
             }
@@ -405,9 +408,9 @@ export function StudentFormFields({
       </div>
 
       <label className="block">
-        <span className="text-sm font-medium text-zinc-700">Notes</span>
+        <span className="text-sm font-medium text-slate-300">Notes</span>
         <textarea
-          className="mt-2 min-h-28 w-full resize-none rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm leading-6 text-zinc-950 outline-none transition placeholder:text-zinc-400 focus:border-zinc-950 focus:bg-white focus:ring-4 focus:ring-zinc-950/10"
+          className="mt-2 min-h-28 w-full resize-none rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm leading-6 text-white outline-none transition placeholder:text-slate-400 focus:border-teal-400/40 focus:bg-white/15 focus:ring-4 focus:ring-teal-400/10"
           onChange={(event) =>
             setForm((current) => ({ ...current, notes: event.target.value }))
           }

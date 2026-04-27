@@ -128,20 +128,20 @@ export function EnrollmentsPageClient() {
           <h2 className="mt-5 text-3xl font-semibold tracking-normal text-white sm:text-4xl">
             Enrollments
           </h2>
-          <p className="mt-3 max-w-2xl text-base leading-7 text-zinc-400">
+          <p className="mt-3 max-w-2xl text-base leading-7 text-slate-400">
             See which students are connected to which courses across this
             workspace.
           </p>
         </div>
-        <div className="rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm text-zinc-100">
+        <div className="rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm text-white">
           {filteredEnrollments.length} visible
         </div>
       </div>
 
-      <Card className="mt-8 border-white/10 bg-white/[0.06] p-5 text-white shadow-2xl shadow-black/10 sm:p-6">
+      <Card className="mt-8 border-white/10 bg-[#101214] p-5 text-white shadow-2xl shadow-black/10 sm:p-6">
         <div className="grid gap-4 lg:grid-cols-[1fr_1fr_auto] lg:items-end">
           <div>
-            <p className="text-sm font-medium text-zinc-400">
+            <p className="text-sm font-medium text-slate-400">
               Current workspace
             </p>
             <p className="mt-1 text-xl font-semibold">
@@ -149,9 +149,9 @@ export function EnrollmentsPageClient() {
             </p>
           </div>
           <label className="block">
-            <span className="text-sm font-medium text-zinc-400">Search</span>
+            <span className="text-sm font-medium text-slate-400">Search</span>
             <input
-              className="mt-2 h-11 w-full rounded-2xl border border-white/15 bg-zinc-900 px-4 text-sm text-white outline-none transition placeholder:text-zinc-400 focus:border-white/30 focus:ring-4 focus:ring-white/10"
+              className="mt-2 h-11 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition placeholder:text-slate-400 focus:border-white/30 focus:ring-4 focus:ring-white/10"
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Student or course"
               type="search"
@@ -159,16 +159,16 @@ export function EnrollmentsPageClient() {
             />
           </label>
           <label className="block">
-            <span className="text-sm font-medium text-zinc-400">Status</span>
+            <span className="text-sm font-medium text-slate-400">Status</span>
             <select
-              className="mt-2 h-11 rounded-2xl border border-white/15 bg-zinc-900 px-4 text-sm text-white outline-none transition focus:border-white/30 focus:ring-4 focus:ring-white/10"
+              className="mt-2 h-11 rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition focus:border-white/30 focus:ring-4 focus:ring-white/10"
               onChange={(event) =>
                 setStatusFilter(event.target.value as StatusFilter)
               }
               value={statusFilter}
             >
               {statusFilters.map((status) => (
-                <option className="text-zinc-950" key={status} value={status}>
+                <option className="text-slate-950" key={status} value={status}>
                   {status}
                 </option>
               ))}
@@ -187,7 +187,7 @@ export function EnrollmentsPageClient() {
         <section className="mt-6 grid gap-4">
           {[0, 1, 2].map((item) => (
             <Card
-              className="h-24 animate-pulse border-white/10 bg-white/[0.06]"
+              className="h-24 animate-pulse border-white/10 bg-[#101214]"
               key={item}
             >
               <span className="sr-only">Loading enrollment</span>
@@ -195,23 +195,23 @@ export function EnrollmentsPageClient() {
           ))}
         </section>
       ) : filteredEnrollments.length === 0 ? (
-        <Card className="mt-6 border-white/10 bg-white p-8 text-zinc-950 shadow-2xl shadow-black/20">
+        <Card className="mt-6 border-white/10 bg-[#101214] p-8 text-white shadow-2xl shadow-black/20">
           <div className="mx-auto max-w-2xl text-center">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-zinc-950 text-sm font-bold text-white">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-teal-400 text-sm font-bold text-black">
               EN
             </div>
             <h3 className="mt-6 text-2xl font-semibold">
               No enrollments found
             </h3>
-            <p className="mt-3 text-sm leading-6 text-zinc-500">
+            <p className="mt-3 text-sm leading-6 text-slate-400">
               Enroll a student from their profile to create the first course
               connection.
             </p>
           </div>
         </Card>
       ) : (
-        <Card className="mt-6 overflow-hidden border-white/10 bg-white/[0.06] text-white shadow-2xl shadow-black/10">
-          <div className="hidden grid-cols-[1fr_1fr_auto_auto] gap-4 border-b border-white/10 px-5 py-4 text-xs font-semibold text-zinc-500 lg:grid">
+        <Card className="mt-6 overflow-hidden border-white/10 bg-[#101214] text-white shadow-2xl shadow-black/10">
+          <div className="hidden grid-cols-[1fr_1fr_auto_auto] gap-4 border-b border-white/10 px-5 py-4 text-xs font-semibold text-slate-400 lg:grid">
             <span>Student</span>
             <span>Course</span>
             <span>Status</span>
@@ -224,26 +224,26 @@ export function EnrollmentsPageClient() {
                 key={enrollment.id}
               >
                 <Link
-                  className="transition hover:text-zinc-300"
+                  className="transition hover:text-white"
                   href={`/app/students/${enrollment.student_id}`}
                 >
                   <p className="font-semibold">
                     {enrollment.student?.full_name ?? "Student unavailable"}
                   </p>
-                  <p className="mt-1 text-sm text-zinc-500">
+                  <p className="mt-1 text-sm text-slate-400">
                     {enrollment.student?.email ||
                       enrollment.student?.phone ||
                       "No contact details"}
                   </p>
                 </Link>
                 <Link
-                  className="font-semibold transition hover:text-zinc-300"
+                  className="font-semibold transition hover:text-white"
                   href={`/app/courses/${enrollment.course_id}`}
                 >
                   {enrollment.course?.title ?? "Course unavailable"}
                 </Link>
                 <EnrollmentStatusBadge status={enrollment.status} />
-                <p className="text-sm text-zinc-500">
+                <p className="text-sm text-slate-400">
                   {formatDate(enrollment.enrolled_at)}
                 </p>
               </div>

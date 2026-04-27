@@ -12,14 +12,14 @@ type ButtonProps = {
 } & React.ButtonHTMLAttributes<HTMLButtonElement>;
 
 const baseClasses =
-  "inline-flex items-center justify-center rounded-full font-semibold transition duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-950 disabled:pointer-events-none disabled:opacity-75";
+  "inline-flex items-center justify-center rounded-full font-semibold transition duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-300 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-500 disabled:shadow-none";
 
 const variantClasses: Record<ButtonVariant, string> = {
   primary:
-    "bg-zinc-950 text-white shadow-lg shadow-zinc-950/20 hover:-translate-y-0.5 hover:bg-zinc-800",
+    "border border-teal-400/30 bg-teal-400 text-black shadow-lg shadow-teal-950/30 hover:-translate-y-0.5 hover:bg-teal-300",
   secondary:
-    "border border-zinc-200 bg-white text-zinc-950 shadow-sm hover:-translate-y-0.5 hover:border-zinc-300 hover:bg-zinc-50",
-  ghost: "text-zinc-700 hover:bg-zinc-100 hover:text-zinc-950",
+    "border border-white/10 bg-white/10 text-white shadow-sm hover:-translate-y-0.5 hover:bg-white/15",
+  ghost: "text-slate-300 hover:bg-white/10 hover:text-white",
 };
 
 const sizeClasses: Record<ButtonSize, string> = {

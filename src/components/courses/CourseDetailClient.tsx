@@ -337,7 +337,7 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
   if (loading) {
     return (
       <div className="mx-auto max-w-7xl">
-        <Card className="h-72 animate-pulse border-white/10 bg-white/[0.06]">
+        <Card className="h-72 animate-pulse border-white/10 bg-[#101214]">
           <span className="sr-only">Loading course</span>
         </Card>
       </div>
@@ -347,13 +347,13 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
   if (error || !course) {
     return (
       <div className="mx-auto max-w-7xl">
-        <Card className="border-white/10 bg-white p-8 text-zinc-950 shadow-2xl shadow-black/20">
-          <p className="text-sm font-semibold text-zinc-500">Course detail</p>
+        <Card className="border-white/10 bg-[#101214] p-8 text-white shadow-2xl shadow-black/20">
+          <p className="text-sm font-semibold text-slate-500">Course detail</p>
           <h2 className="mt-3 text-2xl font-semibold">
             {error || "Course not found."}
           </h2>
           <Link
-            className="mt-6 inline-flex h-11 items-center justify-center rounded-full bg-zinc-950 px-5 text-sm font-semibold text-white"
+            className="mt-6 inline-flex h-11 items-center justify-center rounded-full bg-teal-400 px-5 text-sm font-semibold text-black"
             href="/app/courses"
           >
             Back to courses
@@ -366,14 +366,14 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
   return (
     <div className="mx-auto max-w-7xl">
       <Link
-        className="text-sm font-semibold text-zinc-400 transition hover:text-white"
+        className="text-sm font-semibold text-slate-400 transition hover:text-white"
         href="/app/courses"
       >
         Back to courses
       </Link>
 
       <section className="mt-6 grid gap-6 xl:grid-cols-[1fr_0.42fr]">
-        <Card className="border-white/10 bg-white/[0.06] p-6 text-white shadow-2xl shadow-black/10 sm:p-8">
+        <Card className="border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/10 sm:p-8">
           <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <Badge className="border-white/15 bg-white/10 text-white">
@@ -386,21 +386,21 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
             <CourseStatusBadge status={course.status} />
           </div>
 
-          <p className="mt-6 max-w-3xl text-base leading-7 text-zinc-400">
+          <p className="mt-6 max-w-3xl text-base leading-7 text-slate-400">
             {course.description || "No description added yet."}
           </p>
 
           <div className="mt-8 grid gap-4 border-t border-white/10 pt-6 sm:grid-cols-3">
             <div>
-              <p className="text-sm text-zinc-500">Workspace</p>
+              <p className="text-sm text-slate-500">Workspace</p>
               <p className="mt-2 font-semibold">{tenant?.name}</p>
             </div>
             <div>
-              <p className="text-sm text-zinc-500">Slug</p>
+              <p className="text-sm text-slate-500">Slug</p>
               <p className="mt-2 font-semibold">/{course.slug}</p>
             </div>
             <div>
-              <p className="text-sm text-zinc-500">Created</p>
+              <p className="text-sm text-slate-500">Created</p>
               <p className="mt-2 font-semibold">
                 {formatDate(course.created_at)}
               </p>
@@ -408,14 +408,14 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
           </div>
         </Card>
 
-        <Card className="border-white/10 bg-white p-6 text-zinc-950 shadow-2xl shadow-black/20">
-          <p className="text-sm font-semibold text-zinc-500">
+        <Card className="border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/20">
+          <p className="text-sm font-semibold text-slate-500">
             Structure summary
           </p>
           <h3 className="mt-3 text-2xl font-semibold">
             {sections.length} {sections.length === 1 ? "section" : "sections"}
           </h3>
-          <p className="mt-3 text-sm leading-6 text-zinc-500">
+          <p className="mt-3 text-sm leading-6 text-slate-500">
             {sections.reduce(
               (total, section) => total + section.lessons.length,
               0,
@@ -432,7 +432,7 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
       ) : null}
 
       <section className="mt-6">
-        <Card className="border-white/10 bg-white/[0.06] p-6 text-white shadow-2xl shadow-black/10 sm:p-8">
+        <Card className="border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/10 sm:p-8">
           <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-start">
             <div>
               <Badge className="border-white/15 bg-white/10 text-white">
@@ -441,12 +441,12 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
               <h3 className="mt-4 text-2xl font-semibold">
                 Sections and lessons
               </h3>
-              <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-400">
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-400">
                 Organize the course into ordered sections and lesson assets.
               </p>
             </div>
             <Button
-              className="bg-white text-zinc-950 hover:bg-zinc-100"
+              className="bg-teal-400 text-black hover:bg-teal-300"
               onClick={() => setSectionModal({ mode: "create", title: "" })}
               type="button"
             >
@@ -455,14 +455,14 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
           </div>
 
           {sections.length === 0 ? (
-            <div className="mt-8 rounded-3xl border border-dashed border-white/15 bg-zinc-950/30 p-8 text-center">
-              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-sm font-bold text-zinc-950">
+            <div className="mt-8 rounded-3xl border border-dashed border-white/15 bg-[#101214] p-8 text-center">
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-teal-400 text-sm font-bold text-black">
                 01
               </div>
               <h4 className="mt-5 text-xl font-semibold">
                 No sections yet
               </h4>
-              <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-zinc-400">
+              <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-slate-400">
                 Add your first section to start building the course structure.
                 Lessons can be added inside each section.
               </p>
@@ -471,25 +471,25 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
             <div className="mt-8 space-y-5">
               {sections.map((section, sectionIndex) => (
                 <div
-                  className="rounded-3xl border border-white/10 bg-zinc-950/35 p-5"
+                  className="rounded-3xl border border-white/10 bg-[#15181b] p-5"
                   key={section.id}
                 >
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                     <div>
-                      <p className="text-xs font-semibold text-zinc-500">
+                      <p className="text-xs font-semibold text-slate-500">
                         Section {sectionIndex + 1}
                       </p>
                       <h4 className="mt-2 text-xl font-semibold">
                         {section.title}
                       </h4>
-                      <p className="mt-2 text-sm text-zinc-500">
+                      <p className="mt-2 text-sm text-slate-500">
                         {section.lessons.length}{" "}
                         {section.lessons.length === 1 ? "lesson" : "lessons"}
                       </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
                       <Button
-                        className="bg-white text-zinc-950 hover:bg-zinc-100"
+                        className="bg-teal-400 text-black hover:bg-teal-300"
                         onClick={() => openCreateLesson(section.id)}
                         size="sm"
                         type="button"
@@ -530,22 +530,22 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
                   </div>
 
                   {section.lessons.length === 0 ? (
-                    <div className="mt-5 rounded-2xl border border-dashed border-white/10 bg-white/[0.03] p-5 text-sm text-zinc-500">
+                    <div className="mt-5 rounded-2xl border border-dashed border-white/10 bg-[#101214] p-5 text-sm text-slate-500">
                       No lessons in this section yet.
                     </div>
                   ) : (
                     <div className="mt-5 space-y-3">
                       {section.lessons.map((lesson, lessonIndex) => (
                         <div
-                          className="flex flex-col gap-4 rounded-2xl border border-white/10 bg-white/[0.05] p-4 sm:flex-row sm:items-center sm:justify-between"
+                          className="flex flex-col gap-4 rounded-2xl border border-white/10 bg-[#15181b] p-4 sm:flex-row sm:items-center sm:justify-between"
                           key={lesson.id}
                         >
                           <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-2">
-                              <span className="text-xs font-semibold text-zinc-500">
+                              <span className="text-xs font-semibold text-slate-500">
                                 {String(lessonIndex + 1).padStart(2, "0")}
                               </span>
-                              <Badge className="border-white/10 bg-white/10 text-zinc-300">
+                              <Badge className="border-white/10 bg-white/10 text-slate-300">
                                 {lesson.lesson_type}
                               </Badge>
                               {lesson.is_preview ? (
@@ -555,7 +555,7 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
                             <h5 className="mt-3 truncate text-base font-semibold">
                               {lesson.title}
                             </h5>
-                            <p className="mt-1 line-clamp-2 text-sm leading-6 text-zinc-500">
+                            <p className="mt-1 line-clamp-2 text-sm leading-6 text-slate-500">
                               {lesson.content ||
                                 lesson.video_url ||
                                 lesson.resource_url ||
@@ -601,7 +601,7 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
       </section>
 
       <section className="mt-6 grid gap-4 md:grid-cols-2">
-        <Card className="border-white/10 bg-white/[0.06] p-6 text-white shadow-2xl shadow-black/10 md:col-span-2">
+        <Card className="border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/10 md:col-span-2">
           <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-start">
             <div>
               <Badge className="border-white/15 bg-white/10 text-white">
@@ -610,25 +610,25 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
               <h3 className="mt-4 text-2xl font-semibold">
                 Course enrollment roster
               </h3>
-              <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-400">
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-400">
                 View students connected to this course. Enrollment changes are
                 managed from student profiles and the enrollment overview.
               </p>
             </div>
-            <div className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-zinc-300">
+            <div className="rounded-full border border-white/10 bg-[#101214] px-4 py-2 text-sm text-slate-300">
               {enrollments.length} enrolled
             </div>
           </div>
 
           {enrollments.length === 0 ? (
-            <div className="mt-8 rounded-3xl border border-dashed border-white/15 bg-zinc-950/30 p-8 text-center">
-              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-sm font-bold text-zinc-950">
+            <div className="mt-8 rounded-3xl border border-dashed border-white/15 bg-[#101214] p-8 text-center">
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-teal-400 text-sm font-bold text-black">
                 EN
               </div>
               <h4 className="mt-5 text-xl font-semibold">
                 No enrolled students yet
               </h4>
-              <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-zinc-400">
+              <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-slate-400">
                 Enroll students from their CRM profile or the enrollment
                 overview once records exist.
               </p>
@@ -637,25 +637,25 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
             <div className="mt-8 divide-y divide-white/10 overflow-hidden rounded-3xl border border-white/10">
               {enrollments.map((enrollment) => (
                 <div
-                  className="grid gap-4 bg-zinc-950/30 p-4 lg:grid-cols-[1fr_1fr_auto_auto] lg:items-center"
+                  className="grid gap-4 bg-[#101214] p-4 lg:grid-cols-[1fr_1fr_auto_auto] lg:items-center"
                   key={enrollment.id}
                 >
                   <div>
                     <p className="font-semibold">
                       {enrollment.student?.full_name ?? "Student unavailable"}
                     </p>
-                    <p className="mt-1 text-sm text-zinc-500">
+                    <p className="mt-1 text-sm text-slate-500">
                       {enrollment.student?.email ||
                         enrollment.student?.phone ||
                         "No contact details"}
                     </p>
                   </div>
-                  <p className="text-sm text-zinc-400">
+                  <p className="text-sm text-slate-400">
                     Enrolled {formatDate(enrollment.enrolled_at)}
                   </p>
                   <EnrollmentStatusBadge status={enrollment.status} />
                   <Link
-                    className="text-sm font-semibold text-white transition hover:text-zinc-300"
+                    className="text-sm font-semibold text-white transition hover:text-slate-300"
                     href={`/app/students/${enrollment.student_id}`}
                   >
                     View student
@@ -679,14 +679,14 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
           },
         ].map((item, index) => (
           <Card
-            className="border-white/10 bg-white/[0.06] p-6 text-white shadow-2xl shadow-black/10"
+            className="border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/10"
             key={item.title}
           >
-            <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-sm font-bold text-zinc-950">
+            <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-teal-400 text-sm font-bold text-black">
               {String(index + 1).padStart(2, "0")}
             </span>
             <h3 className="mt-6 text-xl font-semibold">{item.title}</h3>
-            <p className="mt-3 text-sm leading-6 text-zinc-400">
+            <p className="mt-3 text-sm leading-6 text-slate-400">
               {item.detail}
             </p>
           </Card>
@@ -695,17 +695,17 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
 
       {sectionModal ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 px-4 py-4 backdrop-blur-sm sm:items-center">
-          <Card className="w-full max-w-lg border-zinc-200 bg-white p-6 text-zinc-950 shadow-2xl shadow-black/40 sm:p-8">
+          <Card className="w-full max-w-lg border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/40 sm:p-8">
             <h3 className="text-2xl font-semibold">
               {sectionModal.mode === "edit" ? "Edit section" : "Add Section"}
             </h3>
             <form className="mt-6 space-y-5" onSubmit={handleSectionSubmit}>
               <label className="block">
-                <span className="text-sm font-medium text-zinc-700">
+                <span className="text-sm font-medium text-slate-300">
                   Section title
                 </span>
                 <input
-                  className="mt-2 h-12 w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 text-sm text-zinc-950 outline-none transition placeholder:text-zinc-400 focus:border-zinc-950 focus:bg-white focus:ring-4 focus:ring-zinc-950/10"
+                  className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition placeholder:text-slate-400 focus:border-teal-400/40 focus:bg-white/15 focus:ring-4 focus:ring-teal-400/10"
                   onChange={(event) =>
                     setSectionModal({
                       ...sectionModal,
@@ -737,17 +737,17 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
 
       {lessonModal ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-black/70 px-4 py-4 backdrop-blur-sm sm:items-center">
-          <Card className="w-full max-w-2xl border-zinc-200 bg-white p-6 text-zinc-950 shadow-2xl shadow-black/40 sm:p-8">
+          <Card className="w-full max-w-2xl border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/40 sm:p-8">
             <h3 className="text-2xl font-semibold">
               {lessonModal.mode === "edit" ? "Edit lesson" : "Add Lesson"}
             </h3>
             <form className="mt-6 space-y-5" onSubmit={handleLessonSubmit}>
               <label className="block">
-                <span className="text-sm font-medium text-zinc-700">
+                <span className="text-sm font-medium text-slate-300">
                   Lesson title
                 </span>
                 <input
-                  className="mt-2 h-12 w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 text-sm text-zinc-950 outline-none transition placeholder:text-zinc-400 focus:border-zinc-950 focus:bg-white focus:ring-4 focus:ring-zinc-950/10"
+                  className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition placeholder:text-slate-400 focus:border-teal-400/40 focus:bg-white/15 focus:ring-4 focus:ring-teal-400/10"
                   onChange={(event) =>
                     setLessonModal({
                       ...lessonModal,
@@ -762,11 +762,11 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
               </label>
 
               <label className="block">
-                <span className="text-sm font-medium text-zinc-700">
+                <span className="text-sm font-medium text-slate-300">
                   Lesson type
                 </span>
                 <select
-                  className="mt-2 h-12 w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 text-sm text-zinc-950 outline-none transition focus:border-zinc-950 focus:bg-white focus:ring-4 focus:ring-zinc-950/10"
+                  className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition focus:border-teal-400/40 focus:bg-white/15 focus:ring-4 focus:ring-teal-400/10"
                   onChange={(event) =>
                     setLessonModal({
                       ...lessonModal,
@@ -784,11 +784,11 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
               </label>
 
               <label className="block">
-                <span className="text-sm font-medium text-zinc-700">
+                <span className="text-sm font-medium text-slate-300">
                   Content
                 </span>
                 <textarea
-                  className="mt-2 min-h-28 w-full resize-none rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm leading-6 text-zinc-950 outline-none transition placeholder:text-zinc-400 focus:border-zinc-950 focus:bg-white focus:ring-4 focus:ring-zinc-950/10"
+                  className="mt-2 min-h-28 w-full resize-none rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm leading-6 text-white outline-none transition placeholder:text-slate-400 focus:border-teal-400/40 focus:bg-white/15 focus:ring-4 focus:ring-teal-400/10"
                   onChange={(event) =>
                     setLessonModal({
                       ...lessonModal,
@@ -802,11 +802,11 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="block">
-                  <span className="text-sm font-medium text-zinc-700">
+                  <span className="text-sm font-medium text-slate-300">
                     Video URL
                   </span>
                   <input
-                    className="mt-2 h-12 w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 text-sm text-zinc-950 outline-none transition placeholder:text-zinc-400 focus:border-zinc-950 focus:bg-white focus:ring-4 focus:ring-zinc-950/10"
+                    className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition placeholder:text-slate-400 focus:border-teal-400/40 focus:bg-white/15 focus:ring-4 focus:ring-teal-400/10"
                     onChange={(event) =>
                       setLessonModal({
                         ...lessonModal,
@@ -819,11 +819,11 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
                   />
                 </label>
                 <label className="block">
-                  <span className="text-sm font-medium text-zinc-700">
+                  <span className="text-sm font-medium text-slate-300">
                     Resource URL
                   </span>
                   <input
-                    className="mt-2 h-12 w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 text-sm text-zinc-950 outline-none transition placeholder:text-zinc-400 focus:border-zinc-950 focus:bg-white focus:ring-4 focus:ring-zinc-950/10"
+                    className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition placeholder:text-slate-400 focus:border-teal-400/40 focus:bg-white/15 focus:ring-4 focus:ring-teal-400/10"
                     onChange={(event) =>
                       setLessonModal({
                         ...lessonModal,
@@ -837,10 +837,10 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
                 </label>
               </div>
 
-              <label className="flex items-center gap-3 rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+              <label className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/10 p-4">
                 <input
                   checked={lessonModal.isPreview}
-                  className="h-5 w-5 rounded border-zinc-300 accent-zinc-950"
+                  className="h-5 w-5 rounded border-white/20 accent-teal-400"
                   onChange={(event) =>
                     setLessonModal({
                       ...lessonModal,
@@ -849,7 +849,7 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
                   }
                   type="checkbox"
                 />
-                <span className="text-sm font-medium text-zinc-700">
+                <span className="text-sm font-medium text-slate-300">
                   Preview lesson
                 </span>
               </label>
@@ -873,14 +873,14 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
 
       {deleteTarget ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 px-4 py-4 backdrop-blur-sm sm:items-center">
-          <Card className="w-full max-w-md border-zinc-200 bg-white p-6 text-zinc-950 shadow-2xl shadow-black/40 sm:p-8">
-            <p className="text-sm font-semibold text-red-600">
+          <Card className="w-full max-w-md border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/40 sm:p-8">
+            <p className="text-sm font-semibold text-red-300">
               Confirm delete
             </p>
             <h3 className="mt-3 text-2xl font-semibold">
               Delete {deleteTarget.title}?
             </h3>
-            <p className="mt-3 text-sm leading-6 text-zinc-500">
+            <p className="mt-3 text-sm leading-6 text-slate-500">
               {deleteTarget.kind === "section"
                 ? "This will also remove the lessons inside this section through the database cascade."
                 : "This lesson will be removed from the course structure."}
@@ -894,7 +894,7 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
                 Cancel
               </Button>
               <Button
-                className="bg-red-600 shadow-red-600/20 hover:bg-red-700"
+                className="bg-red-500 shadow-red-950/30 hover:bg-red-600"
                 disabled={mutating}
                 onClick={handleDeleteConfirm}
                 type="button"

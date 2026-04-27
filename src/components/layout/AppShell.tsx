@@ -35,18 +35,18 @@ const iconMap: Record<string, string> = {
 
 export function AppShell({ activeItem = "Dashboard", children }: AppShellProps) {
   return (
-    <div className="min-h-screen bg-zinc-950 text-white">
-      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.16),transparent_32rem),linear-gradient(135deg,rgba(39,39,42,0.55),transparent_34rem)]" />
+    <div className="min-h-screen bg-[#050607] text-white">
+      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top_left,rgba(45,212,191,0.14),transparent_30rem),linear-gradient(135deg,rgba(15,23,42,0.38),transparent_34rem)]" />
 
       <div className="relative flex min-h-screen">
-        <aside className="hidden w-72 shrink-0 border-r border-white/10 bg-white/[0.04] px-4 py-5 backdrop-blur-xl lg:block">
+        <aside className="hidden w-72 shrink-0 border-r border-white/10 bg-[#101214] px-4 py-5 backdrop-blur-xl lg:block">
           <Link className="flex items-center gap-3 px-2" href="/app">
-            <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-sm font-bold text-zinc-950">
+            <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-teal-400 text-sm font-bold text-black">
               CO
             </span>
             <div>
               <p className="text-base font-semibold">CoachOS</p>
-              <p className="text-xs text-zinc-400">Nexus Valley</p>
+              <p className="text-xs text-slate-400">Nexus Valley</p>
             </div>
           </Link>
 
@@ -59,8 +59,8 @@ export function AppShell({ activeItem = "Dashboard", children }: AppShellProps) 
                   className={[
                     "flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-medium transition",
                     active
-                      ? "bg-white text-zinc-950 shadow-lg shadow-black/20"
-                      : "text-zinc-200 hover:bg-white/10 hover:text-white",
+                      ? "bg-teal-400 text-black shadow-lg shadow-teal-950/30"
+                      : "text-slate-300 hover:bg-white/10 hover:text-white",
                   ].join(" ")}
                   href={item.href}
                   key={item.label}
@@ -69,8 +69,8 @@ export function AppShell({ activeItem = "Dashboard", children }: AppShellProps) 
                     className={[
                       "flex h-8 w-8 items-center justify-center rounded-xl text-[10px] font-bold",
                       active
-                        ? "bg-zinc-950 text-white"
-                        : "bg-white/10 text-zinc-100",
+                        ? "bg-black text-teal-300"
+                        : "bg-white/10 text-slate-300",
                     ].join(" ")}
                   >
                     {iconMap[item.label]}
@@ -83,18 +83,18 @@ export function AppShell({ activeItem = "Dashboard", children }: AppShellProps) 
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col pb-24 lg:pb-0">
-          <header className="sticky top-0 z-20 border-b border-white/10 bg-zinc-950/80 backdrop-blur-xl">
+          <header className="sticky top-0 z-20 border-b border-white/10 bg-[#050607]/85 backdrop-blur-xl">
             <div className="flex h-20 items-center justify-between px-5 sm:px-6 lg:px-8">
               <div>
-                <p className="text-xs font-semibold text-zinc-500">
+                <p className="text-xs font-semibold text-slate-400">
                   Nexus Valley
                 </p>
                 <h1 className="mt-1 text-xl font-semibold text-white">
                   CoachOS
                 </h1>
               </div>
-              <div className="hidden items-center gap-3 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm text-zinc-100 sm:flex">
-                <span className="h-2 w-2 rounded-full bg-emerald-400" />
+              <div className="hidden items-center gap-3 rounded-full border border-teal-400/30 bg-teal-400/10 px-4 py-2 text-sm text-teal-300 sm:flex">
+                <span className="h-2 w-2 rounded-full bg-teal-400" />
                 Workspace ready
               </div>
             </div>
@@ -105,7 +105,7 @@ export function AppShell({ activeItem = "Dashboard", children }: AppShellProps) 
           </main>
         </div>
 
-        <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-white/10 bg-zinc-950/90 px-3 py-3 backdrop-blur-xl lg:hidden">
+        <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-white/10 bg-[#050607]/95 px-3 py-3 backdrop-blur-xl lg:hidden">
           <div className="grid grid-cols-5 gap-1">
             {navItems.slice(0, 5).map((item) => {
               const active = item.label === activeItem;
@@ -115,8 +115,8 @@ export function AppShell({ activeItem = "Dashboard", children }: AppShellProps) 
                   className={[
                     "flex flex-col items-center justify-center gap-1 rounded-2xl px-2 py-2 text-[11px] font-medium",
                     active
-                      ? "bg-white text-zinc-950"
-                      : "text-zinc-200 hover:bg-white/10 hover:text-white",
+                      ? "bg-teal-400 text-black"
+                      : "text-slate-300 hover:bg-white/10 hover:text-white",
                   ].join(" ")}
                   href={item.href}
                   key={item.label}

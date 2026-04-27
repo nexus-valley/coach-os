@@ -442,7 +442,7 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
   if (loading) {
     return (
       <div className="mx-auto max-w-7xl">
-        <Card className="h-72 animate-pulse border-white/10 bg-white/6">
+        <Card className="h-72 animate-pulse border-white/10 bg-[#101214]">
           <span className="sr-only">Loading student</span>
         </Card>
       </div>
@@ -452,13 +452,13 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
   if (error || !student) {
     return (
       <div className="mx-auto max-w-7xl">
-        <Card className="border-white/10 bg-white p-8 text-zinc-950 shadow-2xl shadow-black/20">
-          <p className="text-sm font-semibold text-zinc-500">Student profile</p>
+        <Card className="border-white/10 bg-[#101214] p-8 text-white shadow-2xl shadow-black/20">
+          <p className="text-sm font-semibold text-slate-400">Student profile</p>
           <h2 className="mt-3 text-2xl font-semibold">
             {error || "Student not found."}
           </h2>
           <Link
-            className="mt-6 inline-flex h-11 items-center justify-center rounded-full bg-zinc-950 px-5 text-sm font-semibold text-white"
+            className="mt-6 inline-flex h-11 items-center justify-center rounded-full bg-teal-400 px-5 text-sm font-semibold text-black"
             href="/app/students"
           >
             Back to students
@@ -471,14 +471,14 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
   return (
     <div className="mx-auto max-w-7xl">
       <Link
-        className="text-sm font-semibold text-zinc-400 transition hover:text-white"
+        className="text-sm font-semibold text-slate-400 transition hover:text-white"
         href="/app/students"
       >
         Back to students
       </Link>
 
       <section className="mt-6 grid gap-6 xl:grid-cols-[1fr_0.42fr]">
-        <Card className="border-white/10 bg-white/6 p-6 text-white shadow-2xl shadow-black/10 sm:p-8">
+        <Card className="border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/10 sm:p-8">
           <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <Badge className="border-white/15 bg-white/10 text-white">
@@ -493,43 +493,43 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
 
           <div className="mt-8 grid gap-4 border-t border-white/10 pt-6 sm:grid-cols-2 lg:grid-cols-4">
             <div>
-              <p className="text-sm text-zinc-500">Email</p>
+              <p className="text-sm text-slate-400">Email</p>
               <p className="mt-2 wrap-break-word font-semibold">
                 {student.email || "Not added"}
               </p>
             </div>
             <div>
-              <p className="text-sm text-zinc-500">Phone</p>
+              <p className="text-sm text-slate-400">Phone</p>
               <p className="mt-2 font-semibold">
                 {student.phone || "Not added"}
               </p>
             </div>
             <div>
-              <p className="text-sm text-zinc-500">Source</p>
+              <p className="text-sm text-slate-400">Source</p>
               <p className="mt-2 font-semibold">
                 {student.source || "Direct"}
               </p>
             </div>
             <div>
-              <p className="text-sm text-zinc-500">Created</p>
+              <p className="text-sm text-slate-400">Created</p>
               <p className="mt-2 font-semibold">
                 {formatDate(student.created_at)}
               </p>
             </div>
           </div>
 
-          <div className="mt-8 rounded-3xl border border-white/10 bg-zinc-950/35 p-5">
-            <p className="text-sm font-semibold text-zinc-400">Notes</p>
-            <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-zinc-300">
+          <div className="mt-8 rounded-3xl border border-white/10 bg-[#101214] p-5">
+            <p className="text-sm font-semibold text-slate-400">Notes</p>
+            <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-white">
               {student.notes || "No notes added yet."}
             </p>
           </div>
         </Card>
 
-        <Card className="border-white/10 bg-white p-6 text-zinc-950 shadow-2xl shadow-black/20">
-          <p className="text-sm font-semibold text-zinc-500">Workspace</p>
+        <Card className="border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/20">
+          <p className="text-sm font-semibold text-slate-400">Workspace</p>
           <h3 className="mt-3 text-2xl font-semibold">{tenant?.name}</h3>
-          <p className="mt-3 text-sm leading-6 text-zinc-500">
+          <p className="mt-3 text-sm leading-6 text-slate-400">
             This CRM record is scoped to the current tenant and cannot be loaded
             without the matching workspace id.
           </p>
@@ -537,14 +537,19 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
             <Button onClick={openEnrollmentPanel} type="button">
               Enroll in Course
             </Button>
-            <Button onClick={openPaymentPanel} type="button" variant="secondary">
+            <Button
+              className="border-slate-700! bg-white/10! text-white! hover:bg-white/15!"
+              onClick={openPaymentPanel}
+              type="button"
+              variant="secondary"
+            >
               Add Payment
             </Button>
             <Button onClick={() => setEditOpen(true)} type="button">
               Edit Student
             </Button>
             <Button
-              className="text-red-700 hover:bg-red-50 hover:text-red-800"
+              className="text-red-300! hover:bg-red-500/10! hover:text-red-200!"
               onClick={() => setDeleteOpen(true)}
               type="button"
               variant="ghost"
@@ -562,36 +567,32 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
       ) : null}
 
       <section className="mt-6">
-        <Card className="border-white/10 bg-white/6 p-6 text-white shadow-2xl shadow-black/10 sm:p-8">
+        <Card className="border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/10 sm:p-8">
           <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-start">
             <div>
               <Badge className="border-white/15 bg-white/10 text-white">
                 Enrollments
               </Badge>
               <h3 className="mt-4 text-2xl font-semibold">Enrolled courses</h3>
-              <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-400">
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-400">
                 Connect this student to course products. Payments and cohorts
                 remain separate future modules.
               </p>
             </div>
-            <Button
-              className="bg-white text-zinc-950 hover:bg-zinc-100"
-              onClick={openEnrollmentPanel}
-              type="button"
-            >
+            <Button onClick={openEnrollmentPanel} type="button">
               Enroll in Course
             </Button>
           </div>
 
           {enrollments.length === 0 ? (
-            <div className="mt-8 rounded-3xl border border-dashed border-white/15 bg-zinc-950/30 p-8 text-center">
-              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-sm font-bold text-zinc-950">
+            <div className="mt-8 rounded-3xl border border-dashed border-white/15 bg-[#101214] p-8 text-center">
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-teal-400 text-sm font-bold text-black">
                 EN
               </div>
               <h4 className="mt-5 text-xl font-semibold">
                 No enrollments yet
               </h4>
-              <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-zinc-400">
+              <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-slate-400">
                 Enroll this student into a course to start tracking learning
                 access and completion status.
               </p>
@@ -600,14 +601,14 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
             <div className="mt-8 space-y-3">
               {enrollments.map((enrollment) => (
                 <div
-                  className="grid gap-4 rounded-2xl border border-white/10 bg-zinc-950/35 p-4 lg:grid-cols-[1fr_auto_auto_auto] lg:items-center"
+                  className="grid gap-4 rounded-2xl border border-white/10 bg-[#101214] p-4 lg:grid-cols-[1fr_auto_auto_auto] lg:items-center"
                   key={enrollment.id}
                 >
                   <div>
                     <p className="font-semibold">
                       {enrollment.course?.title ?? "Course unavailable"}
                     </p>
-                    <p className="mt-1 text-sm text-zinc-500">
+                    <p className="mt-1 text-sm text-slate-400">
                       Enrolled {formatDate(enrollment.enrolled_at)}
                       {enrollment.completed_at
                         ? ` | Completed ${formatDate(enrollment.completed_at)}`
@@ -629,7 +630,7 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
                     {["active", "completed", "paused", "cancelled"].map(
                       (status) => (
                         <option
-                          className="text-zinc-950"
+                          className="text-slate-950"
                           key={status}
                           value={status}
                         >
@@ -639,7 +640,7 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
                     )}
                   </select>
                   <Button
-                    className="text-red-200 hover:bg-red-500/10 hover:text-red-100"
+                    className="text-red-300! hover:bg-red-500/10! hover:text-red-200!"
                     onClick={() => setDeleteEnrollmentTarget(enrollment)}
                     size="sm"
                     type="button"
@@ -655,34 +656,30 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
       </section>
 
       <section className="mt-6 grid gap-4 md:grid-cols-3">
-        <Card className="border-white/10 bg-white/6 p-6 text-white shadow-2xl shadow-black/10 md:col-span-3">
+        <Card className="border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/10 md:col-span-3">
           <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-start">
             <div>
               <Badge className="border-white/15 bg-white/10 text-white">
                 Payment History
               </Badge>
               <h3 className="mt-4 text-2xl font-semibold">Student payments</h3>
-              <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-400">
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-400">
                 Track payments connected to this student&apos;s course
                 enrollments.
               </p>
             </div>
-            <Button
-              className="bg-white text-zinc-950 hover:bg-zinc-100"
-              onClick={openPaymentPanel}
-              type="button"
-            >
+            <Button onClick={openPaymentPanel} type="button">
               Add Payment
             </Button>
           </div>
 
           {payments.length === 0 ? (
-            <div className="mt-8 rounded-3xl border border-dashed border-white/15 bg-zinc-950/30 p-8 text-center">
-              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-sm font-bold text-zinc-950">
+            <div className="mt-8 rounded-3xl border border-dashed border-white/15 bg-[#101214] p-8 text-center">
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-teal-400 text-sm font-bold text-black">
                 PY
               </div>
               <h4 className="mt-5 text-xl font-semibold">No payments yet</h4>
-              <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-zinc-400">
+              <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-slate-400">
                 Add a payment once this student has an enrollment connected to a
                 course.
               </p>
@@ -691,22 +688,22 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
             <div className="mt-8 divide-y divide-white/10 overflow-hidden rounded-3xl border border-white/10">
               {payments.map((payment) => (
                 <div
-                  className="grid gap-4 bg-zinc-950/30 p-4 lg:grid-cols-[1fr_auto_auto_auto] lg:items-center"
+                  className="grid gap-4 bg-[#101214] p-4 lg:grid-cols-[1fr_auto_auto_auto] lg:items-center"
                   key={payment.id}
                 >
                   <div>
                     <p className="font-semibold">
                       {formatCurrency(payment.amount)}
                     </p>
-                    <p className="mt-1 text-sm text-zinc-500">
+                    <p className="mt-1 text-sm text-slate-400">
                       {payment.course?.title ?? "Course unavailable"}
                     </p>
                   </div>
-                  <p className="text-sm font-semibold text-zinc-300">
+                  <p className="text-sm font-semibold text-white">
                     {payment.payment_method}
                   </p>
                   <PaymentStatusBadge status={payment.status} />
-                  <p className="text-sm text-zinc-500">
+                  <p className="text-sm text-slate-400">
                     {formatDate(payment.paid_at)}
                   </p>
                 </div>
@@ -718,14 +715,14 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
         {["Activity timeline", "Support notes"].map(
           (title, index) => (
           <Card
-            className="border-white/10 bg-white/6 p-6 text-white shadow-2xl shadow-black/10"
+            className="border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/10"
             key={title}
           >
-            <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-sm font-bold text-zinc-950">
+            <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-teal-400 text-sm font-bold text-black">
               {String(index + 1).padStart(2, "0")}
             </span>
             <h3 className="mt-6 text-xl font-semibold">{title}</h3>
-            <p className="mt-3 text-sm leading-6 text-zinc-400">
+            <p className="mt-3 text-sm leading-6 text-slate-400">
               Placeholder for a future module. No logic is connected here yet.
             </p>
           </Card>
@@ -735,25 +732,25 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
 
       {enrollOpen ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 px-4 py-4 backdrop-blur-sm sm:items-center">
-          <Card className="w-full max-w-xl border-zinc-200 bg-white p-6 text-zinc-950 shadow-2xl shadow-black/40 sm:p-8">
+          <Card className="w-full max-w-xl border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/40 sm:p-8">
             <h3 className="text-2xl font-semibold">Enroll in Course</h3>
             <form className="mt-7 space-y-5" onSubmit={handleCreateEnrollment}>
               <label className="block">
-                <span className="text-sm font-medium text-zinc-700">
+                <span className="text-sm font-medium text-slate-300">
                   Course
                 </span>
                 <select
-                  className="mt-2 h-12 w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 text-sm text-zinc-950 outline-none transition focus:border-zinc-950 focus:bg-white focus:ring-4 focus:ring-zinc-950/10"
+                  className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition focus:border-teal-400/40 focus:bg-white/15 focus:ring-4 focus:ring-teal-400/10"
                   onChange={(event) => setSelectedCourseId(event.target.value)}
                   required
                   value={selectedCourseId}
                 >
-                  <option className="text-zinc-950" value="">
+                  <option className="text-slate-950" value="">
                     Select a course
                   </option>
                   {availableCourses.map((course) => (
                     <option
-                      className="text-zinc-950"
+                      className="text-slate-950"
                       key={course.id}
                       value={course.id}
                     >
@@ -763,21 +760,22 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
                 </select>
               </label>
               {courses.length === 0 ? (
-                <p className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-800">
+                <p className="rounded-2xl border border-amber-400/30 bg-amber-400/10 p-4 text-sm leading-6 text-amber-300">
                   Create a course before enrolling this student.
                 </p>
               ) : availableCourses.length === 0 ? (
-                <p className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm leading-6 text-emerald-800">
+                <p className="rounded-2xl border border-teal-400/30 bg-teal-400/10 p-4 text-sm leading-6 text-teal-300">
                   This student is already enrolled in every available course.
                 </p>
               ) : (
-                <p className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 text-sm leading-6 text-zinc-500">
+                <p className="rounded-2xl border border-white/10 bg-white/10 p-4 text-sm leading-6 text-slate-400">
                   Enrollment status starts as active. Courses already connected
                   to this student are hidden from the selector.
                 </p>
               )}
               <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
                 <Button
+                  className="border-slate-700! bg-white/10! text-white! hover:bg-white/15!"
                   onClick={() => setEnrollOpen(false)}
                   type="button"
                   variant="secondary"
@@ -800,27 +798,27 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
 
       {paymentOpen ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-black/70 px-4 py-4 backdrop-blur-sm sm:items-center">
-          <Card className="w-full max-w-2xl border-zinc-200 bg-white p-6 text-zinc-950 shadow-2xl shadow-black/40 sm:p-8">
+          <Card className="w-full max-w-2xl border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/40 sm:p-8">
             <h3 className="text-2xl font-semibold">Add Payment</h3>
             <form className="mt-7 space-y-5" onSubmit={handleCreatePayment}>
               <label className="block">
-                <span className="text-sm font-medium text-zinc-700">
+                <span className="text-sm font-medium text-slate-300">
                   Enrollment
                 </span>
                 <select
-                  className="mt-2 h-12 w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 text-sm text-zinc-950 outline-none transition focus:border-zinc-950 focus:bg-white focus:ring-4 focus:ring-zinc-950/10"
+                  className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition focus:border-teal-400/40 focus:bg-white/15 focus:ring-4 focus:ring-teal-400/10"
                   onChange={(event) =>
                     setSelectedEnrollmentId(event.target.value)
                   }
                   required
                   value={selectedEnrollmentId}
                 >
-                  <option className="text-zinc-950" value="">
+                  <option className="text-slate-950" value="">
                     Select an enrollment
                   </option>
                   {enrollments.map((enrollment) => (
                     <option
-                      className="text-zinc-950"
+                      className="text-slate-950"
                       key={enrollment.id}
                       value={enrollment.id}
                     >
@@ -832,11 +830,11 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
 
               <div className="grid gap-4 sm:grid-cols-3">
                 <label className="block">
-                  <span className="text-sm font-medium text-zinc-700">
+                  <span className="text-sm font-medium text-slate-300">
                     Amount
                   </span>
                   <input
-                    className="mt-2 h-12 w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 text-sm text-zinc-950 outline-none transition placeholder:text-zinc-400 focus:border-zinc-950 focus:bg-white focus:ring-4 focus:ring-zinc-950/10"
+                    className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition placeholder:text-slate-400 focus:border-teal-400/40 focus:bg-white/15 focus:ring-4 focus:ring-teal-400/10"
                     min="0"
                     onChange={(event) =>
                       setPaymentForm((current) => ({
@@ -852,11 +850,11 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
                   />
                 </label>
                 <label className="block">
-                  <span className="text-sm font-medium text-zinc-700">
+                  <span className="text-sm font-medium text-slate-300">
                     Method
                   </span>
                   <select
-                    className="mt-2 h-12 w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 text-sm text-zinc-950 outline-none transition focus:border-zinc-950 focus:bg-white focus:ring-4 focus:ring-zinc-950/10"
+                    className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition focus:border-teal-400/40 focus:bg-white/15 focus:ring-4 focus:ring-teal-400/10"
                     onChange={(event) =>
                       setPaymentForm((current) => ({
                         ...current,
@@ -866,18 +864,18 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
                     value={paymentForm.paymentMethod}
                   >
                     {paymentMethods.map((method) => (
-                      <option className="text-zinc-950" key={method} value={method}>
+                      <option className="text-slate-950" key={method} value={method}>
                         {method}
                       </option>
                     ))}
                   </select>
                 </label>
                 <label className="block">
-                  <span className="text-sm font-medium text-zinc-700">
+                  <span className="text-sm font-medium text-slate-300">
                     Status
                   </span>
                   <select
-                    className="mt-2 h-12 w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 text-sm text-zinc-950 outline-none transition focus:border-zinc-950 focus:bg-white focus:ring-4 focus:ring-zinc-950/10"
+                    className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition focus:border-teal-400/40 focus:bg-white/15 focus:ring-4 focus:ring-teal-400/10"
                     onChange={(event) =>
                       setPaymentForm((current) => ({
                         ...current,
@@ -887,7 +885,7 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
                     value={paymentForm.status}
                   >
                     {paymentStatuses.map((status) => (
-                      <option className="text-zinc-950" key={status} value={status}>
+                      <option className="text-slate-950" key={status} value={status}>
                         {status}
                       </option>
                     ))}
@@ -896,9 +894,9 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
               </div>
 
               <label className="block">
-                <span className="text-sm font-medium text-zinc-700">Notes</span>
+                <span className="text-sm font-medium text-slate-300">Notes</span>
                 <textarea
-                  className="mt-2 min-h-24 w-full resize-none rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm leading-6 text-zinc-950 outline-none transition placeholder:text-zinc-400 focus:border-zinc-950 focus:bg-white focus:ring-4 focus:ring-zinc-950/10"
+                  className="mt-2 min-h-24 w-full resize-none rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm leading-6 text-white outline-none transition placeholder:text-slate-400 focus:border-teal-400/40 focus:bg-white/15 focus:ring-4 focus:ring-teal-400/10"
                   onChange={(event) =>
                     setPaymentForm((current) => ({
                       ...current,
@@ -911,11 +909,11 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
               </label>
 
               {enrollments.length === 0 ? (
-                <p className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-800">
+                <p className="rounded-2xl border border-amber-400/30 bg-amber-400/10 p-4 text-sm leading-6 text-amber-300">
                   Enroll this student in a course before adding a payment.
                 </p>
               ) : (
-                <p className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 text-sm leading-6 text-zinc-500">
+                <p className="rounded-2xl border border-white/10 bg-white/10 p-4 text-sm leading-6 text-slate-400">
                   Course and enrollment are attached automatically from the
                   selected enrollment.
                 </p>
@@ -923,6 +921,7 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
 
               <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
                 <Button
+                  className="border-slate-700! bg-white/10! text-white! hover:bg-white/15!"
                   onClick={() => setPaymentOpen(false)}
                   type="button"
                   variant="secondary"
@@ -943,12 +942,13 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
 
       {editOpen ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-black/70 px-4 py-4 backdrop-blur-sm sm:items-center">
-          <Card className="w-full max-w-2xl border-zinc-200 bg-white p-6 text-zinc-950 shadow-2xl shadow-black/40 sm:p-8">
+          <Card className="w-full max-w-2xl border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/40 sm:p-8">
             <h3 className="text-2xl font-semibold">Edit student</h3>
             <form className="mt-7 space-y-5" onSubmit={handleUpdateStudent}>
               <StudentFormFields form={form} setForm={setForm} />
               <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end">
                 <Button
+                  className="border-slate-700! bg-white/10! text-white! hover:bg-white/15!"
                   onClick={() => {
                     setForm(createFormFromStudent(student));
                     setEditOpen(false);
@@ -969,19 +969,20 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
 
       {deleteOpen ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 px-4 py-4 backdrop-blur-sm sm:items-center">
-          <Card className="w-full max-w-md border-zinc-200 bg-white p-6 text-zinc-950 shadow-2xl shadow-black/40 sm:p-8">
-            <p className="text-sm font-semibold text-red-600">
+          <Card className="w-full max-w-md border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/40 sm:p-8">
+            <p className="text-sm font-semibold text-red-300">
               Confirm delete
             </p>
             <h3 className="mt-3 text-2xl font-semibold">
               Delete {student.full_name}?
             </h3>
-            <p className="mt-3 text-sm leading-6 text-zinc-500">
+            <p className="mt-3 text-sm leading-6 text-slate-400">
               This removes the student CRM record. Enrollment and payment
               modules are not connected in this module.
             </p>
             <div className="mt-7 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
               <Button
+                className="border-slate-700! bg-white/10! text-white! hover:bg-white/15!"
                 onClick={() => setDeleteOpen(false)}
                 type="button"
                 variant="secondary"
@@ -989,7 +990,7 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
                 Cancel
               </Button>
               <Button
-                className="bg-red-600 shadow-red-600/20 hover:bg-red-700"
+                className="bg-red-500! text-white! shadow-red-950/30 hover:bg-red-600!"
                 disabled={mutating}
                 onClick={handleDeleteStudent}
                 type="button"
@@ -1003,19 +1004,20 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
 
       {deleteEnrollmentTarget ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 px-4 py-4 backdrop-blur-sm sm:items-center">
-          <Card className="w-full max-w-md border-zinc-200 bg-white p-6 text-zinc-950 shadow-2xl shadow-black/40 sm:p-8">
-            <p className="text-sm font-semibold text-red-600">
+          <Card className="w-full max-w-md border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/40 sm:p-8">
+            <p className="text-sm font-semibold text-red-300">
               Confirm delete
             </p>
             <h3 className="mt-3 text-2xl font-semibold">
               Remove enrollment?
             </h3>
-            <p className="mt-3 text-sm leading-6 text-zinc-500">
+            <p className="mt-3 text-sm leading-6 text-slate-400">
               This removes {student.full_name} from{" "}
               {deleteEnrollmentTarget.course?.title ?? "this course"}.
             </p>
             <div className="mt-7 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
               <Button
+                className="border-slate-700! bg-white/10! text-white! hover:bg-white/15!"
                 onClick={() => setDeleteEnrollmentTarget(null)}
                 type="button"
                 variant="secondary"
@@ -1023,7 +1025,7 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
                 Cancel
               </Button>
               <Button
-                className="bg-red-600 shadow-red-600/20 hover:bg-red-700"
+                className="bg-red-500! text-white! shadow-red-950/30 hover:bg-red-600!"
                 disabled={mutating}
                 onClick={handleDeleteEnrollment}
                 type="button"
