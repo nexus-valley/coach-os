@@ -15,6 +15,12 @@ import {
   updateCohort,
   type CohortWithCourse,
 } from "@/src/lib/cohorts";
+import { getSupabaseClient } from "@/src/lib/supabaseClient";
+import {
+  canDeleteRecords,
+  getCurrentMemberRole,
+  type MemberRole,
+} from "@/src/lib/team";
 import { getCurrentTenant, type Tenant } from "@/src/lib/tenant";
 
 type CohortFormState = {
@@ -63,6 +69,7 @@ export function CohortsPageClient() {
   const router = useRouter();
   const [cohorts, setCohorts] = useState<CohortWithCourse[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
+  const [currentRole, setCurrentRole] = useState<MemberRole | null>(null);
   const [editingCohort, setEditingCohort] = useState<CohortWithCourse | null>(
     null,
   );
@@ -72,6 +79,7 @@ export function CohortsPageClient() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [tenant, setTenant] = useState<Tenant | null>(null);
+  const canDelete = canDeleteRecords(currentRole);
 
   async function loadCohorts(currentTenant: Tenant) {
     const [tenantCohorts, tenantCourses] = await Promise.all([
@@ -103,7 +111,20 @@ export function CohortsPageClient() {
           return;
         }
 
+        const supabase = getSupabaseClient();
+        const {
+          data: { user },
+          error: userError,
+        } = await supabase.auth.getUser();
+
+        if (userError) {
+          throw userError;
+        }
+
         setTenant(currentTenant);
+        setCurrentRole(
+          user ? await getCurrentMemberRole(currentTenant.id, user.id) : null,
+        );
         await loadCohorts(currentTenant);
       } catch (caught) {
         if (!active) {
@@ -334,16 +355,18 @@ export function CohortsPageClient() {
                   >
                     Edit
                   </Button>
-                  <Button
-                    className="text-red-300! hover:bg-red-500/10! hover:text-red-200!"
-                    disabled={saving}
-                    onClick={() => handleDelete(cohort)}
-                    size="sm"
-                    type="button"
-                    variant="ghost"
-                  >
-                    Delete
-                  </Button>
+                  {canDelete ? (
+                    <Button
+                      className="text-red-300! hover:bg-red-500/10! hover:text-red-200!"
+                      disabled={saving}
+                      onClick={() => handleDelete(cohort)}
+                      size="sm"
+                      type="button"
+                      variant="ghost"
+                    >
+                      Delete
+                    </Button>
+                  ) : null}
                 </div>
               </div>
             </Card>

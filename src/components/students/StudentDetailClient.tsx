@@ -44,6 +44,12 @@ import {
   updateStudent,
   type Student,
 } from "@/src/lib/students";
+import { getSupabaseClient } from "@/src/lib/supabaseClient";
+import {
+  canDeleteRecords,
+  getCurrentMemberRole,
+  type MemberRole,
+} from "@/src/lib/team";
 import { getCurrentTenant, type Tenant } from "@/src/lib/tenant";
 
 type StudentDetailClientProps = {
@@ -103,6 +109,7 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
   const [cohortOpen, setCohortOpen] = useState(false);
   const [cohorts, setCohorts] = useState<CohortWithCourse[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
+  const [currentRole, setCurrentRole] = useState<MemberRole | null>(null);
   const [deleteEnrollmentTarget, setDeleteEnrollmentTarget] =
     useState<EnrollmentWithRelations | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -151,6 +158,7 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
   const selectedEnrollment = enrollments.find(
     (enrollment) => enrollment.id === selectedEnrollmentId,
   );
+  const canDelete = canDeleteRecords(currentRole);
 
   useEffect(() => {
     let active = true;
@@ -168,6 +176,16 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
           return;
         }
 
+        const supabase = getSupabaseClient();
+        const {
+          data: { user },
+          error: userError,
+        } = await supabase.auth.getUser();
+
+        if (userError) {
+          throw userError;
+        }
+
         const [
           currentStudent,
           tenantCourses,
@@ -175,6 +193,7 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
           studentEnrollments,
           studentCohortMemberships,
           studentPayments,
+          memberRole,
         ] =
           await Promise.all([
             getStudentById({
@@ -192,6 +211,9 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
               tenantId: currentTenant.id,
             }),
             getPaymentsByStudent(studentId, currentTenant.id),
+            user
+              ? getCurrentMemberRole(currentTenant.id, user.id)
+              : Promise.resolve(null),
           ]);
 
         if (!active) {
@@ -200,6 +222,7 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
 
         setTenant(currentTenant);
         setStudent(currentStudent);
+        setCurrentRole(memberRole);
         setCourses(tenantCourses);
         setCohorts(tenantCohorts);
         setEnrollments(currentStudent ? studentEnrollments : []);
@@ -662,14 +685,16 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
             <Button onClick={() => setEditOpen(true)} type="button">
               Edit Student
             </Button>
-            <Button
-              className="text-red-300! hover:bg-red-500/10! hover:text-red-200!"
-              onClick={() => setDeleteOpen(true)}
-              type="button"
-              variant="ghost"
-            >
-              Delete Student
-            </Button>
+            {canDelete ? (
+              <Button
+                className="text-red-300! hover:bg-red-500/10! hover:text-red-200!"
+                onClick={() => setDeleteOpen(true)}
+                type="button"
+                variant="ghost"
+              >
+                Delete Student
+              </Button>
+            ) : null}
           </div>
         </Card>
       </section>
@@ -753,15 +778,17 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
                       ),
                     )}
                   </select>
-                  <Button
-                    className="text-red-300! hover:bg-red-500/10! hover:text-red-200!"
-                    onClick={() => setDeleteEnrollmentTarget(enrollment)}
-                    size="sm"
-                    type="button"
-                    variant="ghost"
-                  >
-                    Delete
-                  </Button>
+                  {canDelete ? (
+                    <Button
+                      className="text-red-300! hover:bg-red-500/10! hover:text-red-200!"
+                      onClick={() => setDeleteEnrollmentTarget(enrollment)}
+                      size="sm"
+                      type="button"
+                      variant="ghost"
+                    >
+                      Delete
+                    </Button>
+                  ) : null}
                 </div>
               ))}
             </div>
@@ -1208,7 +1235,7 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
         </div>
       ) : null}
 
-      {deleteOpen ? (
+      {deleteOpen && canDelete ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 px-4 py-4 backdrop-blur-sm sm:items-center">
           <Card className="w-full max-w-md border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/40 sm:p-8">
             <p className="text-sm font-semibold text-red-300">
@@ -1243,7 +1270,7 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
         </div>
       ) : null}
 
-      {deleteEnrollmentTarget ? (
+      {deleteEnrollmentTarget && canDelete ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 px-4 py-4 backdrop-blur-sm sm:items-center">
           <Card className="w-full max-w-md border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/40 sm:p-8">
             <p className="text-sm font-semibold text-red-300">

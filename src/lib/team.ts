@@ -1,0 +1,128 @@
+import { getSupabaseClient } from "@/src/lib/supabaseClient";
+
+export type MemberRole = "owner" | "admin" | "staff";
+
+export type TenantMember = {
+  id: string;
+  tenant_id: string;
+  user_id: string;
+  role: MemberRole;
+  created_at: string;
+};
+
+export type MemberProfile = {
+  id: string;
+  full_name: string | null;
+  email: string | null;
+  avatar_url: string | null;
+};
+
+export type TenantMemberWithProfile = TenantMember & {
+  profile: MemberProfile | null;
+};
+
+const tenantMemberSelect = "id,tenant_id,user_id,role,created_at";
+
+export function canManageTeam(role: MemberRole | null | undefined) {
+  return role === "owner";
+}
+
+export function canManagePayments(role: MemberRole | null | undefined) {
+  return role === "owner" || role === "admin";
+}
+
+export function canDeleteRecords(role: MemberRole | null | undefined) {
+  return role === "owner" || role === "admin";
+}
+
+export function canManageCourses(role: MemberRole | null | undefined) {
+  return role === "owner" || role === "admin";
+}
+
+export async function getCurrentMemberRole(tenantId: string, userId: string) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from("tenant_members")
+    .select("role")
+    .eq("tenant_id", tenantId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  return (data?.role as MemberRole | undefined) ?? null;
+}
+
+export async function getTenantMembers(tenantId: string) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from("tenant_members")
+    .select(tenantMemberSelect)
+    .eq("tenant_id", tenantId)
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    throw error;
+  }
+
+  const members = (data ?? []) as TenantMember[];
+  const userIds = Array.from(new Set(members.map((member) => member.user_id)));
+  const profilesResult = userIds.length
+    ? await supabase
+        .from("profiles")
+        .select("id,full_name,email,avatar_url")
+        .in("id", userIds)
+    : { data: [], error: null };
+
+  if (profilesResult.error) {
+    throw profilesResult.error;
+  }
+
+  const profiles = (profilesResult.data ?? []) as MemberProfile[];
+  const profileById = new Map(
+    profiles.map((profile) => [profile.id, profile]),
+  );
+
+  return members.map((member) => ({
+    ...member,
+    profile: profileById.get(member.user_id) ?? null,
+  })) as TenantMemberWithProfile[];
+}
+
+export async function updateTenantMemberRole(
+  tenantId: string,
+  memberId: string,
+  role: Exclude<MemberRole, "owner">,
+) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from("tenant_members")
+    .update({ role })
+    .eq("tenant_id", tenantId)
+    .eq("id", memberId)
+    .neq("role", "owner")
+    .select(tenantMemberSelect)
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  return data as TenantMember;
+}
+
+export async function removeTenantMember(tenantId: string, memberId: string) {
+  const supabase = getSupabaseClient();
+  const { error } = await supabase
+    .from("tenant_members")
+    .delete()
+    .eq("tenant_id", tenantId)
+    .eq("id", memberId)
+    .neq("role", "owner");
+
+  if (error) {
+    throw error;
+  }
+}

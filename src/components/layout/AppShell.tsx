@@ -16,7 +16,7 @@ const navItems = [
   { href: "/app/payments", label: "Payments" },
   { href: "#", label: "Automations" },
   { href: "#", label: "Analytics" },
-  { href: "#", label: "Settings" },
+  { href: "/app/settings", label: "Settings" },
 ];
 
 const iconMap: Record<string, string> = {

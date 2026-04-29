@@ -16,6 +16,12 @@ import {
   type CohortWithCourse,
 } from "@/src/lib/cohorts";
 import { getStudentsForTenant, type Student } from "@/src/lib/students";
+import { getSupabaseClient } from "@/src/lib/supabaseClient";
+import {
+  canDeleteRecords,
+  getCurrentMemberRole,
+  type MemberRole,
+} from "@/src/lib/team";
 import { getCurrentTenant, type Tenant } from "@/src/lib/tenant";
 
 type CohortDetailClientProps = {
@@ -43,6 +49,7 @@ export function CohortDetailClient({ cohortId }: CohortDetailClientProps) {
   const [actionError, setActionError] = useState("");
   const [addOpen, setAddOpen] = useState(false);
   const [cohort, setCohort] = useState<CohortWithCourse | null>(null);
+  const [currentRole, setCurrentRole] = useState<MemberRole | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [members, setMembers] = useState<CohortMemberWithStudent[]>([]);
@@ -50,6 +57,7 @@ export function CohortDetailClient({ cohortId }: CohortDetailClientProps) {
   const [selectedStudentId, setSelectedStudentId] = useState("");
   const [students, setStudents] = useState<Student[]>([]);
   const [tenant, setTenant] = useState<Tenant | null>(null);
+  const canDelete = canDeleteRecords(currentRole);
 
   const availableStudents = useMemo(
     () =>
@@ -104,7 +112,20 @@ export function CohortDetailClient({ cohortId }: CohortDetailClientProps) {
           return;
         }
 
+        const supabase = getSupabaseClient();
+        const {
+          data: { user },
+          error: userError,
+        } = await supabase.auth.getUser();
+
+        if (userError) {
+          throw userError;
+        }
+
         setTenant(currentTenant);
+        setCurrentRole(
+          user ? await getCurrentMemberRole(currentTenant.id, user.id) : null,
+        );
         await loadCohortContext(currentTenant);
       } catch (caught) {
         if (!active) {
@@ -369,16 +390,18 @@ export function CohortDetailClient({ cohortId }: CohortDetailClientProps) {
                   <p className="text-sm text-slate-400">
                     Added {formatDate(member.enrolled_at)}
                   </p>
-                  <Button
-                    className="text-red-300! hover:bg-red-500/10! hover:text-red-200!"
-                    disabled={mutating}
-                    onClick={() => handleRemoveStudent(member)}
-                    size="sm"
-                    type="button"
-                    variant="ghost"
-                  >
-                    Remove
-                  </Button>
+                  {canDelete ? (
+                    <Button
+                      className="text-red-300! hover:bg-red-500/10! hover:text-red-200!"
+                      disabled={mutating}
+                      onClick={() => handleRemoveStudent(member)}
+                      size="sm"
+                      type="button"
+                      variant="ghost"
+                    >
+                      Remove
+                    </Button>
+                  ) : null}
                 </div>
               ))}
             </div>

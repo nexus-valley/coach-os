@@ -25,6 +25,12 @@ import {
   getEnrollmentsForCourse,
   type EnrollmentWithRelations,
 } from "@/src/lib/enrollments";
+import { getSupabaseClient } from "@/src/lib/supabaseClient";
+import {
+  canDeleteRecords,
+  getCurrentMemberRole,
+  type MemberRole,
+} from "@/src/lib/team";
 import { getCurrentTenant, type Tenant } from "@/src/lib/tenant";
 
 type CourseDetailClientProps = {
@@ -87,6 +93,7 @@ function getErrorMessage(caught: unknown, fallback: string) {
 export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
   const [actionError, setActionError] = useState("");
   const [course, setCourse] = useState<Course | null>(null);
+  const [currentRole, setCurrentRole] = useState<MemberRole | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
   const [enrollments, setEnrollments] = useState<EnrollmentWithRelations[]>([]);
   const [error, setError] = useState("");
@@ -98,6 +105,7 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
   );
   const [sections, setSections] = useState<CourseSectionWithLessons[]>([]);
   const [tenant, setTenant] = useState<Tenant | null>(null);
+  const canDelete = canDeleteRecords(currentRole);
 
   useEffect(() => {
     let active = true;
@@ -115,18 +123,31 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
           return;
         }
 
-        const [currentCourse, currentStructure, courseEnrollments] =
+        const supabase = getSupabaseClient();
+        const {
+          data: { user },
+          error: userError,
+        } = await supabase.auth.getUser();
+
+        if (userError) {
+          throw userError;
+        }
+
+        const [currentCourse, currentStructure, courseEnrollments, memberRole] =
           await Promise.all([
-          getCourseById({
-            courseId,
-            tenantId: currentTenant.id,
-          }),
-          getCourseStructure(courseId, currentTenant.id),
-          getEnrollmentsForCourse({
-            courseId,
-            tenantId: currentTenant.id,
-          }),
-        ]);
+            getCourseById({
+              courseId,
+              tenantId: currentTenant.id,
+            }),
+            getCourseStructure(courseId, currentTenant.id),
+            getEnrollmentsForCourse({
+              courseId,
+              tenantId: currentTenant.id,
+            }),
+            user
+              ? getCurrentMemberRole(currentTenant.id, user.id)
+              : Promise.resolve(null),
+          ]);
 
         if (!active) {
           return;
@@ -134,6 +155,7 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
 
         setTenant(currentTenant);
         setCourse(currentCourse);
+        setCurrentRole(memberRole);
         setSections(currentCourse ? currentStructure : []);
         setEnrollments(currentCourse ? courseEnrollments : []);
 
@@ -511,21 +533,23 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
                       >
                         Edit
                       </Button>
-                      <Button
-                        className="text-red-200 hover:bg-red-500/10 hover:text-red-100"
-                        onClick={() =>
-                          setDeleteTarget({
-                            kind: "section",
-                            sectionId: section.id,
-                            title: section.title,
-                          })
-                        }
-                        size="sm"
-                        type="button"
-                        variant="ghost"
-                      >
-                        Delete
-                      </Button>
+                      {canDelete ? (
+                        <Button
+                          className="text-red-200 hover:bg-red-500/10 hover:text-red-100"
+                          onClick={() =>
+                            setDeleteTarget({
+                              kind: "section",
+                              sectionId: section.id,
+                              title: section.title,
+                            })
+                          }
+                          size="sm"
+                          type="button"
+                          variant="ghost"
+                        >
+                          Delete
+                        </Button>
+                      ) : null}
                     </div>
                   </div>
 
@@ -572,22 +596,24 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
                             >
                               Edit
                             </Button>
-                            <Button
-                              className="text-red-200 hover:bg-red-500/10 hover:text-red-100"
-                              onClick={() =>
-                                setDeleteTarget({
-                                  kind: "lesson",
-                                  lessonId: lesson.id,
-                                  sectionId: section.id,
-                                  title: lesson.title,
-                                })
-                              }
-                              size="sm"
-                              type="button"
-                              variant="ghost"
-                            >
-                              Delete
-                            </Button>
+                            {canDelete ? (
+                              <Button
+                                className="text-red-200 hover:bg-red-500/10 hover:text-red-100"
+                                onClick={() =>
+                                  setDeleteTarget({
+                                    kind: "lesson",
+                                    lessonId: lesson.id,
+                                    sectionId: section.id,
+                                    title: lesson.title,
+                                  })
+                                }
+                                size="sm"
+                                type="button"
+                                variant="ghost"
+                              >
+                                Delete
+                              </Button>
+                            ) : null}
                           </div>
                         </div>
                       ))}
@@ -871,7 +897,7 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
         </div>
       ) : null}
 
-      {deleteTarget ? (
+      {deleteTarget && canDelete ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 px-4 py-4 backdrop-blur-sm sm:items-center">
           <Card className="w-full max-w-md border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/40 sm:p-8">
             <p className="text-sm font-semibold text-red-300">
