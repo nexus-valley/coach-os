@@ -18,6 +18,8 @@ export type Payment = {
   status: PaymentStatus;
   notes: string | null;
   paid_at: string;
+  receipt_generated_at: string | null;
+  receipt_number: string | null;
   created_at: string;
 };
 
@@ -45,7 +47,7 @@ export type CreatePaymentInput = {
 };
 
 const paymentSelect =
-  "id,tenant_id,student_id,course_id,enrollment_id,amount,currency,payment_method,status,paid_at,notes,created_at";
+  "id,tenant_id,student_id,course_id,enrollment_id,amount,currency,payment_method,status,paid_at,receipt_number,receipt_generated_at,notes,created_at";
 
 async function loadPaymentRelations(payments: Payment[], tenantId: string) {
   const supabase = getSupabaseClient();
