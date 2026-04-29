@@ -330,7 +330,7 @@ export function StudentCourseAccessClient({
                 const active = course.course.id === selectedCourseId;
 
                 return (
-                  <button
+                  <div
                     className={[
                       "rounded-3xl border p-5 text-left transition",
                       active
@@ -338,8 +338,6 @@ export function StudentCourseAccessClient({
                         : "border-white/10 bg-[#15181b] hover:border-white/20",
                     ].join(" ")}
                     key={course.course.id}
-                    onClick={() => handleSelectCourse(course.course.id)}
-                    type="button"
                   >
                     <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
                       <div>
@@ -353,17 +351,44 @@ export function StudentCourseAccessClient({
                       </div>
                       <EnrollmentStatusBadge status={course.enrollment.status} />
                     </div>
+                    <button
+                      className="mt-4 inline-flex h-9 items-center justify-center rounded-full border border-white/10 bg-white/10 px-4 text-sm font-semibold text-white transition hover:bg-white/15"
+                      onClick={() => handleSelectCourse(course.course.id)}
+                      type="button"
+                    >
+                      {active ? "Course selected" : "Open Course Access"}
+                    </button>
                     <div className="mt-5 h-2 overflow-hidden rounded-full bg-white/10">
                       <div
                         className="h-full rounded-full bg-teal-400"
                         style={{ width: `${course.progressPercentage}%` }}
                       />
                     </div>
-                    <p className="mt-3 text-sm text-slate-400">
-                      {course.completedLessonsCount}/{course.lessonCount} lessons
-                      complete | enrolled {formatDate(course.enrollment.enrolled_at)}
-                    </p>
-                  </button>
+                    {course.lessonCount === 0 ? (
+                      <p className="mt-3 text-sm text-slate-400">
+                        No lessons available yet.
+                      </p>
+                    ) : course.isCompleted ||
+                      course.enrollment.status === "completed" ? (
+                      <div className="mt-4 flex flex-wrap items-center gap-3">
+                        <p className="text-sm font-semibold text-teal-300">
+                          Course Completed 🎉
+                        </p>
+                        <Link
+                          className="inline-flex h-9 items-center justify-center rounded-full bg-teal-400 px-4 text-sm font-semibold text-black transition hover:bg-teal-300"
+                          href={`/app/certificates/${course.enrollment.id}`}
+                        >
+                          View Certificate
+                        </Link>
+                      </div>
+                    ) : (
+                      <p className="mt-3 text-sm text-slate-400">
+                        {course.completedLessonsCount}/{course.lessonCount}{" "}
+                        lessons complete | Continue learning | enrolled{" "}
+                        {formatDate(course.enrollment.enrolled_at)}
+                      </p>
+                    )}
+                  </div>
                 );
               })}
             </div>

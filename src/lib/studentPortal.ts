@@ -3,6 +3,7 @@ import type {
   CourseSection,
   Lesson,
 } from "@/src/lib/courses";
+import { syncEnrollmentCompletion } from "@/src/lib/certificates";
 import type { Enrollment, EnrollmentStatus } from "@/src/lib/enrollments";
 import type { Student } from "@/src/lib/students";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
@@ -35,6 +36,7 @@ export type StudentPortalCourse = {
   completedLessonsCount: number;
   course: Course;
   enrollment: Pick<Enrollment, "id" | "status" | "enrolled_at" | "completed_at">;
+  isCompleted: boolean;
   lessonCount: number;
   progressPercentage: number;
   sectionCount: number;
@@ -319,6 +321,8 @@ export async function getStudentPortalOverview(params: {
           id: enrollment.id,
           status: enrollment.status as EnrollmentStatus,
         },
+        isCompleted:
+          counts.lessonCount > 0 && completedLessonsCount >= counts.lessonCount,
         lessonCount: counts.lessonCount,
         progressPercentage: getProgressPercentage(
           completedLessonsCount,
@@ -458,6 +462,12 @@ export async function updateLessonProgress(params: {
   if (error) {
     throw error;
   }
+
+  await syncEnrollmentCompletion(
+    params.studentId,
+    params.courseId,
+    params.tenantId,
+  );
 
   return data as LessonProgress;
 }
