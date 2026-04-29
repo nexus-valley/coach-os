@@ -16,7 +16,7 @@ const navItems = [
   { href: "#", label: "Community" },
   { href: "/app/payments", label: "Payments" },
   { href: "/app/reminders", label: "Reminders" },
-  { href: "#", label: "Automations" },
+  { href: "/app/automations", label: "Automations" },
   { href: "/app/reports", label: "Reports" },
   { href: "/app/settings", label: "Settings" },
 ];

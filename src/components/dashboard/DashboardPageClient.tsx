@@ -159,6 +159,11 @@ export function DashboardPageClient() {
       label: "Pending Reminders",
       value: String(metrics.pendingRemindersDue),
     },
+    {
+      detail: "Active internal automation rules",
+      label: "Active Automations",
+      value: String(metrics.activeAutomations),
+    },
   ];
 
   return (
@@ -181,7 +186,7 @@ export function DashboardPageClient() {
         </div>
       </div>
 
-      <section className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+      <section className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
         {metricCards.map((metric) => (
           <MetricCard
             detail={metric.detail}

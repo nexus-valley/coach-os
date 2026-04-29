@@ -1,3 +1,4 @@
+import { getAutomationRuleCounts } from "@/src/lib/automations";
 import type { CourseStatus } from "@/src/lib/courses";
 import type { PaymentMethod, PaymentStatus } from "@/src/lib/payments";
 import { getReminderCounts } from "@/src/lib/reminders";
@@ -41,6 +42,7 @@ export type DashboardCourseRevenue = {
 
 export type DashboardMetrics = {
   activeCourses: number;
+  activeAutomations: number;
   courseRevenue: DashboardCourseRevenue[];
   paymentStatusSummary: Record<PaymentStatus, number>;
   pendingPayments: number;
@@ -129,6 +131,7 @@ export async function getDashboardMetrics(
     paymentsResult,
     recentStudentsResult,
     reminderCounts,
+    automationCounts,
   ] = await Promise.all([
     supabase
       .from("students")
@@ -160,6 +163,7 @@ export async function getDashboardMetrics(
       .order("created_at", { ascending: false })
       .limit(5),
     getReminderCounts(tenantId),
+    getAutomationRuleCounts(tenantId),
   ]);
 
   if (studentsCountResult.error) {
@@ -234,6 +238,7 @@ export async function getDashboardMetrics(
   const draftCourses = draftCoursesCountResult.count ?? 0;
 
   return {
+    activeAutomations: automationCounts.activeAutomations,
     activeCourses: publishedCourses > 0 ? publishedCourses : draftCourses,
     courseRevenue: buildCourseRevenue(payments, coursesById),
     paymentStatusSummary: buildPaymentSummary(payments),
