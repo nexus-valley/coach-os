@@ -15,7 +15,7 @@ const navItems = [
   { href: "#", label: "Community" },
   { href: "/app/payments", label: "Payments" },
   { href: "#", label: "Automations" },
-  { href: "#", label: "Analytics" },
+  { href: "/app/reports", label: "Reports" },
   { href: "/app/settings", label: "Settings" },
 ];
 
@@ -29,6 +29,7 @@ const iconMap: Record<string, string> = {
   Dashboard: "DB",
   Enrollments: "EN",
   Payments: "PY",
+  Reports: "RP",
   Settings: "ST",
   Students: "SD",
 };
