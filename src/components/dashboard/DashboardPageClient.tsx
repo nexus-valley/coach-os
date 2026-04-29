@@ -154,6 +154,11 @@ export function DashboardPageClient() {
       label: "Total Revenue",
       value: formatCurrency(metrics.totalRevenue),
     },
+    {
+      detail: "Pending reminders due today or overdue",
+      label: "Pending Reminders",
+      value: String(metrics.pendingRemindersDue),
+    },
   ];
 
   return (
@@ -176,7 +181,7 @@ export function DashboardPageClient() {
         </div>
       </div>
 
-      <section className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         {metricCards.map((metric) => (
           <MetricCard
             detail={metric.detail}

@@ -1,5 +1,6 @@
 import type { CourseStatus } from "@/src/lib/courses";
 import type { PaymentMethod, PaymentStatus } from "@/src/lib/payments";
+import { getReminderCounts } from "@/src/lib/reminders";
 import type { StudentStatus } from "@/src/lib/students";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 
@@ -43,6 +44,7 @@ export type DashboardMetrics = {
   courseRevenue: DashboardCourseRevenue[];
   paymentStatusSummary: Record<PaymentStatus, number>;
   pendingPayments: number;
+  pendingRemindersDue: number;
   recentPayments: DashboardRecentPayment[];
   recentStudents: DashboardRecentStudent[];
   totalEnrollments: number;
@@ -126,6 +128,7 @@ export async function getDashboardMetrics(
     enrollmentsCountResult,
     paymentsResult,
     recentStudentsResult,
+    reminderCounts,
   ] = await Promise.all([
     supabase
       .from("students")
@@ -156,6 +159,7 @@ export async function getDashboardMetrics(
       .eq("tenant_id", tenantId)
       .order("created_at", { ascending: false })
       .limit(5),
+    getReminderCounts(tenantId),
   ]);
 
   if (studentsCountResult.error) {
@@ -235,6 +239,7 @@ export async function getDashboardMetrics(
     paymentStatusSummary: buildPaymentSummary(payments),
     pendingPayments: payments.filter((payment) => payment.status === "pending")
       .length,
+    pendingRemindersDue: reminderCounts.pendingDueTodayOrOverdue,
     recentPayments: payments.slice(0, 5).map((payment) => ({
       ...payment,
       courseTitle:

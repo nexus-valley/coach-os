@@ -1,0 +1,249 @@
+import type { Course } from "@/src/lib/courses";
+import type { Payment } from "@/src/lib/payments";
+import type { Student } from "@/src/lib/students";
+import { getSupabaseClient } from "@/src/lib/supabaseClient";
+
+export type ReminderType =
+  | "general"
+  | "payment"
+  | "course_followup"
+  | "student_followup";
+
+export type ReminderStatus = "pending" | "completed" | "cancelled";
+
+export type Reminder = {
+  id: string;
+  tenant_id: string;
+  student_id: string | null;
+  course_id: string | null;
+  payment_id: string | null;
+  title: string;
+  description: string | null;
+  reminder_type: ReminderType;
+  due_at: string;
+  status: ReminderStatus;
+  created_at: string;
+  updated_at: string;
+};
+
+type ReminderStudent = Pick<
+  Student,
+  "email" | "full_name" | "id" | "phone" | "tenant_id"
+>;
+type ReminderCourse = Pick<Course, "id" | "tenant_id" | "title">;
+type ReminderPayment = Pick<
+  Payment,
+  "amount" | "currency" | "id" | "status" | "tenant_id"
+>;
+
+export type ReminderWithRelations = Reminder & {
+  course: ReminderCourse | null;
+  payment: ReminderPayment | null;
+  student: ReminderStudent | null;
+};
+
+export type CreateReminderPayload = {
+  course_id?: string | null;
+  description: string;
+  due_at: string;
+  payment_id?: string | null;
+  reminder_type: ReminderType;
+  student_id?: string | null;
+  tenant_id: string;
+  title: string;
+};
+
+const reminderSelect =
+  "id,tenant_id,student_id,course_id,payment_id,title,description,reminder_type,due_at,status,created_at,updated_at";
+
+async function attachReminderRelations(
+  reminders: Reminder[],
+  tenantId: string,
+) {
+  if (reminders.length === 0) {
+    return [];
+  }
+
+  const supabase = getSupabaseClient();
+  const studentIds = Array.from(
+    new Set(
+      reminders
+        .map((reminder) => reminder.student_id)
+        .filter((value): value is string => Boolean(value)),
+    ),
+  );
+  const courseIds = Array.from(
+    new Set(
+      reminders
+        .map((reminder) => reminder.course_id)
+        .filter((value): value is string => Boolean(value)),
+    ),
+  );
+  const paymentIds = Array.from(
+    new Set(
+      reminders
+        .map((reminder) => reminder.payment_id)
+        .filter((value): value is string => Boolean(value)),
+    ),
+  );
+
+  const [studentsResult, coursesResult, paymentsResult] = await Promise.all([
+    studentIds.length
+      ? supabase
+          .from("students")
+          .select("id,tenant_id,full_name,email,phone")
+          .eq("tenant_id", tenantId)
+          .in("id", studentIds)
+      : Promise.resolve({ data: [], error: null }),
+    courseIds.length
+      ? supabase
+          .from("courses")
+          .select("id,tenant_id,title")
+          .eq("tenant_id", tenantId)
+          .in("id", courseIds)
+      : Promise.resolve({ data: [], error: null }),
+    paymentIds.length
+      ? supabase
+          .from("payments")
+          .select("id,tenant_id,amount,currency,status")
+          .eq("tenant_id", tenantId)
+          .in("id", paymentIds)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+
+  if (studentsResult.error) {
+    throw studentsResult.error;
+  }
+
+  if (coursesResult.error) {
+    throw coursesResult.error;
+  }
+
+  if (paymentsResult.error) {
+    throw paymentsResult.error;
+  }
+
+  const students = (studentsResult.data ?? []) as ReminderStudent[];
+  const courses = (coursesResult.data ?? []) as ReminderCourse[];
+  const payments = (paymentsResult.data ?? []) as ReminderPayment[];
+  const studentById = new Map(students.map((student) => [student.id, student]));
+  const courseById = new Map(courses.map((course) => [course.id, course]));
+  const paymentById = new Map(payments.map((payment) => [payment.id, payment]));
+
+  return reminders.map((reminder) => ({
+    ...reminder,
+    course: reminder.course_id
+      ? courseById.get(reminder.course_id) ?? null
+      : null,
+    payment: reminder.payment_id
+      ? paymentById.get(reminder.payment_id) ?? null
+      : null,
+    student: reminder.student_id
+      ? studentById.get(reminder.student_id) ?? null
+      : null,
+  })) as ReminderWithRelations[];
+}
+
+export async function getRemindersForTenant(tenantId: string) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from("reminders")
+    .select(reminderSelect)
+    .eq("tenant_id", tenantId)
+    .order("due_at", { ascending: true });
+
+  if (error) {
+    throw error;
+  }
+
+  return attachReminderRelations((data ?? []) as Reminder[], tenantId);
+}
+
+export async function createReminder(payload: CreateReminderPayload) {
+  const title = payload.title.trim();
+
+  if (!title) {
+    throw new Error("Reminder title is required.");
+  }
+
+  if (!payload.due_at) {
+    throw new Error("Reminder due date is required.");
+  }
+
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from("reminders")
+    .insert({
+      course_id: payload.course_id || null,
+      description: payload.description.trim() || null,
+      due_at: payload.due_at,
+      payment_id: payload.payment_id || null,
+      reminder_type: payload.reminder_type,
+      student_id: payload.student_id || null,
+      tenant_id: payload.tenant_id,
+      title,
+    })
+    .select(reminderSelect)
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  return data as Reminder;
+}
+
+export async function updateReminderStatus(
+  reminderId: string,
+  tenantId: string,
+  status: ReminderStatus,
+) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from("reminders")
+    .update({ status })
+    .eq("tenant_id", tenantId)
+    .eq("id", reminderId)
+    .select(reminderSelect)
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  return data as Reminder;
+}
+
+export async function deleteReminder(reminderId: string, tenantId: string) {
+  const supabase = getSupabaseClient();
+  const { error } = await supabase
+    .from("reminders")
+    .delete()
+    .eq("tenant_id", tenantId)
+    .eq("id", reminderId);
+
+  if (error) {
+    throw error;
+  }
+}
+
+export async function getReminderCounts(tenantId: string) {
+  const supabase = getSupabaseClient();
+  const todayEnd = new Date();
+  todayEnd.setHours(23, 59, 59, 999);
+
+  const { count, error } = await supabase
+    .from("reminders")
+    .select("id", { count: "exact", head: true })
+    .eq("tenant_id", tenantId)
+    .eq("status", "pending")
+    .lte("due_at", todayEnd.toISOString());
+
+  if (error) {
+    throw error;
+  }
+
+  return {
+    pendingDueTodayOrOverdue: count ?? 0,
+  };
+}
