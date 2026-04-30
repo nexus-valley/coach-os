@@ -6,6 +6,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/src/components/ui/Badge";
 import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
+import { EmptyState } from "@/src/components/ui/EmptyState";
+import { FeedbackAlert } from "@/src/components/ui/FeedbackAlert";
 import { getCoursesForTenant, type Course } from "@/src/lib/courses";
 import {
   createReminder,
@@ -133,6 +135,7 @@ export function RemindersPageClient() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [students, setStudents] = useState<Student[]>([]);
+  const [success, setSuccess] = useState("");
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
 
@@ -222,8 +225,13 @@ export function RemindersPageClient() {
 
     setMutatingId("create");
     setActionError("");
+    setSuccess("");
 
     try {
+      if (!form.title.trim()) {
+        throw new Error("Reminder title is required.");
+      }
+
       const dueDate = new Date(form.dueAt);
 
       if (Number.isNaN(dueDate.getTime())) {
@@ -242,6 +250,7 @@ export function RemindersPageClient() {
       setForm(emptyForm);
       setFormOpen(false);
       await refreshReminders();
+      setSuccess("Reminder created.");
     } catch (caught) {
       setActionError(getErrorMessage(caught, "Unable to create reminder."));
     } finally {
@@ -259,10 +268,12 @@ export function RemindersPageClient() {
 
     setMutatingId(reminderId);
     setActionError("");
+    setSuccess("");
 
     try {
       await updateReminderStatus(reminderId, tenant.id, status);
       await refreshReminders();
+      setSuccess(`Reminder marked ${formatType(status)}.`);
     } catch (caught) {
       setActionError(getErrorMessage(caught, "Unable to update reminder."));
     } finally {
@@ -283,10 +294,12 @@ export function RemindersPageClient() {
 
     setMutatingId(reminderId);
     setActionError("");
+    setSuccess("");
 
     try {
       await deleteReminder(reminderId, tenant.id);
       await refreshReminders();
+      setSuccess("Reminder deleted.");
     } catch (caught) {
       setActionError(getErrorMessage(caught, "Unable to delete reminder."));
     } finally {
@@ -378,14 +391,22 @@ export function RemindersPageClient() {
       </Card>
 
       {error ? (
-        <div className="mt-6 rounded-3xl border border-red-400/30 bg-red-500/10 p-4 text-sm text-red-100">
-          {error}
+        <div className="mt-6">
+          <FeedbackAlert onRetry={() => window.location.reload()}>
+            {error}
+          </FeedbackAlert>
         </div>
       ) : null}
 
       {actionError ? (
-        <div className="mt-6 rounded-3xl border border-red-400/30 bg-red-500/10 p-4 text-sm text-red-100">
-          {actionError}
+        <div className="mt-6">
+          <FeedbackAlert>{actionError}</FeedbackAlert>
+        </div>
+      ) : null}
+
+      {success ? (
+        <div className="mt-6">
+          <FeedbackAlert tone="success">{success}</FeedbackAlert>
         </div>
       ) : null}
 
@@ -401,20 +422,15 @@ export function RemindersPageClient() {
           ))}
         </section>
       ) : filteredReminders.length === 0 ? (
-        <Card className="mt-6 border-white/10 bg-[#101214] p-8 text-white shadow-2xl shadow-black/20">
-          <div className="mx-auto max-w-2xl text-center">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-teal-400 text-sm font-bold text-black">
-              RM
-            </div>
-            <h3 className="mt-6 text-2xl font-semibold">
-              No reminders found
-            </h3>
-            <p className="mt-3 text-sm leading-6 text-slate-400">
-              Create internal reminders for follow-ups, payment checks, or
-              course operations.
-            </p>
-          </div>
-        </Card>
+        <EmptyState
+          action={{
+            label: "Create Reminder",
+            onClick: () => setFormOpen(true),
+          }}
+          description="Create internal reminders for follow-ups, payment checks, or course operations."
+          icon="RM"
+          title="No reminders found"
+        />
       ) : (
         <section className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {filteredReminders.map((reminder) => {

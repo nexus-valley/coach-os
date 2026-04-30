@@ -6,6 +6,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/src/components/ui/Badge";
 import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
+import { EmptyState } from "@/src/components/ui/EmptyState";
+import { FeedbackAlert } from "@/src/components/ui/FeedbackAlert";
 import {
   createAutomationRule,
   deleteAutomationRule,
@@ -19,6 +21,8 @@ import {
   type AutomationTriggerType,
 } from "@/src/lib/automations";
 import type { ReminderType } from "@/src/lib/reminders";
+import { getSupabaseClient } from "@/src/lib/supabaseClient";
+import { getCurrentMemberRole, type MemberRole } from "@/src/lib/team";
 import { getCurrentTenant, type Tenant } from "@/src/lib/tenant";
 
 type StatusFilter = "all" | "active" | "inactive";
@@ -137,6 +141,7 @@ function ActiveBadge({ active }: { active: boolean }) {
 export function AutomationsPageClient() {
   const router = useRouter();
   const [actionError, setActionError] = useState("");
+  const [currentRole, setCurrentRole] = useState<MemberRole | null>(null);
   const [editingRule, setEditingRule] = useState<AutomationRule | null>(null);
   const [error, setError] = useState("");
   const [form, setForm] = useState<AutomationFormState>(emptyForm);
@@ -149,6 +154,7 @@ export function AutomationsPageClient() {
   const [success, setSuccess] = useState("");
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [triggerFilter, setTriggerFilter] = useState<TriggerFilter>("all");
+  const canManageAutomations = currentRole === "owner" || currentRole === "admin";
 
   async function loadRules(currentTenant: Tenant) {
     setRules(await getAutomationRulesForTenant(currentTenant.id));
@@ -170,7 +176,22 @@ export function AutomationsPageClient() {
           return;
         }
 
+        const supabase = getSupabaseClient();
+        const {
+          data: { user },
+          error: userError,
+        } = await supabase.auth.getUser();
+
+        if (userError) {
+          throw userError;
+        }
+
+        const role = user
+          ? await getCurrentMemberRole(currentTenant.id, user.id)
+          : null;
+
         setTenant(currentTenant);
+        setCurrentRole(role);
         await loadRules(currentTenant);
       } catch (caught) {
         if (!active) {
@@ -209,6 +230,10 @@ export function AutomationsPageClient() {
   }, [rules, search, statusFilter, triggerFilter]);
 
   function openCreateForm() {
+    if (!canManageAutomations) {
+      return;
+    }
+
     setActionError("");
     setSuccess("");
     setEditingRule(null);
@@ -217,6 +242,10 @@ export function AutomationsPageClient() {
   }
 
   function openEditForm(rule: AutomationRule) {
+    if (!canManageAutomations) {
+      return;
+    }
+
     setActionError("");
     setSuccess("");
     setEditingRule(rule);
@@ -235,7 +264,7 @@ export function AutomationsPageClient() {
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!tenant) {
+    if (!tenant || !canManageAutomations) {
       setActionError("Workspace context is not available.");
       return;
     }
@@ -245,6 +274,14 @@ export function AutomationsPageClient() {
     setSuccess("");
 
     try {
+      if (!form.name.trim()) {
+        throw new Error("Automation name is required.");
+      }
+
+      if (Number(form.dueOffsetDays) < 0) {
+        throw new Error("Due offset days cannot be negative.");
+      }
+
       const payload = {
         action_type: form.actionType,
         config: configFromForm(form),
@@ -266,6 +303,7 @@ export function AutomationsPageClient() {
       setEditingRule(null);
       setForm(emptyForm);
       await refreshRules();
+      setSuccess(editingRule ? "Automation updated." : "Automation created.");
     } catch (caught) {
       setActionError(getErrorMessage(caught, "Unable to save automation."));
     } finally {
@@ -274,7 +312,7 @@ export function AutomationsPageClient() {
   }
 
   async function handleToggle(rule: AutomationRule) {
-    if (!tenant) {
+    if (!tenant || !canManageAutomations) {
       return;
     }
 
@@ -285,6 +323,9 @@ export function AutomationsPageClient() {
     try {
       await toggleAutomationRule(rule.id, tenant.id, !rule.is_active);
       await refreshRules();
+      setSuccess(
+        rule.is_active ? "Automation deactivated." : "Automation activated.",
+      );
     } catch (caught) {
       setActionError(getErrorMessage(caught, "Unable to update automation."));
     } finally {
@@ -293,7 +334,7 @@ export function AutomationsPageClient() {
   }
 
   async function handleTest(rule: AutomationRule) {
-    if (!tenant) {
+    if (!tenant || !canManageAutomations) {
       return;
     }
 
@@ -312,7 +353,7 @@ export function AutomationsPageClient() {
   }
 
   async function handleDelete(rule: AutomationRule) {
-    if (!tenant) {
+    if (!tenant || !canManageAutomations) {
       return;
     }
 
@@ -329,6 +370,7 @@ export function AutomationsPageClient() {
     try {
       await deleteAutomationRule(rule.id, tenant.id);
       await refreshRules();
+      setSuccess("Automation deleted.");
     } catch (caught) {
       setActionError(getErrorMessage(caught, "Unable to delete automation."));
     } finally {
@@ -351,9 +393,11 @@ export function AutomationsPageClient() {
             events. No external messaging or background workers are connected.
           </p>
         </div>
-        <Button onClick={openCreateForm} size="lg" type="button">
-          Create Automation
-        </Button>
+        {canManageAutomations ? (
+          <Button onClick={openCreateForm} size="lg" type="button">
+            Create Automation
+          </Button>
+        ) : null}
       </div>
 
       <Card className="mt-8 border-white/10 bg-[#101214] p-5 text-white shadow-2xl shadow-black/10 sm:p-6">
@@ -416,20 +460,22 @@ export function AutomationsPageClient() {
       </Card>
 
       {error ? (
-        <div className="mt-6 rounded-3xl border border-red-400/30 bg-red-500/10 p-4 text-sm text-red-100">
-          {error}
+        <div className="mt-6">
+          <FeedbackAlert onRetry={() => window.location.reload()}>
+            {error}
+          </FeedbackAlert>
         </div>
       ) : null}
 
       {actionError ? (
-        <div className="mt-6 rounded-3xl border border-red-400/30 bg-red-500/10 p-4 text-sm text-red-100">
-          {actionError}
+        <div className="mt-6">
+          <FeedbackAlert>{actionError}</FeedbackAlert>
         </div>
       ) : null}
 
       {success ? (
-        <div className="mt-6 rounded-3xl border border-teal-400/30 bg-teal-400/10 p-4 text-sm text-teal-200">
-          {success}
+        <div className="mt-6">
+          <FeedbackAlert tone="success">{success}</FeedbackAlert>
         </div>
       ) : null}
 
@@ -445,20 +491,16 @@ export function AutomationsPageClient() {
           ))}
         </section>
       ) : filteredRules.length === 0 ? (
-        <Card className="mt-6 border-white/10 bg-[#101214] p-8 text-white shadow-2xl shadow-black/20">
-          <div className="mx-auto max-w-2xl text-center">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-teal-400 text-sm font-bold text-black">
-              AU
-            </div>
-            <h3 className="mt-6 text-2xl font-semibold">
-              No automation rules found
-            </h3>
-            <p className="mt-3 text-sm leading-6 text-slate-400">
-              Create a rule to define reminder behavior for future workflow
-              automation.
-            </p>
-          </div>
-        </Card>
+        <EmptyState
+          action={
+            canManageAutomations
+              ? { label: "Create Automation", onClick: openCreateForm }
+              : undefined
+          }
+          description="Create a rule to define reminder behavior for future workflow automation."
+          icon="AU"
+          title="No automation rules found"
+        />
       ) : (
         <section className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {filteredRules.map((rule) => (
@@ -510,41 +552,51 @@ export function AutomationsPageClient() {
                 </div>
               </div>
               <div className="mt-7 flex flex-wrap gap-2 border-t border-white/10 pt-5">
-                <Button
-                  disabled={mutatingId === rule.id}
-                  onClick={() => handleToggle(rule)}
-                  size="sm"
-                  type="button"
-                  variant="secondary"
-                >
-                  {rule.is_active ? "Deactivate" : "Activate"}
-                </Button>
-                <Button
-                  disabled={mutatingId === `test-${rule.id}`}
-                  onClick={() => handleTest(rule)}
-                  size="sm"
-                  type="button"
-                >
-                  {mutatingId === `test-${rule.id}` ? "Testing..." : "Test rule"}
-                </Button>
-                <Button
-                  onClick={() => openEditForm(rule)}
-                  size="sm"
-                  type="button"
-                  variant="secondary"
-                >
-                  Edit
-                </Button>
-                <Button
-                  className="text-red-300! hover:bg-red-500/10! hover:text-red-200!"
-                  disabled={mutatingId === rule.id}
-                  onClick={() => handleDelete(rule)}
-                  size="sm"
-                  type="button"
-                  variant="ghost"
-                >
-                  Delete
-                </Button>
+                {canManageAutomations ? (
+                  <>
+                    <Button
+                      disabled={mutatingId === rule.id}
+                      onClick={() => handleToggle(rule)}
+                      size="sm"
+                      type="button"
+                      variant="secondary"
+                    >
+                      {rule.is_active ? "Deactivate" : "Activate"}
+                    </Button>
+                    <Button
+                      disabled={mutatingId === `test-${rule.id}`}
+                      onClick={() => handleTest(rule)}
+                      size="sm"
+                      type="button"
+                    >
+                      {mutatingId === `test-${rule.id}`
+                        ? "Testing..."
+                        : "Test rule"}
+                    </Button>
+                    <Button
+                      onClick={() => openEditForm(rule)}
+                      size="sm"
+                      type="button"
+                      variant="secondary"
+                    >
+                      Edit
+                    </Button>
+                    <Button
+                      className="text-red-300! hover:bg-red-500/10! hover:text-red-200!"
+                      disabled={mutatingId === rule.id}
+                      onClick={() => handleDelete(rule)}
+                      size="sm"
+                      type="button"
+                      variant="ghost"
+                    >
+                      Delete
+                    </Button>
+                  </>
+                ) : (
+                  <Badge className="border-white/10 bg-white/10 text-slate-300">
+                    View only
+                  </Badge>
+                )}
               </div>
             </Card>
           ))}

@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useEffect, useState, type CSSProperties } from "react";
 
+import { getSupabaseClient } from "@/src/lib/supabaseClient";
+import { getCurrentMemberRole, type MemberRole } from "@/src/lib/team";
 import { getCurrentTenant } from "@/src/lib/tenant";
 import {
   defaultTenantBrandColor,
@@ -28,16 +30,12 @@ const navItems = [
   { href: "/app/reports", label: "Reports" },
   { href: "/app/subscription", label: "Subscription" },
   { href: "/app/settings", label: "Settings" },
-  { disabled: true, href: "#", label: "CRM" },
-  { disabled: true, href: "#", label: "Community" },
 ];
 
 const iconMap: Record<string, string> = {
   Analytics: "AN",
   Automations: "AU",
-  CRM: "CR",
   Cohorts: "CO",
-  Community: "CM",
   Courses: "CU",
   Dashboard: "DB",
   Enrollments: "EN",
@@ -52,6 +50,7 @@ const iconMap: Record<string, string> = {
 
 export function AppShell({ activeItem = "Dashboard", children }: AppShellProps) {
   const [brandColor, setBrandColor] = useState(defaultTenantBrandColor);
+  const [currentRole, setCurrentRole] = useState<MemberRole | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -64,10 +63,20 @@ export function AppShell({ activeItem = "Dashboard", children }: AppShellProps) 
           return;
         }
 
-        const settings = await getTenantSettings(currentTenant.id);
+        const supabase = getSupabaseClient();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        const [settings, role] = await Promise.all([
+          getTenantSettings(currentTenant.id),
+          user
+            ? getCurrentMemberRole(currentTenant.id, user.id)
+            : Promise.resolve(null),
+        ]);
 
         if (active) {
           setBrandColor(getSafeTenantBrandColor(settings?.brand_color));
+          setCurrentRole(role);
         }
       } catch {
         if (active) {
@@ -91,6 +100,9 @@ export function AppShell({ activeItem = "Dashboard", children }: AppShellProps) 
     borderColor: `${brandColor}66`,
     color: brandColor,
   } satisfies CSSProperties;
+  const visibleNavItems = navItems.filter(
+    (item) => !(currentRole === "staff" && item.label === "Subscription"),
+  );
 
   return (
     <div className="min-h-screen bg-[#050607] text-white" style={shellStyle}>
@@ -109,16 +121,13 @@ export function AppShell({ activeItem = "Dashboard", children }: AppShellProps) 
           </Link>
 
           <nav className="mt-10 space-y-1">
-            {navItems.map((item) => {
+            {visibleNavItems.map((item) => {
               const active = item.label === activeItem;
-              const disabled = "disabled" in item && item.disabled;
               const className = [
                 "flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-medium transition",
                 active
                   ? "text-black shadow-lg shadow-teal-950/30"
-                  : disabled
-                    ? "cursor-not-allowed text-slate-600"
-                    : "text-slate-300 hover:bg-white/10 hover:text-white",
+                  : "text-slate-300 hover:bg-white/10 hover:text-white",
               ].join(" ");
               const activeStyle = active
                 ? ({ backgroundColor: brandColor } satisfies CSSProperties)
@@ -130,9 +139,7 @@ export function AppShell({ activeItem = "Dashboard", children }: AppShellProps) 
                       "flex h-8 w-8 items-center justify-center rounded-xl text-[10px] font-bold",
                       active
                         ? "bg-black text-teal-300"
-                        : disabled
-                          ? "bg-white/5 text-slate-600"
-                          : "bg-white/10 text-slate-300",
+                        : "bg-white/10 text-slate-300",
                     ].join(" ")}
                   >
                     {iconMap[item.label]}
@@ -141,16 +148,7 @@ export function AppShell({ activeItem = "Dashboard", children }: AppShellProps) 
                 </>
               );
 
-              return disabled ? (
-                <span
-                  aria-disabled="true"
-                  className={className}
-                  key={item.label}
-                  style={activeStyle}
-                >
-                  {content}
-                </span>
-              ) : (
+              return (
                 <Link
                   className={className}
                   href={item.href}
@@ -195,7 +193,7 @@ export function AppShell({ activeItem = "Dashboard", children }: AppShellProps) 
 
         <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-white/10 bg-[#050607]/95 px-3 py-3 backdrop-blur-xl lg:hidden">
           <div className="grid grid-cols-5 gap-1">
-            {navItems.slice(0, 5).map((item) => {
+            {visibleNavItems.slice(0, 5).map((item) => {
               const active = item.label === activeItem;
               const activeStyle = active
                 ? ({ backgroundColor: brandColor } satisfies CSSProperties)

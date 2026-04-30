@@ -7,6 +7,8 @@ import { useEffect, useState } from "react";
 import { Badge } from "@/src/components/ui/Badge";
 import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
+import { EmptyState } from "@/src/components/ui/EmptyState";
+import { FeedbackAlert } from "@/src/components/ui/FeedbackAlert";
 import {
   createCourse,
   getCoursesForTenant,
@@ -41,6 +43,7 @@ export function CoursesPageClient() {
   const [description, setDescription] = useState("");
   const [error, setError] = useState("");
   const [formOpen, setFormOpen] = useState(false);
+  const [formError, setFormError] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState<CourseFormStatus>("draft");
@@ -103,8 +106,14 @@ export function CoursesPageClient() {
       return;
     }
 
+    if (!title.trim()) {
+      setFormError("Course title is required.");
+      return;
+    }
+
     setSaving(true);
     setError("");
+    setFormError("");
 
     try {
       const course = await createCourse({
@@ -123,7 +132,7 @@ export function CoursesPageClient() {
       setError(
         caught instanceof Error
           ? caught.message
-          : "Unable to create course right now.",
+          : "Unable to create course. Please try again.",
       );
     } finally {
       setSaving(false);
@@ -146,7 +155,6 @@ export function CoursesPageClient() {
           </p>
         </div>
         <Button
-          className="bg-teal-400 text-black hover:bg-teal-300"
           onClick={() => setFormOpen(true)}
           size="lg"
           type="button"
@@ -172,8 +180,10 @@ export function CoursesPageClient() {
       </Card>
 
       {error ? (
-        <div className="mt-6 rounded-3xl border border-red-400/30 bg-red-500/10 p-4 text-sm text-red-100">
-          {error}
+        <div className="mt-6">
+          <FeedbackAlert onRetry={() => window.location.reload()}>
+            {error}
+          </FeedbackAlert>
         </div>
       ) : null}
 
@@ -189,28 +199,12 @@ export function CoursesPageClient() {
           ))}
         </section>
       ) : courses.length === 0 ? (
-        <Card className="mt-6 border-white/10 bg-[#101214] p-8 text-white shadow-2xl shadow-black/20">
-          <div className="mx-auto max-w-2xl text-center">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-teal-400 text-sm font-bold text-black">
-              CU
-            </div>
-            <h3 className="mt-6 text-2xl font-semibold">
-              No courses created yet
-            </h3>
-            <p className="mt-3 text-sm leading-6 text-slate-500">
-              Create your first draft course to start shaping the learning
-              experience. Lessons and section management will arrive in a later
-              module.
-            </p>
-            <Button
-              className="mt-7"
-              onClick={() => setFormOpen(true)}
-              type="button"
-            >
-              Create Course
-            </Button>
-          </div>
-        </Card>
+        <EmptyState
+          action={{ label: "Create Course", onClick: () => setFormOpen(true) }}
+          description="Create your first draft course to start shaping the learning experience, sections, lessons, and enrollments."
+          icon="CU"
+          title="No courses created yet"
+        />
       ) : (
         <section className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {courses.map((course) => (
@@ -274,6 +268,9 @@ export function CoursesPageClient() {
                   type="text"
                   value={title}
                 />
+                {formError ? (
+                  <p className="mt-2 text-xs text-red-300">{formError}</p>
+                ) : null}
               </label>
 
               <label className="block">

@@ -7,6 +7,8 @@ import { useEffect, useMemo, useState } from "react";
 import { EnrollmentStatusBadge } from "@/src/components/enrollments/EnrollmentStatusBadge";
 import { Badge } from "@/src/components/ui/Badge";
 import { Card } from "@/src/components/ui/Card";
+import { EmptyState } from "@/src/components/ui/EmptyState";
+import { FeedbackAlert } from "@/src/components/ui/FeedbackAlert";
 import {
   getEnrollmentsForTenant,
   type EnrollmentStatus,
@@ -178,8 +180,10 @@ export function EnrollmentsPageClient() {
       </Card>
 
       {error ? (
-        <div className="mt-6 rounded-3xl border border-red-400/30 bg-red-500/10 p-4 text-sm text-red-100">
-          {error}
+        <div className="mt-6">
+          <FeedbackAlert onRetry={() => window.location.reload()}>
+            {error}
+          </FeedbackAlert>
         </div>
       ) : null}
 
@@ -195,20 +199,12 @@ export function EnrollmentsPageClient() {
           ))}
         </section>
       ) : filteredEnrollments.length === 0 ? (
-        <Card className="mt-6 border-white/10 bg-[#101214] p-8 text-white shadow-2xl shadow-black/20">
-          <div className="mx-auto max-w-2xl text-center">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-teal-400 text-sm font-bold text-black">
-              EN
-            </div>
-            <h3 className="mt-6 text-2xl font-semibold">
-              No enrollments found
-            </h3>
-            <p className="mt-3 text-sm leading-6 text-slate-400">
-              Enroll a student from their profile to create the first course
-              connection.
-            </p>
-          </div>
-        </Card>
+        <EmptyState
+          action={{ label: "Open Students", onClick: () => router.push("/app/students") }}
+          description="Enroll a student from their profile to create the first course connection."
+          icon="EN"
+          title="No enrollments found"
+        />
       ) : (
         <Card className="mt-6 overflow-hidden border-white/10 bg-[#101214] text-white shadow-2xl shadow-black/10">
           <div className="hidden grid-cols-[1fr_1fr_auto_auto] gap-4 border-b border-white/10 px-5 py-4 text-xs font-semibold text-slate-400 lg:grid">

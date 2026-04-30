@@ -7,6 +7,8 @@ import { useEffect, useState } from "react";
 import { Badge } from "@/src/components/ui/Badge";
 import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
+import { EmptyState } from "@/src/components/ui/EmptyState";
+import { FeedbackAlert } from "@/src/components/ui/FeedbackAlert";
 import {
   createStudent,
   getStudentsForTenant,
@@ -30,6 +32,8 @@ type StudentFormState = {
   source: string;
   status: StudentStatus;
 };
+
+type StudentFormErrors = Partial<Record<keyof StudentFormState, string>>;
 
 const emptyForm: StudentFormState = {
   email: "",
@@ -76,14 +80,30 @@ function getErrorMessage(caught: unknown, fallback: string) {
   return caught instanceof Error ? caught.message : fallback;
 }
 
+function validateStudentForm(form: StudentFormState) {
+  const errors: StudentFormErrors = {};
+
+  if (!form.fullName.trim()) {
+    errors.fullName = "Full name is required.";
+  }
+
+  if (form.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
+    errors.email = "Enter a valid email address.";
+  }
+
+  return errors;
+}
+
 export function StudentsPageClient() {
   const router = useRouter();
   const [error, setError] = useState("");
   const [form, setForm] = useState<StudentFormState>(emptyForm);
+  const [formErrors, setFormErrors] = useState<StudentFormErrors>({});
   const [formOpen, setFormOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [students, setStudents] = useState<Student[]>([]);
+  const [success, setSuccess] = useState("");
   const [tenant, setTenant] = useState<Tenant | null>(null);
 
   useEffect(() => {
@@ -146,8 +166,17 @@ export function StudentsPageClient() {
       return;
     }
 
+    const validationErrors = validateStudentForm(form);
+
+    if (Object.keys(validationErrors).length > 0) {
+      setFormErrors(validationErrors);
+      return;
+    }
+
     setSaving(true);
     setError("");
+    setFormErrors({});
+    setSuccess("");
 
     try {
       await createStudent({
@@ -157,8 +186,9 @@ export function StudentsPageClient() {
       setForm(emptyForm);
       setFormOpen(false);
       await refreshStudents();
+      setSuccess("Student added.");
     } catch (caught) {
-      setError(getErrorMessage(caught, "Unable to add student right now."));
+      setError(getErrorMessage(caught, "Unable to add student. Please try again."));
     } finally {
       setSaving(false);
     }
@@ -201,8 +231,19 @@ export function StudentsPageClient() {
       </Card>
 
       {error ? (
-        <div className="mt-6 rounded-3xl border border-red-400/30 bg-red-500/10 p-4 text-sm text-red-100">
-          {error}
+        <div className="mt-6">
+          <FeedbackAlert
+            onRetry={() => window.location.reload()}
+            tone="error"
+          >
+            {error}
+          </FeedbackAlert>
+        </div>
+      ) : null}
+
+      {success ? (
+        <div className="mt-6">
+          <FeedbackAlert tone="success">{success}</FeedbackAlert>
         </div>
       ) : null}
 
@@ -218,27 +259,12 @@ export function StudentsPageClient() {
           ))}
         </section>
       ) : students.length === 0 ? (
-        <Card className="mt-6 border-white/10 bg-[#101214] p-8 text-white shadow-2xl shadow-black/20">
-          <div className="mx-auto max-w-2xl text-center">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-teal-400 text-sm font-bold text-black">
-              SD
-            </div>
-            <h3 className="mt-6 text-2xl font-semibold">
-              No students added yet
-            </h3>
-            <p className="mt-3 text-sm leading-6 text-slate-400">
-              Add your first student or lead to begin building the CRM layer.
-              Enrollment and payment history will connect in later modules.
-            </p>
-            <Button
-              className="mt-7"
-              onClick={() => setFormOpen(true)}
-              type="button"
-            >
-              Add Student
-            </Button>
-          </div>
-        </Card>
+        <EmptyState
+          action={{ label: "Add Student", onClick: () => setFormOpen(true) }}
+          description="Add your first student or lead to begin building the CRM layer. Enrollment and payment history will connect automatically."
+          icon="SD"
+          title="No students added yet"
+        />
       ) : (
         <Card className="mt-6 overflow-hidden border-white/10 bg-[#101214] text-white shadow-2xl shadow-black/10">
           <div className="hidden grid-cols-[1.2fr_1fr_0.8fr_0.7fr_0.8fr_0.7fr] gap-4 border-b border-white/10 px-5 py-4 text-xs font-semibold text-slate-400 lg:grid">
@@ -301,7 +327,11 @@ export function StudentsPageClient() {
             </div>
 
             <form className="mt-7 space-y-5" onSubmit={handleCreateStudent}>
-              <StudentFormFields form={form} setForm={setForm} />
+              <StudentFormFields
+                errors={formErrors}
+                form={form}
+                setForm={setForm}
+              />
               <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end">
                 <Button
                   className="border-slate-700! bg-white/10! text-white! hover:bg-white/15!"
@@ -324,9 +354,11 @@ export function StudentsPageClient() {
 }
 
 export function StudentFormFields({
+  errors = {},
   form,
   setForm,
 }: {
+  errors?: StudentFormErrors;
   form: StudentFormState;
   setForm: React.Dispatch<React.SetStateAction<StudentFormState>>;
 }) {
@@ -344,6 +376,9 @@ export function StudentFormFields({
           type="text"
           value={form.fullName}
         />
+        {errors.fullName ? (
+          <p className="mt-2 text-xs text-red-300">{errors.fullName}</p>
+        ) : null}
       </label>
 
       <div className="grid gap-4 sm:grid-cols-2">
@@ -358,6 +393,9 @@ export function StudentFormFields({
             type="email"
             value={form.email}
           />
+          {errors.email ? (
+            <p className="mt-2 text-xs text-red-300">{errors.email}</p>
+          ) : null}
         </label>
         <label className="block">
           <span className="text-sm font-medium text-slate-300">Phone</span>

@@ -4,7 +4,9 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 import { Badge } from "@/src/components/ui/Badge";
+import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
+import { FeedbackAlert } from "@/src/components/ui/FeedbackAlert";
 import {
   getDashboardMetrics,
   type DashboardMetrics,
@@ -126,9 +128,9 @@ export function DashboardPageClient() {
   if (error || !metrics) {
     return (
       <div className="mx-auto max-w-7xl">
-        <Card className="border-red-400/30 bg-red-500/10 p-6 text-red-100">
-          {error || "Dashboard data is not available."}
-        </Card>
+        <FeedbackAlert onRetry={() => window.location.reload()}>
+          {error || "Unable to load dashboard data. Please try again."}
+        </FeedbackAlert>
       </div>
     );
   }
@@ -185,6 +187,18 @@ export function DashboardPageClient() {
           Workspace: {tenant?.name ?? "Current workspace"}
         </div>
       </div>
+
+      <section className="mt-8 grid gap-4 md:grid-cols-3">
+        <Button href="/app/students" size="lg">
+          Add Student
+        </Button>
+        <Button href="/app/courses" size="lg" variant="secondary">
+          Create Course
+        </Button>
+        <Button href="/app/payments" size="lg" variant="secondary">
+          Record Payment
+        </Button>
+      </section>
 
       <section className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
         {metricCards.map((metric) => (

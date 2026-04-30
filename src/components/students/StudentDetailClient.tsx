@@ -15,6 +15,7 @@ import {
 import { Badge } from "@/src/components/ui/Badge";
 import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
+import { FeedbackAlert } from "@/src/components/ui/FeedbackAlert";
 import { getCoursesForTenant, type Course } from "@/src/lib/courses";
 import {
   addStudentToCohort,
@@ -106,6 +107,7 @@ function createFormFromStudent(student: Student): StudentFormState {
 export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
   const router = useRouter();
   const [actionError, setActionError] = useState("");
+  const [actionMessage, setActionMessage] = useState("");
   const [cohortOpen, setCohortOpen] = useState(false);
   const [cohorts, setCohorts] = useState<CohortWithCourse[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
@@ -393,6 +395,12 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
 
     setMutating(true);
     setActionError("");
+    setActionMessage("");
+    setActionMessage("");
+    setActionMessage("");
+    setActionMessage("");
+    setActionMessage("");
+    setActionMessage("");
 
     try {
       const updatedStudent = await updateStudent({
@@ -403,6 +411,7 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
       setStudent(updatedStudent);
       setForm(createFormFromStudent(updatedStudent));
       setEditOpen(false);
+      setActionMessage("Student updated.");
     } catch (caught) {
       setActionError(getErrorMessage(caught, "Unable to update student."));
     } finally {
@@ -430,6 +439,7 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
       });
       setEnrollOpen(false);
       await refreshEnrollments();
+      setActionMessage("Student enrolled.");
     } catch (caught) {
       setActionError(getErrorMessage(caught, "Unable to create enrollment."));
     } finally {
@@ -456,6 +466,7 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
       });
       setCohortOpen(false);
       await refreshCohorts();
+      setActionMessage("Student added to cohort.");
     } catch (caught) {
       setActionError(getErrorMessage(caught, "Unable to add student to cohort."));
     } finally {
@@ -482,6 +493,7 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
         tenantId: tenant.id,
       });
       await refreshEnrollments();
+      setActionMessage("Enrollment status updated.");
     } catch (caught) {
       setActionError(
         getErrorMessage(caught, "Unable to update enrollment status."),
@@ -503,8 +515,13 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
 
     setMutating(true);
     setActionError("");
+    setActionMessage("");
 
     try {
+      if (!Number.isFinite(amount) || amount <= 0) {
+        throw new Error("Amount must be greater than zero.");
+      }
+
       await createPayment({
         amount,
         course_id: selectedEnrollment.course_id,
@@ -518,6 +535,7 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
       setPaymentForm(emptyPaymentForm);
       setPaymentOpen(false);
       await refreshPayments();
+      setActionMessage("Payment added.");
     } catch (caught) {
       setActionError(getErrorMessage(caught, "Unable to add payment."));
     } finally {
@@ -540,6 +558,7 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
       });
       setDeleteEnrollmentTarget(null);
       await refreshEnrollments();
+      setActionMessage("Enrollment deleted.");
     } catch (caught) {
       setActionError(getErrorMessage(caught, "Unable to delete enrollment."));
     } finally {
@@ -700,8 +719,14 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
       </section>
 
       {actionError ? (
-        <div className="mt-6 rounded-3xl border border-red-400/30 bg-red-500/10 p-4 text-sm text-red-100">
-          {actionError}
+        <div className="mt-6">
+          <FeedbackAlert>{actionError}</FeedbackAlert>
+        </div>
+      ) : null}
+
+      {actionMessage ? (
+        <div className="mt-6">
+          <FeedbackAlert tone="success">{actionMessage}</FeedbackAlert>
         </div>
       ) : null}
 

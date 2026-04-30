@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/src/components/ui/Badge";
 import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
+import { FeedbackAlert } from "@/src/components/ui/FeedbackAlert";
 import {
   getPlanLimits,
   getTenantSubscription,
@@ -345,6 +346,17 @@ export function SubscriptionPageClient() {
         <Card className="border-red-400/30 bg-red-500/10 p-6 text-red-100">
           {error || "Subscription is not available for this workspace."}
         </Card>
+      </div>
+    );
+  }
+
+  if (currentRole === "staff") {
+    return (
+      <div className="mx-auto max-w-7xl">
+        <FeedbackAlert tone="warning">
+          Subscription settings are available to owners and admins. Staff
+          accounts do not have access to this billing foundation.
+        </FeedbackAlert>
       </div>
     );
   }

@@ -7,6 +7,8 @@ import { useEffect, useState } from "react";
 import { Badge } from "@/src/components/ui/Badge";
 import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
+import { EmptyState } from "@/src/components/ui/EmptyState";
+import { FeedbackAlert } from "@/src/components/ui/FeedbackAlert";
 import { getCoursesForTenant, type Course } from "@/src/lib/courses";
 import {
   createCohort,
@@ -78,6 +80,7 @@ export function CohortsPageClient() {
   const [formOpen, setFormOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [success, setSuccess] = useState("");
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const canDelete = canDeleteRecords(currentRole);
 
@@ -148,6 +151,7 @@ export function CohortsPageClient() {
 
   function openCreateForm() {
     setError("");
+    setSuccess("");
     setEditingCohort(null);
     setForm({ ...emptyForm, courseId: courses[0]?.id ?? "" });
     setFormOpen(true);
@@ -155,6 +159,7 @@ export function CohortsPageClient() {
 
   function openEditForm(cohort: CohortWithCourse) {
     setError("");
+    setSuccess("");
     setEditingCohort(cohort);
     setForm(createFormFromCohort(cohort));
     setFormOpen(true);
@@ -170,8 +175,25 @@ export function CohortsPageClient() {
 
     setSaving(true);
     setError("");
+    setSuccess("");
 
     try {
+      if (!form.name.trim()) {
+        throw new Error("Cohort name is required.");
+      }
+
+      if (!form.courseId) {
+        throw new Error("Select a linked course.");
+      }
+
+      if (
+        form.startDate &&
+        form.endDate &&
+        new Date(form.endDate) < new Date(form.startDate)
+      ) {
+        throw new Error("End date cannot be before start date.");
+      }
+
       if (editingCohort) {
         await updateCohort({
           cohortId: editingCohort.id,
@@ -197,6 +219,7 @@ export function CohortsPageClient() {
       setEditingCohort(null);
       setForm({ ...emptyForm, courseId: courses[0]?.id ?? "" });
       await loadCohorts(tenant);
+      setSuccess(editingCohort ? "Cohort updated." : "Cohort created.");
     } catch (caught) {
       setError(getErrorMessage(caught, "Unable to save cohort."));
     } finally {
@@ -218,6 +241,7 @@ export function CohortsPageClient() {
 
     setSaving(true);
     setError("");
+    setSuccess("");
 
     try {
       await deleteCohort({
@@ -225,6 +249,7 @@ export function CohortsPageClient() {
         tenantId: tenant.id,
       });
       await loadCohorts(tenant);
+      setSuccess("Cohort deleted.");
     } catch (caught) {
       setError(getErrorMessage(caught, "Unable to delete cohort."));
     } finally {
@@ -269,8 +294,16 @@ export function CohortsPageClient() {
       </Card>
 
       {error ? (
-        <div className="mt-6 rounded-3xl border border-red-400/30 bg-red-500/10 p-4 text-sm text-red-100">
-          {error}
+        <div className="mt-6">
+          <FeedbackAlert onRetry={() => window.location.reload()}>
+            {error}
+          </FeedbackAlert>
+        </div>
+      ) : null}
+
+      {success ? (
+        <div className="mt-6">
+          <FeedbackAlert tone="success">{success}</FeedbackAlert>
         </div>
       ) : null}
 
@@ -286,28 +319,16 @@ export function CohortsPageClient() {
           ))}
         </section>
       ) : cohorts.length === 0 ? (
-        <Card className="mt-6 border-white/10 bg-[#101214] p-8 text-white shadow-2xl shadow-black/20">
-          <div className="mx-auto max-w-2xl text-center">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-teal-400 text-sm font-bold text-black">
-              CO
-            </div>
-            <h3 className="mt-6 text-2xl font-semibold">
-              No cohorts created yet
-            </h3>
-            <p className="mt-3 text-sm leading-6 text-slate-400">
-              Create a batch for a course, then add students from the cohort
-              detail page or each student profile.
-            </p>
-            <Button
-              className="mt-7"
-              disabled={courses.length === 0}
-              onClick={openCreateForm}
-              type="button"
-            >
-              Create Cohort
-            </Button>
-          </div>
-        </Card>
+        <EmptyState
+          action={{
+            disabled: courses.length === 0,
+            label: "Create Cohort",
+            onClick: openCreateForm,
+          }}
+          description="Create a batch for a course, then add students from the cohort detail page or each student profile."
+          icon="CO"
+          title="No cohorts created yet"
+        />
       ) : (
         <section className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {cohorts.map((cohort) => (
