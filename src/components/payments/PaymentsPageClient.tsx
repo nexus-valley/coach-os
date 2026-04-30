@@ -243,8 +243,13 @@ export function PaymentsPageClient() {
             workspace.
           </p>
         </div>
-        <div className="rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm text-white">
-          {filteredPayments.length} visible
+        <div className="flex flex-wrap items-center gap-3">
+          <Button href="/app/payment-links" size="sm" variant="secondary">
+            Payment Links
+          </Button>
+          <div className="rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm text-white">
+            {filteredPayments.length} visible
+          </div>
         </div>
       </div>
 

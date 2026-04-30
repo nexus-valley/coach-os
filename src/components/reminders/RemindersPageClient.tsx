@@ -20,6 +20,10 @@ import {
 } from "@/src/lib/reminders";
 import { getStudentsForTenant, type Student } from "@/src/lib/students";
 import { getCurrentTenant, type Tenant } from "@/src/lib/tenant";
+import {
+  buildReminderWhatsAppMessage,
+  buildWhatsAppShareUrl,
+} from "@/src/lib/whatsapp";
 
 type StatusFilter = "all" | ReminderStatus;
 type TypeFilter = "all" | ReminderType;
@@ -307,6 +311,17 @@ export function RemindersPageClient() {
     }
   }
 
+  function getReminderWhatsAppUrl(reminder: ReminderWithRelations) {
+    const message = buildReminderWhatsAppMessage({
+      dueDate: formatDateTime(reminder.due_at),
+      reminderTitle: reminder.title,
+      studentName: reminder.student?.full_name,
+      workspaceName: tenant?.name ?? "CoachOS",
+    });
+
+    return buildWhatsAppShareUrl(reminder.student?.phone, message);
+  }
+
   return (
     <div className="mx-auto max-w-7xl">
       <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
@@ -517,6 +532,14 @@ export function RemindersPageClient() {
                   >
                     Cancel
                   </Button>
+                  <a
+                    className="inline-flex h-10 items-center justify-center rounded-full border border-white/10 bg-white/10 px-4 text-sm font-semibold text-white transition hover:bg-white/15"
+                    href={getReminderWhatsAppUrl(reminder)}
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    Share WhatsApp
+                  </a>
                   <Button
                     className="text-red-300! hover:bg-red-500/10! hover:text-red-200!"
                     disabled={mutatingId === reminder.id}

@@ -16,6 +16,7 @@ import {
   getTenantSettings,
   type TenantSettings,
 } from "@/src/lib/tenantSettings";
+import { buildWhatsAppMessage, buildWhatsAppShareUrl } from "@/src/lib/whatsapp";
 
 type ReceiptPageClientProps = {
   paymentId: string;
@@ -139,6 +140,26 @@ export function ReceiptPageClient({ paymentId }: ReceiptPageClientProps) {
   const brandColor = getSafeTenantBrandColor(tenantSettings?.brand_color);
   const workspaceName =
     tenantSettings?.name || tenant?.name || "CoachOS Workspace";
+  function handleShareReceipt() {
+    if (!payment) {
+      return;
+    }
+
+    const receiptShareMessage = buildWhatsAppMessage(
+      "Hi {{studentName}}, your payment receipt for {{amount}} is ready.\n{{receiptUrl}}",
+      {
+        amount: formatCurrency(payment.amount, payment.currency || "USD"),
+        receiptUrl: window.location.href,
+        studentName: payment.student?.full_name || "there",
+      },
+    );
+    const receiptShareUrl = buildWhatsAppShareUrl(
+      payment.student?.phone,
+      receiptShareMessage,
+    );
+
+    window.open(receiptShareUrl, "_blank", "noopener,noreferrer");
+  }
 
   return (
     <div className="mx-auto max-w-5xl print:max-w-none">
@@ -157,7 +178,17 @@ export function ReceiptPageClient({ paymentId }: ReceiptPageClientProps) {
         <Button onClick={() => window.print()} type="button">
           Download / Print Receipt
         </Button>
+        <Button
+          onClick={handleShareReceipt}
+          type="button"
+          variant="secondary"
+        >
+          Share Receipt on WhatsApp
+        </Button>
       </div>
+      <p className="mb-6 text-sm text-slate-500 print:hidden">
+        WhatsApp opens with a pre-filled message. Sending is done manually.
+      </p>
 
       <section className="rounded-[2rem] border border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/20 print:rounded-none print:border-0 print:bg-white print:p-0 print:text-black print:shadow-none sm:p-8">
         <div className="rounded-[1.5rem] border border-white/10 bg-white/3 p-6 print:rounded-none print:border-0 print:bg-white print:p-0">

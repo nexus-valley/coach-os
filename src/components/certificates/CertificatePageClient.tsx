@@ -16,6 +16,10 @@ import {
   getTenantSettings,
   type TenantSettings,
 } from "@/src/lib/tenantSettings";
+import {
+  buildCertificateWhatsAppMessage,
+  buildWhatsAppShareUrl,
+} from "@/src/lib/whatsapp";
 
 type CertificatePageClientProps = {
   enrollmentId: string;
@@ -128,6 +132,23 @@ export function CertificatePageClient({
   const brandColor = getSafeTenantBrandColor(tenantSettings?.brand_color);
   const workspaceName =
     tenantSettings?.name || tenant?.name || "CoachOS Workspace";
+  function handleShareCertificate() {
+    if (!certificate) {
+      return;
+    }
+
+    const certificateShareMessage = buildCertificateWhatsAppMessage({
+      certificateUrl: window.location.href,
+      courseName: certificate.course_title,
+      studentName: certificate.student_name,
+    });
+    const certificateShareUrl = buildWhatsAppShareUrl(
+      null,
+      certificateShareMessage,
+    );
+
+    window.open(certificateShareUrl, "_blank", "noopener,noreferrer");
+  }
 
   return (
     <main className="min-h-screen bg-[#050607] px-5 py-8 text-white print:bg-white print:px-0 print:py-0">
@@ -142,7 +163,17 @@ export function CertificatePageClient({
           <Button onClick={() => window.print()} type="button">
             Download
           </Button>
+          <Button
+            onClick={handleShareCertificate}
+            type="button"
+            variant="secondary"
+          >
+            Share Certificate on WhatsApp
+          </Button>
         </div>
+        <p className="mb-6 text-sm text-slate-500 print:hidden">
+          WhatsApp opens with a pre-filled message. Sending is done manually.
+        </p>
 
         <section className="bg-white p-6 text-black shadow-2xl shadow-black/30 print:min-h-screen print:p-10 print:shadow-none sm:p-10">
           <div

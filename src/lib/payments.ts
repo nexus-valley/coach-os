@@ -3,7 +3,7 @@ import type { Enrollment } from "@/src/lib/enrollments";
 import type { Student } from "@/src/lib/students";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 
-export type PaymentMethod = "UPI" | "Cash" | "Bank";
+export type PaymentMethod = "UPI" | "Cash" | "Bank" | "UPI Link";
 export type PaymentStatus = "completed" | "pending" | "failed";
 
 export type Payment = {
