@@ -11,6 +11,11 @@ import {
   type CertificateData,
 } from "@/src/lib/certificates";
 import { getCurrentTenant, type Tenant } from "@/src/lib/tenant";
+import {
+  getSafeTenantBrandColor,
+  getTenantSettings,
+  type TenantSettings,
+} from "@/src/lib/tenantSettings";
 
 type CertificatePageClientProps = {
   enrollmentId: string;
@@ -36,6 +41,8 @@ export function CertificatePageClient({
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [tenant, setTenant] = useState<Tenant | null>(null);
+  const [tenantSettings, setTenantSettings] =
+    useState<TenantSettings | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -53,16 +60,17 @@ export function CertificatePageClient({
           return;
         }
 
-        const certificateData = await generateCertificateData(
-          enrollmentId,
-          currentTenant.id,
-        );
+        const [certificateData, settings] = await Promise.all([
+          generateCertificateData(enrollmentId, currentTenant.id),
+          getTenantSettings(currentTenant.id),
+        ]);
 
         if (!active) {
           return;
         }
 
         setTenant(currentTenant);
+        setTenantSettings(settings);
         setCertificate(certificateData);
 
         if (!certificateData) {
@@ -117,6 +125,10 @@ export function CertificatePageClient({
     );
   }
 
+  const brandColor = getSafeTenantBrandColor(tenantSettings?.brand_color);
+  const workspaceName =
+    tenantSettings?.name || tenant?.name || "CoachOS Workspace";
+
   return (
     <main className="min-h-screen bg-[#050607] px-5 py-8 text-white print:bg-white print:px-0 print:py-0">
       <div className="mx-auto max-w-5xl">
@@ -133,9 +145,23 @@ export function CertificatePageClient({
         </div>
 
         <section className="bg-white p-6 text-black shadow-2xl shadow-black/30 print:min-h-screen print:p-10 print:shadow-none sm:p-10">
-          <div className="flex min-h-[680px] flex-col items-center justify-center border-4 border-black p-8 text-center sm:p-12">
-            <p className="text-sm font-semibold uppercase tracking-[0.35em] text-slate-600">
-              Nexus Valley Academy
+          <div
+            className="flex min-h-[680px] flex-col items-center justify-center border-4 p-8 text-center sm:p-12"
+            style={{ borderColor: brandColor }}
+          >
+            {tenantSettings?.logo_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                alt={`${workspaceName} logo`}
+                className="mb-6 h-16 w-16 rounded-2xl object-contain"
+                src={tenantSettings.logo_url}
+              />
+            ) : null}
+            <p
+              className="text-sm font-semibold uppercase tracking-[0.35em]"
+              style={{ color: brandColor }}
+            >
+              {workspaceName}
             </p>
             <h1 className="mt-8 text-5xl font-semibold tracking-normal sm:text-6xl">
               Certificate
@@ -176,14 +202,12 @@ export function CertificatePageClient({
                 <p className="font-semibold uppercase tracking-[0.18em] text-slate-500">
                   Workspace
                 </p>
-                <p className="mt-2 font-semibold">
-                  {tenant?.name ?? "CoachOS"}
-                </p>
+                <p className="mt-2 font-semibold">{workspaceName}</p>
               </div>
             </div>
 
             <p className="mt-12 text-sm font-semibold text-slate-600">
-              Issued by Nexus Valley Academy
+              Issued by {workspaceName}
             </p>
           </div>
         </section>

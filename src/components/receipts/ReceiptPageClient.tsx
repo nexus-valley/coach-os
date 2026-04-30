@@ -11,6 +11,11 @@ import { Card } from "@/src/components/ui/Card";
 import type { PaymentWithRelations } from "@/src/lib/payments";
 import { getPaymentReceipt } from "@/src/lib/receipts";
 import { getCurrentTenant, type Tenant } from "@/src/lib/tenant";
+import {
+  getSafeTenantBrandColor,
+  getTenantSettings,
+  type TenantSettings,
+} from "@/src/lib/tenantSettings";
 
 type ReceiptPageClientProps = {
   paymentId: string;
@@ -45,6 +50,8 @@ export function ReceiptPageClient({ paymentId }: ReceiptPageClientProps) {
   const [loading, setLoading] = useState(true);
   const [payment, setPayment] = useState<PaymentWithRelations | null>(null);
   const [tenant, setTenant] = useState<Tenant | null>(null);
+  const [tenantSettings, setTenantSettings] =
+    useState<TenantSettings | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -62,16 +69,17 @@ export function ReceiptPageClient({ paymentId }: ReceiptPageClientProps) {
           return;
         }
 
-        const currentPayment = await getPaymentReceipt(
-          paymentId,
-          currentTenant.id,
-        );
+        const [currentPayment, settings] = await Promise.all([
+          getPaymentReceipt(paymentId, currentTenant.id),
+          getTenantSettings(currentTenant.id),
+        ]);
 
         if (!active) {
           return;
         }
 
         setTenant(currentTenant);
+        setTenantSettings(settings);
         setPayment(currentPayment);
 
         if (!currentPayment) {
@@ -128,6 +136,10 @@ export function ReceiptPageClient({ paymentId }: ReceiptPageClientProps) {
     );
   }
 
+  const brandColor = getSafeTenantBrandColor(tenantSettings?.brand_color);
+  const workspaceName =
+    tenantSettings?.name || tenant?.name || "CoachOS Workspace";
+
   return (
     <div className="mx-auto max-w-5xl print:max-w-none">
       <div className="mb-6 flex flex-col justify-between gap-4 print:hidden sm:flex-row sm:items-end">
@@ -149,20 +161,42 @@ export function ReceiptPageClient({ paymentId }: ReceiptPageClientProps) {
 
       <section className="rounded-[2rem] border border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/20 print:rounded-none print:border-0 print:bg-white print:p-0 print:text-black print:shadow-none sm:p-8">
         <div className="rounded-[1.5rem] border border-white/10 bg-white/3 p-6 print:rounded-none print:border-0 print:bg-white print:p-0">
-          <div className="flex flex-col justify-between gap-6 border-b border-white/10 pb-8 print:border-slate-200 sm:flex-row">
-            <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.22em] text-teal-300 print:text-slate-600">
-                {tenant?.name ?? "CoachOS Workspace"}
-              </p>
-              <h1 className="mt-4 text-4xl font-semibold tracking-normal print:text-black">
-                Receipt
-              </h1>
-              <p className="mt-3 text-sm text-slate-400 print:text-slate-600">
-                Nexus Valley CoachOS
-              </p>
+          <div
+            className="flex flex-col justify-between gap-6 border-b border-white/10 pb-8 print:border-slate-200 sm:flex-row"
+            style={{ borderColor: `${brandColor}44` }}
+          >
+            <div className="flex gap-4">
+              {tenantSettings?.logo_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  alt={`${workspaceName} logo`}
+                  className="h-14 w-14 rounded-2xl object-contain"
+                  src={tenantSettings.logo_url}
+                />
+              ) : null}
+              <div>
+                <p
+                  className="text-sm font-semibold uppercase tracking-[0.22em] print:text-slate-600"
+                  style={{ color: brandColor }}
+                >
+                  {workspaceName}
+                </p>
+                <h1 className="mt-4 text-4xl font-semibold tracking-normal print:text-black">
+                  Receipt
+                </h1>
+                <p className="mt-3 text-sm text-slate-400 print:text-slate-600">
+                  Nexus Valley CoachOS
+                </p>
+              </div>
             </div>
             <div className="text-left sm:text-right">
-              <Badge className="border-teal-400/30 bg-teal-400/10 text-teal-300 print:border-slate-300 print:bg-white print:text-black">
+              <Badge
+                className="bg-white/5 print:border-slate-300 print:bg-white print:text-black"
+                style={{
+                  borderColor: `${brandColor}55`,
+                  color: brandColor,
+                }}
+              >
                 {payment.receipt_number}
               </Badge>
               <p className="mt-4 text-sm text-slate-400 print:text-slate-600">
@@ -234,6 +268,30 @@ export function ReceiptPageClient({ paymentId }: ReceiptPageClientProps) {
               {payment.notes || "No notes added."}
             </p>
           </div>
+
+          {tenantSettings?.support_email ||
+          tenantSettings?.support_phone ||
+          tenantSettings?.website_url ? (
+            <div className="mt-8 rounded-3xl border border-white/10 bg-[#101214] p-5 print:border-slate-200 print:bg-white">
+              <p
+                className="text-sm font-semibold print:text-slate-600"
+                style={{ color: brandColor }}
+              >
+                Support
+              </p>
+              <div className="mt-3 grid gap-2 text-sm text-slate-300 print:text-black sm:grid-cols-3">
+                {tenantSettings.support_email ? (
+                  <p>{tenantSettings.support_email}</p>
+                ) : null}
+                {tenantSettings.support_phone ? (
+                  <p>{tenantSettings.support_phone}</p>
+                ) : null}
+                {tenantSettings.website_url ? (
+                  <p>{tenantSettings.website_url}</p>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
         </div>
       </section>
     </div>

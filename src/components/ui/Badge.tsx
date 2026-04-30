@@ -4,7 +4,7 @@ type BadgeProps = {
   children: React.ReactNode;
   className?: string;
   tone?: BadgeTone;
-};
+} & React.HTMLAttributes<HTMLSpanElement>;
 
 const toneClasses: Record<BadgeTone, string> = {
   dark: "border-white/10 bg-white/10 text-white",
@@ -12,7 +12,12 @@ const toneClasses: Record<BadgeTone, string> = {
   success: "border-teal-400/30 bg-teal-400/15 text-teal-300",
 };
 
-export function Badge({ children, className = "", tone = "light" }: BadgeProps) {
+export function Badge({
+  children,
+  className = "",
+  tone = "light",
+  ...props
+}: BadgeProps) {
   return (
     <span
       className={[
@@ -22,6 +27,7 @@ export function Badge({ children, className = "", tone = "light" }: BadgeProps) 
       ]
         .filter(Boolean)
         .join(" ")}
+      {...props}
     >
       {children}
     </span>

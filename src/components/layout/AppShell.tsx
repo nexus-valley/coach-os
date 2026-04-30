@@ -1,4 +1,14 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect, useState, type CSSProperties } from "react";
+
+import { getCurrentTenant } from "@/src/lib/tenant";
+import {
+  defaultTenantBrandColor,
+  getSafeTenantBrandColor,
+  getTenantSettings,
+} from "@/src/lib/tenantSettings";
 
 type AppShellProps = {
   activeItem?: string;
@@ -39,8 +49,49 @@ const iconMap: Record<string, string> = {
 };
 
 export function AppShell({ activeItem = "Dashboard", children }: AppShellProps) {
+  const [brandColor, setBrandColor] = useState(defaultTenantBrandColor);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadBrandColor() {
+      try {
+        const currentTenant = await getCurrentTenant();
+
+        if (!currentTenant) {
+          return;
+        }
+
+        const settings = await getTenantSettings(currentTenant.id);
+
+        if (active) {
+          setBrandColor(getSafeTenantBrandColor(settings?.brand_color));
+        }
+      } catch {
+        if (active) {
+          setBrandColor(defaultTenantBrandColor);
+        }
+      }
+    }
+
+    loadBrandColor();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const shellStyle = {
+    "--coachos-brand": brandColor,
+  } as CSSProperties;
+
+  const brandBadgeStyle = {
+    borderColor: `${brandColor}66`,
+    color: brandColor,
+  } satisfies CSSProperties;
+
   return (
-    <div className="min-h-screen bg-[#050607] text-white">
+    <div className="min-h-screen bg-[#050607] text-white" style={shellStyle}>
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top_left,rgba(45,212,191,0.14),transparent_30rem),linear-gradient(135deg,rgba(15,23,42,0.38),transparent_34rem)]" />
 
       <div className="relative flex min-h-screen">
@@ -62,11 +113,14 @@ export function AppShell({ activeItem = "Dashboard", children }: AppShellProps) 
               const className = [
                 "flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-medium transition",
                 active
-                  ? "bg-teal-400 text-black shadow-lg shadow-teal-950/30"
+                  ? "text-black shadow-lg shadow-teal-950/30"
                   : disabled
                     ? "cursor-not-allowed text-slate-600"
                     : "text-slate-300 hover:bg-white/10 hover:text-white",
               ].join(" ");
+              const activeStyle = active
+                ? ({ backgroundColor: brandColor } satisfies CSSProperties)
+                : undefined;
               const content = (
                 <>
                   <span
@@ -90,6 +144,7 @@ export function AppShell({ activeItem = "Dashboard", children }: AppShellProps) 
                   aria-disabled="true"
                   className={className}
                   key={item.label}
+                  style={activeStyle}
                 >
                   {content}
                 </span>
@@ -98,6 +153,7 @@ export function AppShell({ activeItem = "Dashboard", children }: AppShellProps) 
                   className={className}
                   href={item.href}
                   key={item.label}
+                  style={activeStyle}
                 >
                   {content}
                 </Link>
@@ -117,8 +173,14 @@ export function AppShell({ activeItem = "Dashboard", children }: AppShellProps) 
                   CoachOS
                 </h1>
               </div>
-              <div className="hidden items-center gap-3 rounded-full border border-teal-400/30 bg-teal-400/10 px-4 py-2 text-sm text-teal-300 sm:flex">
-                <span className="h-2 w-2 rounded-full bg-teal-400" />
+              <div
+                className="hidden items-center gap-3 rounded-full border bg-white/5 px-4 py-2 text-sm sm:flex"
+                style={brandBadgeStyle}
+              >
+                <span
+                  className="h-2 w-2 rounded-full"
+                  style={{ backgroundColor: brandColor }}
+                />
                 Workspace ready
               </div>
             </div>
@@ -133,17 +195,21 @@ export function AppShell({ activeItem = "Dashboard", children }: AppShellProps) 
           <div className="grid grid-cols-5 gap-1">
             {navItems.slice(0, 5).map((item) => {
               const active = item.label === activeItem;
+              const activeStyle = active
+                ? ({ backgroundColor: brandColor } satisfies CSSProperties)
+                : undefined;
 
               return (
                 <Link
                   className={[
                     "flex flex-col items-center justify-center gap-1 rounded-2xl px-2 py-2 text-[11px] font-medium",
                     active
-                      ? "bg-teal-400 text-black"
+                      ? "text-black"
                       : "text-slate-300 hover:bg-white/10 hover:text-white",
                   ].join(" ")}
                   href={item.href}
                   key={item.label}
+                  style={activeStyle}
                 >
                   <span className="text-[10px] font-bold">
                     {iconMap[item.label]}

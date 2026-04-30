@@ -16,7 +16,7 @@ const baseClasses =
 
 const variantClasses: Record<ButtonVariant, string> = {
   primary:
-    "border border-teal-400/30 bg-teal-400 text-black shadow-lg shadow-teal-950/30 hover:-translate-y-0.5 hover:bg-teal-300",
+    "border border-white/10 bg-[var(--coachos-brand)] text-black shadow-lg shadow-teal-950/30 hover:-translate-y-0.5 hover:brightness-110",
   secondary:
     "border border-white/10 bg-white/10 text-white shadow-sm hover:-translate-y-0.5 hover:bg-white/15",
   ghost: "text-slate-300 hover:bg-white/10 hover:text-white",

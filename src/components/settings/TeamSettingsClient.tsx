@@ -1,7 +1,13 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useState,
+  type ChangeEvent,
+  type FormEvent,
+} from "react";
 
 import { Badge } from "@/src/components/ui/Badge";
 import { Button } from "@/src/components/ui/Button";
@@ -17,8 +23,33 @@ import {
   type TenantMemberWithProfile,
 } from "@/src/lib/team";
 import { getCurrentTenant, type Tenant } from "@/src/lib/tenant";
+import {
+  defaultTenantBrandColor,
+  getTenantSettings,
+  getSafeTenantBrandColor,
+  updateTenantSettings,
+  type TenantSettings,
+} from "@/src/lib/tenantSettings";
 
 const manageableRoles: Exclude<MemberRole, "owner">[] = ["admin", "staff"];
+
+type BrandingFormState = {
+  brandColor: string;
+  logoUrl: string;
+  name: string;
+  supportEmail: string;
+  supportPhone: string;
+  websiteUrl: string;
+};
+
+const emptyBrandingForm: BrandingFormState = {
+  brandColor: defaultTenantBrandColor,
+  logoUrl: "",
+  name: "",
+  supportEmail: "",
+  supportPhone: "",
+  websiteUrl: "",
+};
 
 const roleDefinitions: {
   description: string;
@@ -83,6 +114,21 @@ function getErrorMessage(caught: unknown, fallback: string) {
   return caught instanceof Error ? caught.message : fallback;
 }
 
+function createBrandingForm(settings: TenantSettings): BrandingFormState {
+  return {
+    brandColor: getSafeTenantBrandColor(settings.brand_color),
+    logoUrl: settings.logo_url ?? "",
+    name: settings.name,
+    supportEmail: settings.support_email ?? "",
+    supportPhone: settings.support_phone ?? "",
+    websiteUrl: settings.website_url ?? "",
+  };
+}
+
+function getPreviewBrandColor(value: string) {
+  return getSafeTenantBrandColor(value);
+}
+
 function createCurrentUserMember(params: {
   email: string | null;
   fullName: string | null;
@@ -108,6 +154,10 @@ function createCurrentUserMember(params: {
 export function TeamSettingsClient() {
   const router = useRouter();
   const [actionError, setActionError] = useState("");
+  const [brandingForm, setBrandingForm] =
+    useState<BrandingFormState>(emptyBrandingForm);
+  const [brandingMessage, setBrandingMessage] = useState("");
+  const [brandingSaving, setBrandingSaving] = useState(false);
   const [currentRole, setCurrentRole] = useState<MemberRole | null>(null);
   const [currentUserId, setCurrentUserId] = useState("");
   const [error, setError] = useState("");
@@ -115,6 +165,8 @@ export function TeamSettingsClient() {
   const [members, setMembers] = useState<TenantMemberWithProfile[]>([]);
   const [mutatingMemberId, setMutatingMemberId] = useState("");
   const [tenant, setTenant] = useState<Tenant | null>(null);
+  const [tenantSettings, setTenantSettings] =
+    useState<TenantSettings | null>(null);
 
   const loadTeam = useCallback(async (currentTenant: Tenant) => {
     const supabase = getSupabaseClient();
@@ -174,6 +226,17 @@ export function TeamSettingsClient() {
         if (!currentTenant) {
           router.replace("/onboarding");
           return;
+        }
+
+        const settings = await getTenantSettings(currentTenant.id);
+
+        if (!active) {
+          return;
+        }
+
+        if (settings) {
+          setBrandingForm(createBrandingForm(settings));
+          setTenantSettings(settings);
         }
 
         setTenant(currentTenant);
@@ -251,7 +314,52 @@ export function TeamSettingsClient() {
     }
   }
 
+  function handleBrandingChange(
+    field: keyof BrandingFormState,
+    event: ChangeEvent<HTMLInputElement>,
+  ) {
+    setBrandingMessage("");
+    setActionError("");
+    setBrandingForm((currentForm) => ({
+      ...currentForm,
+      [field]: event.target.value,
+    }));
+  }
+
+  async function handleBrandingSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!tenant || !canManageTeam(currentRole)) {
+      return;
+    }
+
+    setActionError("");
+    setBrandingMessage("");
+    setBrandingSaving(true);
+
+    try {
+      const updatedSettings = await updateTenantSettings(
+        tenant.id,
+        brandingForm,
+      );
+
+      setTenantSettings(updatedSettings);
+      setBrandingForm(createBrandingForm(updatedSettings));
+      setTenant((currentTenant) =>
+        currentTenant ? { ...currentTenant, name: updatedSettings.name } : null,
+      );
+      setBrandingMessage("Workspace branding saved.");
+    } catch (caught) {
+      setActionError(
+        getErrorMessage(caught, "Unable to save workspace branding."),
+      );
+    } finally {
+      setBrandingSaving(false);
+    }
+  }
+
   const canManage = canManageTeam(currentRole);
+  const previewBrandColor = getPreviewBrandColor(brandingForm.brandColor);
 
   if (loading) {
     return (
@@ -292,6 +400,194 @@ export function TeamSettingsClient() {
           {actionError}
         </div>
       ) : null}
+
+      {brandingMessage ? (
+        <div className="mt-6 rounded-3xl border border-teal-400/30 bg-teal-400/10 p-4 text-sm text-teal-100">
+          {brandingMessage}
+        </div>
+      ) : null}
+
+      <section className="mt-8 grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
+        <Card className="border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/10">
+          <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
+            <div>
+              <Badge className="border-white/15 bg-white/10 text-white">
+                Workspace Branding
+              </Badge>
+              <h3 className="mt-4 text-2xl font-semibold">
+                Business identity
+              </h3>
+              <p className="mt-2 text-sm leading-6 text-slate-400">
+                Set the logo, accent color, and support details that appear
+                across customer-facing workspace surfaces.
+              </p>
+            </div>
+            <p className="rounded-full border border-white/10 bg-white/10 px-4 py-2 text-sm text-slate-300">
+              {canManage ? "Owner editable" : "Read only"}
+            </p>
+          </div>
+
+          <form className="mt-7 grid gap-5" onSubmit={handleBrandingSubmit}>
+            <div className="grid gap-5 md:grid-cols-2">
+              <label className="block text-sm font-medium text-slate-300">
+                Workspace Name
+                <input
+                  className="mt-2 h-11 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition placeholder:text-slate-500 disabled:cursor-not-allowed disabled:bg-slate-900 disabled:text-slate-500 focus:border-teal-400/50 focus:ring-4 focus:ring-teal-400/10"
+                  disabled={!canManage || brandingSaving}
+                  onChange={(event) => handleBrandingChange("name", event)}
+                  placeholder="Nexus Valley Academy"
+                  required
+                  value={brandingForm.name}
+                />
+              </label>
+
+              <label className="block text-sm font-medium text-slate-300">
+                Brand Color
+                <div className="mt-2 flex gap-3">
+                  <input
+                    aria-label="Brand color picker"
+                    className="h-11 w-14 rounded-2xl border border-white/10 bg-white/10 p-1 disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={!canManage || brandingSaving}
+                    onChange={(event) =>
+                      handleBrandingChange("brandColor", event)
+                    }
+                    type="color"
+                    value={previewBrandColor}
+                  />
+                  <input
+                    className="h-11 min-w-0 flex-1 rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition placeholder:text-slate-500 disabled:cursor-not-allowed disabled:bg-slate-900 disabled:text-slate-500 focus:border-teal-400/50 focus:ring-4 focus:ring-teal-400/10"
+                    disabled={!canManage || brandingSaving}
+                    onChange={(event) =>
+                      handleBrandingChange("brandColor", event)
+                    }
+                    placeholder="#14b8a6"
+                    value={brandingForm.brandColor}
+                  />
+                </div>
+              </label>
+            </div>
+
+            <label className="block text-sm font-medium text-slate-300">
+              Logo URL
+              <input
+                className="mt-2 h-11 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition placeholder:text-slate-500 disabled:cursor-not-allowed disabled:bg-slate-900 disabled:text-slate-500 focus:border-teal-400/50 focus:ring-4 focus:ring-teal-400/10"
+                disabled={!canManage || brandingSaving}
+                onChange={(event) => handleBrandingChange("logoUrl", event)}
+                placeholder="https://example.com/logo.png"
+                type="url"
+                value={brandingForm.logoUrl}
+              />
+            </label>
+
+            <div className="grid gap-5 md:grid-cols-3">
+              <label className="block text-sm font-medium text-slate-300">
+                Support Email
+                <input
+                  className="mt-2 h-11 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition placeholder:text-slate-500 disabled:cursor-not-allowed disabled:bg-slate-900 disabled:text-slate-500 focus:border-teal-400/50 focus:ring-4 focus:ring-teal-400/10"
+                  disabled={!canManage || brandingSaving}
+                  onChange={(event) =>
+                    handleBrandingChange("supportEmail", event)
+                  }
+                  placeholder="support@example.com"
+                  type="email"
+                  value={brandingForm.supportEmail}
+                />
+              </label>
+
+              <label className="block text-sm font-medium text-slate-300">
+                Support Phone
+                <input
+                  className="mt-2 h-11 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition placeholder:text-slate-500 disabled:cursor-not-allowed disabled:bg-slate-900 disabled:text-slate-500 focus:border-teal-400/50 focus:ring-4 focus:ring-teal-400/10"
+                  disabled={!canManage || brandingSaving}
+                  onChange={(event) =>
+                    handleBrandingChange("supportPhone", event)
+                  }
+                  placeholder="+1 555 0100"
+                  value={brandingForm.supportPhone}
+                />
+              </label>
+
+              <label className="block text-sm font-medium text-slate-300">
+                Website URL
+                <input
+                  className="mt-2 h-11 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition placeholder:text-slate-500 disabled:cursor-not-allowed disabled:bg-slate-900 disabled:text-slate-500 focus:border-teal-400/50 focus:ring-4 focus:ring-teal-400/10"
+                  disabled={!canManage || brandingSaving}
+                  onChange={(event) => handleBrandingChange("websiteUrl", event)}
+                  placeholder="https://example.com"
+                  type="url"
+                  value={brandingForm.websiteUrl}
+                />
+              </label>
+            </div>
+
+            {canManage ? (
+              <div className="flex justify-end">
+                <Button disabled={brandingSaving} type="submit">
+                  {brandingSaving ? "Saving..." : "Save Branding"}
+                </Button>
+              </div>
+            ) : null}
+          </form>
+        </Card>
+
+        <Card className="border-white/10 bg-[#15181b] p-6 text-white shadow-2xl shadow-black/10">
+          <Badge
+            className="bg-white/5"
+            style={{
+              borderColor: `${previewBrandColor}55`,
+              color: previewBrandColor,
+            }}
+          >
+            Live Preview
+          </Badge>
+          <div className="mt-7 rounded-3xl border border-white/10 bg-[#101214] p-6">
+            {brandingForm.logoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                alt={`${brandingForm.name || "Workspace"} logo`}
+                className="h-14 w-14 rounded-2xl border border-white/10 object-cover"
+                src={brandingForm.logoUrl}
+              />
+            ) : (
+              <div
+                className="flex h-14 w-14 items-center justify-center rounded-2xl text-sm font-bold text-black"
+                style={{ backgroundColor: previewBrandColor }}
+              >
+                {brandingForm.name.trim().slice(0, 2).toUpperCase() || "CO"}
+              </div>
+            )}
+            <h3 className="mt-5 text-2xl font-semibold">
+              {brandingForm.name || tenant?.name || "Workspace"}
+            </h3>
+            <p className="mt-2 text-sm text-slate-400">
+              {tenantSettings?.slug ?? "workspace"} · CoachOS workspace
+            </p>
+            <div className="mt-6 flex flex-wrap gap-3">
+              <span
+                className="rounded-full border px-3 py-1 text-xs font-semibold"
+                style={{
+                  borderColor: `${previewBrandColor}55`,
+                  color: previewBrandColor,
+                }}
+              >
+                Branded badge
+              </span>
+              <span
+                className="inline-flex h-10 items-center justify-center rounded-full px-4 text-sm font-semibold text-black"
+                style={{ backgroundColor: previewBrandColor }}
+              >
+                Primary action
+              </span>
+            </div>
+          </div>
+          {!canManage ? (
+            <p className="mt-5 text-sm leading-6 text-slate-400">
+              Branding can be edited by workspace owners only. Your current
+              role can view these settings.
+            </p>
+          ) : null}
+        </Card>
+      </section>
 
       <section className="mt-8 grid gap-5 lg:grid-cols-[0.75fr_1.25fr]">
         <Card className="border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/10">
