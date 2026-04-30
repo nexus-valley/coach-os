@@ -26,6 +26,7 @@ const navItems = [
   { href: "/app/reminders", label: "Reminders" },
   { href: "/app/automations", label: "Automations" },
   { href: "/app/reports", label: "Reports" },
+  { href: "/app/subscription", label: "Subscription" },
   { href: "/app/settings", label: "Settings" },
   { disabled: true, href: "#", label: "CRM" },
   { disabled: true, href: "#", label: "Community" },
@@ -46,6 +47,7 @@ const iconMap: Record<string, string> = {
   Reports: "RP",
   Settings: "ST",
   Students: "SD",
+  Subscription: "SU",
 };
 
 export function AppShell({ activeItem = "Dashboard", children }: AppShellProps) {
