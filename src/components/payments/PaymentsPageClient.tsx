@@ -88,6 +88,10 @@ function getPaymentLoadErrorMessage(error: unknown) {
 }
 
 function logPaymentsLoadError(error: unknown) {
+  if (process.env.NODE_ENV !== "development") {
+    return;
+  }
+
   const message = getErrorField(error, "message");
   const code = getErrorField(error, "code");
   const details = getErrorField(error, "details");

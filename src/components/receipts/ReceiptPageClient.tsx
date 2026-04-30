@@ -148,7 +148,7 @@ export function ReceiptPageClient({ paymentId }: ReceiptPageClientProps) {
       </div>
 
       <section className="rounded-[2rem] border border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/20 print:rounded-none print:border-0 print:bg-white print:p-0 print:text-black print:shadow-none sm:p-8">
-        <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-6 print:rounded-none print:border-0 print:bg-white print:p-0">
+        <div className="rounded-[1.5rem] border border-white/10 bg-white/3 p-6 print:rounded-none print:border-0 print:bg-white print:p-0">
           <div className="flex flex-col justify-between gap-6 border-b border-white/10 pb-8 print:border-slate-200 sm:flex-row">
             <div>
               <p className="text-sm font-semibold uppercase tracking-[0.22em] text-teal-300 print:text-slate-600">

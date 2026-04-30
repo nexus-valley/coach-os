@@ -12,13 +12,13 @@ const navItems = [
   { href: "/app/students", label: "Students" },
   { href: "/app/student-portal", label: "Portal" },
   { href: "/app/enrollments", label: "Enrollments" },
-  { href: "#", label: "CRM" },
-  { href: "#", label: "Community" },
   { href: "/app/payments", label: "Payments" },
   { href: "/app/reminders", label: "Reminders" },
   { href: "/app/automations", label: "Automations" },
   { href: "/app/reports", label: "Reports" },
   { href: "/app/settings", label: "Settings" },
+  { disabled: true, href: "#", label: "CRM" },
+  { disabled: true, href: "#", label: "Community" },
 ];
 
 const iconMap: Record<string, string> = {
@@ -58,29 +58,48 @@ export function AppShell({ activeItem = "Dashboard", children }: AppShellProps) 
           <nav className="mt-10 space-y-1">
             {navItems.map((item) => {
               const active = item.label === activeItem;
-
-              return (
-                <Link
-                  className={[
-                    "flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-medium transition",
-                    active
-                      ? "bg-teal-400 text-black shadow-lg shadow-teal-950/30"
-                      : "text-slate-300 hover:bg-white/10 hover:text-white",
-                  ].join(" ")}
-                  href={item.href}
-                  key={item.label}
-                >
+              const disabled = "disabled" in item && item.disabled;
+              const className = [
+                "flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-medium transition",
+                active
+                  ? "bg-teal-400 text-black shadow-lg shadow-teal-950/30"
+                  : disabled
+                    ? "cursor-not-allowed text-slate-600"
+                    : "text-slate-300 hover:bg-white/10 hover:text-white",
+              ].join(" ");
+              const content = (
+                <>
                   <span
                     className={[
                       "flex h-8 w-8 items-center justify-center rounded-xl text-[10px] font-bold",
                       active
                         ? "bg-black text-teal-300"
-                        : "bg-white/10 text-slate-300",
+                        : disabled
+                          ? "bg-white/5 text-slate-600"
+                          : "bg-white/10 text-slate-300",
                     ].join(" ")}
                   >
                     {iconMap[item.label]}
                   </span>
                   {item.label}
+                </>
+              );
+
+              return disabled ? (
+                <span
+                  aria-disabled="true"
+                  className={className}
+                  key={item.label}
+                >
+                  {content}
+                </span>
+              ) : (
+                <Link
+                  className={className}
+                  href={item.href}
+                  key={item.label}
+                >
+                  {content}
                 </Link>
               );
             })}

@@ -69,7 +69,7 @@ export function RouteGuard({ children, mode }: RouteGuardProps) {
   if (!allowed) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-zinc-950 px-5 text-white">
-        <div className="rounded-3xl border border-white/10 bg-white/[0.06] p-8 text-center shadow-2xl shadow-black/20">
+        <div className="rounded-3xl border border-white/10 bg-white/6 p-8 text-center shadow-2xl shadow-black/20">
           <div className="mx-auto h-10 w-10 animate-pulse rounded-full bg-white" />
           <p className="mt-5 text-sm font-medium text-zinc-300">{message}</p>
         </div>

@@ -224,10 +224,16 @@ export function RemindersPageClient() {
     setActionError("");
 
     try {
+      const dueDate = new Date(form.dueAt);
+
+      if (Number.isNaN(dueDate.getTime())) {
+        throw new Error("Choose a valid due date and time.");
+      }
+
       await createReminder({
         course_id: form.courseId || null,
         description: form.description,
-        due_at: new Date(form.dueAt).toISOString(),
+        due_at: dueDate.toISOString(),
         reminder_type: form.reminderType,
         student_id: form.studentId || null,
         tenant_id: tenant.id,

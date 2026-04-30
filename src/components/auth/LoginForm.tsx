@@ -38,15 +38,10 @@ export function LoginForm() {
     setLoading(true);
 
     try {
-      console.log("Attempting login with:", email);
-
       const tenant = await signInWithPassword(email.trim(), password);
-
-      console.log("Login success. Tenant:", tenant);
 
       router.replace(tenant ? "/app" : "/onboarding");
     } catch (caught: unknown) {
-      console.error("Login error:", caught);
       setError(getErrorMessage(caught));
     } finally {
       setLoading(false);
