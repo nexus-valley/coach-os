@@ -132,7 +132,7 @@ export default function Home() {
 
       <section
         className="mx-auto grid max-w-7xl gap-6 px-5 py-20 sm:px-6 lg:grid-cols-3 lg:px-8"
-        id="problem"
+        id="why-coachos"
       >
         <div className="lg:col-span-1">
           <Badge>Problem</Badge>
@@ -155,7 +155,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="bg-zinc-950 text-white" id="solution">
+      <section className="bg-zinc-950 text-white" id="platform">
         <div className="mx-auto grid max-w-7xl gap-10 px-5 py-20 sm:px-6 lg:grid-cols-[0.9fr_1.1fr] lg:px-8">
           <div>
             <Badge className="border-white/15 bg-white/10 text-white">
@@ -214,6 +214,87 @@ export default function Home() {
               </div>
             </Card>
           ))}
+        </div>
+      </section>
+
+      <section
+        className="mx-auto grid max-w-7xl gap-8 px-5 pb-20 sm:px-6 lg:grid-cols-[0.85fr_1.15fr] lg:px-8"
+        id="about"
+      >
+        <div>
+          <Badge>About Us</Badge>
+          <h2 className="mt-5 text-3xl font-semibold tracking-normal text-zinc-950 sm:text-4xl">
+            About CoachOS
+          </h2>
+        </div>
+        <Card className="p-6 sm:p-8">
+          <div className="space-y-5 text-base leading-8 text-zinc-600">
+            <p>
+              CoachOS is built by Nexus Valley to help coaches, trainers, and
+              small academies run their business without complexity.
+            </p>
+            <p>
+              From managing students and courses to tracking payments and
+              sending WhatsApp reminders, CoachOS brings everything into one
+              simple platform.
+            </p>
+            <p>
+              We focus on practical, real-world workflows so coaches can spend
+              less time on operations and more time teaching and growing their
+              business.
+            </p>
+          </div>
+        </Card>
+      </section>
+
+      <section
+        className="border-y border-zinc-200 bg-[#F3FAFD]"
+        id="contact"
+      >
+        <div className="mx-auto grid max-w-7xl gap-8 px-5 py-20 sm:px-6 lg:grid-cols-[0.85fr_1.15fr] lg:px-8">
+          <div>
+            <Badge>Contact</Badge>
+            <h2 className="mt-5 text-3xl font-semibold tracking-normal text-zinc-950 sm:text-4xl">
+              Contact Us
+            </h2>
+          </div>
+          <Card className="p-6 sm:p-8">
+            <div className="grid gap-8 md:grid-cols-[1fr_auto] md:items-end">
+              <div>
+                <p className="text-lg font-semibold text-zinc-950">
+                  Nexus Valley Technologies
+                </p>
+                <address className="mt-4 not-italic leading-8 text-zinc-600">
+                  9/443-3, Pari Nagar Extension
+                  <br />
+                  CAK Road
+                  <br />
+                  Karur - 639002
+                  <br />
+                  Tamil Nadu, India
+                </address>
+                <div className="mt-6">
+                  <p className="text-sm font-semibold text-zinc-500">
+                    Mobile / WhatsApp
+                  </p>
+                  <a
+                    className="mt-2 inline-block text-lg font-semibold text-[#145DA0] transition hover:text-[#0F4C81]"
+                    href="tel:+917338841434"
+                  >
+                    +91 73388 41434
+                  </a>
+                </div>
+              </div>
+              <a
+                className="inline-flex h-12 items-center justify-center rounded-full border border-[#145DA0]/20 bg-[#145DA0] px-6 text-base font-semibold text-white shadow-md shadow-[#145DA0]/15 transition hover:-translate-y-0.5 hover:bg-[#0F4C81]"
+                href="https://wa.me/917338841434"
+                rel="noreferrer"
+                target="_blank"
+              >
+                Chat on WhatsApp
+              </a>
+            </div>
+          </Card>
         </div>
       </section>
 

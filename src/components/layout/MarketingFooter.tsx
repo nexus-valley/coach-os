@@ -1,46 +1,16 @@
 export function MarketingFooter() {
   return (
     <footer className="border-t border-zinc-200 bg-white">
-      <div className="mx-auto grid max-w-7xl gap-10 px-5 py-12 sm:px-6 lg:grid-cols-[1.2fr_0.8fr] lg:px-8">
-        <div>
-          <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-zinc-950 text-sm font-bold text-white">
-              NV
-            </span>
-            <div>
-              <p className="font-semibold text-zinc-950">Nexus Valley CoachOS</p>
-              <p className="text-sm text-zinc-500">
-                Premium operating system for serious coaching businesses.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-8 text-sm sm:grid-cols-3">
-          <div>
-            <p className="font-semibold text-zinc-950">Platform</p>
-            <div className="mt-4 space-y-3 text-zinc-500">
-              <p>Courses</p>
-              <p>Cohorts</p>
-              <p>Payments</p>
-            </div>
-          </div>
-          <div>
-            <p className="font-semibold text-zinc-950">Operations</p>
-            <div className="mt-4 space-y-3 text-zinc-500">
-              <p>CRM</p>
-              <p>Automation</p>
-              <p>Analytics</p>
-            </div>
-          </div>
-          <div>
-            <p className="font-semibold text-zinc-950">Brand</p>
-            <div className="mt-4 space-y-3 text-zinc-500">
-              <p>Nexus Valley</p>
-              <p>CoachOS</p>
-              <p>2026</p>
-            </div>
-          </div>
+      <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 px-5 py-8 text-center text-sm text-zinc-500 sm:px-6 md:flex-row md:text-left lg:px-8">
+        <p>&copy; 2026 Nexus Valley Technologies. All rights reserved.</p>
+        <div className="flex items-center gap-2 font-medium text-zinc-600">
+          <a className="transition hover:text-zinc-950" href="#about">
+            About
+          </a>
+          <span className="text-zinc-300">|</span>
+          <a className="transition hover:text-zinc-950" href="#contact">
+            Contact
+          </a>
         </div>
       </div>
     </footer>
