@@ -111,6 +111,26 @@ function getSearchText(link: PaymentLinkWithRelations) {
     .toLowerCase();
 }
 
+function getAvailableStatusActions(link: PaymentLinkWithRelations) {
+  if (link.status === "created") {
+    return statusActions;
+  }
+
+  if (link.status === "sent") {
+    return statusActions.filter((action) => action.status !== "sent");
+  }
+
+  return [];
+}
+
+function getLifecycleLabel(status: PaymentLinkStatus) {
+  if (status === "expired" || status === "cancelled" || status === "failed") {
+    return `${formatStatus(status)} is a terminal status.`;
+  }
+
+  return "Lifecycle: Created -> Sent -> Paid";
+}
+
 export function PaymentLinkStatusBadge({
   status,
 }: {
@@ -142,6 +162,10 @@ export function PaymentLinksPageClient() {
   const [links, setLinks] = useState<PaymentLinkWithRelations[]>([]);
   const [loading, setLoading] = useState(true);
   const [mutatingId, setMutatingId] = useState("");
+  const [recordPaymentNotes, setRecordPaymentNotes] =
+    useState("Paid via payment link");
+  const [recordPaymentTarget, setRecordPaymentTarget] =
+    useState<PaymentLinkWithRelations | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [students, setStudents] = useState<Student[]>([]);
@@ -237,6 +261,19 @@ export function PaymentLinksPageClient() {
     setFormOpen(true);
   }
 
+  function openRecordPaymentModal(link: PaymentLinkWithRelations) {
+    setActionError("");
+    setSuccess("");
+
+    if (link.status === "paid" && link.paid_at) {
+      setActionError("Payment has already been recorded for this link.");
+      return;
+    }
+
+    setRecordPaymentNotes(link.description || "Paid via payment link");
+    setRecordPaymentTarget(link);
+  }
+
   async function handleCopy(value: string | null) {
     if (!value) {
       setActionError("This payment link does not have a URL yet.");
@@ -305,6 +342,11 @@ export function PaymentLinksPageClient() {
       return;
     }
 
+    if (status === "paid") {
+      openRecordPaymentModal(link);
+      return;
+    }
+
     setMutatingId(link.id);
     setActionError("");
     setSuccess("");
@@ -330,8 +372,10 @@ export function PaymentLinksPageClient() {
     setSuccess("");
 
     try {
-      await convertPaymentLinkToPayment(link.id, tenant.id);
+      await convertPaymentLinkToPayment(link.id, tenant.id, recordPaymentNotes);
       await refreshLinks();
+      setRecordPaymentTarget(null);
+      setRecordPaymentNotes("Paid via payment link");
       setSuccess("Payment recorded from link.");
     } catch (caught) {
       setActionError(getErrorMessage(caught, "Unable to record payment."));
@@ -536,6 +580,10 @@ export function PaymentLinksPageClient() {
                 </p>
               </div>
 
+              <p className="mt-4 text-xs font-semibold text-slate-400">
+                {getLifecycleLabel(link.status)}
+              </p>
+
               <div className="mt-5 rounded-2xl border border-white/10 bg-white/5 p-4">
                 <p className="wrap-break-word text-sm text-slate-300">
                   {link.payment_url ?? "No payment URL"}
@@ -565,7 +613,7 @@ export function PaymentLinksPageClient() {
                 >
                   Share on WhatsApp
                 </a>
-                {statusActions.map((action) => (
+                {getAvailableStatusActions(link).map((action) => (
                   <Button
                     disabled={mutatingId === link.id}
                     key={action.status}
@@ -574,13 +622,13 @@ export function PaymentLinksPageClient() {
                     type="button"
                     variant="secondary"
                   >
-                    {action.label}
+                    {action.status === "paid" ? "Mark paid" : action.label}
                   </Button>
                 ))}
                 {link.status === "paid" && !link.paid_at ? (
                   <Button
                     disabled={mutatingId === `convert-${link.id}`}
-                    onClick={() => handleConvert(link)}
+                    onClick={() => openRecordPaymentModal(link)}
                     size="sm"
                     type="button"
                   >
@@ -820,6 +868,96 @@ export function PaymentLinksPageClient() {
                 </Button>
               </div>
             </form>
+          </Card>
+        </div>
+      ) : null}
+
+      {recordPaymentTarget ? (
+        <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-black/70 px-4 py-4 backdrop-blur-sm sm:items-center">
+          <Card className="w-full max-w-xl border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/40 sm:p-8">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-semibold text-slate-500">
+                  Confirm payment
+                </p>
+                <h3 className="mt-2 text-2xl font-semibold">
+                  Record UPI Link payment
+                </h3>
+              </div>
+              <button
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 text-sm font-semibold text-slate-500 transition hover:bg-white/10 hover:text-white"
+                onClick={() => setRecordPaymentTarget(null)}
+                type="button"
+              >
+                X
+              </button>
+            </div>
+
+            <div className="mt-6 space-y-3 rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-300">
+              <p>
+                Student:{" "}
+                <span className="font-semibold text-white">
+                  {recordPaymentTarget.student?.full_name ??
+                    "Student unavailable"}
+                </span>
+              </p>
+              <p>
+                Course:{" "}
+                <span className="font-semibold text-white">
+                  {recordPaymentTarget.course?.title ?? "No course linked"}
+                </span>
+              </p>
+              <p>
+                Amount:{" "}
+                <span className="font-semibold text-white">
+                  {formatCurrency(
+                    recordPaymentTarget.amount,
+                    recordPaymentTarget.currency || "INR",
+                  )}
+                </span>
+              </p>
+              <p>
+                Payment method:{" "}
+                <span className="font-semibold text-white">UPI Link</span>
+              </p>
+            </div>
+
+            <p className="mt-4 rounded-2xl border border-amber-400/30 bg-amber-400/10 p-4 text-sm font-semibold leading-6 text-amber-100">
+              This will create a completed payment record.
+            </p>
+
+            <label className="mt-5 block">
+              <span className="text-sm font-medium text-slate-300">
+                Payment notes
+              </span>
+              <textarea
+                className="mt-2 min-h-24 w-full resize-none rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm leading-6 text-white outline-none transition placeholder:text-slate-400 focus:border-teal-400/40 focus:bg-white/15 focus:ring-4 focus:ring-teal-400/10"
+                onChange={(event) => setRecordPaymentNotes(event.target.value)}
+                placeholder="Paid via payment link"
+                value={recordPaymentNotes}
+              />
+            </label>
+
+            <div className="mt-7 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <Button
+                onClick={() => setRecordPaymentTarget(null)}
+                type="button"
+                variant="secondary"
+              >
+                Cancel
+              </Button>
+              <Button
+                disabled={
+                  mutatingId === `convert-${recordPaymentTarget.id}`
+                }
+                onClick={() => handleConvert(recordPaymentTarget)}
+                type="button"
+              >
+                {mutatingId === `convert-${recordPaymentTarget.id}`
+                  ? "Recording..."
+                  : "Confirm and Record Payment"}
+              </Button>
+            </div>
           </Card>
         </div>
       ) : null}

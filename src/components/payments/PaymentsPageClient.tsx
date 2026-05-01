@@ -378,12 +378,17 @@ export function PaymentsPageClient() {
                     >
                       {payment.course?.title ?? "Course unavailable"}
                     </Link>
-                    <p className="text-right font-semibold">
-                      {formatCurrency(
-                        payment.amount,
-                        payment.currency || "USD",
-                      )}
-                    </p>
+                    <div className="text-right">
+                      <p className="font-semibold">
+                        {formatCurrency(
+                          payment.amount,
+                          payment.currency || "USD",
+                        )}
+                      </p>
+                      <p className="mt-1 text-xs font-medium text-slate-400">
+                        {payment.payment_method || "Manual"}
+                      </p>
+                    </div>
                     <div>
                       <PaymentStatusBadge status={payment.status} />
                     </div>

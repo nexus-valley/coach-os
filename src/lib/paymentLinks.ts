@@ -279,6 +279,7 @@ export async function deletePaymentLink(
 export async function convertPaymentLinkToPayment(
   paymentLinkId: string,
   tenantId: string,
+  notes = "Paid via payment link",
 ) {
   const supabase = getSupabaseClient();
   const { data: existingLink, error: linkError } = await supabase
@@ -299,11 +300,38 @@ export async function convertPaymentLinkToPayment(
   const link = existingLink as PaymentLink;
 
   if (link.status === "paid" && link.paid_at) {
-    return attachPaymentLinkRelations([link], tenantId).then(([item]) => item);
+    throw new Error("Payment has already been recorded for this link.");
   }
 
   if (!link.course_id) {
     throw new Error("Select a course before recording this link as payment.");
+  }
+
+  const paymentNotes = notes.trim() || link.description || "Paid via payment link";
+  let duplicateQuery = supabase
+    .from("payments")
+    .select("id")
+    .eq("tenant_id", tenantId)
+    .eq("student_id", link.student_id)
+    .eq("course_id", link.course_id)
+    .eq("amount", link.amount)
+    .eq("payment_method", "UPI Link")
+    .eq("status", "completed")
+    .eq("notes", paymentNotes);
+
+  duplicateQuery = link.enrollment_id
+    ? duplicateQuery.eq("enrollment_id", link.enrollment_id)
+    : duplicateQuery.is("enrollment_id", null);
+
+  const { data: duplicatePayments, error: duplicateError } =
+    await duplicateQuery.limit(1);
+
+  if (duplicateError) {
+    throw duplicateError;
+  }
+
+  if ((duplicatePayments ?? []).length > 0) {
+    throw new Error("Payment has already been recorded for this link.");
   }
 
   const paidAt = new Date().toISOString();
@@ -312,7 +340,7 @@ export async function convertPaymentLinkToPayment(
     course_id: link.course_id,
     currency: link.currency || "INR",
     enrollment_id: link.enrollment_id,
-    notes: link.description || "Paid via payment link",
+    notes: paymentNotes,
     paid_at: paidAt,
     payment_method: "UPI Link",
     status: "completed",

@@ -114,6 +114,20 @@ const paymentLinkStatusActions: { label: string; status: PaymentLinkStatus }[] =
 const defaultWhatsAppFollowUp =
   "Hope you are doing well. Please let us know if you need any support.";
 
+function getAvailablePaymentLinkStatusActions(link: PaymentLinkWithRelations) {
+  if (link.status === "created") {
+    return paymentLinkStatusActions;
+  }
+
+  if (link.status === "sent") {
+    return paymentLinkStatusActions.filter(
+      (action) => action.status !== "sent",
+    );
+  }
+
+  return [];
+}
+
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("en", {
     day: "numeric",
@@ -184,6 +198,10 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
   >([]);
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [payments, setPayments] = useState<PaymentWithRelations[]>([]);
+  const [recordPaymentLinkNotes, setRecordPaymentLinkNotes] =
+    useState("Paid via payment link");
+  const [recordPaymentLinkTarget, setRecordPaymentLinkTarget] =
+    useState<PaymentLinkWithRelations | null>(null);
   const [selectedCohortId, setSelectedCohortId] = useState("");
   const [selectedCourseId, setSelectedCourseId] = useState("");
   const [selectedEnrollmentId, setSelectedEnrollmentId] = useState("");
@@ -756,19 +774,24 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
   }
 
   async function handlePaymentLinkStatus(
-    linkId: string,
+    link: PaymentLinkWithRelations,
     status: PaymentLinkStatus,
   ) {
     if (!tenant) {
       return;
     }
 
-    setPaymentLinkMutatingId(linkId);
+    if (status === "paid") {
+      openRecordPaymentLinkModal(link);
+      return;
+    }
+
+    setPaymentLinkMutatingId(link.id);
     setActionError("");
     setActionMessage("");
 
     try {
-      await updatePaymentLinkStatus(linkId, tenant.id, status);
+      await updatePaymentLinkStatus(link.id, tenant.id, status);
       await refreshPaymentLinks();
       setActionMessage(`Payment link marked ${formatPaymentLinkStatus(status)}.`);
     } catch (caught) {
@@ -778,18 +801,37 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
     }
   }
 
-  async function handleConvertPaymentLink(linkId: string) {
+  function openRecordPaymentLinkModal(link: PaymentLinkWithRelations) {
+    setActionError("");
+    setActionMessage("");
+
+    if (link.status === "paid" && link.paid_at) {
+      setActionError("Payment has already been recorded for this link.");
+      return;
+    }
+
+    setRecordPaymentLinkNotes(link.description || "Paid via payment link");
+    setRecordPaymentLinkTarget(link);
+  }
+
+  async function handleConvertPaymentLink(link: PaymentLinkWithRelations) {
     if (!tenant) {
       return;
     }
 
-    setPaymentLinkMutatingId(`convert-${linkId}`);
+    setPaymentLinkMutatingId(`convert-${link.id}`);
     setActionError("");
     setActionMessage("");
 
     try {
-      await convertPaymentLinkToPayment(linkId, tenant.id);
+      await convertPaymentLinkToPayment(
+        link.id,
+        tenant.id,
+        recordPaymentLinkNotes,
+      );
       await Promise.all([refreshPaymentLinks(), refreshPayments()]);
+      setRecordPaymentLinkTarget(null);
+      setRecordPaymentLinkNotes("Paid via payment link");
       setActionMessage("Payment recorded from link.");
     } catch (caught) {
       setActionError(getErrorMessage(caught, "Unable to record payment."));
@@ -1235,12 +1277,12 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
                     >
                       Share on WhatsApp
                     </a>
-                    {paymentLinkStatusActions.map((action) => (
+                    {getAvailablePaymentLinkStatusActions(link).map((action) => (
                       <Button
                         disabled={paymentLinkMutatingId === link.id}
                         key={action.status}
                         onClick={() =>
-                          handlePaymentLinkStatus(link.id, action.status)
+                          handlePaymentLinkStatus(link, action.status)
                         }
                         size="sm"
                         type="button"
@@ -1254,7 +1296,7 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
                         disabled={
                           paymentLinkMutatingId === `convert-${link.id}`
                         }
-                        onClick={() => handleConvertPaymentLink(link.id)}
+                        onClick={() => openRecordPaymentLinkModal(link)}
                         size="sm"
                         type="button"
                       >
@@ -1689,6 +1731,100 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
                 </Button>
               </div>
             </form>
+          </Card>
+        </div>
+      ) : null}
+
+      {recordPaymentLinkTarget ? (
+        <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-black/70 px-4 py-4 backdrop-blur-sm sm:items-center">
+          <Card className="w-full max-w-xl border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/40 sm:p-8">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-semibold text-slate-500">
+                  Confirm payment
+                </p>
+                <h3 className="mt-2 text-2xl font-semibold">
+                  Record UPI Link payment
+                </h3>
+              </div>
+              <button
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 text-sm font-semibold text-slate-500 transition hover:bg-white/10 hover:text-white"
+                onClick={() => setRecordPaymentLinkTarget(null)}
+                type="button"
+              >
+                X
+              </button>
+            </div>
+
+            <div className="mt-6 space-y-3 rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-300">
+              <p>
+                Student:{" "}
+                <span className="font-semibold text-white">
+                  {student.full_name}
+                </span>
+              </p>
+              <p>
+                Course:{" "}
+                <span className="font-semibold text-white">
+                  {recordPaymentLinkTarget.course?.title ?? "No course linked"}
+                </span>
+              </p>
+              <p>
+                Amount:{" "}
+                <span className="font-semibold text-white">
+                  {formatCurrencyForPaymentLink(
+                    recordPaymentLinkTarget.amount,
+                    recordPaymentLinkTarget.currency || "INR",
+                  )}
+                </span>
+              </p>
+              <p>
+                Payment method:{" "}
+                <span className="font-semibold text-white">UPI Link</span>
+              </p>
+            </div>
+
+            <p className="mt-4 rounded-2xl border border-amber-400/30 bg-amber-400/10 p-4 text-sm font-semibold leading-6 text-amber-100">
+              This will create a completed payment record.
+            </p>
+
+            <label className="mt-5 block">
+              <span className="text-sm font-medium text-slate-300">
+                Payment notes
+              </span>
+              <textarea
+                className="mt-2 min-h-24 w-full resize-none rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm leading-6 text-white outline-none transition placeholder:text-slate-400 focus:border-teal-400/40 focus:bg-white/15 focus:ring-4 focus:ring-teal-400/10"
+                onChange={(event) =>
+                  setRecordPaymentLinkNotes(event.target.value)
+                }
+                placeholder="Paid via payment link"
+                value={recordPaymentLinkNotes}
+              />
+            </label>
+
+            <div className="mt-7 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <Button
+                className="border-slate-700! bg-white/10! text-white! hover:bg-white/15!"
+                onClick={() => setRecordPaymentLinkTarget(null)}
+                type="button"
+                variant="secondary"
+              >
+                Cancel
+              </Button>
+              <Button
+                disabled={
+                  paymentLinkMutatingId ===
+                  `convert-${recordPaymentLinkTarget.id}`
+                }
+                onClick={() => handleConvertPaymentLink(recordPaymentLinkTarget)}
+                type="button"
+              >
+                {paymentLinkMutatingId ===
+                `convert-${recordPaymentLinkTarget.id}`
+                  ? "Recording..."
+                  : "Confirm and Record Payment"}
+              </Button>
+            </div>
           </Card>
         </div>
       ) : null}
