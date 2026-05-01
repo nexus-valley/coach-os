@@ -5,14 +5,46 @@ import { MarketingFooter } from "@/src/components/layout/MarketingFooter";
 import { MarketingHeader } from "@/src/components/layout/MarketingHeader";
 
 const features = [
-  "Course Builder",
-  "Live Cohorts",
-  "Student CRM",
-  "Payments",
-  "WhatsApp & Email Automation",
-  "Community",
-  "Analytics",
-  "Admin Controls",
+  {
+    description:
+      "Create structured courses with sections, lessons, video/resource links, and learner progress tracking.",
+    title: "Course Builder",
+  },
+  {
+    description:
+      "Organize students into batches, connect cohorts to courses, and track members with start and end dates.",
+    title: "Live Cohorts",
+  },
+  {
+    description:
+      "Manage student profiles, contact details, notes, enrollments, payments, and follow-ups in one place.",
+    title: "Student CRM",
+  },
+  {
+    description:
+      "Record payments, generate receipts, track payment status, and manage UPI-ready payment links.",
+    title: "Payments",
+  },
+  {
+    description:
+      "Share payment links, receipts, reminders, and certificates through WhatsApp-ready templates, with automation rules for follow-ups.",
+    title: "WhatsApp & Email Automation",
+  },
+  {
+    description:
+      "Build engagement around your coaching programs with future-ready community and learner interaction workflows.",
+    title: "Community",
+  },
+  {
+    description:
+      "View revenue, students, enrollments, course performance, payment activity, and export reports for business decisions.",
+    title: "Analytics",
+  },
+  {
+    description:
+      "Manage workspace branding, roles, permissions, subscription plans, and secure team access.",
+    title: "Admin Controls",
+  },
 ];
 
 const previewRows = [
@@ -163,17 +195,20 @@ export default function Home() {
         </div>
         <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {features.map((feature, index) => (
-            <Card className="group min-h-44 p-6 transition hover:-translate-y-1 hover:shadow-2xl hover:shadow-zinc-950/[0.08]" key={feature}>
+            <Card
+              className="group min-h-52 p-6 transition hover:-translate-y-1 hover:shadow-2xl hover:shadow-zinc-950/[0.08]"
+              key={feature.title}
+            >
               <div className="flex h-full flex-col justify-between">
                 <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-zinc-950 text-sm font-bold text-white">
                   {String(index + 1).padStart(2, "0")}
                 </span>
                 <div>
                   <h3 className="mt-8 text-lg font-semibold text-zinc-950">
-                    {feature}
+                    {feature.title}
                   </h3>
                   <p className="mt-3 text-sm leading-6 text-zinc-500">
-                    Premium foundation ready for the next module.
+                    {feature.description}
                   </p>
                 </div>
               </div>
