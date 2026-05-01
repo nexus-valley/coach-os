@@ -1,9 +1,13 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --coachos-brand: #14b8a6;
-  --foreground: #171717;
+  --background: #f3fafd;
+  --coachos-accent: #2ecbea;
+  --coachos-brand: #145da0;
+  --coachos-border: #d8e8f0;
+  --coachos-muted: #425b76;
+  --coachos-navy: #0b2a3d;
+  --foreground: #0b1f33;
 }
 
 @theme inline {
@@ -15,8 +19,8 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #f3fafd;
+    --foreground: #0b2a3d;
   }
 }
 
@@ -27,4 +31,157 @@ body {
 
 html {
   scroll-behavior: smooth;
+}
+
+.coachos-light {
+  background:
+    radial-gradient(circle at top right, rgba(46, 203, 234, 0.2), transparent 28rem),
+    linear-gradient(135deg, #f3fafd 0%, #ffffff 48%, #eaf7fc 100%);
+}
+
+.coachos-light .coachos-content {
+  color: #0b1f33;
+}
+
+.coachos-light .coachos-content [class*="bg-[#101214]"],
+.coachos-light .coachos-content [class*="bg-[#15181b]"],
+.coachos-light .coachos-content [class*="bg-zinc-950"] {
+  background-color: #ffffff !important;
+}
+
+.coachos-light .coachos-content [class*="bg-white/"],
+.coachos-light .coachos-content [class*="bg-white\\/"] {
+  background-color: #f7fcff !important;
+}
+
+.coachos-light .coachos-content [class*="border-white/"],
+.coachos-light .coachos-content [class*="border-white\\/"] {
+  border-color: #d8e8f0 !important;
+}
+
+.coachos-light .coachos-content [class~="text-white"],
+.coachos-light .coachos-content [class*="text-white!"] {
+  color: #0b1f33 !important;
+}
+
+.coachos-light .coachos-content [class~="text-slate-300"],
+.coachos-light .coachos-content [class~="text-slate-400"],
+.coachos-light .coachos-content [class~="text-gray-300"],
+.coachos-light .coachos-content [class~="text-gray-400"],
+.coachos-light .coachos-content [class~="text-zinc-400"] {
+  color: #425b76 !important;
+}
+
+.coachos-light .coachos-content [class~="text-slate-500"],
+.coachos-light .coachos-content [class~="text-zinc-500"],
+.coachos-light .coachos-content [class~="text-gray-500"] {
+  color: #66788f !important;
+}
+
+.coachos-light .coachos-content [class~="text-teal-300"],
+.coachos-light .coachos-content [class~="text-teal-400"],
+.coachos-light .coachos-content [class~="text-teal-100"],
+.coachos-light .coachos-content [class~="text-teal-200"],
+.coachos-light .coachos-content [class~="text-blue-300"],
+.coachos-light .coachos-content [class~="text-blue-400"] {
+  color: #0e7490 !important;
+}
+
+.coachos-light .coachos-content [class~="text-red-100"],
+.coachos-light .coachos-content [class~="text-red-200"],
+.coachos-light .coachos-content [class~="text-red-300"],
+.coachos-light .coachos-content [class*="text-red-300!"] {
+  color: #dc2626 !important;
+}
+
+.coachos-light .coachos-content [class~="text-amber-100"],
+.coachos-light .coachos-content [class~="text-amber-200"],
+.coachos-light .coachos-content [class~="text-amber-300"] {
+  color: #92400e !important;
+}
+
+.coachos-light .coachos-content [class~="hover:text-white"]:hover,
+.coachos-light .coachos-content [class~="hover:text-teal-200"]:hover {
+  color: #145da0 !important;
+}
+
+.coachos-light .coachos-content [class*="hover:text-red-200!"]:hover {
+  color: #dc2626 !important;
+}
+
+.coachos-light .coachos-content [class*="bg-[var(--coachos-brand)]"] {
+  background-color: #145da0 !important;
+  color: #ffffff !important;
+}
+
+.coachos-light .coachos-content [class*="bg-[#145DA0]"],
+.coachos-light .coachos-content [class*="bg-\\[\\#145DA0\\]"] {
+  color: #ffffff !important;
+}
+
+.coachos-light .coachos-primary-button,
+.coachos-primary-button {
+  background-color: #145da0 !important;
+  color: #ffffff !important;
+  font-weight: 600 !important;
+}
+
+.coachos-light .coachos-primary-button:hover,
+.coachos-primary-button:hover {
+  background-color: #0f4c81 !important;
+}
+
+.coachos-light .coachos-content [class~="bg-teal-400"] {
+  background-color: #2ecbea !important;
+}
+
+.coachos-sidebar {
+  scrollbar-color: rgba(154, 221, 234, 0.45) transparent;
+  scrollbar-width: thin;
+}
+
+.coachos-sidebar::-webkit-scrollbar {
+  width: 8px;
+}
+
+.coachos-sidebar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.coachos-sidebar::-webkit-scrollbar-thumb {
+  background-color: rgba(154, 221, 234, 0.42);
+  border-radius: 999px;
+}
+
+.coachos-sidebar::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(154, 221, 234, 0.68);
+}
+
+.coachos-light .coachos-content [class~="hover:bg-teal-300"]:hover {
+  background-color: #78e4f3 !important;
+}
+
+.coachos-light .coachos-content [class~="shadow-teal-950/30"],
+.coachos-light .coachos-content [class~="shadow-teal-400/30"] {
+  --tw-shadow-color: rgba(46, 203, 234, 0.28) !important;
+}
+
+.coachos-light .coachos-content input,
+.coachos-light .coachos-content select,
+.coachos-light .coachos-content textarea {
+  background-color: #ffffff !important;
+  border-color: #d8e8f0 !important;
+  color: #0b1f33 !important;
+}
+
+.coachos-light .coachos-content input::placeholder,
+.coachos-light .coachos-content textarea::placeholder {
+  color: #8aa0b2 !important;
+}
+
+.coachos-light .coachos-content table,
+.coachos-light .coachos-content thead,
+.coachos-light .coachos-content tbody,
+.coachos-light .coachos-content tr {
+  color: #0b2a3d;
 }

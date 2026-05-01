@@ -59,7 +59,7 @@ export function StudentStatusBadge({ status }: { status: StudentStatus }) {
 
   if (status === "blocked") {
     return (
-      <Badge className="border-red-500/20 bg-red-500/20 text-red-400">
+      <Badge className="border-red-500/30 bg-red-50 text-red-700">
         Blocked
       </Badge>
     );
@@ -67,7 +67,7 @@ export function StudentStatusBadge({ status }: { status: StudentStatus }) {
 
   if (status === "lead") {
     return (
-      <Badge className="border-blue-500/20 bg-blue-500/20 text-blue-400">
+      <Badge className="border-[#145DA0]/25 bg-[#145DA0]/10 text-[#145DA0]">
         Lead
       </Badge>
     );

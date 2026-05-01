@@ -12,14 +12,14 @@ type ButtonProps = {
 } & React.ButtonHTMLAttributes<HTMLButtonElement>;
 
 const baseClasses =
-  "inline-flex items-center justify-center rounded-full font-semibold transition duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-300 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-500 disabled:shadow-none";
+  "inline-flex items-center justify-center rounded-full font-semibold transition duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2ECBEA] disabled:pointer-events-none disabled:cursor-not-allowed disabled:border-[#D8E8F0] disabled:bg-[#E5EEF4] disabled:text-[#66788F] disabled:shadow-none";
 
 const variantClasses: Record<ButtonVariant, string> = {
   primary:
-    "border border-white/10 bg-[var(--coachos-brand)] text-black shadow-lg shadow-teal-950/30 hover:-translate-y-0.5 hover:brightness-110",
+    "coachos-primary-button border border-[#145DA0]/20 bg-[#145DA0] text-white shadow-md shadow-[#145DA0]/15 hover:-translate-y-0.5 hover:bg-[#0F4C81]",
   secondary:
-    "border border-white/10 bg-white/10 text-white shadow-sm hover:-translate-y-0.5 hover:bg-white/15",
-  ghost: "text-slate-300 hover:bg-white/10 hover:text-white",
+    "border border-[#D8E8F0] bg-white text-[#0B2A3D] shadow-sm hover:-translate-y-0.5 hover:border-[#2ECBEA]/60 hover:bg-[#F3FAFD]",
+  ghost: "text-[#5D7185] hover:bg-[#EAF7FC] hover:text-[#0B2A3D]",
 };
 
 const sizeClasses: Record<ButtonSize, string> = {

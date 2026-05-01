@@ -46,7 +46,7 @@ function getErrorMessage(caught: unknown, fallback: string) {
 function StudentStatusBadge({ status }: { status: string }) {
   if (status === "active") {
     return (
-      <Badge className="border-teal-400/30 bg-teal-400/10 text-teal-300">
+      <Badge className="border-[#14B8C6]/30 bg-[#14B8C6]/10 text-[#0E7490]">
         Active
       </Badge>
     );
@@ -54,7 +54,7 @@ function StudentStatusBadge({ status }: { status: string }) {
 
   if (status === "lead") {
     return (
-      <Badge className="border-blue-400/30 bg-blue-500/10 text-blue-300">
+      <Badge className="border-[#145DA0]/25 bg-[#145DA0]/10 text-[#145DA0]">
         Lead
       </Badge>
     );
@@ -62,14 +62,14 @@ function StudentStatusBadge({ status }: { status: string }) {
 
   if (status === "blocked") {
     return (
-      <Badge className="border-red-400/30 bg-red-500/10 text-red-300">
+      <Badge className="border-red-500/30 bg-red-50 text-red-700">
         Blocked
       </Badge>
     );
   }
 
   return (
-    <Badge className="border-white/10 bg-white/10 text-slate-300">
+    <Badge className="border-[#D8E8F0] bg-[#F6FBFE] text-[#425B76]">
       Inactive
     </Badge>
   );

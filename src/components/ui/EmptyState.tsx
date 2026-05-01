@@ -19,13 +19,13 @@ export function EmptyState({
   title,
 }: EmptyStateProps) {
   return (
-    <Card className="mt-6 border-white/10 bg-[#101214] p-8 text-white shadow-2xl shadow-black/20">
+    <Card className="mt-6 border-[#D8E8F0] bg-white p-8 text-[#0B2A3D] shadow-2xl shadow-[#0B2A3D]/10">
       <div className="mx-auto max-w-2xl text-center">
-        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--coachos-brand)] text-sm font-bold text-black">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#2ECBEA] text-sm font-bold text-[#0B1F33] shadow-lg shadow-[#2ECBEA]/25">
           {icon}
         </div>
         <h3 className="mt-6 text-2xl font-semibold">{title}</h3>
-        <p className="mt-3 text-sm leading-6 text-slate-400">{description}</p>
+        <p className="mt-3 text-sm leading-6 text-[#5D7185]">{description}</p>
         {action ? (
           <Button
             className="mt-7"

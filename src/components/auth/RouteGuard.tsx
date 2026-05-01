@@ -68,10 +68,10 @@ export function RouteGuard({ children, mode }: RouteGuardProps) {
 
   if (!allowed) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-zinc-950 px-5 text-white">
-        <div className="rounded-3xl border border-white/10 bg-white/6 p-8 text-center shadow-2xl shadow-black/20">
-          <div className="mx-auto h-10 w-10 animate-pulse rounded-full bg-white" />
-          <p className="mt-5 text-sm font-medium text-zinc-300">{message}</p>
+      <main className="flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_top_right,rgba(46,203,234,0.22),transparent_30rem),linear-gradient(135deg,#F3FAFD_0%,#FFFFFF_52%,#EAF7FC_100%)] px-5 text-[#0B1F33]">
+        <div className="rounded-3xl border border-[#D8E8F0] bg-white p-8 text-center shadow-2xl shadow-[#0B2A3D]/10">
+          <div className="mx-auto h-10 w-10 animate-pulse rounded-full bg-[#2ECBEA] shadow-lg shadow-[#2ECBEA]/25" />
+          <p className="mt-5 text-sm font-medium text-[#425B76]">{message}</p>
         </div>
       </main>
     );

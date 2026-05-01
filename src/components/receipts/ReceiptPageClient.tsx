@@ -111,7 +111,7 @@ export function ReceiptPageClient({ paymentId }: ReceiptPageClientProps) {
   if (loading) {
     return (
       <div className="mx-auto max-w-5xl">
-        <Card className="h-72 animate-pulse border-white/10 bg-[#101214]">
+        <Card className="h-72 animate-pulse border-[#D8E8F0] bg-white">
           <span className="sr-only">Loading receipt</span>
         </Card>
       </div>
@@ -121,13 +121,13 @@ export function ReceiptPageClient({ paymentId }: ReceiptPageClientProps) {
   if (error || !payment || !payment.receipt_number) {
     return (
       <div className="mx-auto max-w-5xl">
-        <Card className="border-white/10 bg-[#101214] p-8 text-white shadow-2xl shadow-black/20">
-          <p className="text-sm font-semibold text-slate-400">Receipt</p>
+        <Card className="border-[#D8E8F0] bg-white p-8 text-[#0B2A3D] shadow-2xl shadow-[#0B2A3D]/10">
+          <p className="text-sm font-semibold text-[#5D7185]">Receipt</p>
           <h2 className="mt-3 text-2xl font-semibold">
             {error || "Receipt unavailable."}
           </h2>
           <Link
-            className="mt-6 inline-flex h-11 items-center justify-center rounded-full bg-teal-400 px-5 text-sm font-semibold text-black"
+            className="mt-6 inline-flex h-11 items-center justify-center rounded-full bg-[var(--coachos-brand)] px-5 text-sm font-semibold text-white shadow-lg shadow-[#145DA0]/20"
             href="/app/payments"
           >
             Back to payments
@@ -166,12 +166,12 @@ export function ReceiptPageClient({ paymentId }: ReceiptPageClientProps) {
       <div className="mb-6 flex flex-col justify-between gap-4 print:hidden sm:flex-row sm:items-end">
         <div>
           <Link
-            className="text-sm font-semibold text-slate-400 transition hover:text-white"
+            className="text-sm font-semibold text-[#5D7185] transition hover:text-[#145DA0]"
             href="/app/payments"
           >
             Back to payments
           </Link>
-          <h2 className="mt-4 text-3xl font-semibold tracking-normal text-white sm:text-4xl">
+          <h2 className="mt-4 text-3xl font-semibold tracking-normal text-[#0B2A3D] sm:text-4xl">
             Receipt
           </h2>
         </div>
@@ -186,14 +186,14 @@ export function ReceiptPageClient({ paymentId }: ReceiptPageClientProps) {
           Share Receipt on WhatsApp
         </Button>
       </div>
-      <p className="mb-6 text-sm text-slate-500 print:hidden">
+      <p className="mb-6 text-sm text-[#5D7185] print:hidden">
         WhatsApp opens with a pre-filled message. Sending is done manually.
       </p>
 
-      <section className="rounded-[2rem] border border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/20 print:rounded-none print:border-0 print:bg-white print:p-0 print:text-black print:shadow-none sm:p-8">
-        <div className="rounded-[1.5rem] border border-white/10 bg-white/3 p-6 print:rounded-none print:border-0 print:bg-white print:p-0">
+      <section className="rounded-[2rem] border border-[#D8E8F0] bg-white p-6 text-[#0B2A3D] shadow-2xl shadow-[#0B2A3D]/10 print:rounded-none print:border-0 print:bg-white print:p-0 print:text-black print:shadow-none sm:p-8">
+        <div className="rounded-[1.5rem] border border-[#D8E8F0] bg-[#F7FCFF] p-6 print:rounded-none print:border-0 print:bg-white print:p-0">
           <div
-            className="flex flex-col justify-between gap-6 border-b border-white/10 pb-8 print:border-slate-200 sm:flex-row"
+            className="flex flex-col justify-between gap-6 border-b border-[#D8E8F0] pb-8 print:border-slate-200 sm:flex-row"
             style={{ borderColor: `${brandColor}44` }}
           >
             <div className="flex gap-4">
@@ -215,14 +215,14 @@ export function ReceiptPageClient({ paymentId }: ReceiptPageClientProps) {
                 <h1 className="mt-4 text-4xl font-semibold tracking-normal print:text-black">
                   Receipt
                 </h1>
-                <p className="mt-3 text-sm text-slate-400 print:text-slate-600">
+                <p className="mt-3 text-sm text-[#5D7185] print:text-slate-600">
                   Nexus Valley CoachOS
                 </p>
               </div>
             </div>
             <div className="text-left sm:text-right">
               <Badge
-                className="bg-white/5 print:border-slate-300 print:bg-white print:text-black"
+                className="bg-[#EAF7FC] print:border-slate-300 print:bg-white print:text-black"
                 style={{
                   borderColor: `${brandColor}55`,
                   color: brandColor,
@@ -230,32 +230,32 @@ export function ReceiptPageClient({ paymentId }: ReceiptPageClientProps) {
               >
                 {payment.receipt_number}
               </Badge>
-              <p className="mt-4 text-sm text-slate-400 print:text-slate-600">
+              <p className="mt-4 text-sm text-[#5D7185] print:text-slate-600">
                 Generated {formatDate(payment.receipt_generated_at)}
               </p>
-              <p className="mt-1 text-sm text-slate-400 print:text-slate-600">
+              <p className="mt-1 text-sm text-[#5D7185] print:text-slate-600">
                 Payment date {formatDate(payment.paid_at)}
               </p>
             </div>
           </div>
 
           <div className="mt-8 grid gap-6 md:grid-cols-2">
-            <div className="rounded-3xl border border-white/10 bg-[#101214] p-5 print:border-slate-200 print:bg-white">
-              <p className="text-sm font-semibold text-slate-400 print:text-slate-600">
+            <div className="rounded-3xl border border-[#D8E8F0] bg-white p-5 print:border-slate-200 print:bg-white">
+              <p className="text-sm font-semibold text-[#5D7185] print:text-slate-600">
                 Billed to
               </p>
               <h3 className="mt-3 text-xl font-semibold print:text-black">
                 {payment.student?.full_name ?? "Student unavailable"}
               </h3>
-              <p className="mt-2 text-sm text-slate-400 print:text-slate-600">
+              <p className="mt-2 text-sm text-[#5D7185] print:text-slate-600">
                 {payment.student?.email ||
                   payment.student?.phone ||
                   "No contact details"}
               </p>
             </div>
 
-            <div className="rounded-3xl border border-white/10 bg-[#101214] p-5 print:border-slate-200 print:bg-white">
-              <p className="text-sm font-semibold text-slate-400 print:text-slate-600">
+            <div className="rounded-3xl border border-[#D8E8F0] bg-white p-5 print:border-slate-200 print:bg-white">
+              <p className="text-sm font-semibold text-[#5D7185] print:text-slate-600">
                 Course
               </p>
               <h3 className="mt-3 text-xl font-semibold print:text-black">
@@ -267,15 +267,15 @@ export function ReceiptPageClient({ paymentId }: ReceiptPageClientProps) {
             </div>
           </div>
 
-          <div className="mt-8 overflow-hidden rounded-3xl border border-white/10 print:rounded-none print:border-slate-200">
-            <div className="grid grid-cols-[1fr_auto] gap-4 border-b border-white/10 bg-[#15181b] px-5 py-4 text-sm font-semibold print:border-slate-200 print:bg-slate-50 print:text-black">
+          <div className="mt-8 overflow-hidden rounded-3xl border border-[#D8E8F0] print:rounded-none print:border-slate-200">
+            <div className="grid grid-cols-[1fr_auto] gap-4 border-b border-[#D8E8F0] bg-[#EAF7FC] px-5 py-4 text-sm font-semibold print:border-slate-200 print:bg-slate-50 print:text-black">
               <span>Payment detail</span>
               <span>Amount</span>
             </div>
             <div className="grid grid-cols-[1fr_auto] gap-4 px-5 py-5 print:text-black">
               <div>
                 <p className="font-semibold">Course payment</p>
-                <p className="mt-2 text-sm text-slate-400 print:text-slate-600">
+                <p className="mt-2 text-sm text-[#5D7185] print:text-slate-600">
                   Method: {payment.payment_method}
                 </p>
               </div>
@@ -283,7 +283,7 @@ export function ReceiptPageClient({ paymentId }: ReceiptPageClientProps) {
                 {formatCurrency(payment.amount, payment.currency || "USD")}
               </p>
             </div>
-            <div className="grid grid-cols-[1fr_auto] gap-4 border-t border-white/10 bg-[#15181b] px-5 py-4 text-lg font-semibold print:border-slate-200 print:bg-slate-50 print:text-black">
+            <div className="grid grid-cols-[1fr_auto] gap-4 border-t border-[#D8E8F0] bg-[#EAF7FC] px-5 py-4 text-lg font-semibold print:border-slate-200 print:bg-slate-50 print:text-black">
               <span>Total paid</span>
               <span>
                 {formatCurrency(payment.amount, payment.currency || "USD")}
@@ -291,11 +291,11 @@ export function ReceiptPageClient({ paymentId }: ReceiptPageClientProps) {
             </div>
           </div>
 
-          <div className="mt-8 rounded-3xl border border-white/10 bg-[#101214] p-5 print:border-slate-200 print:bg-white">
-            <p className="text-sm font-semibold text-slate-400 print:text-slate-600">
+          <div className="mt-8 rounded-3xl border border-[#D8E8F0] bg-white p-5 print:border-slate-200 print:bg-white">
+            <p className="text-sm font-semibold text-[#5D7185] print:text-slate-600">
               Notes
             </p>
-            <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-white print:text-black">
+            <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-[#0B2A3D] print:text-black">
               {payment.notes || "No notes added."}
             </p>
           </div>
@@ -303,14 +303,14 @@ export function ReceiptPageClient({ paymentId }: ReceiptPageClientProps) {
           {tenantSettings?.support_email ||
           tenantSettings?.support_phone ||
           tenantSettings?.website_url ? (
-            <div className="mt-8 rounded-3xl border border-white/10 bg-[#101214] p-5 print:border-slate-200 print:bg-white">
+            <div className="mt-8 rounded-3xl border border-[#D8E8F0] bg-white p-5 print:border-slate-200 print:bg-white">
               <p
                 className="text-sm font-semibold print:text-slate-600"
                 style={{ color: brandColor }}
               >
                 Support
               </p>
-              <div className="mt-3 grid gap-2 text-sm text-slate-300 print:text-black sm:grid-cols-3">
+              <div className="mt-3 grid gap-2 text-sm text-[#5D7185] print:text-black sm:grid-cols-3">
                 {tenantSettings.support_email ? (
                   <p>{tenantSettings.support_email}</p>
                 ) : null}

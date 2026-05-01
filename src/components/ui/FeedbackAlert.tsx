@@ -7,9 +7,9 @@ type FeedbackAlertProps = {
 };
 
 const toneClasses = {
-  error: "border-red-400/30 bg-red-500/10 text-red-100",
-  success: "border-teal-400/30 bg-teal-400/10 text-teal-100",
-  warning: "border-amber-400/30 bg-amber-400/10 text-amber-100",
+  error: "border-red-200 bg-red-50 text-red-800",
+  success: "border-[#14B8A6]/30 bg-[#14B8A6]/10 text-[#0F766E]",
+  warning: "border-amber-200 bg-amber-50 text-amber-800",
 };
 
 export function FeedbackAlert({

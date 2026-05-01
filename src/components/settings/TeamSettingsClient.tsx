@@ -81,7 +81,7 @@ function RoleBadge({ role }: { role: MemberRole }) {
 
   if (role === "owner") {
     return (
-      <Badge className="border-teal-400/30 bg-teal-400/10 text-teal-300">
+      <Badge className="border-[#14B8C6]/30 bg-[#14B8C6]/10 text-[#0E7490]">
         {label}
       </Badge>
     );
@@ -89,14 +89,14 @@ function RoleBadge({ role }: { role: MemberRole }) {
 
   if (role === "admin") {
     return (
-      <Badge className="border-blue-400/30 bg-blue-500/10 text-blue-300">
+      <Badge className="border-[#145DA0]/25 bg-[#145DA0]/10 text-[#145DA0]">
         {label}
       </Badge>
     );
   }
 
   return (
-    <Badge className="border-white/10 bg-white/10 text-slate-300">
+    <Badge className="border-[#D8E8F0] bg-[#F6FBFE] text-[#425B76]">
       {label}
     </Badge>
   );

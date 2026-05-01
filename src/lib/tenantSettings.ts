@@ -25,7 +25,7 @@ export type UpdateTenantSettingsInput = {
 const tenantSettingsSelect =
   "id,name,slug,category,owner_user_id,logo_url,brand_color,support_email,support_phone,website_url";
 
-export const defaultTenantBrandColor = "#14b8a6";
+export const defaultTenantBrandColor = "#145da0";
 
 const hexColorPattern = /^#[0-9a-f]{6}$/i;
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;

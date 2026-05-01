@@ -12,7 +12,7 @@ export function EnrollmentStatusBadge({
 
   if (status === "paused") {
     return (
-      <Badge className="border-amber-400/30 bg-amber-400/10 text-amber-300">
+      <Badge className="border-amber-400/40 bg-amber-50 text-amber-700">
         Paused
       </Badge>
     );
@@ -20,14 +20,14 @@ export function EnrollmentStatusBadge({
 
   if (status === "cancelled") {
     return (
-      <Badge className="border-red-500/30 bg-red-500/15 text-red-300">
+      <Badge className="border-red-500/30 bg-red-50 text-red-700">
         Cancelled
       </Badge>
     );
   }
 
   return (
-    <Badge className="border-teal-400/30 bg-teal-400/10 text-teal-300">
+    <Badge className="border-[#14B8C6]/30 bg-[#14B8C6]/10 text-[#0E7490]">
       Active
     </Badge>
   );

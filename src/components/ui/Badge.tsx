@@ -7,9 +7,9 @@ type BadgeProps = {
 } & React.HTMLAttributes<HTMLSpanElement>;
 
 const toneClasses: Record<BadgeTone, string> = {
-  dark: "border-white/10 bg-white/10 text-white",
-  light: "border-teal-400/30 bg-teal-400/10 text-teal-300 shadow-sm",
-  success: "border-teal-400/30 bg-teal-400/15 text-teal-300",
+  dark: "border-[#D8E8F0] bg-white text-[#0B1F33]",
+  light: "border-[#2ECBEA]/40 bg-[#EAF7FC] text-[#145DA0] shadow-sm",
+  success: "border-[#14B8A6]/30 bg-[#14B8A6]/10 text-[#0F766E]",
 };
 
 export function Badge({

@@ -118,7 +118,7 @@ export function PaymentLinkStatusBadge({
 }) {
   if (status === "paid") {
     return (
-      <Badge className="border-teal-400/30 bg-teal-400/10 text-teal-300">
+      <Badge className="border-[#14B8C6]/30 bg-[#14B8C6]/10 text-[#0E7490]">
         Paid
       </Badge>
     );
@@ -126,7 +126,7 @@ export function PaymentLinkStatusBadge({
 
   if (status === "sent" || status === "created") {
     return (
-      <Badge className="border-blue-400/30 bg-blue-500/10 text-blue-300">
+      <Badge className="border-[#145DA0]/25 bg-[#145DA0]/10 text-[#145DA0]">
         {formatStatus(status)}
       </Badge>
     );
@@ -134,7 +134,7 @@ export function PaymentLinkStatusBadge({
 
   if (status === "expired" || status === "cancelled" || status === "failed") {
     return (
-      <Badge className="border-red-400/30 bg-red-500/10 text-red-300">
+      <Badge className="border-red-500/30 bg-red-50 text-red-700">
         {formatStatus(status)}
       </Badge>
     );

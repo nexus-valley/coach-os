@@ -102,8 +102,8 @@ export function CertificatePageClient({
 
   if (loading) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[#050607] px-5 text-white">
-        <Card className="h-72 w-full max-w-4xl animate-pulse border-white/10 bg-[#101214]">
+      <main className="flex min-h-screen items-center justify-center bg-[#F3FAFD] px-5 text-[#0B2A3D]">
+        <Card className="h-72 w-full max-w-4xl animate-pulse border-[#D8E8F0] bg-white">
           <span className="sr-only">Loading certificate</span>
         </Card>
       </main>
@@ -112,14 +112,14 @@ export function CertificatePageClient({
 
   if (error || !certificate) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[#050607] px-5 text-white">
-        <Card className="w-full max-w-2xl border-white/10 bg-[#101214] p-8 text-white shadow-2xl shadow-black/20">
-          <p className="text-sm font-semibold text-slate-400">Certificate</p>
+      <main className="flex min-h-screen items-center justify-center bg-[#F3FAFD] px-5 text-[#0B2A3D]">
+        <Card className="w-full max-w-2xl border-[#D8E8F0] bg-white p-8 text-[#0B2A3D] shadow-2xl shadow-[#0B2A3D]/10">
+          <p className="text-sm font-semibold text-[#5D7185]">Certificate</p>
           <h2 className="mt-3 text-2xl font-semibold">
             {error || "Certificate unavailable."}
           </h2>
           <Link
-            className="mt-6 inline-flex h-11 items-center justify-center rounded-full bg-teal-400 px-5 text-sm font-semibold text-black"
+            className="mt-6 inline-flex h-11 items-center justify-center rounded-full bg-[#145DA0] px-5 text-sm font-semibold text-white"
             href="/app/student-portal"
           >
             Back
@@ -151,11 +151,11 @@ export function CertificatePageClient({
   }
 
   return (
-    <main className="min-h-screen bg-[#050607] px-5 py-8 text-white print:bg-white print:px-0 print:py-0">
+    <main className="min-h-screen bg-[#F3FAFD] px-5 py-8 text-[#0B2A3D] print:bg-white print:px-0 print:py-0">
       <div className="mx-auto max-w-5xl">
         <div className="mb-6 flex flex-col justify-between gap-4 print:hidden sm:flex-row sm:items-center">
           <Link
-            className="text-sm font-semibold text-slate-400 transition hover:text-white"
+            className="text-sm font-semibold text-[#5D7185] transition hover:text-[#0B2A3D]"
             href="/app/student-portal"
           >
             Back
@@ -171,7 +171,7 @@ export function CertificatePageClient({
             Share Certificate on WhatsApp
           </Button>
         </div>
-        <p className="mb-6 text-sm text-slate-500 print:hidden">
+        <p className="mb-6 text-sm text-[#5D7185] print:hidden">
           WhatsApp opens with a pre-filled message. Sending is done manually.
         </p>
 
