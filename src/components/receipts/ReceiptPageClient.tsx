@@ -16,7 +16,10 @@ import {
   getTenantSettings,
   type TenantSettings,
 } from "@/src/lib/tenantSettings";
-import { buildWhatsAppMessage, buildWhatsAppShareUrl } from "@/src/lib/whatsapp";
+import {
+  buildReceiptShareMessage,
+  buildWhatsAppShareUrl,
+} from "@/src/lib/whatsapp";
 
 type ReceiptPageClientProps = {
   paymentId: string;
@@ -145,14 +148,12 @@ export function ReceiptPageClient({ paymentId }: ReceiptPageClientProps) {
       return;
     }
 
-    const receiptShareMessage = buildWhatsAppMessage(
-      "Hi {{studentName}}, your payment receipt for {{amount}} is ready.\n{{receiptUrl}}",
-      {
-        amount: formatCurrency(payment.amount, payment.currency || "USD"),
-        receiptUrl: window.location.href,
-        studentName: payment.student?.full_name || "there",
-      },
-    );
+    const receiptShareMessage = buildReceiptShareMessage({
+      amount: formatCurrency(payment.amount, payment.currency || "USD"),
+      receiptLink: window.location.href,
+      studentName: payment.student?.full_name,
+      workspaceName,
+    });
     const receiptShareUrl = buildWhatsAppShareUrl(
       payment.student?.phone,
       receiptShareMessage,
@@ -183,7 +184,7 @@ export function ReceiptPageClient({ paymentId }: ReceiptPageClientProps) {
           type="button"
           variant="secondary"
         >
-          Share Receipt on WhatsApp
+          Share on WhatsApp
         </Button>
       </div>
       <p className="mb-6 text-sm text-[#5D7185] print:hidden">

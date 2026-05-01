@@ -27,6 +27,8 @@ import { getCurrentTenant, type Tenant } from "@/src/lib/tenant";
 type StatusFilter = "all" | PaymentStatus;
 
 const statusFilters: StatusFilter[] = ["all", "completed", "pending", "failed"];
+const paymentGridColumns =
+  "grid-cols-[minmax(180px,1.4fr)_minmax(220px,1.4fr)_120px_120px_220px_130px]";
 
 function formatCurrency(value: number, currency: string) {
   return new Intl.NumberFormat("en-US", {
@@ -332,95 +334,113 @@ export function PaymentsPageClient() {
         />
       ) : (
         <Card className="mt-6 overflow-hidden border-white/10 bg-[#101214] text-white shadow-2xl shadow-black/10">
-          <div className="hidden grid-cols-[1fr_1fr_auto_auto_auto_auto] gap-4 border-b border-white/10 px-5 py-4 text-xs font-semibold text-slate-400 lg:grid">
-            <span>Student</span>
-            <span>Course</span>
-            <span>Amount</span>
-            <span>Status</span>
-            <span>Receipt</span>
-            <span>Date</span>
-          </div>
-          <div className="divide-y divide-white/10">
-            {filteredPayments.map((payment) => (
+          <div className="overflow-x-auto">
+            <div className="min-w-[1040px]">
               <div
-                className="grid gap-4 px-5 py-5 lg:grid-cols-[1fr_1fr_auto_auto_auto_auto] lg:items-center"
-                key={payment.id}
+                className={[
+                  "grid gap-4 border-b border-white/10 px-5 py-4 text-xs font-semibold text-slate-400",
+                  paymentGridColumns,
+                ].join(" ")}
               >
-                <Link
-                  className="transition hover:text-white"
-                  href={`/app/students/${payment.student_id}`}
-                >
-                  <p className="font-semibold">
-                    {payment.student?.full_name ?? "Student unavailable"}
-                  </p>
-                  <p className="mt-1 text-sm text-slate-400">
-                    {payment.student?.email ||
-                      payment.student?.phone ||
-                      "No contact details"}
-                  </p>
-                </Link>
-                <Link
-                  className="font-semibold transition hover:text-white"
-                  href={`/app/courses/${payment.course_id}`}
-                >
-                  {payment.course?.title ?? "Course unavailable"}
-                </Link>
-                <p className="font-semibold">
-                  {formatCurrency(payment.amount, payment.currency || "USD")}
-                </p>
-                <PaymentStatusBadge status={payment.status} />
-                <div className="space-y-2">
-                  {payment.receipt_number ? (
-                    <>
-                      <Link
-                        className="block text-sm font-semibold text-teal-300 transition hover:text-teal-200"
-                        href={`/app/receipts/${payment.id}`}
-                      >
-                        {payment.receipt_number}
-                      </Link>
-                      <div className="flex flex-wrap gap-2">
-                        <Badge className="border-teal-400/30 bg-teal-400/10 text-teal-300">
-                          Generated
-                        </Badge>
-                        <Link
-                          className="inline-flex h-8 items-center justify-center rounded-full border border-white/10 bg-white/10 px-3 text-xs font-semibold text-white transition hover:bg-white/15"
-                          href={`/app/receipts/${payment.id}`}
-                        >
-                          View
-                        </Link>
-                        <Link
-                          className="inline-flex h-8 items-center justify-center rounded-full border border-white/10 bg-white/10 px-3 text-xs font-semibold text-white transition hover:bg-white/15"
-                          href={`/app/receipts/${payment.id}`}
-                        >
-                          Download
-                        </Link>
-                      </div>
-                    </>
-                  ) : (
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge className="border-white/10 bg-white/10 text-slate-300">
-                        Not generated
-                      </Badge>
-                      {canManagePayments(currentRole) ? (
-                        <Button
-                          disabled={mutatingReceiptId === payment.id}
-                          onClick={() => handleGenerateReceipt(payment.id)}
-                          size="sm"
-                          type="button"
-                        >
-                          {mutatingReceiptId === payment.id
-                            ? "Generating..."
-                            : "Generate Receipt"}
-                        </Button>
-                      ) : null}
-                    </div>
-                  )}
-                </div>
-                <p className="text-sm text-slate-400">
-                  {formatDate(payment.paid_at)}
-                </p>
+                <span>Student</span>
+                <span>Course</span>
+                <span className="text-right">Amount</span>
+                <span>Status</span>
+                <span>Receipt</span>
+                <span>Date</span>
               </div>
-            ))}
+              <div className="divide-y divide-white/10">
+                {filteredPayments.map((payment) => (
+                  <div
+                    className={[
+                      "grid gap-4 px-5 py-5",
+                      paymentGridColumns,
+                      "items-start",
+                    ].join(" ")}
+                    key={payment.id}
+                  >
+                    <Link
+                      className="min-w-0 transition hover:text-white"
+                      href={`/app/students/${payment.student_id}`}
+                    >
+                      <p className="truncate font-semibold">
+                        {payment.student?.full_name ?? "Student unavailable"}
+                      </p>
+                      <p className="mt-1 truncate text-sm text-slate-400">
+                        {payment.student?.email ||
+                          payment.student?.phone ||
+                          "No contact details"}
+                      </p>
+                    </Link>
+                    <Link
+                      className="min-w-0 truncate font-semibold transition hover:text-white"
+                      href={`/app/courses/${payment.course_id}`}
+                    >
+                      {payment.course?.title ?? "Course unavailable"}
+                    </Link>
+                    <p className="text-right font-semibold">
+                      {formatCurrency(
+                        payment.amount,
+                        payment.currency || "USD",
+                      )}
+                    </p>
+                    <div>
+                      <PaymentStatusBadge status={payment.status} />
+                    </div>
+                    <div className="space-y-2">
+                      {payment.receipt_number ? (
+                        <>
+                          <Link
+                            className="block truncate text-sm font-semibold text-teal-300 transition hover:text-teal-200"
+                            href={`/app/receipts/${payment.id}`}
+                          >
+                            {payment.receipt_number}
+                          </Link>
+                          <div className="flex flex-wrap gap-2">
+                            <Badge className="border-[#A7F3D0] bg-[#E8F8F3] text-[#047857]">
+                              Generated
+                            </Badge>
+                            <Link
+                              className="inline-flex h-8 items-center justify-center rounded-full border border-white/10 bg-white/10 px-3 text-xs font-semibold text-white transition hover:bg-white/15"
+                              href={`/app/receipts/${payment.id}`}
+                            >
+                              View
+                            </Link>
+                            <Link
+                              className="inline-flex h-8 items-center justify-center rounded-full border border-white/10 bg-white/10 px-3 text-xs font-semibold text-white transition hover:bg-white/15"
+                              href={`/app/receipts/${payment.id}`}
+                            >
+                              Download
+                            </Link>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge className="border-[#CBD5E1] bg-[#F1F5F9] text-[#334155]">
+                            Not generated
+                          </Badge>
+                          {canManagePayments(currentRole) ? (
+                            <Button
+                              disabled={mutatingReceiptId === payment.id}
+                              onClick={() => handleGenerateReceipt(payment.id)}
+                              size="sm"
+                              type="button"
+                            >
+                              {mutatingReceiptId === payment.id
+                                ? "Generating..."
+                                : "Generate Receipt"}
+                            </Button>
+                          ) : null}
+                        </div>
+                      )}
+                    </div>
+                    <p className="text-sm text-slate-400">
+                      {formatDate(payment.paid_at)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </Card>
       )}

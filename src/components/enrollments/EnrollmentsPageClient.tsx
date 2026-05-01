@@ -25,6 +25,8 @@ const statusFilters: StatusFilter[] = [
   "paused",
   "cancelled",
 ];
+const enrollmentGridColumns =
+  "grid-cols-[minmax(220px,1.4fr)_minmax(260px,1.4fr)_130px_130px]";
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("en", {
@@ -207,43 +209,59 @@ export function EnrollmentsPageClient() {
         />
       ) : (
         <Card className="mt-6 overflow-hidden border-white/10 bg-[#101214] text-white shadow-2xl shadow-black/10">
-          <div className="hidden grid-cols-[1fr_1fr_auto_auto] gap-4 border-b border-white/10 px-5 py-4 text-xs font-semibold text-slate-400 lg:grid">
-            <span>Student</span>
-            <span>Course</span>
-            <span>Status</span>
-            <span>Enrolled</span>
-          </div>
-          <div className="divide-y divide-white/10">
-            {filteredEnrollments.map((enrollment) => (
+          <div className="overflow-x-auto">
+            <div className="min-w-[780px]">
               <div
-                className="grid gap-4 px-5 py-5 lg:grid-cols-[1fr_1fr_auto_auto] lg:items-center"
-                key={enrollment.id}
+                className={[
+                  "grid gap-4 border-b border-white/10 px-5 py-4 text-xs font-semibold text-slate-400",
+                  enrollmentGridColumns,
+                ].join(" ")}
               >
-                <Link
-                  className="transition hover:text-white"
-                  href={`/app/students/${enrollment.student_id}`}
-                >
-                  <p className="font-semibold">
-                    {enrollment.student?.full_name ?? "Student unavailable"}
-                  </p>
-                  <p className="mt-1 text-sm text-slate-400">
-                    {enrollment.student?.email ||
-                      enrollment.student?.phone ||
-                      "No contact details"}
-                  </p>
-                </Link>
-                <Link
-                  className="font-semibold transition hover:text-white"
-                  href={`/app/courses/${enrollment.course_id}`}
-                >
-                  {enrollment.course?.title ?? "Course unavailable"}
-                </Link>
-                <EnrollmentStatusBadge status={enrollment.status} />
-                <p className="text-sm text-slate-400">
-                  {formatDate(enrollment.enrolled_at)}
-                </p>
+                <span>Student</span>
+                <span>Course</span>
+                <span>Status</span>
+                <span>Enrolled</span>
               </div>
-            ))}
+              <div className="divide-y divide-white/10">
+                {filteredEnrollments.map((enrollment) => (
+                  <div
+                    className={[
+                      "grid gap-4 px-5 py-5",
+                      enrollmentGridColumns,
+                      "items-start",
+                    ].join(" ")}
+                    key={enrollment.id}
+                  >
+                    <Link
+                      className="min-w-0 transition hover:text-white"
+                      href={`/app/students/${enrollment.student_id}`}
+                    >
+                      <p className="truncate font-semibold">
+                        {enrollment.student?.full_name ??
+                          "Student unavailable"}
+                      </p>
+                      <p className="mt-1 truncate text-sm text-slate-400">
+                        {enrollment.student?.email ||
+                          enrollment.student?.phone ||
+                          "No contact details"}
+                      </p>
+                    </Link>
+                    <Link
+                      className="min-w-0 truncate font-semibold transition hover:text-white"
+                      href={`/app/courses/${enrollment.course_id}`}
+                    >
+                      {enrollment.course?.title ?? "Course unavailable"}
+                    </Link>
+                    <div>
+                      <EnrollmentStatusBadge status={enrollment.status} />
+                    </div>
+                    <p className="text-sm text-slate-400">
+                      {formatDate(enrollment.enrolled_at)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </Card>
       )}

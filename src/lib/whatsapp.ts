@@ -9,6 +9,7 @@ type PaymentLinkMessageData = {
 };
 
 type ReminderMessageData = {
+  description?: string | null;
   dueDate: string;
   reminderTitle: string;
   studentName?: string | null;
@@ -16,9 +17,29 @@ type ReminderMessageData = {
 };
 
 type CertificateMessageData = {
-  certificateUrl: string;
+  certificateLink: string;
   courseName: string;
   studentName: string;
+  workspaceName: string;
+};
+
+type ReceiptMessageData = {
+  amount: string;
+  receiptLink: string;
+  studentName?: string | null;
+  workspaceName: string;
+};
+
+type CourseEnrollmentMessageData = {
+  courseName: string;
+  studentName?: string | null;
+  workspaceName: string;
+};
+
+type GeneralFollowUpMessageData = {
+  message: string;
+  studentName?: string | null;
+  workspaceName: string;
 };
 
 export function formatIndianPhoneNumber(phone?: string | null) {
@@ -68,17 +89,88 @@ export function buildWhatsAppShareUrl(
   return `https://wa.me/${normalizedPhone}?text=${encodedMessage}`;
 }
 
-export function buildPaymentLinkWhatsAppMessage(
-  data: PaymentLinkMessageData,
-) {
-  const courseText = data.courseName ? ` for ${data.courseName}` : "";
+function withRupeePrefix(amount: string) {
+  const trimmedAmount = amount.trim();
 
+  if (
+    trimmedAmount.startsWith("₹") ||
+    trimmedAmount.startsWith("INR") ||
+    trimmedAmount.startsWith("Rs") ||
+    trimmedAmount.startsWith("$")
+  ) {
+    return trimmedAmount;
+  }
+
+  return `₹${trimmedAmount}`;
+}
+
+export function buildPaymentReminderMessage(data: PaymentLinkMessageData) {
   return buildWhatsAppMessage(
-    "Hi {{studentName}}, please complete your payment of {{amount}}{{courseText}} using this link:\n{{paymentUrl}}\n- {{workspaceName}}",
+    "Hi {{studentName}},\n\nThis is a reminder for your payment of {{amount}} for {{courseName}}.\n\nPlease complete using this link:\n{{paymentLink}}\n\n- {{workspaceName}}",
     {
-      amount: data.amount,
-      courseText,
-      paymentUrl: data.paymentUrl || "Payment link unavailable",
+      amount: withRupeePrefix(data.amount),
+      courseName: data.courseName || "your course",
+      paymentLink: data.paymentUrl || "Payment link unavailable",
+      studentName: data.studentName || "there",
+      workspaceName: data.workspaceName,
+    },
+  );
+}
+
+export function buildPaymentConfirmationMessage(data: ReceiptMessageData) {
+  return buildWhatsAppMessage(
+    "Hi {{studentName}},\n\nYour payment of {{amount}} has been received successfully.\n\nReceipt:\n{{receiptLink}}\n\nThank you.\n- {{workspaceName}}",
+    {
+      amount: withRupeePrefix(data.amount),
+      receiptLink: data.receiptLink,
+      studentName: data.studentName || "there",
+      workspaceName: data.workspaceName,
+    },
+  );
+}
+
+export function buildCourseEnrollmentMessage(
+  data: CourseEnrollmentMessageData,
+) {
+  return buildWhatsAppMessage(
+    "Hi {{studentName}},\n\nYou are successfully enrolled in {{courseName}}.\n\nAccess details will be shared by {{workspaceName}}.\n\nThank you.",
+    {
+      courseName: data.courseName,
+      studentName: data.studentName || "there",
+      workspaceName: data.workspaceName,
+    },
+  );
+}
+
+export function buildCertificateShareMessage(data: CertificateMessageData) {
+  return buildWhatsAppMessage(
+    "Hi {{studentName}},\n\nCongratulations!\n\nYou have successfully completed {{courseName}}.\n\nYour certificate is ready:\n{{certificateLink}}\n\n- {{workspaceName}}",
+    {
+      certificateLink: data.certificateLink,
+      courseName: data.courseName,
+      studentName: data.studentName,
+      workspaceName: data.workspaceName,
+    },
+  );
+}
+
+export function buildReceiptShareMessage(data: ReceiptMessageData) {
+  return buildWhatsAppMessage(
+    "Hi {{studentName}},\n\nYour payment receipt for {{amount}} is ready.\n\nView receipt:\n{{receiptLink}}\n\n- {{workspaceName}}",
+    {
+      amount: withRupeePrefix(data.amount),
+      receiptLink: data.receiptLink,
+      studentName: data.studentName || "there",
+      workspaceName: data.workspaceName,
+    },
+  );
+}
+
+export function buildGeneralFollowUpMessage(data: GeneralFollowUpMessageData) {
+  return buildWhatsAppMessage(
+    "Hi {{studentName}},\n\nThis is a quick follow-up from {{workspaceName}}.\n\n{{message}}",
+    {
+      message: data.message,
       studentName: data.studentName || "there",
       workspaceName: data.workspaceName,
     },
@@ -87,8 +179,9 @@ export function buildPaymentLinkWhatsAppMessage(
 
 export function buildReminderWhatsAppMessage(data: ReminderMessageData) {
   return buildWhatsAppMessage(
-    "Hi {{studentName}}, reminder from {{workspaceName}}: {{reminderTitle}}. Due: {{dueDate}}.",
+    "Hi {{studentName}},\n\nReminder from {{workspaceName}}:\n{{reminderTitle}}\n\nDue: {{dueDate}}\n\n{{description}}",
     {
+      description: data.description || "",
       dueDate: data.dueDate,
       reminderTitle: data.reminderTitle,
       studentName: data.studentName || "there",
@@ -97,13 +190,10 @@ export function buildReminderWhatsAppMessage(data: ReminderMessageData) {
   );
 }
 
+export function buildPaymentLinkWhatsAppMessage(data: PaymentLinkMessageData) {
+  return buildPaymentReminderMessage(data);
+}
+
 export function buildCertificateWhatsAppMessage(data: CertificateMessageData) {
-  return buildWhatsAppMessage(
-    "Hi {{studentName}}, congratulations on completing {{courseName}}. Your certificate is ready.\n{{certificateUrl}}",
-    {
-      certificateUrl: data.certificateUrl,
-      courseName: data.courseName,
-      studentName: data.studentName,
-    },
-  );
+  return buildCertificateShareMessage(data);
 }

@@ -58,22 +58,14 @@ export function StudentStatusBadge({ status }: { status: StudentStatus }) {
   }
 
   if (status === "blocked") {
-    return (
-      <Badge className="border-red-500/30 bg-red-50 text-red-700">
-        Blocked
-      </Badge>
-    );
+    return <Badge tone="danger">Blocked</Badge>;
   }
 
   if (status === "lead") {
-    return (
-      <Badge className="border-[#145DA0]/25 bg-[#145DA0]/10 text-[#145DA0]">
-        Lead
-      </Badge>
-    );
+    return <Badge tone="admin">Lead</Badge>;
   }
 
-  return <Badge>Inactive</Badge>;
+  return <Badge tone="staff">Inactive</Badge>;
 }
 
 function getErrorMessage(caught: unknown, fallback: string) {

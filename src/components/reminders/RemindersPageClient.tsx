@@ -313,6 +313,7 @@ export function RemindersPageClient() {
 
   function getReminderWhatsAppUrl(reminder: ReminderWithRelations) {
     const message = buildReminderWhatsAppMessage({
+      description: reminder.description,
       dueDate: formatDateTime(reminder.due_at),
       reminderTitle: reminder.title,
       studentName: reminder.student?.full_name,
@@ -538,7 +539,7 @@ export function RemindersPageClient() {
                     rel="noreferrer"
                     target="_blank"
                   >
-                    Share WhatsApp
+                    Share on WhatsApp
                   </a>
                   <Button
                     className="text-red-300! hover:bg-red-500/10! hover:text-red-200!"

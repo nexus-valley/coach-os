@@ -80,26 +80,14 @@ function RoleBadge({ role }: { role: MemberRole }) {
   const label = role.charAt(0).toUpperCase() + role.slice(1);
 
   if (role === "owner") {
-    return (
-      <Badge className="border-[#14B8C6]/30 bg-[#14B8C6]/10 text-[#0E7490]">
-        {label}
-      </Badge>
-    );
+    return <Badge tone="owner">{label}</Badge>;
   }
 
   if (role === "admin") {
-    return (
-      <Badge className="border-[#145DA0]/25 bg-[#145DA0]/10 text-[#145DA0]">
-        {label}
-      </Badge>
-    );
+    return <Badge tone="admin">{label}</Badge>;
   }
 
-  return (
-    <Badge className="border-[#D8E8F0] bg-[#F6FBFE] text-[#425B76]">
-      {label}
-    </Badge>
-  );
+  return <Badge tone="staff">{label}</Badge>;
 }
 
 function formatDate(value: string) {

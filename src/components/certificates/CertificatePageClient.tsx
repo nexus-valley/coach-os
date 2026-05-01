@@ -17,7 +17,7 @@ import {
   type TenantSettings,
 } from "@/src/lib/tenantSettings";
 import {
-  buildCertificateWhatsAppMessage,
+  buildCertificateShareMessage,
   buildWhatsAppShareUrl,
 } from "@/src/lib/whatsapp";
 
@@ -137,10 +137,11 @@ export function CertificatePageClient({
       return;
     }
 
-    const certificateShareMessage = buildCertificateWhatsAppMessage({
-      certificateUrl: window.location.href,
+    const certificateShareMessage = buildCertificateShareMessage({
+      certificateLink: window.location.href,
       courseName: certificate.course_title,
       studentName: certificate.student_name,
+      workspaceName,
     });
     const certificateShareUrl = buildWhatsAppShareUrl(
       null,
@@ -168,7 +169,7 @@ export function CertificatePageClient({
             type="button"
             variant="secondary"
           >
-            Share Certificate on WhatsApp
+            Share on WhatsApp
           </Button>
         </div>
         <p className="mb-6 text-sm text-[#5D7185] print:hidden">

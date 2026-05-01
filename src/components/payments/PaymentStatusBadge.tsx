@@ -7,16 +7,8 @@ export function PaymentStatusBadge({ status }: { status: PaymentStatus }) {
   }
 
   if (status === "failed") {
-    return (
-      <Badge className="border-red-500/30 bg-red-50 text-red-700">
-        Failed
-      </Badge>
-    );
+    return <Badge tone="danger">Failed</Badge>;
   }
 
-  return (
-    <Badge className="border-amber-400/40 bg-amber-50 text-amber-700">
-      Pending
-    </Badge>
-  );
+  return <Badge tone="warning">Pending</Badge>;
 }

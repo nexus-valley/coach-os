@@ -62,8 +62,8 @@ import {
 } from "@/src/lib/team";
 import { getCurrentTenant, type Tenant } from "@/src/lib/tenant";
 import {
-  buildPaymentLinkWhatsAppMessage,
-  buildWhatsAppMessage,
+  buildGeneralFollowUpMessage,
+  buildPaymentReminderMessage,
   buildWhatsAppShareUrl,
 } from "@/src/lib/whatsapp";
 
@@ -111,6 +111,8 @@ const paymentLinkStatusActions: { label: string; status: PaymentLinkStatus }[] =
     { label: "Expire", status: "expired" },
     { label: "Cancel", status: "cancelled" },
   ];
+const defaultWhatsAppFollowUp =
+  "Hope you are doing well. Please let us know if you need any support.";
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("en", {
@@ -190,6 +192,10 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
     StudentCohortMembership[]
   >([]);
   const [tenant, setTenant] = useState<Tenant | null>(null);
+  const [whatsAppMessage, setWhatsAppMessage] = useState(
+    defaultWhatsAppFollowUp,
+  );
+  const [whatsAppOpen, setWhatsAppOpen] = useState(false);
 
   const availableCourses = useMemo(
     () =>
@@ -225,21 +231,8 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
     (Number(paymentLinkForm.amount) > 0
       ? buildManualUpiPaymentUrl(Number(paymentLinkForm.amount))
       : "upi://pay?pa=YOUR_UPI_ID&pn=CoachOS&am=AMOUNT&cu=INR");
-  const studentWhatsAppMessage = student
-    ? buildWhatsAppMessage(
-        "Hi {{studentName}}, this is a quick follow-up from {{workspaceName}}.",
-        {
-          studentName: student.full_name,
-          workspaceName: tenant?.name ?? "CoachOS",
-        },
-      )
-    : "";
-  const studentWhatsAppUrl = student
-    ? buildWhatsAppShareUrl(student.phone, studentWhatsAppMessage)
-    : "#";
-
   function getPaymentLinkWhatsAppUrl(link: PaymentLinkWithRelations) {
-    const message = buildPaymentLinkWhatsAppMessage({
+    const message = buildPaymentReminderMessage({
       amount: formatCurrencyForPaymentLink(link.amount, link.currency || "INR"),
       courseName: link.course?.title,
       paymentUrl: link.payment_url,
@@ -248,6 +241,29 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
     });
 
     return buildWhatsAppShareUrl(student?.phone, message);
+  }
+
+  function openWhatsAppFollowUp() {
+    setWhatsAppMessage(defaultWhatsAppFollowUp);
+    setWhatsAppOpen(true);
+  }
+
+  function handleShareStudentWhatsApp(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!student) {
+      return;
+    }
+
+    const message = buildGeneralFollowUpMessage({
+      message: whatsAppMessage.trim() || defaultWhatsAppFollowUp,
+      studentName: student.full_name,
+      workspaceName: tenant?.name ?? "CoachOS",
+    });
+    const shareUrl = buildWhatsAppShareUrl(student.phone, message);
+
+    window.open(shareUrl, "_blank", "noopener,noreferrer");
+    setWhatsAppOpen(false);
   }
 
   useEffect(() => {
@@ -940,17 +956,16 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
             >
               Add Payment
             </Button>
-            <a
-              className="inline-flex h-11 items-center justify-center rounded-full border border-white/10 bg-white/10 px-5 text-sm font-semibold text-white transition hover:bg-white/15"
-              href={studentWhatsAppUrl}
-              rel="noreferrer"
-              target="_blank"
+            <Button
+              onClick={openWhatsAppFollowUp}
+              type="button"
+              variant="secondary"
             >
               WhatsApp Student
-            </a>
+            </Button>
             <p className="text-xs leading-5 text-slate-500">
               {student.phone
-                ? "Opens WhatsApp with a pre-filled message. Sending is manual."
+                ? "WhatsApp opens with a pre-filled message. Sending is manual."
                 : "Phone number missing. Opens generic WhatsApp share."}
             </p>
             <Button onClick={() => setEditOpen(true)} type="button">
@@ -1156,7 +1171,7 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
 
           {paymentLinks.length === 0 ? (
             <div className="mt-8 rounded-3xl border border-dashed border-white/15 bg-[#101214] p-8 text-center">
-              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--coachos-brand)] text-sm font-bold text-black">
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-(--coachos-brand) text-sm font-bold text-black">
                 PL
               </div>
               <h4 className="mt-5 text-xl font-semibold">
@@ -1218,7 +1233,7 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
                       rel="noreferrer"
                       target="_blank"
                     >
-                      Share WhatsApp
+                      Share on WhatsApp
                     </a>
                     {paymentLinkStatusActions.map((action) => (
                       <Button
@@ -1457,6 +1472,46 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
                 >
                   {mutating ? "Adding..." : "Add to Cohort"}
                 </Button>
+              </div>
+            </form>
+          </Card>
+        </div>
+      ) : null}
+
+      {whatsAppOpen ? (
+        <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-black/70 px-4 py-4 backdrop-blur-sm sm:items-center">
+          <Card className="w-full max-w-xl border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/40 sm:p-8">
+            <h3 className="text-2xl font-semibold">WhatsApp Student</h3>
+            <p className="mt-3 text-sm leading-6 text-slate-400">
+              Edit the follow-up message for {student?.full_name ?? "this student"}.
+              WhatsApp opens with a pre-filled message. Sending is manual.
+            </p>
+            <form className="mt-7 space-y-5" onSubmit={handleShareStudentWhatsApp}>
+              <label className="block">
+                <span className="text-sm font-medium text-slate-300">
+                  Message
+                </span>
+                <textarea
+                  className="mt-2 min-h-32 w-full resize-none rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm leading-6 text-white outline-none transition placeholder:text-slate-400 focus:border-teal-400/40 focus:bg-white/15 focus:ring-4 focus:ring-teal-400/10"
+                  onChange={(event) => setWhatsAppMessage(event.target.value)}
+                  value={whatsAppMessage}
+                />
+              </label>
+              {!student?.phone ? (
+                <p className="rounded-2xl border border-amber-400/30 bg-amber-400/10 p-4 text-sm leading-6 text-amber-300">
+                  Phone number missing. This will open generic WhatsApp share.
+                </p>
+              ) : null}
+              <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                <Button
+                  className="border-slate-700! bg-white/10! text-white! hover:bg-white/15!"
+                  onClick={() => setWhatsAppOpen(false)}
+                  type="button"
+                  variant="secondary"
+                >
+                  Cancel
+                </Button>
+                <Button type="submit">Share on WhatsApp</Button>
               </div>
             </form>
           </Card>

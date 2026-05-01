@@ -1,4 +1,12 @@
-type BadgeTone = "dark" | "light" | "success";
+type BadgeTone =
+  | "admin"
+  | "danger"
+  | "dark"
+  | "light"
+  | "owner"
+  | "staff"
+  | "success"
+  | "warning";
 
 type BadgeProps = {
   children: React.ReactNode;
@@ -7,9 +15,14 @@ type BadgeProps = {
 } & React.HTMLAttributes<HTMLSpanElement>;
 
 const toneClasses: Record<BadgeTone, string> = {
+  admin: "border-[#BFDDF5] bg-[#EEF6FF] text-[#145DA0]",
+  danger: "border-[#FECACA] bg-[#FEF2F2] text-[#B91C1C]",
   dark: "border-[#D8E8F0] bg-white text-[#0B1F33]",
-  light: "border-[#2ECBEA]/40 bg-[#EAF7FC] text-[#145DA0] shadow-sm",
-  success: "border-[#14B8A6]/30 bg-[#14B8A6]/10 text-[#0F766E]",
+  light: "border-[#9ADDEA] bg-[#EAF8FC] text-[#0B2A3D] shadow-sm",
+  owner: "border-[#9ADDEA] bg-[#EAF8FC] text-[#0B6F87]",
+  staff: "border-[#CBD5E1] bg-[#F1F5F9] text-[#334155]",
+  success: "border-[#A7F3D0] bg-[#E8F8F3] text-[#047857]",
+  warning: "border-[#FED7AA] bg-[#FFF7ED] text-[#C2410C]",
 };
 
 export function Badge({

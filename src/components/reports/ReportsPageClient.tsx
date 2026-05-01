@@ -45,34 +45,18 @@ function getErrorMessage(caught: unknown, fallback: string) {
 
 function StudentStatusBadge({ status }: { status: string }) {
   if (status === "active") {
-    return (
-      <Badge className="border-[#14B8C6]/30 bg-[#14B8C6]/10 text-[#0E7490]">
-        Active
-      </Badge>
-    );
+    return <Badge tone="success">Active</Badge>;
   }
 
   if (status === "lead") {
-    return (
-      <Badge className="border-[#145DA0]/25 bg-[#145DA0]/10 text-[#145DA0]">
-        Lead
-      </Badge>
-    );
+    return <Badge tone="admin">Lead</Badge>;
   }
 
   if (status === "blocked") {
-    return (
-      <Badge className="border-red-500/30 bg-red-50 text-red-700">
-        Blocked
-      </Badge>
-    );
+    return <Badge tone="danger">Blocked</Badge>;
   }
 
-  return (
-    <Badge className="border-[#D8E8F0] bg-[#F6FBFE] text-[#425B76]">
-      Inactive
-    </Badge>
-  );
+  return <Badge tone="staff">Inactive</Badge>;
 }
 
 export function ReportsPageClient() {

@@ -26,7 +26,7 @@ import {
 import { getStudentsForTenant, type Student } from "@/src/lib/students";
 import { getCurrentTenant, type Tenant } from "@/src/lib/tenant";
 import {
-  buildPaymentLinkWhatsAppMessage,
+  buildPaymentReminderMessage,
   buildWhatsAppShareUrl,
 } from "@/src/lib/whatsapp";
 
@@ -117,27 +117,15 @@ export function PaymentLinkStatusBadge({
   status: PaymentLinkStatus;
 }) {
   if (status === "paid") {
-    return (
-      <Badge className="border-[#14B8C6]/30 bg-[#14B8C6]/10 text-[#0E7490]">
-        Paid
-      </Badge>
-    );
+    return <Badge tone="success">Paid</Badge>;
   }
 
   if (status === "sent" || status === "created") {
-    return (
-      <Badge className="border-[#145DA0]/25 bg-[#145DA0]/10 text-[#145DA0]">
-        {formatStatus(status)}
-      </Badge>
-    );
+    return <Badge tone="admin">{formatStatus(status)}</Badge>;
   }
 
   if (status === "expired" || status === "cancelled" || status === "failed") {
-    return (
-      <Badge className="border-red-500/30 bg-red-50 text-red-700">
-        {formatStatus(status)}
-      </Badge>
-    );
+    return <Badge tone="danger">{formatStatus(status)}</Badge>;
   }
 
   return <Badge>{formatStatus(status)}</Badge>;
@@ -385,7 +373,7 @@ export function PaymentLinksPageClient() {
       : "upi://pay?pa=YOUR_UPI_ID&pn=CoachOS&am=AMOUNT&cu=INR");
 
   function getPaymentLinkShareUrl(link: PaymentLinkWithRelations) {
-    const message = buildPaymentLinkWhatsAppMessage({
+    const message = buildPaymentReminderMessage({
       amount: formatCurrency(link.amount, link.currency || "INR"),
       courseName: link.course?.title,
       paymentUrl: link.payment_url,
@@ -575,7 +563,7 @@ export function PaymentLinksPageClient() {
                   rel="noreferrer"
                   target="_blank"
                 >
-                  Share WhatsApp
+                  Share on WhatsApp
                 </a>
                 {statusActions.map((action) => (
                   <Button
