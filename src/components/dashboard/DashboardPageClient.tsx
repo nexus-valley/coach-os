@@ -11,6 +11,9 @@ import {
   getDashboardMetrics,
   type DashboardMetrics,
 } from "@/src/lib/dashboard";
+import { loadDemoDataForTenant } from "@/src/lib/demoSeed";
+import { getSupabaseClient } from "@/src/lib/supabaseClient";
+import { getCurrentMemberRole, type MemberRole } from "@/src/lib/team";
 import { getCurrentTenant, type Tenant } from "@/src/lib/tenant";
 
 function formatCurrency(value: number, currency = "USD") {
@@ -58,6 +61,11 @@ function MetricCard({
 
 export function DashboardPageClient() {
   const router = useRouter();
+  const [currentRole, setCurrentRole] = useState<MemberRole | null>(null);
+  const [demoConfirmOpen, setDemoConfirmOpen] = useState(false);
+  const [demoError, setDemoError] = useState("");
+  const [demoLoading, setDemoLoading] = useState(false);
+  const [demoMessage, setDemoMessage] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
@@ -81,13 +89,29 @@ export function DashboardPageClient() {
 
         setTenant(currentTenant);
 
-        const dashboardMetrics = await getDashboardMetrics(currentTenant.id);
+        const supabase = getSupabaseClient();
+        const {
+          data: { user },
+          error: userError,
+        } = await supabase.auth.getUser();
+
+        if (userError) {
+          throw userError;
+        }
+
+        const [dashboardMetrics, memberRole] = await Promise.all([
+          getDashboardMetrics(currentTenant.id),
+          user
+            ? getCurrentMemberRole(currentTenant.id, user.id)
+            : Promise.resolve(null),
+        ]);
 
         if (!active) {
           return;
         }
 
         setMetrics(dashboardMetrics);
+        setCurrentRole(memberRole);
         setError("");
       } catch (caught) {
         if (!active) {
@@ -108,6 +132,38 @@ export function DashboardPageClient() {
       active = false;
     };
   }, [router]);
+
+  async function handleLoadDemoData() {
+    if (!tenant) {
+      setDemoError("Workspace context is not available.");
+      return;
+    }
+
+    setDemoLoading(true);
+    setDemoError("");
+    setDemoMessage("");
+
+    try {
+      const result = await loadDemoDataForTenant(tenant.id);
+      const addedCount = Object.values(result).reduce(
+        (total, count) => total + count,
+        0,
+      );
+      const dashboardMetrics = await getDashboardMetrics(tenant.id);
+
+      setMetrics(dashboardMetrics);
+      setDemoConfirmOpen(false);
+      setDemoMessage(
+        addedCount > 0
+          ? `Demo data loaded. Added ${addedCount} sample records.`
+          : "Demo data is already loaded for this workspace.",
+      );
+    } catch (caught) {
+      setDemoError(getErrorMessage(caught, "Unable to load demo data."));
+    } finally {
+      setDemoLoading(false);
+    }
+  }
 
   const maxCourseRevenue = useMemo(() => {
     if (!metrics?.courseRevenue.length) {
@@ -169,6 +225,12 @@ export function DashboardPageClient() {
       value: String(metrics.activeAutomations),
     },
   ];
+  const canLoadDemo = currentRole === "owner" || currentRole === "admin";
+  const workspaceHasData =
+    metrics.totalStudents > 0 ||
+    metrics.activeCourses > 0 ||
+    metrics.totalEnrollments > 0 ||
+    metrics.totalRevenue > 0;
 
   return (
     <div className="mx-auto max-w-7xl">
@@ -201,6 +263,45 @@ export function DashboardPageClient() {
           Record Payment
         </Button>
       </section>
+
+      <Card className="mt-6 border-[#D8E8F0] bg-white p-6 text-[#0B1F33] shadow-2xl shadow-[#0B2A3D]/10">
+        <div className="grid gap-5 lg:grid-cols-[1fr_auto] lg:items-center">
+          <div>
+            <Badge className="border-[#9ADDEA] bg-[#EAF8FC] text-[#0B6F87]">
+              Demo readiness
+            </Badge>
+            <h3 className="mt-4 text-xl font-semibold">
+              Load a safe sample CoachOS workspace
+            </h3>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-[#425B76]">
+              Add clearly marked demo students, courses, cohorts, payments,
+              payment links, reminders, and automation rules to this workspace.
+              This is tenant-scoped and does not run automatically.
+            </p>
+          </div>
+          {canLoadDemo ? (
+            <Button onClick={() => setDemoConfirmOpen(true)} type="button">
+              Load Demo Data
+            </Button>
+          ) : (
+            <Badge className="border-[#D8E8F0] bg-[#F6FBFE] text-[#425B76]">
+              Owner/admin only
+            </Badge>
+          )}
+        </div>
+
+        {demoMessage ? (
+          <div className="mt-5">
+            <FeedbackAlert tone="success">{demoMessage}</FeedbackAlert>
+          </div>
+        ) : null}
+
+        {demoError ? (
+          <div className="mt-5">
+            <FeedbackAlert>{demoError}</FeedbackAlert>
+          </div>
+        ) : null}
+      </Card>
 
       <section className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
         {metricCards.map((metric) => (
@@ -415,6 +516,62 @@ export function DashboardPageClient() {
           )}
         </Card>
       </section>
+
+      {demoConfirmOpen ? (
+        <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-[#0B2A3D]/40 px-4 py-4 backdrop-blur-sm sm:items-center">
+          <Card className="w-full max-w-xl border-[#D8E8F0] bg-white p-6 text-[#0B1F33] shadow-2xl shadow-[#0B2A3D]/20 sm:p-8">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-semibold text-[#0E7490]">
+                  Confirm demo setup
+                </p>
+                <h3 className="mt-2 text-2xl font-semibold">
+                  Load sample data?
+                </h3>
+              </div>
+              <button
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-[#D8E8F0] text-sm font-semibold text-[#425B76] transition hover:bg-[#F3FAFD] hover:text-[#0B1F33]"
+                onClick={() => setDemoConfirmOpen(false)}
+                type="button"
+              >
+                X
+              </button>
+            </div>
+
+            <p className="mt-5 text-sm leading-6 text-[#425B76]">
+              This will add sample students, courses, payments, payment links,
+              cohorts, reminders, and automations to this workspace. Existing
+              demo records are checked first, so repeated loads will not create
+              duplicates.
+            </p>
+
+            {workspaceHasData ? (
+              <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-800">
+                This workspace already has data. Demo records will be added
+                alongside existing records and marked with sample/demo notes.
+              </div>
+            ) : null}
+
+            <div className="mt-7 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <Button
+                disabled={demoLoading}
+                onClick={() => setDemoConfirmOpen(false)}
+                type="button"
+                variant="secondary"
+              >
+                Cancel
+              </Button>
+              <Button
+                disabled={demoLoading}
+                onClick={handleLoadDemoData}
+                type="button"
+              >
+                {demoLoading ? "Loading..." : "Confirm and Load Demo Data"}
+              </Button>
+            </div>
+          </Card>
+        </div>
+      ) : null}
     </div>
   );
 }

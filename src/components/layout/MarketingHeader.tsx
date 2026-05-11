@@ -38,8 +38,8 @@ export function MarketingHeader() {
           </a>
         </nav>
 
-        <Button className="hidden sm:inline-flex" href="/app" size="sm">
-          View Platform
+        <Button className="hidden sm:inline-flex" href="/demo" size="sm">
+          Try Demo
         </Button>
       </div>
     </header>

@@ -71,11 +71,14 @@ export default function Home() {
               analytics &mdash; built for serious coaches and academies.
             </p>
             <div className="mt-10 flex flex-col gap-3 sm:flex-row">
-              <Button href="/signup" size="lg">
+              <Button href="/demo" size="lg">
+                Try Demo
+              </Button>
+              <Button href="/signup" size="lg" variant="secondary">
                 Start Building
               </Button>
               <Button href="/app" size="lg" variant="secondary">
-                View Platform
+                Open Platform
               </Button>
             </div>
           </div>
