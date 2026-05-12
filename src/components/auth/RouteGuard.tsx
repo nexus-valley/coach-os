@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { requireClientSession } from "@/src/lib/auth";
-import { getCurrentTenant } from "@/src/lib/tenant";
+import { createWorkspace, getCurrentTenant } from "@/src/lib/tenant";
 
 type RouteGuardProps = {
   children: React.ReactNode;
@@ -22,6 +22,9 @@ export function RouteGuard({ children, mode }: RouteGuardProps) {
     async function guardRoute() {
       try {
         const session = await requireClientSession();
+        const demoIntent =
+          typeof window !== "undefined" &&
+          new URLSearchParams(window.location.search).get("demo") === "1";
 
         if (!active) {
           return;
@@ -39,6 +42,22 @@ export function RouteGuard({ children, mode }: RouteGuardProps) {
         }
 
         if (mode === "app" && !tenant) {
+          if (demoIntent) {
+            setMessage("Preparing your demo workspace...");
+
+            await createWorkspace({
+              category: "Other",
+              name: "CoachOS Demo Workspace",
+            });
+
+            if (!active) {
+              return;
+            }
+
+            setAllowed(true);
+            return;
+          }
+
           router.replace("/onboarding");
           return;
         }

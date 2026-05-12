@@ -61,13 +61,16 @@ export async function signInWithGoogle(redirectPath = "/app") {
 
   const supabase = getSupabaseClient();
   const safeRedirectPath = getSafeInternalRedirectPath(redirectPath);
+  const redirectTo = `${window.location.origin}${safeRedirectPath}`;
 
   // Google consent screen app name/domain is configured in Google Cloud OAuth
   // consent screen and Supabase Auth settings.
+  // Demo OAuth redirect uses window.location.origin so production custom
+  // domains do not fall back to a Vercel preview URL.
   const { error } = await supabase.auth.signInWithOAuth({
     provider: "google",
     options: {
-      redirectTo: window.location.origin + safeRedirectPath,
+      redirectTo,
     },
   });
 

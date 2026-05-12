@@ -159,7 +159,7 @@ export function DashboardPageClient() {
       setDemoMessage(
         addedCount > 0
           ? `Demo data loaded. Added ${addedCount} sample records.`
-          : "Demo data is already loaded for this workspace.",
+          : "Demo data is already available in this workspace.",
       );
     } catch (caught) {
       setDemoError(getErrorMessage(caught, "Unable to load demo data."));
@@ -262,14 +262,17 @@ export function DashboardPageClient() {
             >
               {demoIntent ? "Demo mode" : "Demo readiness"}
             </Badge>
+            {demoIntent ? (
+              <span className="ml-3 inline-flex rounded-full border border-[#9ADDEA] bg-[#EAF8FC] px-3 py-1 text-xs font-semibold text-[#0B6F87]">
+                Demo version
+              </span>
+            ) : null}
             <h3 className="mt-4 text-xl font-semibold">
-              {demoIntent
-                ? "Demo mode: Load sample CoachOS data into this workspace."
-                : "Load a safe sample CoachOS workspace"}
+              {demoIntent ? "Demo Mode" : "Load a safe sample CoachOS workspace"}
             </h3>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-[#425B76]">
               {demoIntent
-                ? "You are signed in and ready to explore CoachOS. Owners and admins can load sample data here; staff users can view existing workspace data or ask an owner/admin to load the demo records."
+                ? "You are viewing a demo workspace. Sample data can be loaded to explore students, courses, payments, reports, reminders, and WhatsApp-ready workflows."
                 : "Add clearly marked demo students, courses, cohorts, payments, payment links, reminders, and automation rules to this workspace. This is tenant-scoped and does not run automatically."}
             </p>
           </div>
