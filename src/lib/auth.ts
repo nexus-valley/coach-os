@@ -79,6 +79,27 @@ export async function signInWithGoogle(redirectPath = "/app") {
   }
 }
 
+export async function signInWithGoogleForDemo() {
+  if (typeof window === "undefined") {
+    throw new Error("Google login is only available in the browser.");
+  }
+
+  // Demo OAuth redirect uses window.location.origin so production custom
+  // domains do not fall back to a Vercel preview URL.
+  const redirectTo = `${window.location.origin}/app?demo=1`;
+  const supabase = getSupabaseClient();
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: {
+      redirectTo,
+    },
+  });
+
+  if (error) {
+    throw error;
+  }
+}
+
 export async function requireClientSession() {
   const supabase = getSupabaseClient();
   const {

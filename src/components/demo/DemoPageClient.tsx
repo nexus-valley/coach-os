@@ -6,7 +6,8 @@ import { useEffect, useState } from "react";
 import { Badge } from "@/src/components/ui/Badge";
 import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
-import { requireClientSession, signInWithGoogle } from "@/src/lib/auth";
+import { requireClientSession, signInWithGoogleForDemo } from "@/src/lib/auth";
+import { getSupabaseClient } from "@/src/lib/supabaseClient";
 
 type DemoAccessState = "checking" | "guest";
 
@@ -41,6 +42,14 @@ export function DemoPageClient() {
 
   useEffect(() => {
     let active = true;
+    const supabase = getSupabaseClient();
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (active && session) {
+        router.replace("/app?demo=1");
+      }
+    });
 
     async function checkDemoAccess() {
       try {
@@ -67,6 +76,7 @@ export function DemoPageClient() {
 
     return () => {
       active = false;
+      subscription.unsubscribe();
     };
   }, [router]);
 
@@ -77,7 +87,7 @@ export function DemoPageClient() {
       setOauthLoading(true);
 
       try {
-        await signInWithGoogle("/app?demo=1");
+        await signInWithGoogleForDemo();
       } catch (caught) {
         setOauthLoading(false);
         setError(
