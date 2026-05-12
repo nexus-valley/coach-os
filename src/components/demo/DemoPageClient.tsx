@@ -1,14 +1,14 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { Badge } from "@/src/components/ui/Badge";
 import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
 import { requireClientSession, signInWithGoogle } from "@/src/lib/auth";
-import { getCurrentTenant } from "@/src/lib/tenant";
 
-type DemoAccessState = "checking" | "guest" | "needs-workspace" | "ready";
+type DemoAccessState = "checking" | "guest";
 
 const demoHighlights = [
   {
@@ -33,28 +33,8 @@ const demoHighlights = [
   },
 ];
 
-function getPrimaryAction(state: DemoAccessState) {
-  if (state === "ready") {
-    return {
-      href: "/app?demo=1",
-      label: "Open Demo Workspace",
-    };
-  }
-
-  if (state === "needs-workspace") {
-    return {
-      href: "/onboarding",
-      label: "Create Workspace First",
-    };
-  }
-
-  return {
-    href: "/login",
-    label: "Sign in with Google",
-  };
-}
-
 export function DemoPageClient() {
+  const router = useRouter();
   const [error, setError] = useState("");
   const [oauthLoading, setOauthLoading] = useState(false);
   const [state, setState] = useState<DemoAccessState>("checking");
@@ -75,13 +55,7 @@ export function DemoPageClient() {
           return;
         }
 
-        const tenant = await getCurrentTenant();
-
-        if (!active) {
-          return;
-        }
-
-        setState(tenant ? "ready" : "needs-workspace");
+        router.replace("/app?demo=1");
       } catch {
         if (active) {
           setState("guest");
@@ -94,9 +68,7 @@ export function DemoPageClient() {
     return () => {
       active = false;
     };
-  }, []);
-
-  const primaryAction = getPrimaryAction(state);
+  }, [router]);
 
   async function handlePrimaryAction() {
     setError("");
@@ -135,24 +107,18 @@ export function DemoPageClient() {
           </p>
 
           <div className="mt-9 flex flex-col gap-3 sm:flex-row">
-            {state === "guest" ? (
-              <Button
-                disabled={oauthLoading}
-                onClick={handlePrimaryAction}
-                size="lg"
-                type="button"
-              >
-                {oauthLoading ? "Redirecting..." : "Sign in and Open Demo"}
-              </Button>
-            ) : (
-              <Button
-                disabled={state === "checking"}
-                href={state === "checking" ? undefined : primaryAction.href}
-                size="lg"
-              >
-                {state === "checking" ? "Checking access..." : primaryAction.label}
-              </Button>
-            )}
+            <Button
+              disabled={state === "checking" || oauthLoading}
+              onClick={handlePrimaryAction}
+              size="lg"
+              type="button"
+            >
+              {state === "checking"
+                ? "Checking access..."
+                : oauthLoading
+                  ? "Redirecting..."
+                  : "Sign in with Google to Try Demo"}
+            </Button>
             <a
               className="inline-flex h-12 items-center justify-center rounded-full border border-[#D8E8F0] bg-white px-6 text-base font-semibold text-[#0B2A3D] shadow-sm transition hover:-translate-y-0.5 hover:border-[#2ECBEA]/60 hover:bg-[#F3FAFD]"
               href="https://wa.me/917338841434"
@@ -170,8 +136,8 @@ export function DemoPageClient() {
           ) : null}
 
           <p className="mt-5 text-sm leading-6 text-[#66788F]">
-            Google may show the Supabase authentication domain during sign-in.
-            You will be redirected back to CoachOS after authentication.
+            After signing in, you&apos;ll be taken directly into the CoachOS app
+            demo.
           </p>
         </div>
 
