@@ -26,7 +26,7 @@ export function AuthCard({
         <section className="hidden lg:block">
           <div className="max-w-xl">
             <CoachOSLogo
-              className="h-16 w-56 rounded-3xl shadow-lg shadow-black/20"
+              className="h-16 w-56"
               variant="full"
             />
             <h1 className="mt-10 text-5xl font-semibold leading-tight tracking-normal">

@@ -17,8 +17,8 @@ export const metadata: Metadata = {
   description:
     "Manage students, cohorts, payments, certificates, reminders, and WhatsApp-ready workflows from one platform.",
   icons: {
-    apple: "/brand/coachos-master.png",
-    icon: "/brand/coachos-master.png",
+    apple: "/brand/coachos-icon.png",
+    icon: "/brand/coachos-icon.png",
   },
 };
 

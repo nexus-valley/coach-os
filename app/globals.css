@@ -33,14 +33,18 @@ html {
   scroll-behavior: smooth;
 }
 
-@keyframes coachos-logo-spin {
+@keyframes coachosSpin {
+  from {
+    transform: rotate(0deg);
+  }
+
   to {
     transform: rotate(360deg);
   }
 }
 
-.coachos-logo-spin {
-  animation: coachos-logo-spin 1.5s linear infinite;
+.coachos-spin {
+  animation: coachosSpin 1.4s linear infinite;
 }
 
 .coachos-light {
