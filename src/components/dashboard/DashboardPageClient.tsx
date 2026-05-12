@@ -64,6 +64,11 @@ export function DashboardPageClient() {
   const [currentRole, setCurrentRole] = useState<MemberRole | null>(null);
   const [demoConfirmOpen, setDemoConfirmOpen] = useState(false);
   const [demoError, setDemoError] = useState("");
+  const [demoIntent] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      new URLSearchParams(window.location.search).get("demo") === "1",
+  );
   const [demoLoading, setDemoLoading] = useState(false);
   const [demoMessage, setDemoMessage] = useState("");
   const [error, setError] = useState("");
@@ -267,16 +272,24 @@ export function DashboardPageClient() {
       <Card className="mt-6 border-[#D8E8F0] bg-white p-6 text-[#0B1F33] shadow-2xl shadow-[#0B2A3D]/10">
         <div className="grid gap-5 lg:grid-cols-[1fr_auto] lg:items-center">
           <div>
-            <Badge className="border-[#9ADDEA] bg-[#EAF8FC] text-[#0B6F87]">
-              Demo readiness
+            <Badge
+              className={
+                demoIntent
+                  ? "border-[#9ADDEA] bg-[#EAF8FC] text-[#0B6F87]"
+                  : "border-[#D8E8F0] bg-[#F6FBFE] text-[#425B76]"
+              }
+            >
+              {demoIntent ? "Demo mode" : "Demo readiness"}
             </Badge>
             <h3 className="mt-4 text-xl font-semibold">
-              Load a safe sample CoachOS workspace
+              {demoIntent
+                ? "Demo mode: Load sample CoachOS data into this workspace."
+                : "Load a safe sample CoachOS workspace"}
             </h3>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-[#425B76]">
-              Add clearly marked demo students, courses, cohorts, payments,
-              payment links, reminders, and automation rules to this workspace.
-              This is tenant-scoped and does not run automatically.
+              {demoIntent
+                ? "You are signed in and ready to explore CoachOS. Owners and admins can load sample data here; staff users can view existing workspace data or ask an owner/admin to load the demo records."
+                : "Add clearly marked demo students, courses, cohorts, payments, payment links, reminders, and automation rules to this workspace. This is tenant-scoped and does not run automatically."}
             </p>
           </div>
           {canLoadDemo ? (

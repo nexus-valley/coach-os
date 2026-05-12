@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { Badge } from "@/src/components/ui/Badge";
 import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
-import { requireClientSession } from "@/src/lib/auth";
+import { requireClientSession, signInWithGoogle } from "@/src/lib/auth";
 import { getCurrentTenant } from "@/src/lib/tenant";
 
 type DemoAccessState = "checking" | "guest" | "needs-workspace" | "ready";
@@ -36,7 +36,7 @@ const demoHighlights = [
 function getPrimaryAction(state: DemoAccessState) {
   if (state === "ready") {
     return {
-      href: "/app",
+      href: "/app?demo=1",
       label: "Open Demo Workspace",
     };
   }
@@ -55,6 +55,8 @@ function getPrimaryAction(state: DemoAccessState) {
 }
 
 export function DemoPageClient() {
+  const [error, setError] = useState("");
+  const [oauthLoading, setOauthLoading] = useState(false);
   const [state, setState] = useState<DemoAccessState>("checking");
 
   useEffect(() => {
@@ -96,6 +98,25 @@ export function DemoPageClient() {
 
   const primaryAction = getPrimaryAction(state);
 
+  async function handlePrimaryAction() {
+    setError("");
+
+    if (state === "guest") {
+      setOauthLoading(true);
+
+      try {
+        await signInWithGoogle("/app?demo=1");
+      } catch (caught) {
+        setOauthLoading(false);
+        setError(
+          caught instanceof Error
+            ? caught.message
+            : "Unable to continue with Google. Please try again.",
+        );
+      }
+    }
+  }
+
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top_right,rgba(46,203,234,0.18),transparent_30rem),linear-gradient(135deg,#F3FAFD_0%,#FFFFFF_48%,#EAF7FC_100%)] text-[#0B1F33]">
       <section className="mx-auto grid min-h-[calc(100vh-5rem)] max-w-7xl items-center gap-10 px-5 py-16 sm:px-6 lg:grid-cols-[0.92fr_1.08fr] lg:px-8">
@@ -114,13 +135,24 @@ export function DemoPageClient() {
           </p>
 
           <div className="mt-9 flex flex-col gap-3 sm:flex-row">
-            <Button
-              disabled={state === "checking"}
-              href={state === "checking" ? undefined : primaryAction.href}
-              size="lg"
-            >
-              {state === "checking" ? "Checking access..." : primaryAction.label}
-            </Button>
+            {state === "guest" ? (
+              <Button
+                disabled={oauthLoading}
+                onClick={handlePrimaryAction}
+                size="lg"
+                type="button"
+              >
+                {oauthLoading ? "Redirecting..." : "Sign in and Open Demo"}
+              </Button>
+            ) : (
+              <Button
+                disabled={state === "checking"}
+                href={state === "checking" ? undefined : primaryAction.href}
+                size="lg"
+              >
+                {state === "checking" ? "Checking access..." : primaryAction.label}
+              </Button>
+            )}
             <a
               className="inline-flex h-12 items-center justify-center rounded-full border border-[#D8E8F0] bg-white px-6 text-base font-semibold text-[#0B2A3D] shadow-sm transition hover:-translate-y-0.5 hover:border-[#2ECBEA]/60 hover:bg-[#F3FAFD]"
               href="https://wa.me/917338841434"
@@ -131,9 +163,15 @@ export function DemoPageClient() {
             </a>
           </div>
 
+          {error ? (
+            <div className="mt-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {error}
+            </div>
+          ) : null}
+
           <p className="mt-5 text-sm leading-6 text-[#66788F]">
-            If you are not signed in, use Google login first. CoachOS keeps the
-            regular Supabase authentication and tenant isolation flow intact.
+            Google may show the Supabase authentication domain during sign-in.
+            You will be redirected back to CoachOS after authentication.
           </p>
         </div>
 

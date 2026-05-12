@@ -46,16 +46,28 @@ export async function signUpWithPassword(params: {
   return data.user;
 }
 
-export async function signInWithGoogle() {
+function getSafeInternalRedirectPath(path?: string) {
+  if (!path || !path.startsWith("/") || path.startsWith("//")) {
+    return "/app";
+  }
+
+  return path;
+}
+
+export async function signInWithGoogle(redirectPath = "/app") {
   if (typeof window === "undefined") {
     throw new Error("Google login is only available in the browser.");
   }
 
   const supabase = getSupabaseClient();
+  const safeRedirectPath = getSafeInternalRedirectPath(redirectPath);
+
+  // Google consent screen app name/domain is configured in Google Cloud OAuth
+  // consent screen and Supabase Auth settings.
   const { error } = await supabase.auth.signInWithOAuth({
     provider: "google",
     options: {
-      redirectTo: window.location.origin + "/app",
+      redirectTo: window.location.origin + safeRedirectPath,
     },
   });
 
