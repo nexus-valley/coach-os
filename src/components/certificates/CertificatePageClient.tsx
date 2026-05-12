@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { CoachOSLogo } from "@/src/components/branding/CoachOSLogo";
 import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
 import {
@@ -188,7 +189,9 @@ export function CertificatePageClient({
                 className="mb-6 h-16 w-16 rounded-2xl object-contain"
                 src={tenantSettings.logo_url}
               />
-            ) : null}
+            ) : (
+              <CoachOSLogo className="mb-6 h-14 w-48" variant="full" />
+            )}
             <p
               className="text-sm font-semibold uppercase tracking-[0.35em]"
               style={{ color: brandColor }}

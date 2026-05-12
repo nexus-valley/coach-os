@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { CoachOSLogo } from "@/src/components/branding/CoachOSLogo";
 import { PaymentStatusBadge } from "@/src/components/payments/PaymentStatusBadge";
 import { Badge } from "@/src/components/ui/Badge";
 import { Button } from "@/src/components/ui/Button";
@@ -205,7 +206,9 @@ export function ReceiptPageClient({ paymentId }: ReceiptPageClientProps) {
                   className="h-14 w-14 rounded-2xl object-contain"
                   src={tenantSettings.logo_url}
                 />
-              ) : null}
+              ) : (
+                <CoachOSLogo className="h-14 w-14" variant="icon" />
+              )}
               <div>
                 <p
                   className="text-sm font-semibold uppercase tracking-[0.22em] print:text-slate-600"
@@ -217,7 +220,7 @@ export function ReceiptPageClient({ paymentId }: ReceiptPageClientProps) {
                   Receipt
                 </h1>
                 <p className="mt-3 text-sm text-[#5D7185] print:text-slate-600">
-                  Nexus Valley CoachOS
+                  CoachOS by Nexus Valley
                 </p>
               </div>
             </div>

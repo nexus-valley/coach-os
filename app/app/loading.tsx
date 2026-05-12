@@ -1,33 +1,18 @@
+import { CoachOSLogo } from "@/src/components/branding/CoachOSLogo";
+
 export default function AppLoading() {
   return (
-    <main className="min-h-screen bg-[#F3FAFD] px-5 py-6 text-[#0B2A3D] sm:px-6 lg:px-8 lg:py-8">
-      <div className="mx-auto max-w-7xl">
-        <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
-          <div>
-            <div className="h-8 w-32 animate-pulse rounded-full bg-[#D8E8F0]" />
-            <div className="mt-5 h-10 w-64 animate-pulse rounded-2xl bg-[#D8E8F0]" />
-            <div className="mt-4 h-5 w-full max-w-xl animate-pulse rounded-full bg-[#D8E8F0]" />
-          </div>
-          <div className="h-10 w-40 animate-pulse rounded-full bg-[#2ECBEA]/30" />
-        </div>
-
-        <section className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {[0, 1, 2, 3].map((item) => (
-            <div
-              className="h-36 animate-pulse rounded-[2rem] border border-[#D8E8F0] bg-white"
-              key={item}
-            />
-          ))}
-        </section>
-
-        <section className="mt-6 grid gap-6 xl:grid-cols-2">
-          {[0, 1].map((item) => (
-            <div
-              className="h-80 animate-pulse rounded-[2rem] border border-[#D8E8F0] bg-white"
-              key={item}
-            />
-          ))}
-        </section>
+    <main className="flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_top_right,rgba(46,203,234,0.22),transparent_30rem),linear-gradient(135deg,#F3FAFD_0%,#FFFFFF_52%,#EAF7FC_100%)] px-5 text-[#0B1F33]">
+      <div className="w-full max-w-md rounded-3xl border border-[#D8E8F0] bg-white p-8 text-center shadow-2xl shadow-[#0B2A3D]/10">
+        <CoachOSLogo
+          className="mx-auto h-16 w-16 rounded-full"
+          label="Loading CoachOS"
+          variant="spinner"
+        />
+        <h1 className="mt-6 text-xl font-semibold">Loading CoachOS</h1>
+        <p className="mt-2 text-sm leading-6 text-[#425B76]">
+          Preparing your workspace...
+        </p>
       </div>
     </main>
   );

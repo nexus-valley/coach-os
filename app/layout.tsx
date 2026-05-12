@@ -13,9 +13,13 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Nexus Valley CoachOS",
+  title: "CoachOS | Coaching Business Platform",
   description:
-    "A premium operating system for serious coaches and academies.",
+    "Manage students, cohorts, payments, certificates, reminders, and WhatsApp-ready workflows from one platform.",
+  icons: {
+    apple: "/brand/coachos-master.png",
+    icon: "/brand/coachos-master.png",
+  },
 };
 
 export default function RootLayout({

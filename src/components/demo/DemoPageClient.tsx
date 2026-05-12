@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { CoachOSLogo } from "@/src/components/branding/CoachOSLogo";
 import { Badge } from "@/src/components/ui/Badge";
 import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
@@ -103,6 +104,7 @@ export function DemoPageClient() {
     <main className="min-h-screen bg-[radial-gradient(circle_at_top_right,rgba(46,203,234,0.18),transparent_30rem),linear-gradient(135deg,#F3FAFD_0%,#FFFFFF_48%,#EAF7FC_100%)] text-[#0B1F33]">
       <section className="mx-auto grid min-h-[calc(100vh-5rem)] max-w-7xl items-center gap-10 px-5 py-16 sm:px-6 lg:grid-cols-[0.92fr_1.08fr] lg:px-8">
         <div>
+          <CoachOSLogo className="mb-8 h-14 w-48 sm:h-16 sm:w-56" variant="full" />
           <Badge className="border-[#9ADDEA] bg-[#EAF8FC] text-[#0B6F87]">
             Demo workspace
           </Badge>

@@ -33,6 +33,16 @@ html {
   scroll-behavior: smooth;
 }
 
+@keyframes coachos-logo-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.coachos-logo-spin {
+  animation: coachos-logo-spin 1.5s linear infinite;
+}
+
 .coachos-light {
   background:
     radial-gradient(circle at top right, rgba(46, 203, 234, 0.2), transparent 28rem),

@@ -1,5 +1,7 @@
 import Link from "next/link";
 
+import { CoachOSLogo } from "@/src/components/branding/CoachOSLogo";
+
 type AuthCardProps = {
   children: React.ReactNode;
   eyebrow: string;
@@ -23,15 +25,10 @@ export function AuthCard({
       <div className="relative mx-auto grid min-h-screen max-w-7xl items-center gap-10 px-5 py-10 sm:px-6 lg:grid-cols-[0.9fr_1.1fr] lg:px-8">
         <section className="hidden lg:block">
           <div className="max-w-xl">
-            <div className="flex items-center gap-3">
-              <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-sm font-bold text-zinc-950">
-                NV
-              </span>
-              <div>
-                <p className="font-semibold text-white">Nexus Valley</p>
-                <p className="text-sm text-zinc-400">CoachOS</p>
-              </div>
-            </div>
+            <CoachOSLogo
+              className="h-16 w-56 rounded-3xl shadow-lg shadow-black/20"
+              variant="full"
+            />
             <h1 className="mt-10 text-5xl font-semibold leading-tight tracking-normal">
               Premium workspace infrastructure for modern coaching teams.
             </h1>

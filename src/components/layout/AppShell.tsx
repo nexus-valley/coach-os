@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 
+import { CoachOSLogo } from "@/src/components/branding/CoachOSLogo";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 import { getCurrentMemberRole, type MemberRole } from "@/src/lib/team";
 import { getCurrentTenant } from "@/src/lib/tenant";
@@ -202,12 +203,10 @@ export function AppShell({ activeItem = "Dashboard", children }: AppShellProps) 
       <div className="relative flex h-screen overflow-hidden">
         <aside className="coachos-sidebar hidden h-screen w-72 shrink-0 overflow-y-auto border-r border-[#2ECBEA]/20 bg-[linear-gradient(180deg,#0B2A3D_0%,#145DA0_100%)] px-4 py-5 text-white shadow-2xl shadow-[#0B2A3D]/20 lg:block">
           <Link className="flex items-center gap-3 px-2" href="/app">
-            <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#2ECBEA] text-sm font-bold text-[#0B2A3D] shadow-lg shadow-cyan-950/20">
-              CO
-            </span>
+            <CoachOSLogo className="h-11 w-11" variant="icon" />
             <div>
               <p className="text-base font-semibold">CoachOS</p>
-              <p className="text-xs text-cyan-100/80">Nexus Valley</p>
+              <p className="text-xs text-cyan-100/80">by Nexus Valley</p>
             </div>
           </Link>
 
@@ -256,13 +255,16 @@ export function AppShell({ activeItem = "Dashboard", children }: AppShellProps) 
         <div className="flex h-screen min-w-0 flex-1 flex-col overflow-y-auto pb-24 lg:pb-0">
           <header className="sticky top-0 z-20 border-b border-[#D8E8F0] bg-white/80 text-[#0B2A3D] shadow-sm shadow-[#0B2A3D]/5 backdrop-blur-xl">
             <div className="flex h-20 items-center justify-between px-5 sm:px-6 lg:px-8">
-              <div>
-                <p className="text-xs font-semibold text-[#5D7185]">
-                  Nexus Valley
-                </p>
-                <h1 className="mt-1 text-xl font-semibold text-[#0B2A3D]">
-                  CoachOS
-                </h1>
+              <div className="flex items-center gap-3">
+                <CoachOSLogo className="h-10 w-10 lg:hidden" variant="icon" />
+                <div>
+                  <p className="text-xs font-semibold text-[#5D7185]">
+                    by Nexus Valley
+                  </p>
+                  <h1 className="mt-1 text-xl font-semibold text-[#0B2A3D]">
+                    CoachOS
+                  </h1>
+                </div>
               </div>
               <div
                 className="hidden items-center gap-3 rounded-full border border-[#9ADDEA] bg-[#EAF8FC] px-4 py-2 text-sm font-semibold text-[#0B2A3D] shadow-sm shadow-[#0B2A3D]/5 sm:flex"
