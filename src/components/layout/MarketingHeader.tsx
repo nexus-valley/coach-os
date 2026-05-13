@@ -32,9 +32,14 @@ export function MarketingHeader() {
           </a>
         </nav>
 
-        <Button className="hidden sm:inline-flex" href="/demo" size="sm">
-          Try Demo
-        </Button>
+        <div className="hidden items-center gap-3 sm:flex">
+          <Button href="/demo" size="sm">
+            Try Demo
+          </Button>
+          <Button href="#contact" size="sm" variant="secondary">
+            Contact
+          </Button>
+        </div>
       </div>
     </header>
   );

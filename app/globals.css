@@ -47,6 +47,21 @@ html {
   animation: coachosSpin 1.4s linear infinite;
 }
 
+@keyframes coachosFloat {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.coachos-float {
+  animation: coachosFloat 7s ease-in-out infinite;
+}
+
 .coachos-light {
   background:
     radial-gradient(circle at top right, rgba(46, 203, 234, 0.2), transparent 28rem),
