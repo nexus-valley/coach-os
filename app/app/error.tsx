@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 
-import { CoachOSLogo } from "@/src/components/branding/CoachOSLogo";
+import { CoachOSBrandAsset } from "@/src/components/branding/CoachOSBrandAsset";
 
 type AppErrorProps = {
   error: Error & { digest?: string };
@@ -13,7 +13,7 @@ export default function AppError({ reset }: AppErrorProps) {
   return (
     <main className="flex min-h-screen items-center justify-center bg-[#F3FAFD] px-5 text-[#0B2A3D]">
       <div className="w-full max-w-2xl rounded-[2rem] border border-[#D8E8F0] bg-white p-8 text-center shadow-2xl shadow-[#0B2A3D]/10">
-        <CoachOSLogo className="mx-auto h-14 w-14" variant="icon" />
+        <CoachOSBrandAsset className="mx-auto h-14 w-14" variant="appIcon" />
         <p className="mt-6 text-sm font-semibold uppercase tracking-[0.22em] text-[#145DA0]">
           Workspace interrupted
         </p>

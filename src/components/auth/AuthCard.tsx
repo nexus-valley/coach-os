@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { CoachOSLogo } from "@/src/components/branding/CoachOSLogo";
+import { CoachOSBrandAsset } from "@/src/components/branding/CoachOSBrandAsset";
 
 type AuthCardProps = {
   children: React.ReactNode;
@@ -25,9 +25,9 @@ export function AuthCard({
       <div className="relative mx-auto grid min-h-screen max-w-7xl items-center gap-10 px-5 py-10 sm:px-6 lg:grid-cols-[0.9fr_1.1fr] lg:px-8">
         <section className="hidden lg:block">
           <div className="max-w-xl">
-            <CoachOSLogo
-              className="h-16 w-56"
-              variant="full"
+            <CoachOSBrandAsset
+              className="h-20 w-72"
+              variant="fullLogo"
             />
             <h1 className="mt-10 text-5xl font-semibold leading-tight tracking-normal">
               Premium workspace infrastructure for modern coaching teams.

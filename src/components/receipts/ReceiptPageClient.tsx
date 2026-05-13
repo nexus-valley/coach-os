@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
-import { CoachOSLogo } from "@/src/components/branding/CoachOSLogo";
+import { CoachOSBrandAsset } from "@/src/components/branding/CoachOSBrandAsset";
 import { PaymentStatusBadge } from "@/src/components/payments/PaymentStatusBadge";
 import { Badge } from "@/src/components/ui/Badge";
 import { Button } from "@/src/components/ui/Button";
@@ -207,7 +207,7 @@ export function ReceiptPageClient({ paymentId }: ReceiptPageClientProps) {
                   src={tenantSettings.logo_url}
                 />
               ) : (
-                <CoachOSLogo className="h-14 w-14" variant="icon" />
+                <CoachOSBrandAsset className="h-14 w-14" variant="appIcon" />
               )}
               <div>
                 <p
