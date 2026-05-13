@@ -15,10 +15,11 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "CoachOS | Coaching Business Platform",
   description:
-    "Manage students, cohorts, payments, certificates, reminders, and WhatsApp-ready workflows from one platform.",
+    "Manage students, courses, cohorts, payments, certificates, reminders, and WhatsApp-ready workflows from one platform.",
   icons: {
-    apple: "/brand/coachos-master.png",
-    icon: "/brand/coachos-master.png",
+    apple: "/brand/coachos-favicon.png",
+    icon: "/brand/coachos-favicon.png",
+    shortcut: "/brand/coachos-favicon.png",
   },
 };
 
