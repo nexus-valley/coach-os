@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 
-import { CoachOSBrandAsset } from "@/src/components/branding/CoachOSBrandAsset";
+import { CoachFortBrandAsset } from "@/src/components/branding/CoachFortBrandAsset";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 import { getCurrentMemberRole, type MemberRole } from "@/src/lib/team";
 import { getCurrentTenant } from "@/src/lib/tenant";
@@ -203,9 +203,9 @@ export function AppShell({ activeItem = "Dashboard", children }: AppShellProps) 
       <div className="relative flex h-screen overflow-hidden">
         <aside className="coachos-sidebar hidden h-screen w-72 shrink-0 overflow-y-auto border-r border-[#2ECBEA]/20 bg-[linear-gradient(180deg,#0B2A3D_0%,#145DA0_100%)] px-4 py-5 text-white shadow-2xl shadow-[#0B2A3D]/20 lg:block">
           <Link className="flex items-center gap-3 px-2" href="/app">
-            <CoachOSBrandAsset className="h-11 w-11" variant="appIcon" />
+            <CoachFortBrandAsset className="h-11 w-11" variant="appIcon" />
             <div>
-              <p className="text-base font-semibold">CoachOS</p>
+              <p className="text-base font-semibold">CoachFort</p>
               <p className="text-xs text-cyan-100/80">by Nexus Valley</p>
             </div>
           </Link>
@@ -256,7 +256,7 @@ export function AppShell({ activeItem = "Dashboard", children }: AppShellProps) 
           <header className="sticky top-0 z-20 border-b border-[#D8E8F0] bg-white/80 text-[#0B2A3D] shadow-sm shadow-[#0B2A3D]/5 backdrop-blur-xl">
             <div className="flex h-20 items-center justify-between px-5 sm:px-6 lg:px-8">
               <div className="flex items-center gap-3">
-                <CoachOSBrandAsset
+                <CoachFortBrandAsset
                   className="h-10 w-10 lg:hidden"
                   variant="appIcon"
                 />
@@ -265,7 +265,7 @@ export function AppShell({ activeItem = "Dashboard", children }: AppShellProps) 
                     by Nexus Valley
                   </p>
                   <h1 className="mt-1 text-xl font-semibold text-[#0B2A3D]">
-                    CoachOS
+                    CoachFort
                   </h1>
                 </div>
               </div>

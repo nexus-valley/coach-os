@@ -28,7 +28,7 @@ const plans: {
   target: string;
 }[] = [
   {
-    description: "Core workspace for testing CoachOS with a small audience.",
+    description: "Core workspace for testing CoachFort with a small audience.",
     plan: "free",
     target: "Solo coach validating a new offer",
   },

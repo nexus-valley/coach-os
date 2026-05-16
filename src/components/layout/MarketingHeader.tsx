@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { CoachOSBrandAsset } from "@/src/components/branding/CoachOSBrandAsset";
+import { CoachFortBrandAsset } from "@/src/components/branding/CoachFortBrandAsset";
 import { Button } from "@/src/components/ui/Button";
 
 export function MarketingHeader() {
@@ -8,7 +8,7 @@ export function MarketingHeader() {
     <header className="sticky top-0 z-30 border-b border-white/70 bg-white/80 backdrop-blur-xl">
       <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-5 sm:px-6 lg:px-8">
         <Link className="flex items-center gap-3" href="/">
-          <CoachOSBrandAsset
+          <CoachFortBrandAsset
             className="h-14 w-48 sm:h-16 sm:w-56"
             variant="fullLogo"
           />
@@ -21,8 +21,8 @@ export function MarketingHeader() {
           <a className="transition hover:text-zinc-950" href="#features">
             Features
           </a>
-          <a className="transition hover:text-zinc-950" href="#why-coachos">
-            Why CoachOS
+          <a className="transition hover:text-zinc-950" href="#why-coachfort">
+            Why CoachFort
           </a>
           <a className="transition hover:text-zinc-950" href="#about">
             About Us

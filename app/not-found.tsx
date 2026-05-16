@@ -11,7 +11,7 @@ export default function NotFound() {
           Page not found
         </p>
         <h1 className="mt-4 text-3xl font-semibold tracking-normal">
-          This CoachOS page does not exist.
+          This CoachFort page does not exist.
         </h1>
         <p className="mx-auto mt-4 max-w-xl text-sm leading-6 text-[#5D7185]">
           The route may have moved, or the link may be incomplete.

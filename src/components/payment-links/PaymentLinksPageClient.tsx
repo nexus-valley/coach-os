@@ -414,7 +414,7 @@ export function PaymentLinksPageClient() {
     form.paymentUrl.trim() ||
     (Number(form.amount) > 0
       ? buildManualUpiPaymentUrl(Number(form.amount))
-      : "upi://pay?pa=YOUR_UPI_ID&pn=CoachOS&am=AMOUNT&cu=INR");
+      : "upi://pay?pa=YOUR_UPI_ID&pn=CoachFort&am=AMOUNT&cu=INR");
 
   function getPaymentLinkShareUrl(link: PaymentLinkWithRelations) {
     const message = buildPaymentReminderMessage({
@@ -422,7 +422,7 @@ export function PaymentLinksPageClient() {
       courseName: link.course?.title,
       paymentUrl: link.payment_url,
       studentName: link.student?.full_name,
-      workspaceName: tenant?.name ?? "CoachOS",
+      workspaceName: tenant?.name ?? "CoachFort",
     });
 
     return buildWhatsAppShareUrl(link.student?.phone, message);

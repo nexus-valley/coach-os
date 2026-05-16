@@ -8,7 +8,7 @@ export default function SignupPage() {
       footerHref="/login"
       footerLabel="Login"
       footerText="Already have an account?"
-      title="Create your CoachOS account"
+      title="Create your CoachFort account"
     >
       <SignupForm />
     </AuthCard>

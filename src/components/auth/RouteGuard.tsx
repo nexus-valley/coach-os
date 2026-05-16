@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
-import { CoachOSBrandAsset } from "@/src/components/branding/CoachOSBrandAsset";
+import { CoachFortBrandAsset } from "@/src/components/branding/CoachFortBrandAsset";
 import { requireClientSession } from "@/src/lib/auth";
 import { createWorkspace, getCurrentTenant } from "@/src/lib/tenant";
 
@@ -48,7 +48,7 @@ export function RouteGuard({ children, mode }: RouteGuardProps) {
 
             await createWorkspace({
               category: "Other",
-              name: "CoachOS Demo Workspace",
+              name: "CoachFort Demo Workspace",
             });
 
             if (!active) {
@@ -90,12 +90,12 @@ export function RouteGuard({ children, mode }: RouteGuardProps) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_top_right,rgba(46,203,234,0.22),transparent_30rem),linear-gradient(135deg,#F3FAFD_0%,#FFFFFF_52%,#EAF7FC_100%)] px-5 text-[#0B1F33]">
         <div className="rounded-3xl border border-[#D8E8F0] bg-white p-8 text-center shadow-2xl shadow-[#0B2A3D]/10">
-          <CoachOSBrandAsset
-            alt="Loading CoachOS"
+          <CoachFortBrandAsset
+            alt="Loading CoachFort"
             className="mx-auto h-16 w-16"
             variant="spinner"
           />
-          <h1 className="mt-6 text-xl font-semibold">Loading CoachOS</h1>
+          <h1 className="mt-6 text-xl font-semibold">Loading CoachFort</h1>
           <p className="mt-2 text-sm font-medium text-[#425B76]">
             {message === "Checking your secure session..."
               ? "Preparing your workspace..."

@@ -1,9 +1,9 @@
-import { CoachOSBrandAsset } from "@/src/components/branding/CoachOSBrandAsset";
+import { CoachFortBrandAsset } from "@/src/components/branding/CoachFortBrandAsset";
 
 const quickLinks = [
   ["Platform", "#platform"],
   ["Features", "#features"],
-  ["Why CoachOS", "#why-coachos"],
+  ["Why CoachFort", "#why-coachfort"],
   ["About", "#about"],
   ["Contact", "#contact"],
 ];
@@ -13,9 +13,9 @@ export function MarketingFooter() {
     <footer className="border-t border-[#D8E8F0] bg-white">
       <div className="mx-auto grid max-w-7xl gap-10 px-5 py-12 text-sm sm:px-6 md:grid-cols-[1.3fr_0.8fr_1fr] lg:px-8">
         <div>
-          <CoachOSBrandAsset className="h-12 w-44" variant="fullLogo" />
+          <CoachFortBrandAsset className="h-12 w-44" variant="fullLogo" />
           <p className="mt-5 max-w-md leading-7 text-[#425B76]">
-            CoachOS is built by Nexus Valley Technologies to help coaches,
+            CoachFort is built by Nexus Valley Technologies to help coaches,
             trainers, and academies manage students, courses, payments,
             reminders, and growth workflows from one clean platform.
           </p>

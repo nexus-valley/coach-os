@@ -1,42 +1,42 @@
 import type { CSSProperties } from "react";
 
-type CoachOSBrandAssetVariant = "appIcon" | "fullLogo" | "spinner";
+type CoachFortBrandAssetVariant = "appIcon" | "fullLogo" | "spinner";
 
-type CoachOSBrandAssetProps = {
+type CoachFortBrandAssetProps = {
   alt?: string;
   className?: string;
-  variant: CoachOSBrandAssetVariant;
+  variant: CoachFortBrandAssetVariant;
 };
 
-const defaultClasses: Record<CoachOSBrandAssetVariant, string> = {
+const defaultClasses: Record<CoachFortBrandAssetVariant, string> = {
   appIcon: "h-11 w-11 rounded-2xl",
   fullLogo: "h-16 w-56",
   spinner: "h-16 w-16 rounded-full coachos-spin",
 };
 
-const imageStyles: Record<CoachOSBrandAssetVariant, CSSProperties> = {
+const imageStyles: Record<CoachFortBrandAssetVariant, CSSProperties> = {
   fullLogo: {
     left: "-4%",
-    top: "-17%",
+    top: "-48%",
     width: "108%",
   },
   appIcon: {
-    left: "-27%",
-    top: "-175%",
-    width: "310%",
+    left: "-22%",
+    top: "-170%",
+    width: "300%",
   },
   spinner: {
-    left: "-210%",
-    top: "-211%",
-    width: "358%",
+    left: "-513%",
+    top: "-432%",
+    width: "672%",
   },
 };
 
-export function CoachOSBrandAsset({
-  alt = "CoachOS",
+export function CoachFortBrandAsset({
+  alt = "CoachFort",
   className = "",
   variant,
-}: CoachOSBrandAssetProps) {
+}: CoachFortBrandAssetProps) {
   return (
     <span
       className={[
@@ -52,7 +52,7 @@ export function CoachOSBrandAsset({
         alt={alt}
         className="absolute h-auto max-w-none select-none"
         draggable={false}
-        src="/brand/coachos-master.png"
+        src="/brand/coachfort-master.png"
         style={imageStyles[variant]}
       />
     </span>

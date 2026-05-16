@@ -13,13 +13,14 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "CoachOS | Coaching Business Platform",
+  metadataBase: new URL("https://coachfort.com"),
+  title: "CoachFort | Coaching Business Platform",
   description:
     "Manage students, courses, cohorts, payments, certificates, reminders, and WhatsApp-ready workflows from one platform.",
   icons: {
-    apple: "/brand/coachos-favicon.png",
-    icon: "/brand/coachos-favicon.png",
-    shortcut: "/brand/coachos-favicon.png",
+    apple: "/brand/coachfort-master.png",
+    icon: "/brand/coachfort-master.png",
+    shortcut: "/brand/coachfort-master.png",
   },
 };
 

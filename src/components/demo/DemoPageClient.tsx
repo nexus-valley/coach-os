@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
-import { CoachOSBrandAsset } from "@/src/components/branding/CoachOSBrandAsset";
+import { CoachFortBrandAsset } from "@/src/components/branding/CoachFortBrandAsset";
 import { Badge } from "@/src/components/ui/Badge";
 import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
@@ -104,7 +104,7 @@ export function DemoPageClient() {
     <main className="min-h-screen bg-[radial-gradient(circle_at_top_right,rgba(46,203,234,0.18),transparent_30rem),linear-gradient(135deg,#F3FAFD_0%,#FFFFFF_48%,#EAF7FC_100%)] text-[#0B1F33]">
       <section className="mx-auto grid min-h-[calc(100vh-5rem)] max-w-7xl items-center gap-10 px-5 py-16 sm:px-6 lg:grid-cols-[0.92fr_1.08fr] lg:px-8">
         <div>
-          <CoachOSBrandAsset
+          <CoachFortBrandAsset
             className="mb-8 h-16 w-56 sm:h-20 sm:w-72"
             variant="fullLogo"
           />
@@ -112,10 +112,10 @@ export function DemoPageClient() {
             Demo workspace
           </Badge>
           <h1 className="mt-6 max-w-3xl text-5xl font-semibold leading-tight tracking-normal text-[#0B1F33] sm:text-6xl">
-            You are about to enter a sample CoachOS workspace.
+            You are about to enter a sample CoachFort workspace.
           </h1>
           <p className="mt-6 max-w-2xl text-lg leading-8 text-[#425B76]">
-            The demo lets prospects explore CoachOS with sample students,
+            The demo lets prospects explore CoachFort with sample students,
             courses, payments, receipts, reminders, reports, and WhatsApp-ready
             workflows. Demo data is clearly marked as sample data and is loaded
             only into the workspace you choose.
@@ -151,7 +151,7 @@ export function DemoPageClient() {
           ) : null}
 
           <p className="mt-5 text-sm leading-6 text-[#66788F]">
-            After signing in, you&apos;ll be taken directly into the CoachOS app
+            After signing in, you&apos;ll be taken directly into the CoachFort app
             demo.
           </p>
         </div>
@@ -161,7 +161,7 @@ export function DemoPageClient() {
             <div className="flex items-center justify-between gap-4 border-b border-[#D8E8F0] pb-5">
               <div>
                 <p className="text-sm font-semibold text-[#0B1F33]">
-                  Sample CoachOS Workspace
+                  Sample CoachFort Workspace
                 </p>
                 <p className="mt-1 text-xs font-medium text-[#66788F]">
                   Demo records are added manually by an owner or admin.

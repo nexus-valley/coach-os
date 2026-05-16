@@ -37,35 +37,35 @@ const demoNote = "Demo record";
 
 const demoStudents: DemoStudent[] = [
   {
-    email: "nivi.raman.demo@coachos.example",
+    email: "nivi.raman.demo@coachfort.example",
     full_name: "Nivi Raman",
     phone: "+917338841401",
     source: "Demo import",
     status: "active",
   },
   {
-    email: "arjun.kumar.demo@coachos.example",
+    email: "arjun.kumar.demo@coachfort.example",
     full_name: "Arjun Kumar",
     phone: "+917338841402",
     source: "Demo import",
     status: "active",
   },
   {
-    email: "meera.s.demo@coachos.example",
+    email: "meera.s.demo@coachfort.example",
     full_name: "Meera S",
     phone: "+917338841403",
     source: "Demo import",
     status: "active",
   },
   {
-    email: "kavin.raj.demo@coachos.example",
+    email: "kavin.raj.demo@coachfort.example",
     full_name: "Kavin Raj",
     phone: "+917338841404",
     source: "Demo import",
     status: "lead",
   },
   {
-    email: "priya.anand.demo@coachos.example",
+    email: "priya.anand.demo@coachfort.example",
     full_name: "Priya Anand",
     phone: "+917338841405",
     source: "Demo import",
@@ -76,7 +76,7 @@ const demoStudents: DemoStudent[] = [
 const demoCourses: DemoCourse[] = [
   {
     description:
-      "Demo course for exploring CoachOS course delivery, lessons, enrollments, and progress workflows.",
+      "Demo course for exploring CoachFort course delivery, lessons, enrollments, and progress workflows.",
     sections: [
       {
         lessons: [
@@ -105,7 +105,7 @@ const demoCourses: DemoCourse[] = [
   },
   {
     description:
-      "Demo course for exploring CoachOS marketing program delivery, cohorts, payments, and reminders.",
+      "Demo course for exploring CoachFort marketing program delivery, cohorts, payments, and reminders.",
     sections: [
       {
         lessons: [
@@ -211,7 +211,7 @@ export async function loadDemoDataForTenant(tenantId: string) {
         created_by: userId,
         email: student.email,
         full_name: student.full_name,
-        notes: `${demoNote} - sample student profile for CoachOS demo.`,
+        notes: `${demoNote} - sample student profile for CoachFort demo.`,
         phone: student.phone,
         source: student.source,
         status: student.status,
@@ -345,11 +345,11 @@ export async function loadDemoDataForTenant(tenantId: string) {
 
   const stockCourse = coursesByTitle.get("Stock Market Basics");
   const marketingCourse = coursesByTitle.get("Digital Marketing Masterclass");
-  const nivi = studentsByEmail.get("nivi.raman.demo@coachos.example");
-  const arjun = studentsByEmail.get("arjun.kumar.demo@coachos.example");
-  const meera = studentsByEmail.get("meera.s.demo@coachos.example");
-  const kavin = studentsByEmail.get("kavin.raj.demo@coachos.example");
-  const priya = studentsByEmail.get("priya.anand.demo@coachos.example");
+  const nivi = studentsByEmail.get("nivi.raman.demo@coachfort.example");
+  const arjun = studentsByEmail.get("arjun.kumar.demo@coachfort.example");
+  const meera = studentsByEmail.get("meera.s.demo@coachfort.example");
+  const kavin = studentsByEmail.get("kavin.raj.demo@coachfort.example");
+  const priya = studentsByEmail.get("priya.anand.demo@coachfort.example");
 
   const enrollmentInputs = [
     { course: stockCourse, student: nivi },
@@ -491,7 +491,7 @@ export async function loadDemoDataForTenant(tenantId: string) {
         description: paymentLinkDescription,
         enrollment_id: enrollmentId ?? null,
         expires_at: addDays(7),
-        payment_url: "upi://pay?pa=YOUR_UPI_ID&pn=CoachOS&am=4999.00&cu=INR",
+        payment_url: "upi://pay?pa=YOUR_UPI_ID&pn=CoachFort&am=4999.00&cu=INR",
         provider: "manual",
         status: "sent",
         student_id: arjun.id,

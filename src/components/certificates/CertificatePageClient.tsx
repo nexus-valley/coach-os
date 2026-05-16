@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
-import { CoachOSBrandAsset } from "@/src/components/branding/CoachOSBrandAsset";
+import { CoachFortBrandAsset } from "@/src/components/branding/CoachFortBrandAsset";
 import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
 import {
@@ -132,7 +132,7 @@ export function CertificatePageClient({
 
   const brandColor = getSafeTenantBrandColor(tenantSettings?.brand_color);
   const workspaceName =
-    tenantSettings?.name || tenant?.name || "CoachOS Workspace";
+    tenantSettings?.name || tenant?.name || "CoachFort Workspace";
   function handleShareCertificate() {
     if (!certificate) {
       return;
@@ -190,7 +190,7 @@ export function CertificatePageClient({
                 src={tenantSettings.logo_url}
               />
             ) : (
-              <CoachOSBrandAsset
+              <CoachFortBrandAsset
                 className="mb-6 h-16 w-56"
                 variant="fullLogo"
               />

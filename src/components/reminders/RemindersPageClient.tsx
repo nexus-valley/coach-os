@@ -317,7 +317,7 @@ export function RemindersPageClient() {
       dueDate: formatDateTime(reminder.due_at),
       reminderTitle: reminder.title,
       studentName: reminder.student?.full_name,
-      workspaceName: tenant?.name ?? "CoachOS",
+      workspaceName: tenant?.name ?? "CoachFort",
     });
 
     return buildWhatsAppShareUrl(reminder.student?.phone, message);

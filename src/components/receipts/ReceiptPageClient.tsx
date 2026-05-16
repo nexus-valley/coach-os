@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
-import { CoachOSBrandAsset } from "@/src/components/branding/CoachOSBrandAsset";
+import { CoachFortBrandAsset } from "@/src/components/branding/CoachFortBrandAsset";
 import { PaymentStatusBadge } from "@/src/components/payments/PaymentStatusBadge";
 import { Badge } from "@/src/components/ui/Badge";
 import { Button } from "@/src/components/ui/Button";
@@ -143,7 +143,7 @@ export function ReceiptPageClient({ paymentId }: ReceiptPageClientProps) {
 
   const brandColor = getSafeTenantBrandColor(tenantSettings?.brand_color);
   const workspaceName =
-    tenantSettings?.name || tenant?.name || "CoachOS Workspace";
+    tenantSettings?.name || tenant?.name || "CoachFort Workspace";
   function handleShareReceipt() {
     if (!payment) {
       return;
@@ -207,7 +207,7 @@ export function ReceiptPageClient({ paymentId }: ReceiptPageClientProps) {
                   src={tenantSettings.logo_url}
                 />
               ) : (
-                <CoachOSBrandAsset className="h-14 w-14" variant="appIcon" />
+                <CoachFortBrandAsset className="h-14 w-14" variant="appIcon" />
               )}
               <div>
                 <p
@@ -220,7 +220,7 @@ export function ReceiptPageClient({ paymentId }: ReceiptPageClientProps) {
                   Receipt
                 </h1>
                 <p className="mt-3 text-sm text-[#5D7185] print:text-slate-600">
-                  CoachOS by Nexus Valley
+                  CoachFort by Nexus Valley
                 </p>
               </div>
             </div>

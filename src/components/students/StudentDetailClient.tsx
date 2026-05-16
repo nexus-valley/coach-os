@@ -248,14 +248,14 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
     paymentLinkForm.paymentUrl.trim() ||
     (Number(paymentLinkForm.amount) > 0
       ? buildManualUpiPaymentUrl(Number(paymentLinkForm.amount))
-      : "upi://pay?pa=YOUR_UPI_ID&pn=CoachOS&am=AMOUNT&cu=INR");
+      : "upi://pay?pa=YOUR_UPI_ID&pn=CoachFort&am=AMOUNT&cu=INR");
   function getPaymentLinkWhatsAppUrl(link: PaymentLinkWithRelations) {
     const message = buildPaymentReminderMessage({
       amount: formatCurrencyForPaymentLink(link.amount, link.currency || "INR"),
       courseName: link.course?.title,
       paymentUrl: link.payment_url,
       studentName: student?.full_name,
-      workspaceName: tenant?.name ?? "CoachOS",
+      workspaceName: tenant?.name ?? "CoachFort",
     });
 
     return buildWhatsAppShareUrl(student?.phone, message);
@@ -276,7 +276,7 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
     const message = buildGeneralFollowUpMessage({
       message: whatsAppMessage.trim() || defaultWhatsAppFollowUp,
       studentName: student.full_name,
-      workspaceName: tenant?.name ?? "CoachOS",
+      workspaceName: tenant?.name ?? "CoachFort",
     });
     const shareUrl = buildWhatsAppShareUrl(student.phone, message);
 

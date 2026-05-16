@@ -548,7 +548,7 @@ export function TeamSettingsClient() {
               {brandingForm.name || tenant?.name || "Workspace"}
             </h3>
             <p className="mt-2 text-sm text-slate-400">
-              {tenantSettings?.slug ?? "workspace"} · CoachOS workspace
+              {tenantSettings?.slug ?? "workspace"} · CoachFort workspace
             </p>
             <div className="mt-6 flex flex-wrap gap-3">
               <span

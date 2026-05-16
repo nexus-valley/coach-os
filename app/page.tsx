@@ -87,8 +87,8 @@ const comparisonRows = [
 const faqs = [
   {
     answer:
-      "CoachOS is a coaching business platform for managing students, courses, cohorts, payments, certificates, reminders, reports, and daily operations from one workspace.",
-    question: "What is CoachOS?",
+      "CoachFort is a coaching business platform for managing students, courses, cohorts, payments, certificates, reminders, reports, and daily operations from one workspace.",
+    question: "What is CoachFort?",
   },
   {
     answer:
@@ -102,22 +102,22 @@ const faqs = [
   },
   {
     answer:
-      "CoachOS includes WhatsApp-ready manual sharing flows and automation rule foundations. It does not send messages automatically through the WhatsApp Business API yet.",
+      "CoachFort includes WhatsApp-ready manual sharing flows and automation rule foundations. It does not send messages automatically through the WhatsApp Business API yet.",
     question: "Does it support WhatsApp automation?",
   },
   {
     answer:
-      "Yes. CoachOS includes owner, admin, and staff role foundations so coaching teams can work from the same workspace.",
+      "Yes. CoachFort includes owner, admin, and staff role foundations so coaching teams can work from the same workspace.",
     question: "Can multiple staff members use the platform?",
   },
   {
     answer:
       "Yes. The dashboard, management pages, and marketing pages are designed to work across desktop, tablet, and mobile screens.",
-    question: "Is CoachOS mobile friendly?",
+    question: "Is CoachFort mobile friendly?",
   },
   {
     answer:
-      "No. CoachOS is built around practical workflows so coaches and academy teams can manage operations without technical setup.",
+      "No. CoachFort is built around practical workflows so coaches and academy teams can manage operations without technical setup.",
     question: "Do I need technical knowledge?",
   },
 ];
@@ -132,7 +132,7 @@ function HeroVisual() {
           <div className="flex items-center justify-between gap-4 border-b border-[#D8E8F0] pb-5">
             <div>
               <p className="text-sm font-semibold text-[#0B2A3D]">
-                CoachOS command center
+                CoachFort command center
               </p>
               <p className="mt-1 text-xs font-medium text-[#66788F]">
                 Live operating snapshot
@@ -294,15 +294,15 @@ export default function Home() {
 
       <section
         className="mx-auto grid max-w-7xl gap-6 px-5 py-20 sm:px-6 lg:grid-cols-3 lg:px-8"
-        id="why-coachos"
+        id="why-coachfort"
       >
         <div className="lg:col-span-1">
-          <Badge>Why CoachOS</Badge>
+          <Badge>Why CoachFort</Badge>
           <h2 className="mt-5 text-3xl font-semibold tracking-normal text-[#0B1F33] sm:text-4xl">
-            Why Coaches Choose CoachOS
+            Why Coaches Choose CoachFort
           </h2>
           <p className="mt-4 leading-7 text-[#425B76]">
-            CoachOS is designed around the daily operating rhythm of online
+            CoachFort is designed around the daily operating rhythm of online
             coaches and small academies, not generic project management.
           </p>
         </div>
@@ -331,7 +331,7 @@ export default function Home() {
               Platform
             </Badge>
             <h2 className="mt-5 text-3xl font-semibold tracking-normal sm:text-4xl">
-              Traditional Tools vs CoachOS
+              Traditional Tools vs CoachFort
             </h2>
             <p className="mt-4 leading-7 text-cyan-50/75">
               Replace operational patchwork with a focused workspace built for
@@ -345,9 +345,9 @@ export default function Home() {
                 Traditional Tools
               </div>
               <div className="bg-[#0B2A3D] p-4 font-semibold text-[#8BE8F6]">
-                CoachOS
+                CoachFort
               </div>
-              {comparisonRows.map(([workflow, oldWay, coachos]) => (
+              {comparisonRows.map(([workflow, oldWay, coachfort]) => (
                 <Fragment key={workflow}>
                   <div className="bg-white/6 p-4 font-semibold">
                     {workflow}
@@ -356,7 +356,7 @@ export default function Home() {
                     {oldWay}
                   </div>
                   <div className="bg-white/6 p-4 text-cyan-50">
-                    {coachos}
+                    {coachfort}
                   </div>
                 </Fragment>
               ))}
@@ -442,18 +442,18 @@ export default function Home() {
         <div>
           <Badge>About Us</Badge>
           <h2 className="mt-5 text-3xl font-semibold tracking-normal text-[#0B1F33] sm:text-4xl">
-            About CoachOS
+            About CoachFort
           </h2>
         </div>
         <Card className="p-6 sm:p-8">
           <div className="space-y-5 text-base leading-8 text-[#425B76]">
             <p>
-              CoachOS is built by Nexus Valley to help coaches, trainers, and
+              CoachFort is built by Nexus Valley to help coaches, trainers, and
               small academies run their business without complexity.
             </p>
             <p>
               From managing students and courses to tracking payments and
-              sending WhatsApp reminders, CoachOS brings everything into one
+              sending WhatsApp reminders, CoachFort brings everything into one
               simple platform.
             </p>
             <p>
@@ -473,7 +473,7 @@ export default function Home() {
               Questions before you explore?
             </h2>
             <p className="mt-4 leading-7 text-[#425B76]">
-              CoachOS is designed to feel familiar for non-technical teams while
+              CoachFort is designed to feel familiar for non-technical teams while
               still being structured enough for serious operations.
             </p>
           </div>
@@ -550,7 +550,7 @@ export default function Home() {
                 Ready to Modernize Your Coaching Business?
               </h2>
               <p className="mt-4 max-w-2xl leading-7 text-cyan-50/80">
-                Start with the live demo and experience how CoachOS simplifies
+                Start with the live demo and experience how CoachFort simplifies
                 coaching operations.
               </p>
             </div>

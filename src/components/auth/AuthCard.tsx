@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { CoachOSBrandAsset } from "@/src/components/branding/CoachOSBrandAsset";
+import { CoachFortBrandAsset } from "@/src/components/branding/CoachFortBrandAsset";
 
 type AuthCardProps = {
   children: React.ReactNode;
@@ -25,7 +25,7 @@ export function AuthCard({
       <div className="relative mx-auto grid min-h-screen max-w-7xl items-center gap-10 px-5 py-10 sm:px-6 lg:grid-cols-[0.9fr_1.1fr] lg:px-8">
         <section className="hidden lg:block">
           <div className="max-w-xl">
-            <CoachOSBrandAsset
+            <CoachFortBrandAsset
               className="h-20 w-72"
               variant="fullLogo"
             />

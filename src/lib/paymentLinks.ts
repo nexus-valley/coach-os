@@ -58,7 +58,7 @@ function createManualUpiLink(amount: number) {
     am: amount.toFixed(2),
     cu: "INR",
     pa: "YOUR_UPI_ID",
-    pn: "CoachOS",
+    pn: "CoachFort",
   });
 
   return `upi://pay?${params.toString()}`;

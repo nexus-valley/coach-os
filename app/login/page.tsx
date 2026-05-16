@@ -7,8 +7,8 @@ export default function LoginPage() {
       eyebrow="Secure access"
       footerHref="/signup"
       footerLabel="Create an account"
-      footerText="New to CoachOS?"
-      title="Login to CoachOS"
+      footerText="New to CoachFort?"
+      title="Login to CoachFort"
     >
       <LoginForm />
     </AuthCard>

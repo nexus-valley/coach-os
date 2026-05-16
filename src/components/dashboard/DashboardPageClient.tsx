@@ -268,11 +268,11 @@ export function DashboardPageClient() {
               </span>
             ) : null}
             <h3 className="mt-4 text-xl font-semibold">
-              {demoIntent ? "Demo Mode" : "Load a safe sample CoachOS workspace"}
+              {demoIntent ? "Demo Mode" : "Load a safe sample CoachFort workspace"}
             </h3>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-[#425B76]">
               {demoIntent
-                ? "You are viewing a demo workspace. Sample data can be loaded to explore students, courses, payments, reports, reminders, and WhatsApp-ready workflows."
+                ? "You are viewing a CoachFort demo workspace. Sample data can be loaded to explore students, courses, payments, reports, reminders, and WhatsApp-ready workflows."
                 : "Add clearly marked demo students, courses, cohorts, payments, payment links, reminders, and automation rules to this workspace. This is tenant-scoped and does not run automatically."}
             </p>
           </div>
