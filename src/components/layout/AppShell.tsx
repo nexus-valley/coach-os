@@ -203,7 +203,7 @@ export function AppShell({ activeItem = "Dashboard", children }: AppShellProps) 
       <div className="relative flex h-screen overflow-hidden">
         <aside className="coachos-sidebar hidden h-screen w-72 shrink-0 overflow-y-auto border-r border-[#2ECBEA]/20 bg-[linear-gradient(180deg,#0B2A3D_0%,#145DA0_100%)] px-4 py-5 text-white shadow-2xl shadow-[#0B2A3D]/20 lg:block">
           <Link className="flex items-center gap-3 px-2" href="/app">
-            <CoachFortBrandAsset className="h-11 w-11" variant="appIcon" />
+            <CoachFortBrandAsset className="h-14 w-14" variant="appIcon" />
             <div>
               <p className="text-base font-semibold">CoachFort</p>
               <p className="text-xs text-cyan-100/80">by Nexus Valley</p>

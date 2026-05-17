@@ -18,9 +18,9 @@ export const metadata: Metadata = {
   description:
     "Manage students, courses, cohorts, payments, certificates, reminders, and WhatsApp-ready workflows from one platform.",
   icons: {
-    apple: "/brand/coachfort-master.png",
-    icon: "/brand/coachfort-master.png",
-    shortcut: "/brand/coachfort-master.png",
+    apple: "/brand/coachfort-favicon.png",
+    icon: "/brand/coachfort-favicon.png",
+    shortcut: "/brand/coachfort-favicon.png",
   },
 };
 
