@@ -21,9 +21,9 @@ const imageStyles: Record<CoachFortBrandAssetVariant, CSSProperties> = {
     width: "108%",
   },
   appIcon: {
-    left: "-19.5%",
-    top: "-195%",
-    width: "341%",
+    left: "-22%",
+    top: "-207%",
+    width: "358%",
   },
   spinner: {
     left: "-513%",
