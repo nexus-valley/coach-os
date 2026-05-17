@@ -1,6 +1,7 @@
 import type { Course } from "@/src/lib/courses";
 import type { Enrollment } from "@/src/lib/enrollments";
 import type { Student } from "@/src/lib/students";
+import { logActivity } from "@/src/lib/auditLogger";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 
 export type PaymentLinkStatus =
@@ -234,6 +235,21 @@ export async function createPaymentLink(payload: CreatePaymentLinkPayload) {
     payload.tenant_id,
   );
 
+  await logActivity({
+    action: "payment_link_created",
+    description: "Created payment link",
+    entityId: link.id,
+    entityName: link.student?.full_name ?? "Payment link",
+    entityType: "payment_link",
+    metadata: {
+      amount: link.amount,
+      courseId: link.course_id,
+      status: link.status,
+      studentId: link.student_id,
+    },
+    tenantId: link.tenant_id,
+  });
+
   return link;
 }
 
@@ -256,6 +272,19 @@ export async function updatePaymentLinkStatus(
   }
 
   const [link] = await attachPaymentLinkRelations([data as PaymentLink], tenantId);
+
+  await logActivity({
+    action: status === "sent" ? "payment_link_sent" : "payment_link_updated",
+    description:
+      status === "sent"
+        ? "Marked payment link as sent"
+        : `Updated payment link status to ${status}`,
+    entityId: link.id,
+    entityName: link.student?.full_name ?? "Payment link",
+    entityType: "payment_link",
+    metadata: { status: link.status, studentId: link.student_id },
+    tenantId: link.tenant_id,
+  });
 
   return link;
 }
@@ -371,6 +400,20 @@ export async function convertPaymentLinkToPayment(
     [updatedLink as PaymentLink],
     tenantId,
   );
+
+  await logActivity({
+    action: "payment_link_converted",
+    description: "Recorded completed payment from payment link",
+    entityId: convertedLink.id,
+    entityName: convertedLink.student?.full_name ?? "Payment link",
+    entityType: "payment_link",
+    metadata: {
+      amount: convertedLink.amount,
+      courseId: convertedLink.course_id,
+      studentId: convertedLink.student_id,
+    },
+    tenantId: convertedLink.tenant_id,
+  });
 
   return convertedLink;
 }

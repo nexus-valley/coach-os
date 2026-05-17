@@ -1,6 +1,7 @@
 import type { Course } from "@/src/lib/courses";
 import type { Payment } from "@/src/lib/payments";
 import type { Student } from "@/src/lib/students";
+import { logActivity } from "@/src/lib/auditLogger";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 
 export type ReminderType =
@@ -190,7 +191,24 @@ export async function createReminder(payload: CreateReminderPayload) {
     throw error;
   }
 
-  return data as Reminder;
+  const reminder = data as Reminder;
+
+  await logActivity({
+    action: "reminder_created",
+    description: "Created reminder",
+    entityId: reminder.id,
+    entityName: reminder.title,
+    entityType: "reminder",
+    metadata: {
+      courseId: reminder.course_id,
+      dueAt: reminder.due_at,
+      studentId: reminder.student_id,
+      type: reminder.reminder_type,
+    },
+    tenantId: reminder.tenant_id,
+  });
+
+  return reminder;
 }
 
 export async function updateReminderStatus(
@@ -211,7 +229,23 @@ export async function updateReminderStatus(
     throw error;
   }
 
-  return data as Reminder;
+  const reminder = data as Reminder;
+
+  await logActivity({
+    action:
+      status === "completed" ? "reminder_completed" : "reminder_status_updated",
+    description:
+      status === "completed"
+        ? "Marked reminder as completed"
+        : `Updated reminder status to ${status}`,
+    entityId: reminder.id,
+    entityName: reminder.title,
+    entityType: "reminder",
+    metadata: { status: reminder.status },
+    tenantId: reminder.tenant_id,
+  });
+
+  return reminder;
 }
 
 export async function deleteReminder(reminderId: string, tenantId: string) {

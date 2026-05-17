@@ -1,3 +1,4 @@
+import { logActivity } from "@/src/lib/auditLogger";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 
 export type StudentStatus = "active" | "inactive" | "lead" | "blocked";
@@ -89,7 +90,18 @@ export async function createStudent(input: StudentInput) {
     throw error;
   }
 
-  return data as Student;
+  const student = data as Student;
+
+  await logActivity({
+    action: "student_created",
+    description: "Created new student profile",
+    entityId: student.id,
+    entityName: student.full_name,
+    entityType: "student",
+    tenantId: student.tenant_id,
+  });
+
+  return student;
 }
 
 export async function getStudentById(params: {
@@ -142,7 +154,19 @@ export async function updateStudent(input: UpdateStudentInput) {
     throw error;
   }
 
-  return data as Student;
+  const student = data as Student;
+
+  await logActivity({
+    action: "student_updated",
+    description: "Updated student profile",
+    entityId: student.id,
+    entityName: student.full_name,
+    entityType: "student",
+    metadata: { status: student.status },
+    tenantId: student.tenant_id,
+  });
+
+  return student;
 }
 
 export async function deleteStudent(params: {

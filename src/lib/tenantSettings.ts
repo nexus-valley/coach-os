@@ -1,3 +1,4 @@
+import { logActivity } from "@/src/lib/auditLogger";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 
 export type TenantSettings = {
@@ -137,5 +138,20 @@ export async function updateTenantSettings(
     throw error;
   }
 
-  return tenantSettings as TenantSettings;
+  const settings = tenantSettings as TenantSettings;
+
+  await logActivity({
+    action: "settings_updated",
+    description: "Updated workspace branding and settings",
+    entityId: settings.id,
+    entityName: settings.name,
+    entityType: "workspace_settings",
+    metadata: {
+      supportEmail: settings.support_email,
+      websiteUrl: settings.website_url,
+    },
+    tenantId: settings.id,
+  });
+
+  return settings;
 }

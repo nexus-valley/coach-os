@@ -1,4 +1,5 @@
 import type { AutomationRuleConfig } from "@/src/lib/automations";
+import { logActivity } from "@/src/lib/auditLogger";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 import { getCurrentMemberRole } from "@/src/lib/team";
 
@@ -709,6 +710,15 @@ export async function loadDemoDataForTenant(tenantId: string) {
 
     result.automations += 1;
   }
+
+  await logActivity({
+    action: "demo_data_loaded",
+    description: "Loaded sample CoachFort demo data",
+    entityName: "Demo workspace data",
+    entityType: "demo_data",
+    metadata: result,
+    tenantId,
+  });
 
   return result;
 }

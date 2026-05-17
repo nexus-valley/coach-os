@@ -1,3 +1,4 @@
+import { logActivity } from "@/src/lib/auditLogger";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 import type { Course } from "@/src/lib/courses";
 import type { Student } from "@/src/lib/students";
@@ -191,7 +192,23 @@ export async function createEnrollment(input: CreateEnrollmentInput) {
     throw error;
   }
 
-  return data as Enrollment;
+  const enrollment = data as Enrollment;
+
+  await logActivity({
+    action: "enrollment_created",
+    description: "Added student enrollment",
+    entityId: enrollment.id,
+    entityName: "Course enrollment",
+    entityType: "enrollment",
+    metadata: {
+      courseId: enrollment.course_id,
+      studentId: enrollment.student_id,
+      status: enrollment.status,
+    },
+    tenantId: enrollment.tenant_id,
+  });
+
+  return enrollment;
 }
 
 export async function updateEnrollmentStatus(

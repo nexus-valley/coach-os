@@ -1,3 +1,4 @@
+import { logActivity } from "@/src/lib/auditLogger";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 
 export type CourseCompletionStatus = {
@@ -182,7 +183,7 @@ export async function generateCertificateData(
   );
   const year = new Date(enrollment.completed_at).getFullYear();
 
-  return {
+  const certificate = {
     certificate_number: `CERT-${year}-${sequence}`,
     completion_date: enrollment.completed_at,
     course_title: courseResult.data.title,
@@ -190,4 +191,19 @@ export async function generateCertificateData(
     student_name: studentResult.data.full_name,
     tenant_id: tenantId,
   } satisfies CertificateData;
+
+  await logActivity({
+    action: "certificate_generated",
+    description: "Generated course completion certificate",
+    entityId: certificate.enrollment_id,
+    entityName: certificate.certificate_number,
+    entityType: "certificate",
+    metadata: {
+      courseTitle: certificate.course_title,
+      studentName: certificate.student_name,
+    },
+    tenantId,
+  });
+
+  return certificate;
 }

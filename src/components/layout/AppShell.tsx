@@ -30,6 +30,7 @@ const navItems = [
   { href: "/app/reminders", label: "Reminders" },
   { href: "/app/automations", label: "Automations" },
   { href: "/app/reports", label: "Reports" },
+  { href: "/app/activity", label: "Activity" },
   { href: "/app/subscription", label: "Subscription" },
   { href: "/app/settings", label: "Settings" },
 ];
@@ -46,6 +47,12 @@ function NavIcon({ label }: { label: string }) {
   };
 
   const paths: Record<string, ReactNode> = {
+    Activity: (
+      <>
+        <circle cx="12" cy="12" r="9" />
+        <path d="M12 7v5l3 2" />
+      </>
+    ),
     Automations: (
       <>
         <path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z" />
@@ -189,8 +196,9 @@ export function AppShell({ activeItem = "Dashboard", children }: AppShellProps) 
     "--coachos-brand": brandColor,
   } as CSSProperties;
 
+  const staffHiddenItems = new Set(["Activity", "Subscription"]);
   const visibleNavItems = navItems.filter(
-    (item) => !(currentRole === "staff" && item.label === "Subscription"),
+    (item) => !(currentRole === "staff" && staffHiddenItems.has(item.label)),
   );
 
   return (

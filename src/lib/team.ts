@@ -1,3 +1,4 @@
+import { logActivity } from "@/src/lib/auditLogger";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 
 export type MemberRole = "owner" | "admin" | "staff";
@@ -110,7 +111,19 @@ export async function updateTenantMemberRole(
     throw error;
   }
 
-  return data as TenantMember;
+  const member = data as TenantMember;
+
+  await logActivity({
+    action: "role_changed",
+    description: `Changed team member role to ${member.role}`,
+    entityId: member.id,
+    entityName: member.role,
+    entityType: "team_member",
+    metadata: { role: member.role, userId: member.user_id },
+    tenantId: member.tenant_id,
+  });
+
+  return member;
 }
 
 export async function removeTenantMember(tenantId: string, memberId: string) {

@@ -1,3 +1,4 @@
+import { logActivity } from "@/src/lib/auditLogger";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 
 export type CourseStatus = "draft" | "published" | "archived";
@@ -165,7 +166,19 @@ export async function createCourse(input: CreateCourseInput) {
     throw error;
   }
 
-  return data as Course;
+  const course = data as Course;
+
+  await logActivity({
+    action: "course_created",
+    description: "Created new course",
+    entityId: course.id,
+    entityName: course.title,
+    entityType: "course",
+    metadata: { status: course.status },
+    tenantId: course.tenant_id,
+  });
+
+  return course;
 }
 
 export async function getCourseById(params: {
@@ -257,7 +270,19 @@ export async function createCourseSection(input: CourseSectionInput) {
     throw error;
   }
 
-  return data as CourseSection;
+  const section = data as CourseSection;
+
+  await logActivity({
+    action: "course_section_created",
+    description: "Added course section",
+    entityId: section.id,
+    entityName: section.title,
+    entityType: "course_section",
+    metadata: { courseId: section.course_id },
+    tenantId: section.tenant_id,
+  });
+
+  return section;
 }
 
 export async function updateCourseSection(input: UpdateCourseSectionInput) {
@@ -281,7 +306,19 @@ export async function updateCourseSection(input: UpdateCourseSectionInput) {
     throw error;
   }
 
-  return data as CourseSection;
+  const section = data as CourseSection;
+
+  await logActivity({
+    action: "course_section_updated",
+    description: "Updated course section",
+    entityId: section.id,
+    entityName: section.title,
+    entityType: "course_section",
+    metadata: { courseId: section.course_id },
+    tenantId: section.tenant_id,
+  });
+
+  return section;
 }
 
 export async function deleteCourseSection(input: DeleteCourseSectionInput) {
@@ -329,7 +366,19 @@ export async function createLesson(input: LessonInput) {
     throw error;
   }
 
-  return data as Lesson;
+  const lesson = data as Lesson;
+
+  await logActivity({
+    action: "lesson_created",
+    description: "Added course lesson",
+    entityId: lesson.id,
+    entityName: lesson.title,
+    entityType: "lesson",
+    metadata: { courseId: lesson.course_id, lessonType: lesson.lesson_type },
+    tenantId: lesson.tenant_id,
+  });
+
+  return lesson;
 }
 
 export async function updateLesson(input: UpdateLessonInput) {
@@ -363,7 +412,19 @@ export async function updateLesson(input: UpdateLessonInput) {
     throw error;
   }
 
-  return data as Lesson;
+  const lesson = data as Lesson;
+
+  await logActivity({
+    action: "lesson_updated",
+    description: "Updated course lesson",
+    entityId: lesson.id,
+    entityName: lesson.title,
+    entityType: "lesson",
+    metadata: { courseId: lesson.course_id, lessonType: lesson.lesson_type },
+    tenantId: lesson.tenant_id,
+  });
+
+  return lesson;
 }
 
 export async function deleteLesson(input: DeleteLessonInput) {

@@ -1,6 +1,7 @@
 import type { Course } from "@/src/lib/courses";
 import type { Enrollment } from "@/src/lib/enrollments";
 import type { Student } from "@/src/lib/students";
+import { logActivity } from "@/src/lib/auditLogger";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 
 export type PaymentMethod = "UPI" | "Cash" | "Bank" | "UPI Link";
@@ -156,7 +157,25 @@ export async function createPayment(input: CreatePaymentInput) {
     throw error;
   }
 
-  return data as Payment;
+  const payment = data as Payment;
+
+  await logActivity({
+    action: "payment_created",
+    description: "Recorded payment",
+    entityId: payment.id,
+    entityName: `${payment.currency} ${payment.amount}`,
+    entityType: "payment",
+    metadata: {
+      amount: payment.amount,
+      courseId: payment.course_id,
+      method: payment.payment_method,
+      status: payment.status,
+      studentId: payment.student_id,
+    },
+    tenantId: payment.tenant_id,
+  });
+
+  return payment;
 }
 
 export async function getPaymentsByStudent(studentId: string, tenantId: string) {

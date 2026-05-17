@@ -1,6 +1,7 @@
 import type { Course } from "@/src/lib/courses";
 import type { Payment, PaymentWithRelations } from "@/src/lib/payments";
 import type { Student } from "@/src/lib/students";
+import { logActivity } from "@/src/lib/auditLogger";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 
 type ReceiptCourse = Pick<Course, "id" | "tenant_id" | "title">;
@@ -119,13 +120,47 @@ export async function attachReceiptToPayment(
         throw fallbackResult.error;
       }
 
-      return attachReceiptRelations(fallbackResult.data as Payment);
+      const fallbackReceipt = await attachReceiptRelations(
+        fallbackResult.data as Payment,
+      );
+
+      await logActivity({
+        action: "receipt_generated",
+        description: "Generated payment receipt",
+        entityId: fallbackReceipt.id,
+        entityName: fallbackReceipt.receipt_number ?? "Receipt",
+        entityType: "receipt",
+        metadata: {
+          amount: fallbackReceipt.amount,
+          paymentId: fallbackReceipt.id,
+          receiptNumber: fallbackReceipt.receipt_number,
+        },
+        tenantId: fallbackReceipt.tenant_id,
+      });
+
+      return fallbackReceipt;
     }
 
     throw error;
   }
 
-  return attachReceiptRelations(data as Payment);
+  const receipt = await attachReceiptRelations(data as Payment);
+
+  await logActivity({
+    action: "receipt_generated",
+    description: "Generated payment receipt",
+    entityId: receipt.id,
+    entityName: receipt.receipt_number ?? "Receipt",
+    entityType: "receipt",
+    metadata: {
+      amount: receipt.amount,
+      paymentId: receipt.id,
+      receiptNumber: receipt.receipt_number,
+    },
+    tenantId: receipt.tenant_id,
+  });
+
+  return receipt;
 }
 
 export async function getPaymentReceipt(paymentId: string, tenantId: string) {
