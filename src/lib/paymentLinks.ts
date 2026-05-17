@@ -294,6 +294,17 @@ export async function deletePaymentLink(
   tenantId: string,
 ) {
   const supabase = getSupabaseClient();
+  const { data: existingLink, error: existingError } = await supabase
+    .from("payment_links")
+    .select(paymentLinkSelect)
+    .eq("tenant_id", tenantId)
+    .eq("id", paymentLinkId)
+    .maybeSingle();
+
+  if (existingError) {
+    throw existingError;
+  }
+
   const { error } = await supabase
     .from("payment_links")
     .delete()
@@ -302,6 +313,28 @@ export async function deletePaymentLink(
 
   if (error) {
     throw error;
+  }
+
+  if (existingLink) {
+    const [link] = await attachPaymentLinkRelations(
+      [existingLink as PaymentLink],
+      tenantId,
+    );
+    await logActivity({
+      action: "payment_link_deleted",
+      description: "Deleted payment link",
+      entityId: link.id,
+      entityName: link.student?.full_name ?? "Payment link",
+      entityType: "payment_link",
+      metadata: {
+        amount: link.amount,
+        courseId: link.course_id,
+        status: link.status,
+        studentId: link.student_id,
+      },
+      severity: "warning",
+      tenantId: link.tenant_id,
+    });
   }
 }
 

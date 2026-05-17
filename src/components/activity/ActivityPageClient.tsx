@@ -1,150 +1,97 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Badge } from "@/src/components/ui/Badge";
 import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
 import {
+  activityActionOptions,
+  activityEntityOptions,
+  activitySeverityOptions,
+  exportActivityLogsCsv,
+  formatActivityAction,
+  formatActivityEntity,
+  formatActivityTimestamp,
+  formatRelativeActivityTime,
+  getActivityActor,
+  getActivityDateGroup,
+  getActivityInitial,
+  getActivitySentence,
+  getEntityIconClass,
+  getEntityIconLabel,
+  getSeverityBadgeClass,
+  normalizeSeverity,
+} from "@/src/lib/activityFormatter";
+import {
+  getAuditLogById,
   getAuditLogsForTenant,
   type AuditLog,
   type AuditLogFilters,
+  type AuditLogSeverity,
 } from "@/src/lib/auditLogger";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 import { getCurrentMemberRole, type MemberRole } from "@/src/lib/team";
 import { getCurrentTenant, type Tenant } from "@/src/lib/tenant";
 
-const actionOptions = [
-  ["all", "All actions"],
-  ["student_created", "Student created"],
-  ["student_updated", "Student updated"],
-  ["course_created", "Course created"],
-  ["lesson_updated", "Lesson updated"],
-  ["enrollment_created", "Enrollment added"],
-  ["payment_created", "Payment recorded"],
-  ["payment_link_sent", "Payment link sent"],
-  ["receipt_generated", "Receipt generated"],
-  ["certificate_generated", "Certificate generated"],
-  ["reminder_created", "Reminder created"],
-  ["reminder_completed", "Reminder completed"],
-  ["role_changed", "Role changed"],
-  ["settings_updated", "Settings updated"],
-  ["demo_data_loaded", "Demo data loaded"],
-] as const;
+const pageSize = 25;
 
-const entityOptions = [
-  ["all", "All entities"],
-  ["student", "Students"],
-  ["course", "Courses"],
-  ["lesson", "Lessons"],
-  ["enrollment", "Enrollments"],
-  ["payment", "Payments"],
-  ["payment_link", "Payment links"],
-  ["receipt", "Receipts"],
-  ["certificate", "Certificates"],
-  ["reminder", "Reminders"],
-  ["team_member", "Team"],
-  ["workspace_settings", "Settings"],
-  ["demo_data", "Demo data"],
-] as const;
-
-const actionLabels: Record<string, string> = Object.fromEntries(actionOptions);
-
-const actionStyles: Record<string, string> = {
-  certificate_generated: "border-amber-200 bg-amber-50 text-amber-700",
-  course_created: "border-blue-200 bg-blue-50 text-blue-700",
-  demo_data_loaded: "border-cyan-200 bg-cyan-50 text-cyan-700",
-  enrollment_created: "border-violet-200 bg-violet-50 text-violet-700",
-  lesson_created: "border-blue-200 bg-blue-50 text-blue-700",
-  lesson_updated: "border-blue-200 bg-blue-50 text-blue-700",
-  payment_created: "border-emerald-200 bg-emerald-50 text-emerald-700",
-  payment_link_converted: "border-emerald-200 bg-emerald-50 text-emerald-700",
-  payment_link_sent: "border-teal-200 bg-teal-50 text-teal-700",
-  receipt_generated: "border-emerald-200 bg-emerald-50 text-emerald-700",
-  reminder_completed: "border-slate-200 bg-slate-50 text-slate-700",
-  reminder_created: "border-orange-200 bg-orange-50 text-orange-700",
-  role_changed: "border-indigo-200 bg-indigo-50 text-indigo-700",
-  settings_updated: "border-cyan-200 bg-cyan-50 text-cyan-700",
-  student_created: "border-sky-200 bg-sky-50 text-sky-700",
-  student_updated: "border-sky-200 bg-sky-50 text-sky-700",
-};
-
-function formatRelativeTime(value: string) {
-  const timestamp = new Date(value).getTime();
-  const seconds = Math.max(Math.floor((Date.now() - timestamp) / 1000), 0);
-
-  if (seconds < 60) {
-    return "just now";
-  }
-
-  const minutes = Math.floor(seconds / 60);
-
-  if (minutes < 60) {
-    return `${minutes} min${minutes === 1 ? "" : "s"} ago`;
-  }
-
-  const hours = Math.floor(minutes / 60);
-
-  if (hours < 24) {
-    return `${hours} hour${hours === 1 ? "" : "s"} ago`;
-  }
-
-  const days = Math.floor(hours / 24);
-
-  return `${days} day${days === 1 ? "" : "s"} ago`;
-}
-
-function getDateGroup(value: string) {
-  const date = new Date(value);
-  const today = new Date();
-  const yesterday = new Date();
-  yesterday.setDate(today.getDate() - 1);
-
-  if (date.toDateString() === today.toDateString()) {
-    return "Today";
-  }
-
-  if (date.toDateString() === yesterday.toDateString()) {
-    return "Yesterday";
-  }
-
-  return "Earlier";
-}
-
-function formatActionLabel(action: string) {
+function DetailRow({
+  label,
+  value,
+}: {
+  label: string;
+  value: string | null | undefined;
+}) {
   return (
-    actionLabels[action] ??
-    action
-      .split("_")
-      .map((part) => part[0]?.toUpperCase() + part.slice(1))
-      .join(" ")
+    <div>
+      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#66788F]">
+        {label}
+      </p>
+      <p className="mt-1 wrap-break-word text-sm font-medium text-[#0B1F33]">
+        {value || "Not available"}
+      </p>
+    </div>
   );
 }
 
-function getInitial(log: AuditLog) {
-  return (log.user_name || log.user_email || "U").trim().charAt(0).toUpperCase();
-}
-
-function getActor(log: AuditLog) {
-  return log.user_name || log.user_email || "Workspace user";
-}
-
-function getLogSentence(log: AuditLog) {
-  const entity = log.entity_name ? ` "${log.entity_name}"` : "";
-  return `${getActor(log)} ${formatActionLabel(log.action).toLowerCase()}${entity}`;
+function ActivitySkeleton() {
+  return (
+    <div className="space-y-4 p-5">
+      {Array.from({ length: 6 }).map((_, index) => (
+        <div
+          className="grid animate-pulse gap-4 rounded-3xl border border-[#D8E8F0] bg-white p-4 sm:grid-cols-[auto_1fr_auto]"
+          key={index}
+        >
+          <div className="h-12 w-12 rounded-2xl bg-[#EAF7FC]" />
+          <div className="space-y-3">
+            <div className="h-4 w-2/3 rounded-full bg-[#EAF7FC]" />
+            <div className="h-3 w-4/5 rounded-full bg-[#EAF7FC]" />
+            <div className="h-3 w-1/3 rounded-full bg-[#EAF7FC]" />
+          </div>
+          <div className="h-4 w-20 rounded-full bg-[#EAF7FC]" />
+        </div>
+      ))}
+    </div>
+  );
 }
 
 export function ActivityPageClient() {
   const [action, setAction] = useState("all");
   const [dateRange, setDateRange] =
     useState<NonNullable<AuditLogFilters["dateRange"]>>("all");
+  const [detailError, setDetailError] = useState("");
+  const [detailLoading, setDetailLoading] = useState(false);
   const [entityType, setEntityType] = useState("all");
   const [error, setError] = useState("");
+  const [exporting, setExporting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [page, setPage] = useState(1);
   const [role, setRole] = useState<MemberRole | null>(null);
   const [search, setSearch] = useState("");
+  const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
+  const [severity, setSeverity] = useState<AuditLogSeverity | "all">("all");
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [total, setTotal] = useState(0);
 
@@ -195,61 +142,71 @@ export function ActivityPageClient() {
     };
   }, []);
 
+  const loadLogs = useCallback(async () => {
+    if (!tenant || !canViewActivity) {
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+
+    try {
+      const result = await getAuditLogsForTenant(tenant.id, {
+        action,
+        dateRange,
+        entityType,
+        limit: pageSize,
+        page,
+        search,
+        severity,
+      });
+
+      setLogs(result.logs);
+      setTotal(result.total);
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "Unable to load activity logs.",
+      );
+      setLogs([]);
+      setTotal(0);
+    } finally {
+      setLoading(false);
+    }
+  }, [
+    action,
+    canViewActivity,
+    dateRange,
+    entityType,
+    page,
+    search,
+    severity,
+    tenant,
+  ]);
+
   useEffect(() => {
     let active = true;
 
-    async function loadLogs() {
-      if (!tenant || !canViewActivity) {
-        setLoading(false);
+    async function run() {
+      await loadLogs();
+
+      if (!active) {
         return;
-      }
-
-      setLoading(true);
-      setError("");
-
-      try {
-        const result = await getAuditLogsForTenant(tenant.id, {
-          action,
-          dateRange,
-          entityType,
-          limit: 25,
-          page,
-          search,
-        });
-
-        if (!active) {
-          return;
-        }
-
-        setLogs(result.logs);
-        setTotal(result.total);
-      } catch (caught) {
-        if (active) {
-          setError(
-            caught instanceof Error
-              ? caught.message
-              : "Unable to load activity logs.",
-          );
-          setLogs([]);
-          setTotal(0);
-        }
-      } finally {
-        if (active) {
-          setLoading(false);
-        }
       }
     }
 
-    loadLogs();
+    run();
 
     return () => {
       active = false;
     };
-  }, [action, canViewActivity, dateRange, entityType, page, search, tenant]);
+  }, [loadLogs]);
 
   const groupedLogs = useMemo(() => {
     return logs.reduce<Record<string, AuditLog[]>>((groups, log) => {
-      const group = getDateGroup(log.created_at);
+      const group = getActivityDateGroup(log.created_at);
       groups[group] = groups[group] ?? [];
       groups[group].push(log);
       return groups;
@@ -262,6 +219,70 @@ export function ActivityPageClient() {
     setEntityType("all");
     setPage(1);
     setSearch("");
+    setSeverity("all");
+  }
+
+  async function openActivityDetail(log: AuditLog) {
+    setSelectedLog(log);
+    setDetailError("");
+
+    if (!tenant) {
+      return;
+    }
+
+    setDetailLoading(true);
+
+    try {
+      const detail = await getAuditLogById(tenant.id, log.id);
+      setSelectedLog(detail ?? log);
+    } catch (caught) {
+      setDetailError(
+        caught instanceof Error
+          ? caught.message
+          : "Unable to load activity details.",
+      );
+    } finally {
+      setDetailLoading(false);
+    }
+  }
+
+  async function exportFilteredLogs() {
+    if (!tenant || logs.length === 0) {
+      return;
+    }
+
+    setExporting(true);
+    setError("");
+
+    try {
+      const exportedLogs: AuditLog[] = [];
+      let exportPage = 1;
+      let hasMore = true;
+
+      while (hasMore && exportedLogs.length < 1000) {
+        const result = await getAuditLogsForTenant(tenant.id, {
+          action,
+          dateRange,
+          entityType,
+          limit: 100,
+          page: exportPage,
+          search,
+          severity,
+        });
+
+        exportedLogs.push(...result.logs);
+        hasMore = result.hasMore;
+        exportPage += 1;
+      }
+
+      exportActivityLogsCsv(exportedLogs);
+    } catch (caught) {
+      setError(
+        caught instanceof Error ? caught.message : "Unable to export logs.",
+      );
+    } finally {
+      setExporting(false);
+    }
   }
 
   if (role === "staff") {
@@ -283,22 +304,32 @@ export function ActivityPageClient() {
     <div>
       <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
         <div>
-          <Badge>Admin Audit Log</Badge>
+          <Badge>Enterprise Audit Center</Badge>
           <h1 className="mt-4 text-3xl font-semibold tracking-normal text-[#0B1F33]">
             Activity Timeline
           </h1>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-[#425B76]">
-            Review important tenant-scoped actions across students, courses,
-            payments, reminders, team settings, certificates, and demo data.
+            Review tenant-scoped business events, critical changes, payment
+            actions, team updates, and workspace settings activity.
           </p>
         </div>
-        <div className="rounded-full border border-[#D8E8F0] bg-white px-4 py-2 text-sm font-semibold text-[#425B76] shadow-sm">
-          {total} logged event{total === 1 ? "" : "s"}
+        <div className="flex flex-wrap gap-3">
+          <div className="rounded-full border border-[#D8E8F0] bg-white px-4 py-2 text-sm font-semibold text-[#425B76] shadow-sm">
+            {total} logged event{total === 1 ? "" : "s"}
+          </div>
+          <Button
+            disabled={logs.length === 0 || exporting}
+            onClick={exportFilteredLogs}
+            type="button"
+            variant="secondary"
+          >
+            {exporting ? "Exporting..." : "Export CSV"}
+          </Button>
         </div>
       </div>
 
       <Card className="mt-8 p-5">
-        <div className="grid gap-3 lg:grid-cols-[1.3fr_0.85fr_0.85fr_0.75fr_auto]">
+        <div className="grid gap-3 xl:grid-cols-[1.25fr_0.85fr_0.85fr_0.7fr_0.7fr_auto]">
           <label className="block">
             <span className="text-xs font-semibold text-[#66788F]">
               Search
@@ -325,7 +356,7 @@ export function ActivityPageClient() {
               }}
               value={action}
             >
-              {actionOptions.map(([value, label]) => (
+              {activityActionOptions.map(([value, label]) => (
                 <option key={value} value={value}>
                   {label}
                 </option>
@@ -344,7 +375,26 @@ export function ActivityPageClient() {
               }}
               value={entityType}
             >
-              {entityOptions.map(([value, label]) => (
+              {activityEntityOptions.map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block">
+            <span className="text-xs font-semibold text-[#66788F]">
+              Severity
+            </span>
+            <select
+              className="mt-2 h-11 w-full rounded-2xl border border-[#D8E8F0] bg-white px-4 text-sm text-[#0B1F33] outline-none transition focus:border-[#2ECBEA] focus:ring-4 focus:ring-[#2ECBEA]/15"
+              onChange={(event) => {
+                setPage(1);
+                setSeverity(event.target.value as typeof severity);
+              }}
+              value={severity}
+            >
+              {activitySeverityOptions.map(([value, label]) => (
                 <option key={value} value={value}>
                   {label}
                 </option>
@@ -382,37 +432,42 @@ export function ActivityPageClient() {
 
       {error ? (
         <Card className="mt-6 border-red-200 bg-red-50 p-5 text-red-800">
-          <p className="font-semibold">Unable to load activity logs.</p>
-          <p className="mt-2 text-sm leading-6">
-            {error.includes("audit_logs")
-              ? "Run the audit log SQL migration in Supabase, then refresh this page."
-              : error}
-          </p>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="font-semibold">Unable to load activity logs.</p>
+              <p className="mt-2 text-sm leading-6">
+                {error.includes("audit_logs") || error.includes("severity")
+                  ? "Run the latest audit log SQL migrations in Supabase, then refresh this page."
+                  : error}
+              </p>
+            </div>
+            <Button onClick={loadLogs} type="button" variant="secondary">
+              Retry
+            </Button>
+          </div>
         </Card>
       ) : null}
 
       <Card className="mt-6 overflow-hidden">
         {loading ? (
-          <div className="space-y-4 p-5">
-            {Array.from({ length: 5 }).map((_, index) => (
-              <div
-                className="h-20 animate-pulse rounded-2xl bg-[#EAF7FC]"
-                key={index}
-              />
-            ))}
-          </div>
+          <ActivitySkeleton />
         ) : logs.length === 0 ? (
           <div className="p-10 text-center">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#EAF8FC] text-lg font-semibold text-[#145DA0]">
-              A
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl border border-[#9ADDEA] bg-[#EAF8FC] text-lg font-semibold text-[#145DA0] shadow-sm">
+              AC
             </div>
             <h2 className="mt-5 text-xl font-semibold text-[#0B1F33]">
-              No activity found
+              No activity yet
             </h2>
             <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[#425B76]">
-              Activity logs will appear here after audited actions are performed
-              and the Supabase audit table is available.
+              Your workspace activity will appear here after audited actions are
+              performed. Try adjusting filters if you expected to see events.
             </p>
+            <div className="mt-5">
+              <Button onClick={resetFilters} type="button" variant="secondary">
+                Clear filters
+              </Button>
+            </div>
           </div>
         ) : (
           <div>
@@ -423,42 +478,55 @@ export function ActivityPageClient() {
                     {group}
                   </div>
                   <div className="divide-y divide-[#D8E8F0]">
-                    {groupedLogs[group].map((log) => (
-                      <article
-                        className="grid gap-4 p-5 transition hover:bg-[#F6FBFE] sm:grid-cols-[auto_1fr_auto]"
-                        key={log.id}
-                      >
-                        <div
-                          className={[
-                            "flex h-11 w-11 items-center justify-center rounded-2xl border text-sm font-semibold",
-                            actionStyles[log.action] ??
-                              "border-[#D8E8F0] bg-white text-[#145DA0]",
-                          ].join(" ")}
+                    {groupedLogs[group].map((log) => {
+                      const severityValue = normalizeSeverity(log.severity);
+
+                      return (
+                        <button
+                          className="grid w-full gap-4 p-5 text-left transition hover:bg-[#F6FBFE] focus:bg-[#F6FBFE] focus:outline-none focus:ring-4 focus:ring-[#2ECBEA]/15 sm:grid-cols-[auto_1fr_auto]"
+                          key={log.id}
+                          onClick={() => openActivityDetail(log)}
+                          type="button"
                         >
-                          {getInitial(log)}
-                        </div>
-                        <div>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <h3 className="font-semibold text-[#0B1F33]">
-                              {getLogSentence(log)}
-                            </h3>
-                            <Badge>{formatActionLabel(log.action)}</Badge>
+                          <div
+                            className={[
+                              "flex h-12 w-12 items-center justify-center rounded-2xl border text-xs font-semibold shadow-sm",
+                              getEntityIconClass(log.entity_type),
+                            ].join(" ")}
+                          >
+                            {getEntityIconLabel(log.entity_type)}
                           </div>
-                          {log.description ? (
-                            <p className="mt-2 text-sm leading-6 text-[#425B76]">
-                              {log.description}
+                          <div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h3 className="font-semibold text-[#0B1F33]">
+                                {getActivitySentence(log)}
+                              </h3>
+                              <span
+                                className={[
+                                  "rounded-full border px-2.5 py-1 text-xs font-semibold capitalize",
+                                  getSeverityBadgeClass(severityValue),
+                                ].join(" ")}
+                              >
+                                {severityValue}
+                              </span>
+                              <Badge>{formatActivityAction(log.action)}</Badge>
+                            </div>
+                            {log.description ? (
+                              <p className="mt-2 text-sm leading-6 text-[#425B76]">
+                                {log.description}
+                              </p>
+                            ) : null}
+                            <p className="mt-2 text-xs font-medium text-[#66788F]">
+                              {formatActivityEntity(log.entity_type)}
+                              {log.user_email ? ` - ${log.user_email}` : ""}
                             </p>
-                          ) : null}
-                          <p className="mt-2 text-xs font-medium text-[#66788F]">
-                            {log.entity_type}
-                            {log.user_email ? ` - ${log.user_email}` : ""}
-                          </p>
-                        </div>
-                        <div className="text-sm font-semibold text-[#66788F] sm:text-right">
-                          {formatRelativeTime(log.created_at)}
-                        </div>
-                      </article>
-                    ))}
+                          </div>
+                          <div className="text-sm font-semibold text-[#66788F] sm:text-right">
+                            {formatRelativeActivityTime(log.created_at)}
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               ) : null,
@@ -469,9 +537,9 @@ export function ActivityPageClient() {
 
       <div className="mt-6 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
         <p className="text-sm text-[#66788F]">
-          Page {page} - latest first - 25 per page
+          Page {page} - latest first - {pageSize} per page
         </p>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3">
           <Button
             disabled={page === 1 || loading}
             onClick={() => setPage((currentPage) => Math.max(currentPage - 1, 1))}
@@ -481,18 +549,121 @@ export function ActivityPageClient() {
             Previous
           </Button>
           <Button
-            disabled={loading || page * 25 >= total}
+            disabled={loading || page * pageSize >= total}
             onClick={() => setPage((currentPage) => currentPage + 1)}
             type="button"
             variant="secondary"
           >
             Next
           </Button>
-          <Button disabled type="button" variant="secondary">
-            Export logs
-          </Button>
         </div>
       </div>
+
+      {selectedLog ? (
+        <div className="fixed inset-0 z-50 flex justify-end bg-[#0B1F33]/35 backdrop-blur-sm">
+          <button
+            aria-label="Close activity detail"
+            className="absolute inset-0 cursor-default"
+            onClick={() => setSelectedLog(null)}
+            type="button"
+          />
+          <aside className="relative h-full w-full max-w-2xl overflow-y-auto border-l border-[#D8E8F0] bg-white shadow-2xl shadow-[#0B1F33]/20">
+            <div className="sticky top-0 z-10 border-b border-[#D8E8F0] bg-white/95 px-6 py-5 backdrop-blur">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <Badge>Activity detail</Badge>
+                  <h2 className="mt-3 text-2xl font-semibold text-[#0B1F33]">
+                    {formatActivityAction(selectedLog.action)}
+                  </h2>
+                  <p className="mt-2 text-sm text-[#425B76]">
+                    {formatActivityTimestamp(selectedLog.created_at)}
+                  </p>
+                </div>
+                <Button
+                  onClick={() => setSelectedLog(null)}
+                  type="button"
+                  variant="secondary"
+                >
+                  Close
+                </Button>
+              </div>
+            </div>
+
+            <div className="space-y-5 p-6">
+              <Card className="p-5">
+                <div className="flex items-start gap-4">
+                  <div
+                    className={[
+                      "flex h-14 w-14 items-center justify-center rounded-2xl border text-sm font-semibold shadow-sm",
+                      getEntityIconClass(selectedLog.entity_type),
+                    ].join(" ")}
+                  >
+                    {getActivityInitial(selectedLog)}
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-[#0B1F33]">
+                      {getActivitySentence(selectedLog)}
+                    </h3>
+                    <p className="mt-2 text-sm leading-6 text-[#425B76]">
+                      {selectedLog.description || "No description provided."}
+                    </p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <span
+                        className={[
+                          "rounded-full border px-3 py-1 text-xs font-semibold capitalize",
+                          getSeverityBadgeClass(selectedLog.severity),
+                        ].join(" ")}
+                      >
+                        {normalizeSeverity(selectedLog.severity)}
+                      </span>
+                      <Badge>{formatActivityEntity(selectedLog.entity_type)}</Badge>
+                    </div>
+                  </div>
+                </div>
+              </Card>
+
+              {detailError ? (
+                <Card className="border-red-200 bg-red-50 p-4 text-sm text-red-800">
+                  {detailError}
+                </Card>
+              ) : null}
+
+              <Card className="p-5">
+                <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-[#66788F]">
+                  Event properties
+                </h3>
+                <div className="mt-5 grid gap-5 sm:grid-cols-2">
+                  <DetailRow label="User" value={getActivityActor(selectedLog)} />
+                  <DetailRow label="Email" value={selectedLog.user_email} />
+                  <DetailRow
+                    label="Entity"
+                    value={formatActivityEntity(selectedLog.entity_type)}
+                  />
+                  <DetailRow label="Entity ID" value={selectedLog.entity_id} />
+                  <DetailRow label="Entity name" value={selectedLog.entity_name} />
+                  <DetailRow label="Tenant" value={tenant?.name ?? selectedLog.tenant_id} />
+                </div>
+              </Card>
+
+              <Card className="p-5">
+                <div className="flex items-center justify-between gap-3">
+                  <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-[#66788F]">
+                    Metadata JSON
+                  </h3>
+                  {detailLoading ? (
+                    <span className="text-xs font-semibold text-[#66788F]">
+                      Loading detail...
+                    </span>
+                  ) : null}
+                </div>
+                <pre className="mt-4 max-h-80 overflow-auto rounded-2xl border border-[#D8E8F0] bg-[#F6FBFE] p-4 text-xs leading-6 text-[#0B1F33]">
+                  {JSON.stringify(selectedLog.metadata ?? {}, null, 2)}
+                </pre>
+              </Card>
+            </div>
+          </aside>
+        </div>
+      ) : null}
     </div>
   );
 }

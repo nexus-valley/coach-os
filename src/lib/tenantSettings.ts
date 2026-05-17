@@ -150,6 +150,7 @@ export async function updateTenantSettings(
       supportEmail: settings.support_email,
       websiteUrl: settings.website_url,
     },
+    severity: "critical",
     tenantId: settings.id,
   });
 

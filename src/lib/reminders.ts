@@ -250,6 +250,17 @@ export async function updateReminderStatus(
 
 export async function deleteReminder(reminderId: string, tenantId: string) {
   const supabase = getSupabaseClient();
+  const { data: existingReminder, error: existingError } = await supabase
+    .from("reminders")
+    .select(reminderSelect)
+    .eq("tenant_id", tenantId)
+    .eq("id", reminderId)
+    .maybeSingle();
+
+  if (existingError) {
+    throw existingError;
+  }
+
   const { error } = await supabase
     .from("reminders")
     .delete()
@@ -258,6 +269,24 @@ export async function deleteReminder(reminderId: string, tenantId: string) {
 
   if (error) {
     throw error;
+  }
+
+  if (existingReminder) {
+    const reminder = existingReminder as Reminder;
+    await logActivity({
+      action: "reminder_deleted",
+      description: "Deleted reminder",
+      entityId: reminder.id,
+      entityName: reminder.title,
+      entityType: "reminder",
+      metadata: {
+        dueAt: reminder.due_at,
+        status: reminder.status,
+        type: reminder.reminder_type,
+      },
+      severity: "warning",
+      tenantId: reminder.tenant_id,
+    });
   }
 }
 

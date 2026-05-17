@@ -323,6 +323,18 @@ export async function updateCourseSection(input: UpdateCourseSectionInput) {
 
 export async function deleteCourseSection(input: DeleteCourseSectionInput) {
   const supabase = getSupabaseClient();
+  const { data: existingSection, error: existingError } = await supabase
+    .from("course_sections")
+    .select("id,course_id,tenant_id,title,sort_order,created_at,updated_at")
+    .eq("tenant_id", input.tenantId)
+    .eq("course_id", input.courseId)
+    .eq("id", input.sectionId)
+    .maybeSingle();
+
+  if (existingError) {
+    throw existingError;
+  }
+
   const { error } = await supabase
     .from("course_sections")
     .delete()
@@ -332,6 +344,20 @@ export async function deleteCourseSection(input: DeleteCourseSectionInput) {
 
   if (error) {
     throw error;
+  }
+
+  if (existingSection) {
+    const section = existingSection as CourseSection;
+    await logActivity({
+      action: "course_section_deleted",
+      description: "Deleted course section",
+      entityId: section.id,
+      entityName: section.title,
+      entityType: "course_section",
+      metadata: { courseId: section.course_id },
+      severity: "warning",
+      tenantId: section.tenant_id,
+    });
   }
 }
 
@@ -429,6 +455,21 @@ export async function updateLesson(input: UpdateLessonInput) {
 
 export async function deleteLesson(input: DeleteLessonInput) {
   const supabase = getSupabaseClient();
+  const { data: existingLesson, error: existingError } = await supabase
+    .from("lessons")
+    .select(
+      "id,section_id,course_id,tenant_id,title,lesson_type,content,video_url,resource_url,sort_order,is_preview,created_at,updated_at",
+    )
+    .eq("tenant_id", input.tenantId)
+    .eq("course_id", input.courseId)
+    .eq("section_id", input.sectionId)
+    .eq("id", input.lessonId)
+    .maybeSingle();
+
+  if (existingError) {
+    throw existingError;
+  }
+
   const { error } = await supabase
     .from("lessons")
     .delete()
@@ -439,5 +480,19 @@ export async function deleteLesson(input: DeleteLessonInput) {
 
   if (error) {
     throw error;
+  }
+
+  if (existingLesson) {
+    const lesson = existingLesson as Lesson;
+    await logActivity({
+      action: "lesson_deleted",
+      description: "Deleted course lesson",
+      entityId: lesson.id,
+      entityName: lesson.title,
+      entityType: "lesson",
+      metadata: { courseId: lesson.course_id, lessonType: lesson.lesson_type },
+      severity: "warning",
+      tenantId: lesson.tenant_id,
+    });
   }
 }

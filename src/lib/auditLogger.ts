@@ -1,5 +1,7 @@
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 
+export type AuditLogSeverity = "info" | "warning" | "critical";
+
 export type AuditLog = {
   action: string;
   created_at: string;
@@ -9,6 +11,7 @@ export type AuditLog = {
   entity_type: string;
   id: string;
   metadata: Record<string, unknown>;
+  severity: AuditLogSeverity;
   tenant_id: string;
   user_email: string | null;
   user_id: string | null;
@@ -22,6 +25,7 @@ export type AuditLogFilters = {
   limit?: number;
   page?: number;
   search?: string;
+  severity?: AuditLogSeverity | "all";
 };
 
 export type LogActivityInput = {
@@ -31,12 +35,14 @@ export type LogActivityInput = {
   entityName?: string | null;
   entityType: string;
   metadata?: Record<string, unknown>;
+  severity?: AuditLogSeverity;
   tenantId: string;
   userId?: string | null;
 };
 
-const auditLogSelect =
-  "id,tenant_id,user_id,user_name,user_email,action,entity_type,entity_id,entity_name,description,metadata,created_at";
+const auditLogListSelect =
+  "id,tenant_id,user_id,user_name,user_email,action,entity_type,entity_id,entity_name,description,severity,created_at";
+const auditLogDetailSelect = `${auditLogListSelect},metadata`;
 
 function getUserDisplayName(user: {
   email?: string;
@@ -72,6 +78,42 @@ function getStartDateForRange(dateRange: AuditLogFilters["dateRange"]) {
   return null;
 }
 
+function inferSeverity(action: string): AuditLogSeverity {
+  if (
+    [
+      "settings_updated",
+      "student_deleted",
+      "team_member_removed",
+      "certificate_revoked",
+      "user_deleted",
+      "workspace_modified",
+    ].includes(action)
+  ) {
+    return "critical";
+  }
+
+  if (
+    [
+      "course_section_deleted",
+      "enrollment_deleted",
+      "lesson_deleted",
+      "payment_deleted",
+      "payment_link_deleted",
+      "payment_link_updated",
+      "reminder_deleted",
+      "role_changed",
+    ].includes(action)
+  ) {
+    return "warning";
+  }
+
+  return "info";
+}
+
+function sanitizeSearchFilter(search: string) {
+  return search.replace(/[,%]/g, " ").trim();
+}
+
 export async function logActivity(input: LogActivityInput) {
   try {
     const supabase = getSupabaseClient();
@@ -94,12 +136,13 @@ export async function logActivity(input: LogActivityInput) {
         entity_name: input.entityName ?? null,
         entity_type: input.entityType,
         metadata: input.metadata ?? {},
+        severity: input.severity ?? inferSeverity(input.action),
         tenant_id: input.tenantId,
         user_email: user.email ?? null,
         user_id: userId,
         user_name: getUserDisplayName(user),
       })
-      .select(auditLogSelect)
+      .select(auditLogDetailSelect)
       .single();
 
     if (error) {
@@ -137,7 +180,7 @@ export async function getAuditLogsForTenant(
   const supabase = getSupabaseClient();
   let query = supabase
     .from("audit_logs")
-    .select(auditLogSelect, { count: "exact" })
+    .select(auditLogListSelect, { count: "exact" })
     .eq("tenant_id", tenantId)
     .order("created_at", { ascending: false })
     .range(from, to);
@@ -150,13 +193,17 @@ export async function getAuditLogsForTenant(
     query = query.eq("entity_type", filters.entityType);
   }
 
+  if (filters.severity && filters.severity !== "all") {
+    query = query.eq("severity", filters.severity);
+  }
+
   const startDate = getStartDateForRange(filters.dateRange);
 
   if (startDate) {
     query = query.gte("created_at", startDate);
   }
 
-  const search = filters.search?.trim();
+  const search = sanitizeSearchFilter(filters.search?.trim() ?? "");
 
   if (search) {
     query = query.or(
@@ -176,4 +223,20 @@ export async function getAuditLogsForTenant(
     page,
     total: count ?? 0,
   };
+}
+
+export async function getAuditLogById(tenantId: string, logId: string) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from("audit_logs")
+    .select(auditLogDetailSelect)
+    .eq("tenant_id", tenantId)
+    .eq("id", logId)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  return (data as AuditLog | null) ?? null;
 }

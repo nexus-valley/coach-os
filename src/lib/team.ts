@@ -120,6 +120,7 @@ export async function updateTenantMemberRole(
     entityName: member.role,
     entityType: "team_member",
     metadata: { role: member.role, userId: member.user_id },
+    severity: "warning",
     tenantId: member.tenant_id,
   });
 
@@ -128,6 +129,18 @@ export async function updateTenantMemberRole(
 
 export async function removeTenantMember(tenantId: string, memberId: string) {
   const supabase = getSupabaseClient();
+  const { data: existingMember, error: existingError } = await supabase
+    .from("tenant_members")
+    .select(tenantMemberSelect)
+    .eq("tenant_id", tenantId)
+    .eq("id", memberId)
+    .neq("role", "owner")
+    .maybeSingle();
+
+  if (existingError) {
+    throw existingError;
+  }
+
   const { error } = await supabase
     .from("tenant_members")
     .delete()
@@ -137,5 +150,19 @@ export async function removeTenantMember(tenantId: string, memberId: string) {
 
   if (error) {
     throw error;
+  }
+
+  if (existingMember) {
+    const member = existingMember as TenantMember;
+    await logActivity({
+      action: "team_member_removed",
+      description: "Removed team member from workspace",
+      entityId: member.id,
+      entityName: member.role,
+      entityType: "team_member",
+      metadata: { role: member.role, userId: member.user_id },
+      severity: "critical",
+      tenantId: member.tenant_id,
+    });
   }
 }

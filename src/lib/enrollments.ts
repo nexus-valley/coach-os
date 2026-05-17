@@ -242,6 +242,19 @@ export async function deleteEnrollment(params: {
   tenantId: string;
 }) {
   const supabase = getSupabaseClient();
+  const { data: existingEnrollment, error: existingError } = await supabase
+    .from("enrollments")
+    .select(
+      "id,tenant_id,student_id,course_id,status,enrolled_at,completed_at,created_by,created_at,updated_at",
+    )
+    .eq("tenant_id", params.tenantId)
+    .eq("id", params.enrollmentId)
+    .maybeSingle();
+
+  if (existingError) {
+    throw existingError;
+  }
+
   const { error } = await supabase
     .from("enrollments")
     .delete()
@@ -250,5 +263,23 @@ export async function deleteEnrollment(params: {
 
   if (error) {
     throw error;
+  }
+
+  if (existingEnrollment) {
+    const enrollment = existingEnrollment as Enrollment;
+    await logActivity({
+      action: "enrollment_deleted",
+      description: "Removed course enrollment",
+      entityId: enrollment.id,
+      entityName: "Course enrollment",
+      entityType: "enrollment",
+      metadata: {
+        courseId: enrollment.course_id,
+        status: enrollment.status,
+        studentId: enrollment.student_id,
+      },
+      severity: "warning",
+      tenantId: enrollment.tenant_id,
+    });
   }
 }

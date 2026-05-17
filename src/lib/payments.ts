@@ -187,6 +187,17 @@ export async function getPaymentsByStudent(studentId: string, tenantId: string) 
 
 export async function deletePayment(paymentId: string, tenantId: string) {
   const supabase = getSupabaseClient();
+  const { data: existingPayment, error: existingError } = await supabase
+    .from("payments")
+    .select(paymentSelect)
+    .eq("tenant_id", tenantId)
+    .eq("id", paymentId)
+    .maybeSingle();
+
+  if (existingError) {
+    throw existingError;
+  }
+
   const { error } = await supabase
     .from("payments")
     .delete()
@@ -195,5 +206,25 @@ export async function deletePayment(paymentId: string, tenantId: string) {
 
   if (error) {
     throw error;
+  }
+
+  if (existingPayment) {
+    const payment = existingPayment as Payment;
+    await logActivity({
+      action: "payment_deleted",
+      description: "Deleted payment record",
+      entityId: payment.id,
+      entityName: `${payment.currency} ${payment.amount}`,
+      entityType: "payment",
+      metadata: {
+        amount: payment.amount,
+        courseId: payment.course_id,
+        method: payment.payment_method,
+        status: payment.status,
+        studentId: payment.student_id,
+      },
+      severity: "warning",
+      tenantId: payment.tenant_id,
+    });
   }
 }

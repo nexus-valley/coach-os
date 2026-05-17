@@ -174,6 +174,17 @@ export async function deleteStudent(params: {
   tenantId: string;
 }) {
   const supabase = getSupabaseClient();
+  const { data: existingStudent, error: existingError } = await supabase
+    .from("students")
+    .select("id,tenant_id,full_name,status")
+    .eq("tenant_id", params.tenantId)
+    .eq("id", params.studentId)
+    .maybeSingle();
+
+  if (existingError) {
+    throw existingError;
+  }
+
   const { error } = await supabase
     .from("students")
     .delete()
@@ -182,5 +193,18 @@ export async function deleteStudent(params: {
 
   if (error) {
     throw error;
+  }
+
+  if (existingStudent) {
+    await logActivity({
+      action: "student_deleted",
+      description: "Deleted student profile",
+      entityId: existingStudent.id,
+      entityName: existingStudent.full_name,
+      entityType: "student",
+      metadata: { status: existingStudent.status },
+      severity: "critical",
+      tenantId: existingStudent.tenant_id,
+    });
   }
 }
