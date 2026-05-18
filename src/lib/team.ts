@@ -1,7 +1,22 @@
 import { logActivity } from "@/src/lib/auditLogger";
+import {
+  canDeleteRecords,
+  canManageCourses,
+  canManagePayments,
+  canManageTeam,
+  getMemberRoleForTenant,
+  requireTenantPermission,
+  type MemberRole,
+} from "@/src/lib/permissions";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 
-export type MemberRole = "owner" | "admin" | "staff";
+export {
+  canDeleteRecords,
+  canManageCourses,
+  canManagePayments,
+  canManageTeam,
+};
+export type { MemberRole };
 
 export type TenantMember = {
   id: string;
@@ -24,36 +39,8 @@ export type TenantMemberWithProfile = TenantMember & {
 
 const tenantMemberSelect = "id,tenant_id,user_id,role,created_at";
 
-export function canManageTeam(role: MemberRole | null | undefined) {
-  return role === "owner";
-}
-
-export function canManagePayments(role: MemberRole | null | undefined) {
-  return role === "owner" || role === "admin";
-}
-
-export function canDeleteRecords(role: MemberRole | null | undefined) {
-  return role === "owner" || role === "admin";
-}
-
-export function canManageCourses(role: MemberRole | null | undefined) {
-  return role === "owner" || role === "admin";
-}
-
 export async function getCurrentMemberRole(tenantId: string, userId: string) {
-  const supabase = getSupabaseClient();
-  const { data, error } = await supabase
-    .from("tenant_members")
-    .select("role")
-    .eq("tenant_id", tenantId)
-    .eq("user_id", userId)
-    .maybeSingle();
-
-  if (error) {
-    throw error;
-  }
-
-  return (data?.role as MemberRole | undefined) ?? null;
+  return getMemberRoleForTenant(tenantId, userId);
 }
 
 export async function getTenantMembers(tenantId: string) {
@@ -97,6 +84,12 @@ export async function updateTenantMemberRole(
   memberId: string,
   role: Exclude<MemberRole, "owner">,
 ) {
+  await requireTenantPermission({
+    description: "Blocked team role change without owner permission.",
+    permission: "manage_team",
+    tenantId,
+  });
+
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
     .from("tenant_members")
@@ -128,6 +121,12 @@ export async function updateTenantMemberRole(
 }
 
 export async function removeTenantMember(tenantId: string, memberId: string) {
+  await requireTenantPermission({
+    description: "Blocked team member removal without owner permission.",
+    permission: "manage_team",
+    tenantId,
+  });
+
   const supabase = getSupabaseClient();
   const { data: existingMember, error: existingError } = await supabase
     .from("tenant_members")

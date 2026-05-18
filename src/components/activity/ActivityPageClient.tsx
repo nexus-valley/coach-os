@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Badge } from "@/src/components/ui/Badge";
 import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
+import { AccessDeniedCard } from "@/src/components/security/AccessDeniedCard";
 import {
   activityActionOptions,
   activityEntityOptions,
@@ -26,10 +27,12 @@ import {
 import {
   getAuditLogById,
   getAuditLogsForTenant,
+  logActivity,
   type AuditLog,
   type AuditLogFilters,
   type AuditLogSeverity,
 } from "@/src/lib/auditLogger";
+import { canAccessActivity } from "@/src/lib/permissions";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 import { getCurrentMemberRole, type MemberRole } from "@/src/lib/team";
 import { getCurrentTenant, type Tenant } from "@/src/lib/tenant";
@@ -95,7 +98,7 @@ export function ActivityPageClient() {
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [total, setTotal] = useState(0);
 
-  const canViewActivity = role === "owner" || role === "admin";
+  const canViewActivity = canAccessActivity(role);
 
   useEffect(() => {
     let active = true;
@@ -123,6 +126,18 @@ export function ActivityPageClient() {
 
         if (active) {
           setRole(currentRole);
+        }
+
+        if (currentRole && !canAccessActivity(currentRole)) {
+          await logActivity({
+            action: "access_denied",
+            description: "Blocked activity center access attempt.",
+            entityName: "Activity",
+            entityType: "security",
+            metadata: { route: "/app/activity", role: currentRole },
+            severity: "warning",
+            tenantId: currentTenant.id,
+          });
         }
       } catch (caught) {
         if (active) {
@@ -285,18 +300,9 @@ export function ActivityPageClient() {
     }
   }
 
-  if (role === "staff") {
+  if (role && !canViewActivity) {
     return (
-      <Card className="p-8">
-        <Badge tone="warning">Restricted</Badge>
-        <h1 className="mt-4 text-2xl font-semibold text-[#0B1F33]">
-          Activity logs are available to owners and admins.
-        </h1>
-        <p className="mt-3 max-w-2xl text-sm leading-6 text-[#425B76]">
-          Staff accounts can continue using workspace tools, but audit logs are
-          limited to administrative roles.
-        </p>
-      </Card>
+      <AccessDeniedCard description="Activity logs are available to workspace owners and admins only." />
     );
   }
 

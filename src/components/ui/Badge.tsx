@@ -6,6 +6,7 @@ type BadgeTone =
   | "owner"
   | "staff"
   | "success"
+  | "trainer"
   | "warning";
 
 type BadgeProps = {
@@ -22,6 +23,7 @@ const toneClasses: Record<BadgeTone, string> = {
   owner: "border-[#9ADDEA] bg-[#EAF8FC] text-[#0B6F87]",
   staff: "border-[#CBD5E1] bg-[#F1F5F9] text-[#334155]",
   success: "border-[#A7F3D0] bg-[#E8F8F3] text-[#047857]",
+  trainer: "border-[#DDD6FE] bg-[#F5F3FF] text-[#6D28D9]",
   warning: "border-[#FED7AA] bg-[#FFF7ED] text-[#C2410C]",
 };
 

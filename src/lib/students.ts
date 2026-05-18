@@ -1,4 +1,5 @@
 import { logActivity } from "@/src/lib/auditLogger";
+import { requireTenantPermission } from "@/src/lib/permissions";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 
 export type StudentStatus = "active" | "inactive" | "lead" | "blocked";
@@ -49,6 +50,12 @@ export async function getStudentsForTenant(tenantId: string) {
 }
 
 export async function createStudent(input: StudentInput) {
+  await requireTenantPermission({
+    description: "Blocked student creation without student management permission.",
+    permission: "manage_students",
+    tenantId: input.tenantId,
+  });
+
   const supabase = getSupabaseClient();
   const {
     data: { user },
@@ -126,6 +133,12 @@ export async function getStudentById(params: {
 }
 
 export async function updateStudent(input: UpdateStudentInput) {
+  await requireTenantPermission({
+    description: "Blocked student update without student management permission.",
+    permission: "manage_students",
+    tenantId: input.tenantId,
+  });
+
   const fullName = input.fullName.trim();
 
   if (!fullName) {
@@ -173,6 +186,12 @@ export async function deleteStudent(params: {
   studentId: string;
   tenantId: string;
 }) {
+  await requireTenantPermission({
+    description: "Blocked student deletion without delete permission.",
+    permission: "delete_records",
+    tenantId: params.tenantId,
+  });
+
   const supabase = getSupabaseClient();
   const { data: existingStudent, error: existingError } = await supabase
     .from("students")

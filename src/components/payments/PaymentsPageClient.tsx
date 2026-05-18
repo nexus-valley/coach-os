@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 import { PaymentStatusBadge } from "@/src/components/payments/PaymentStatusBadge";
+import { AccessDeniedCard } from "@/src/components/security/AccessDeniedCard";
 import { Badge } from "@/src/components/ui/Badge";
 import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
@@ -15,6 +16,7 @@ import {
   type PaymentStatus,
   type PaymentWithRelations,
 } from "@/src/lib/payments";
+import { canAccessPayments } from "@/src/lib/permissions";
 import { attachReceiptToPayment } from "@/src/lib/receipts";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 import {
@@ -154,19 +156,29 @@ export function PaymentsPageClient() {
           throw userError;
         }
 
-        const [tenantPayments, memberRole] = await Promise.all([
-          getPaymentsForTenant(currentTenant.id),
-          user
-            ? getCurrentMemberRole(currentTenant.id, user.id)
-            : Promise.resolve(null),
-        ]);
+        const memberRole = user
+          ? await getCurrentMemberRole(currentTenant.id, user.id)
+          : null;
+
+        if (!active) {
+          return;
+        }
+
+        setCurrentRole(memberRole);
+
+        if (!canAccessPayments(memberRole)) {
+          setPayments([]);
+          setError("");
+          return;
+        }
+
+        const tenantPayments = await getPaymentsForTenant(currentTenant.id);
 
         if (!active) {
           return;
         }
 
         setPayments(tenantPayments);
-        setCurrentRole(memberRole);
         setError("");
       } catch (caught) {
         if (!active) {
@@ -228,6 +240,14 @@ export function PaymentsPageClient() {
     } finally {
       setMutatingReceiptId("");
     }
+  }
+
+  if (currentRole && !canAccessPayments(currentRole)) {
+    return (
+      <div className="mx-auto max-w-7xl">
+        <AccessDeniedCard description="Payment records are not available for your current workspace role." />
+      </div>
+    );
   }
 
   return (

@@ -1,4 +1,5 @@
 import { logActivity } from "@/src/lib/auditLogger";
+import { requireTenantPermission } from "@/src/lib/permissions";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 import type { Course } from "@/src/lib/courses";
 import type { Student } from "@/src/lib/students";
@@ -140,6 +141,12 @@ export async function getEnrollmentsForCourse(params: {
 }
 
 export async function createEnrollment(input: CreateEnrollmentInput) {
+  await requireTenantPermission({
+    description: "Blocked enrollment creation without student management permission.",
+    permission: "manage_students",
+    tenantId: input.tenantId,
+  });
+
   const supabase = getSupabaseClient();
   const {
     data: { user },
@@ -214,6 +221,12 @@ export async function createEnrollment(input: CreateEnrollmentInput) {
 export async function updateEnrollmentStatus(
   input: UpdateEnrollmentStatusInput,
 ) {
+  await requireTenantPermission({
+    description: "Blocked enrollment update without student management permission.",
+    permission: "manage_students",
+    tenantId: input.tenantId,
+  });
+
   const completedAt =
     input.status === "completed" ? new Date().toISOString() : null;
   const supabase = getSupabaseClient();
@@ -241,6 +254,12 @@ export async function deleteEnrollment(params: {
   enrollmentId: string;
   tenantId: string;
 }) {
+  await requireTenantPermission({
+    description: "Blocked enrollment deletion without delete permission.",
+    permission: "delete_records",
+    tenantId: params.tenantId,
+  });
+
   const supabase = getSupabaseClient();
   const { data: existingEnrollment, error: existingError } = await supabase
     .from("enrollments")

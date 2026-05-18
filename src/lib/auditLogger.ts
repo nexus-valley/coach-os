@@ -83,6 +83,7 @@ function inferSeverity(action: string): AuditLogSeverity {
     [
       "settings_updated",
       "student_deleted",
+      "subscription_plan_changed",
       "team_member_removed",
       "certificate_revoked",
       "user_deleted",
@@ -95,6 +96,7 @@ function inferSeverity(action: string): AuditLogSeverity {
   if (
     [
       "course_section_deleted",
+      "access_denied",
       "enrollment_deleted",
       "lesson_deleted",
       "payment_deleted",

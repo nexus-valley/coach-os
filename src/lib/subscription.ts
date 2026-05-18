@@ -1,3 +1,5 @@
+import { logActivity } from "@/src/lib/auditLogger";
+import { requireTenantPermission } from "@/src/lib/permissions";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 
 export type SubscriptionPlan = "free" | "starter" | "pro" | "business";
@@ -111,6 +113,12 @@ export async function updateTenantPlanForTesting(
   tenantId: string,
   plan: SubscriptionPlan,
 ) {
+  await requireTenantPermission({
+    description: "Blocked subscription plan change without owner permission.",
+    permission: "access_subscription",
+    tenantId,
+  });
+
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
     .from("tenants")
@@ -127,5 +135,18 @@ export async function updateTenantPlanForTesting(
     throw error;
   }
 
-  return normalizeSubscription(data as TenantSubscription);
+  const subscription = normalizeSubscription(data as TenantSubscription);
+
+  await logActivity({
+    action: "subscription_plan_changed",
+    description: `Changed testing plan to ${subscription.plan}`,
+    entityId: subscription.id,
+    entityName: subscription.plan,
+    entityType: "subscription",
+    metadata: { plan: subscription.plan },
+    severity: "critical",
+    tenantId: subscription.id,
+  });
+
+  return subscription;
 }

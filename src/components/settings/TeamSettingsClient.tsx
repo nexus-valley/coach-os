@@ -12,6 +12,11 @@ import {
 import { Badge } from "@/src/components/ui/Badge";
 import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
+import { AccessDeniedCard } from "@/src/components/security/AccessDeniedCard";
+import {
+  canAccessSettings,
+  getRoleDescription,
+} from "@/src/lib/permissions";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 import {
   canManageTeam,
@@ -31,7 +36,11 @@ import {
   type TenantSettings,
 } from "@/src/lib/tenantSettings";
 
-const manageableRoles: Exclude<MemberRole, "owner">[] = ["admin", "staff"];
+const manageableRoles: Exclude<MemberRole, "owner">[] = [
+  "admin",
+  "staff",
+  "trainer",
+];
 
 type BrandingFormState = {
   brandColor: string;
@@ -74,6 +83,12 @@ const roleDefinitions: {
     role: "staff",
     title: "Staff",
   },
+  {
+    description:
+      "Training-focused access for assigned course, cohort, and student workflows without billing or workspace settings.",
+    role: "trainer",
+    title: "Trainer",
+  },
 ];
 
 function RoleBadge({ role }: { role: MemberRole }) {
@@ -85,6 +100,10 @@ function RoleBadge({ role }: { role: MemberRole }) {
 
   if (role === "admin") {
     return <Badge tone="admin">{label}</Badge>;
+  }
+
+  if (role === "trainer") {
+    return <Badge tone="trainer">{label}</Badge>;
   }
 
   return <Badge tone="staff">{label}</Badge>;
@@ -181,7 +200,7 @@ export function TeamSettingsClient() {
     setCurrentUserId(user.id);
     setCurrentRole(role);
 
-    if (role === "staff") {
+    if (!canAccessSettings(role)) {
       setMembers([
         createCurrentUserMember({
           email: user.email ?? null,
@@ -194,10 +213,11 @@ export function TeamSettingsClient() {
           userId: user.id,
         }),
       ]);
-      return;
+      return role;
     }
 
     setMembers(await getTenantMembers(currentTenant.id));
+    return role;
   }, [router]);
 
   useEffect(() => {
@@ -216,6 +236,13 @@ export function TeamSettingsClient() {
           return;
         }
 
+        setTenant(currentTenant);
+        const role = await loadTeam(currentTenant);
+
+        if (!active || !role || !canAccessSettings(role)) {
+          return;
+        }
+
         const settings = await getTenantSettings(currentTenant.id);
 
         if (!active) {
@@ -226,9 +253,6 @@ export function TeamSettingsClient() {
           setBrandingForm(createBrandingForm(settings));
           setTenantSettings(settings);
         }
-
-        setTenant(currentTenant);
-        await loadTeam(currentTenant);
       } catch (caught) {
         if (!active) {
           return;
@@ -262,6 +286,14 @@ export function TeamSettingsClient() {
     role: Exclude<MemberRole, "owner">,
   ) {
     if (!tenant || !canManageTeam(currentRole)) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Change ${member.profile?.full_name || member.profile?.email || "this member"} to ${role}?`,
+    );
+
+    if (!confirmed) {
       return;
     }
 
@@ -355,6 +387,14 @@ export function TeamSettingsClient() {
         <Card className="h-72 animate-pulse border-white/10 bg-[#101214]">
           <span className="sr-only">Loading team settings</span>
         </Card>
+      </div>
+    );
+  }
+
+  if (currentRole && !canAccessSettings(currentRole)) {
+    return (
+      <div className="mx-auto max-w-7xl">
+        <AccessDeniedCard description="Workspace settings and team management are available to owners and admins only." />
       </div>
     );
   }
@@ -593,11 +633,9 @@ export function TeamSettingsClient() {
               {currentRole ? <RoleBadge role={currentRole} /> : null}
             </div>
             <p className="mt-4 text-sm leading-6 text-slate-400">
-              {currentRole === "owner"
-                ? "You can manage team roles and remove admin or staff members."
-                : currentRole === "admin"
-                  ? "You can view the team list, but only owners can change roles."
-                  : "You can view your own workspace role. Team management is owner-only."}
+              {currentRole
+                ? getRoleDescription(currentRole)
+                : "Your workspace role is loading."}
             </p>
           </div>
         </Card>
@@ -702,6 +740,35 @@ export function TeamSettingsClient() {
             </p>
           </Card>
         ))}
+      </section>
+
+      <section className="mt-8">
+        <Card className="border-red-200 bg-red-50 p-6 text-red-950 shadow-xl shadow-red-950/5">
+          <Badge tone="danger">Danger Zone</Badge>
+          <h3 className="mt-4 text-2xl font-semibold">
+            Destructive action controls
+          </h3>
+          <p className="mt-3 max-w-3xl text-sm leading-6 text-red-800">
+            Critical workspace actions are restricted by role, confirmed before
+            execution, and written to the audit center. Delete workspace and
+            ownership transfer controls are intentionally not exposed in this
+            phase.
+          </p>
+          <div className="mt-5 grid gap-3 text-sm md:grid-cols-3">
+            {[
+              "Member removal requires owner permission.",
+              "Record deletion requires owner or admin permission.",
+              "Settings changes are owner-only and logged as critical.",
+            ].map((item) => (
+              <div
+                className="rounded-2xl border border-red-200 bg-white p-4 font-medium text-red-900"
+                key={item}
+              >
+                {item}
+              </div>
+            ))}
+          </div>
+        </Card>
       </section>
     </div>
   );

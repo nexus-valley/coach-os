@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 
 import { CoachFortBrandAsset } from "@/src/components/branding/CoachFortBrandAsset";
+import { canAccessNavigationItem } from "@/src/lib/permissions";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 import { getCurrentMemberRole, type MemberRole } from "@/src/lib/team";
 import { getCurrentTenant } from "@/src/lib/tenant";
@@ -196,9 +197,8 @@ export function AppShell({ activeItem = "Dashboard", children }: AppShellProps) 
     "--coachos-brand": brandColor,
   } as CSSProperties;
 
-  const staffHiddenItems = new Set(["Activity", "Subscription"]);
   const visibleNavItems = navItems.filter(
-    (item) => !(currentRole === "staff" && staffHiddenItems.has(item.label)),
+    (item) => canAccessNavigationItem(currentRole, item.label),
   );
 
   return (

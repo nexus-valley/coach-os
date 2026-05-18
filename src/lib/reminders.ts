@@ -2,6 +2,7 @@ import type { Course } from "@/src/lib/courses";
 import type { Payment } from "@/src/lib/payments";
 import type { Student } from "@/src/lib/students";
 import { logActivity } from "@/src/lib/auditLogger";
+import { requireTenantPermission } from "@/src/lib/permissions";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 
 export type ReminderType =
@@ -161,6 +162,12 @@ export async function getRemindersForTenant(tenantId: string) {
 }
 
 export async function createReminder(payload: CreateReminderPayload) {
+  await requireTenantPermission({
+    description: "Blocked reminder creation without student management permission.",
+    permission: "manage_students",
+    tenantId: payload.tenant_id,
+  });
+
   const title = payload.title.trim();
 
   if (!title) {
@@ -216,6 +223,12 @@ export async function updateReminderStatus(
   tenantId: string,
   status: ReminderStatus,
 ) {
+  await requireTenantPermission({
+    description: "Blocked reminder status update without student management permission.",
+    permission: "manage_students",
+    tenantId,
+  });
+
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
     .from("reminders")
@@ -249,6 +262,12 @@ export async function updateReminderStatus(
 }
 
 export async function deleteReminder(reminderId: string, tenantId: string) {
+  await requireTenantPermission({
+    description: "Blocked reminder deletion without delete permission.",
+    permission: "delete_records",
+    tenantId,
+  });
+
   const supabase = getSupabaseClient();
   const { data: existingReminder, error: existingError } = await supabase
     .from("reminders")

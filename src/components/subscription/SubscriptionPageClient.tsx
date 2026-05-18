@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/src/components/ui/Badge";
 import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
-import { FeedbackAlert } from "@/src/components/ui/FeedbackAlert";
+import { AccessDeniedCard } from "@/src/components/security/AccessDeniedCard";
 import {
   getPlanLimits,
   getTenantSubscription,
@@ -17,6 +17,7 @@ import {
   type TenantSubscription,
 } from "@/src/lib/subscription";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
+import { canAccessSubscription } from "@/src/lib/permissions";
 import { getCurrentMemberRole, type MemberRole } from "@/src/lib/team";
 import { getCurrentTenant, type Tenant } from "@/src/lib/tenant";
 
@@ -270,9 +271,21 @@ export function SubscriptionPageClient() {
           return;
         }
 
-        const [currentSubscription, role, currentUsage] = await Promise.all([
+        const role = await getCurrentMemberRole(currentTenant.id, user.id);
+
+        if (!active) {
+          return;
+        }
+
+        setTenant(currentTenant);
+        setCurrentRole(role);
+
+        if (!canAccessSubscription(role)) {
+          return;
+        }
+
+        const [currentSubscription, currentUsage] = await Promise.all([
           getTenantSubscription(currentTenant.id),
-          getCurrentMemberRole(currentTenant.id, user.id),
           getUsageCounts(currentTenant.id),
         ]);
 
@@ -280,9 +293,7 @@ export function SubscriptionPageClient() {
           return;
         }
 
-        setTenant(currentTenant);
         setSubscription(currentSubscription);
-        setCurrentRole(role);
         setUsage(currentUsage);
       } catch (caught) {
         if (!active) {
@@ -340,23 +351,20 @@ export function SubscriptionPageClient() {
     );
   }
 
+  if (currentRole && !canAccessSubscription(currentRole)) {
+    return (
+      <div className="mx-auto max-w-7xl">
+        <AccessDeniedCard description="Subscription and billing controls are available to workspace owners only." />
+      </div>
+    );
+  }
+
   if (error || !subscription) {
     return (
       <div className="mx-auto max-w-7xl">
         <Card className="border-red-400/30 bg-red-500/10 p-6 text-red-100">
           {error || "Subscription is not available for this workspace."}
         </Card>
-      </div>
-    );
-  }
-
-  if (currentRole === "staff") {
-    return (
-      <div className="mx-auto max-w-7xl">
-        <FeedbackAlert tone="warning">
-          Subscription settings are available to owners and admins. Staff
-          accounts do not have access to this billing foundation.
-        </FeedbackAlert>
       </div>
     );
   }

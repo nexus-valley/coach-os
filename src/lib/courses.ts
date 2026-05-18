@@ -1,4 +1,5 @@
 import { logActivity } from "@/src/lib/auditLogger";
+import { requireTenantPermission } from "@/src/lib/permissions";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 
 export type CourseStatus = "draft" | "published" | "archived";
@@ -127,6 +128,12 @@ export async function getCoursesForTenant(tenantId: string) {
 }
 
 export async function createCourse(input: CreateCourseInput) {
+  await requireTenantPermission({
+    description: "Blocked course creation without course management permission.",
+    permission: "manage_courses",
+    tenantId: input.tenantId,
+  });
+
   const supabase = getSupabaseClient();
   const {
     data: { user },
@@ -248,6 +255,12 @@ export async function getCourseStructure(courseId: string, tenantId: string) {
 }
 
 export async function createCourseSection(input: CourseSectionInput) {
+  await requireTenantPermission({
+    description: "Blocked course section creation without course management permission.",
+    permission: "manage_courses",
+    tenantId: input.tenantId,
+  });
+
   const title = input.title.trim();
 
   if (!title) {
@@ -286,6 +299,12 @@ export async function createCourseSection(input: CourseSectionInput) {
 }
 
 export async function updateCourseSection(input: UpdateCourseSectionInput) {
+  await requireTenantPermission({
+    description: "Blocked course section update without course management permission.",
+    permission: "manage_courses",
+    tenantId: input.tenantId,
+  });
+
   const title = input.title.trim();
 
   if (!title) {
@@ -322,6 +341,12 @@ export async function updateCourseSection(input: UpdateCourseSectionInput) {
 }
 
 export async function deleteCourseSection(input: DeleteCourseSectionInput) {
+  await requireTenantPermission({
+    description: "Blocked course section deletion without delete permission.",
+    permission: "delete_records",
+    tenantId: input.tenantId,
+  });
+
   const supabase = getSupabaseClient();
   const { data: existingSection, error: existingError } = await supabase
     .from("course_sections")
@@ -362,6 +387,12 @@ export async function deleteCourseSection(input: DeleteCourseSectionInput) {
 }
 
 export async function createLesson(input: LessonInput) {
+  await requireTenantPermission({
+    description: "Blocked lesson creation without course management permission.",
+    permission: "manage_courses",
+    tenantId: input.tenantId,
+  });
+
   const title = input.title.trim();
 
   if (!title) {
@@ -408,6 +439,12 @@ export async function createLesson(input: LessonInput) {
 }
 
 export async function updateLesson(input: UpdateLessonInput) {
+  await requireTenantPermission({
+    description: "Blocked lesson update without course management permission.",
+    permission: "manage_courses",
+    tenantId: input.tenantId,
+  });
+
   const title = input.title.trim();
 
   if (!title) {
@@ -454,6 +491,12 @@ export async function updateLesson(input: UpdateLessonInput) {
 }
 
 export async function deleteLesson(input: DeleteLessonInput) {
+  await requireTenantPermission({
+    description: "Blocked lesson deletion without delete permission.",
+    permission: "delete_records",
+    tenantId: input.tenantId,
+  });
+
   const supabase = getSupabaseClient();
   const { data: existingLesson, error: existingError } = await supabase
     .from("lessons")

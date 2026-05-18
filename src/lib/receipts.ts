@@ -2,6 +2,7 @@ import type { Course } from "@/src/lib/courses";
 import type { Payment, PaymentWithRelations } from "@/src/lib/payments";
 import type { Student } from "@/src/lib/students";
 import { logActivity } from "@/src/lib/auditLogger";
+import { requireTenantPermission } from "@/src/lib/permissions";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 
 type ReceiptCourse = Pick<Course, "id" | "tenant_id" | "title">;
@@ -76,6 +77,12 @@ export async function attachReceiptToPayment(
   paymentId: string,
   tenantId: string,
 ) {
+  await requireTenantPermission({
+    description: "Blocked receipt generation without payment management permission.",
+    permission: "manage_payments",
+    tenantId,
+  });
+
   const supabase = getSupabaseClient();
   const existingReceipt = await getPaymentReceipt(paymentId, tenantId);
 

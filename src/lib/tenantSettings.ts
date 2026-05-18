@@ -1,4 +1,5 @@
 import { logActivity } from "@/src/lib/auditLogger";
+import { requireTenantPermission } from "@/src/lib/permissions";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 
 export type TenantSettings = {
@@ -125,6 +126,12 @@ export async function updateTenantSettings(
   tenantId: string,
   data: UpdateTenantSettingsInput,
 ) {
+  await requireTenantPermission({
+    description: "Blocked workspace branding/settings update without owner permission.",
+    permission: "manage_workspace",
+    tenantId,
+  });
+
   const supabase = getSupabaseClient();
   const payload = normalizeTenantSettingsPayload(data);
   const { data: tenantSettings, error } = await supabase

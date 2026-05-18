@@ -2,6 +2,7 @@ import type { Course } from "@/src/lib/courses";
 import type { Enrollment } from "@/src/lib/enrollments";
 import type { Student } from "@/src/lib/students";
 import { logActivity } from "@/src/lib/auditLogger";
+import { requireTenantPermission } from "@/src/lib/permissions";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 
 export type PaymentLinkStatus =
@@ -182,6 +183,12 @@ export async function getPaymentLinksByStudent(
 }
 
 export async function createPaymentLink(payload: CreatePaymentLinkPayload) {
+  await requireTenantPermission({
+    description: "Blocked payment link creation without payment management permission.",
+    permission: "manage_payments",
+    tenantId: payload.tenant_id,
+  });
+
   const supabase = getSupabaseClient();
   const {
     data: { user },
@@ -258,6 +265,12 @@ export async function updatePaymentLinkStatus(
   tenantId: string,
   status: PaymentLinkStatus,
 ) {
+  await requireTenantPermission({
+    description: "Blocked payment link status update without payment management permission.",
+    permission: "manage_payments",
+    tenantId,
+  });
+
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
     .from("payment_links")
@@ -293,6 +306,12 @@ export async function deletePaymentLink(
   paymentLinkId: string,
   tenantId: string,
 ) {
+  await requireTenantPermission({
+    description: "Blocked payment link deletion without delete permission.",
+    permission: "delete_records",
+    tenantId,
+  });
+
   const supabase = getSupabaseClient();
   const { data: existingLink, error: existingError } = await supabase
     .from("payment_links")
@@ -343,6 +362,12 @@ export async function convertPaymentLinkToPayment(
   tenantId: string,
   notes = "Paid via payment link",
 ) {
+  await requireTenantPermission({
+    description: "Blocked payment link conversion without payment management permission.",
+    permission: "manage_payments",
+    tenantId,
+  });
+
   const supabase = getSupabaseClient();
   const { data: existingLink, error: linkError } = await supabase
     .from("payment_links")

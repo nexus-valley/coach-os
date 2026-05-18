@@ -1,4 +1,5 @@
 import { createReminder, type ReminderType } from "@/src/lib/reminders";
+import { requireTenantPermission } from "@/src/lib/permissions";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 
 export type AutomationTriggerType =
@@ -116,6 +117,12 @@ export async function getAutomationRulesForTenant(tenantId: string) {
 }
 
 export async function createAutomationRule(payload: AutomationRulePayload) {
+  await requireTenantPermission({
+    description: "Blocked automation creation without automation management permission.",
+    permission: "manage_automations",
+    tenantId: payload.tenant_id,
+  });
+
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
     .from("automation_rules")
@@ -138,6 +145,12 @@ export async function updateAutomationRule(
   tenantId: string,
   payload: UpdateAutomationRulePayload,
 ) {
+  await requireTenantPermission({
+    description: "Blocked automation update without automation management permission.",
+    permission: "manage_automations",
+    tenantId,
+  });
+
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
     .from("automation_rules")
@@ -159,6 +172,12 @@ export async function toggleAutomationRule(
   tenantId: string,
   isActive: boolean,
 ) {
+  await requireTenantPermission({
+    description: "Blocked automation toggle without automation management permission.",
+    permission: "manage_automations",
+    tenantId,
+  });
+
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
     .from("automation_rules")
@@ -176,6 +195,12 @@ export async function toggleAutomationRule(
 }
 
 export async function deleteAutomationRule(ruleId: string, tenantId: string) {
+  await requireTenantPermission({
+    description: "Blocked automation deletion without delete permission.",
+    permission: "delete_records",
+    tenantId,
+  });
+
   const supabase = getSupabaseClient();
   const { error } = await supabase
     .from("automation_rules")

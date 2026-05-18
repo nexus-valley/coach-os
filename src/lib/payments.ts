@@ -2,6 +2,7 @@ import type { Course } from "@/src/lib/courses";
 import type { Enrollment } from "@/src/lib/enrollments";
 import type { Student } from "@/src/lib/students";
 import { logActivity } from "@/src/lib/auditLogger";
+import { requireTenantPermission } from "@/src/lib/permissions";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 
 export type PaymentMethod = "UPI" | "Cash" | "Bank" | "UPI Link";
@@ -132,6 +133,12 @@ export async function getPaymentsForTenant(tenantId: string) {
 }
 
 export async function createPayment(input: CreatePaymentInput) {
+  await requireTenantPermission({
+    description: "Blocked payment creation without payment management permission.",
+    permission: "manage_payments",
+    tenantId: input.tenant_id,
+  });
+
   const supabase = getSupabaseClient();
   if (!Number.isFinite(input.amount) || input.amount <= 0) {
     throw new Error("Payment amount must be greater than zero.");
@@ -186,6 +193,12 @@ export async function getPaymentsByStudent(studentId: string, tenantId: string) 
 }
 
 export async function deletePayment(paymentId: string, tenantId: string) {
+  await requireTenantPermission({
+    description: "Blocked payment deletion without delete permission.",
+    permission: "delete_records",
+    tenantId,
+  });
+
   const supabase = getSupabaseClient();
   const { data: existingPayment, error: existingError } = await supabase
     .from("payments")

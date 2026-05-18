@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
+import { AccessDeniedCard } from "@/src/components/security/AccessDeniedCard";
 import { Badge } from "@/src/components/ui/Badge";
 import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
@@ -29,6 +30,9 @@ import {
   buildPaymentReminderMessage,
   buildWhatsAppShareUrl,
 } from "@/src/lib/whatsapp";
+import { canManagePayments } from "@/src/lib/permissions";
+import { getSupabaseClient } from "@/src/lib/supabaseClient";
+import { getCurrentMemberRole, type MemberRole } from "@/src/lib/team";
 
 type StatusFilter = "all" | PaymentLinkStatus;
 
@@ -155,6 +159,7 @@ export function PaymentLinksPageClient() {
   const router = useRouter();
   const [actionError, setActionError] = useState("");
   const [courses, setCourses] = useState<Course[]>([]);
+  const [currentRole, setCurrentRole] = useState<MemberRole | null>(null);
   const [enrollments, setEnrollments] = useState<EnrollmentWithRelations[]>([]);
   const [error, setError] = useState("");
   const [form, setForm] = useState<PaymentLinkFormState>(emptyForm);
@@ -225,6 +230,19 @@ export function PaymentLinksPageClient() {
         }
 
         setTenant(currentTenant);
+        const supabase = getSupabaseClient();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        const role = user
+          ? await getCurrentMemberRole(currentTenant.id, user.id)
+          : null;
+        setCurrentRole(role);
+
+        if (!canManagePayments(role)) {
+          return;
+        }
+
         await loadContext(currentTenant);
       } catch (caught) {
         if (!active) {
@@ -429,6 +447,11 @@ export function PaymentLinksPageClient() {
   }
 
   return (
+    currentRole && !canManagePayments(currentRole) ? (
+      <div className="mx-auto max-w-7xl">
+        <AccessDeniedCard description="Payment link management is available to owners and admins only." />
+      </div>
+    ) : (
     <div className="mx-auto max-w-7xl">
       <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
         <div>
@@ -962,5 +985,6 @@ export function PaymentLinksPageClient() {
         </div>
       ) : null}
     </div>
+    )
   );
 }
