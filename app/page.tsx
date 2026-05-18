@@ -256,17 +256,19 @@ export default function Home() {
               WhatsApp workflows, analytics, and operations from a single
               premium workspace.
             </p>
-            <div className="mt-9 flex flex-col gap-3 sm:flex-row">
-              <Button href="/demo" size="lg">
+            <div className="mt-9 flex flex-col gap-3 sm:flex-row sm:items-center">
+              <Button href="/signup" size="lg">
+                Start Free / Sign Up
+              </Button>
+              <Button href="/demo" size="lg" variant="secondary">
                 Try Live Demo
               </Button>
-              <Button
-                href={whatsappUrl}
-                size="lg"
-                variant="secondary"
+              <a
+                className="inline-flex h-12 items-center justify-center rounded-full px-2 text-sm font-semibold text-[#145DA0] transition hover:text-[#0F4C81] sm:px-4"
+                href="/login"
               >
-                Chat on WhatsApp
-              </Button>
+                Already have an account? Login
+              </a>
             </div>
             <p className="mt-5 text-sm font-medium text-[#66788F]">
               No credit card required &bull; Google sign-in &bull; Demo
