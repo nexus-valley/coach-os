@@ -31,6 +31,68 @@ function createTenantSlug(name: string) {
   return `${baseSlug || "workspace"}-${suffix}`;
 }
 
+type SupabaseErrorLike = {
+  code?: string;
+  details?: string;
+  hint?: string;
+  message?: string;
+  name?: string;
+};
+
+function getSupabaseErrorDetails(error: unknown) {
+  if (error && typeof error === "object") {
+    const candidate = error as SupabaseErrorLike;
+
+    return {
+      code: candidate.code,
+      details: candidate.details,
+      hint: candidate.hint,
+      message: candidate.message,
+      name: candidate.name,
+    };
+  }
+
+  return {
+    code: undefined,
+    details: undefined,
+    hint: undefined,
+    message: error instanceof Error ? error.message : undefined,
+    name: error instanceof Error ? error.name : undefined,
+  };
+}
+
+function logWorkspaceCreationError(stage: string, error: unknown) {
+  const details = getSupabaseErrorDetails(error);
+
+  console.error("[CoachFort onboarding] Workspace creation failed", {
+    code: details.code,
+    details: details.details,
+    hint: details.hint,
+    message: details.message,
+    name: details.name,
+    stage,
+  });
+}
+
+function getWorkspaceCreationMessage(error: unknown, fallback: string) {
+  const details = getSupabaseErrorDetails(error);
+  const message = details.message ?? "";
+
+  if (message.toLowerCase().includes("failed to fetch")) {
+    return "Unable to reach Supabase while creating your workspace. Please check the Supabase URL/CORS settings and try again.";
+  }
+
+  if (details.code === "42501") {
+    return "Workspace creation was blocked by Supabase security policies. Run the onboarding RLS fix SQL, then try again.";
+  }
+
+  if (details.code === "23505") {
+    return "That workspace slug already exists. Please try again.";
+  }
+
+  return message || fallback;
+}
+
 export async function getCurrentTenant() {
   const supabase = getSupabaseClient();
   const {
@@ -98,32 +160,131 @@ export async function createWorkspace(params: {
     throw new Error("Workspace name is required.");
   }
 
-  const { data: tenant, error: tenantError } = await supabase
-    .from("tenants")
-    .insert({
-      category: params.category,
-      name: workspaceName,
-      owner_user_id: user.id,
-      slug: createTenantSlug(workspaceName),
-    })
-    .select("id,name,slug,category,owner_user_id")
-    .single();
+  let existingTenant: Tenant | null = null;
 
-  if (tenantError) {
-    throw tenantError;
+  try {
+    existingTenant = await getCurrentTenant();
+  } catch (caught) {
+    logWorkspaceCreationError("existing_tenant_lookup", caught);
+    throw new Error(
+      getWorkspaceCreationMessage(
+        caught,
+        "Unable to verify your existing workspace access. Please try again.",
+      ),
+    );
   }
 
-  const { error: membershipError } = await supabase
-    .from("tenant_members")
-    .insert({
+  if (existingTenant) {
+    return existingTenant;
+  }
+
+  const slug = createTenantSlug(workspaceName);
+  let rpcTenant: unknown = null;
+  let rpcError: SupabaseErrorLike | null = null;
+
+  try {
+    const result = await supabase
+      .rpc("create_workspace_with_owner", {
+        workspace_category: params.category,
+        workspace_name: workspaceName,
+        workspace_slug: slug,
+      })
+      .single();
+
+    rpcTenant = result.data;
+    rpcError = result.error;
+  } catch (caught) {
+    logWorkspaceCreationError("create_workspace_with_owner_rpc_fetch", caught);
+    throw new Error(
+      getWorkspaceCreationMessage(
+        caught,
+        "Unable to create your workspace. Please try again.",
+      ),
+    );
+  }
+
+  if (!rpcError && rpcTenant) {
+    return rpcTenant as Tenant;
+  }
+
+  if (rpcError?.code !== "PGRST202") {
+    logWorkspaceCreationError("create_workspace_with_owner_rpc", rpcError);
+    throw new Error(
+      getWorkspaceCreationMessage(
+        rpcError,
+        "Unable to create your workspace. Please try again.",
+      ),
+    );
+  }
+
+  logWorkspaceCreationError("create_workspace_with_owner_rpc_missing", rpcError);
+
+  let tenant: Tenant | null = null;
+  let tenantError: SupabaseErrorLike | null = null;
+
+  try {
+    const result = await supabase
+      .from("tenants")
+      .insert({
+        category: params.category,
+        name: workspaceName,
+        owner_user_id: user.id,
+        slug,
+      })
+      .select("id,name,slug,category,owner_user_id")
+      .single();
+
+    tenant = (result.data as Tenant | null) ?? null;
+    tenantError = result.error;
+  } catch (caught) {
+    logWorkspaceCreationError("tenant_insert_fetch", caught);
+    throw new Error(
+      getWorkspaceCreationMessage(
+        caught,
+        "Unable to create your workspace. Please try again.",
+      ),
+    );
+  }
+
+  if (tenantError || !tenant) {
+    logWorkspaceCreationError("tenant_insert", tenantError);
+    throw new Error(
+      getWorkspaceCreationMessage(
+        tenantError,
+        "Unable to create your workspace. Please try again.",
+      ),
+    );
+  }
+
+  let membershipError: SupabaseErrorLike | null = null;
+
+  try {
+    const result = await supabase.from("tenant_members").insert({
       role: "owner",
       tenant_id: tenant.id,
       user_id: user.id,
     });
 
-  if (membershipError) {
-    throw membershipError;
+    membershipError = result.error;
+  } catch (caught) {
+    logWorkspaceCreationError("tenant_member_owner_insert_fetch", caught);
+    throw new Error(
+      getWorkspaceCreationMessage(
+        caught,
+        "Workspace was created, but owner access could not be assigned. Run the onboarding RLS fix SQL, then try again.",
+      ),
+    );
   }
 
-  return tenant as Tenant;
+  if (membershipError) {
+    logWorkspaceCreationError("tenant_member_owner_insert", membershipError);
+    throw new Error(
+      getWorkspaceCreationMessage(
+        membershipError,
+        "Workspace was created, but owner access could not be assigned. Run the onboarding RLS fix SQL, then try again.",
+      ),
+    );
+  }
+
+  return tenant;
 }
