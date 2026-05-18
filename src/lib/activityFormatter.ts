@@ -6,6 +6,9 @@ export const activityActionOptions = [
   ["student_updated", "Student Updated"],
   ["student_deleted", "Student Deleted"],
   ["course_created", "Course Created"],
+  ["cohort_created", "Cohort Created"],
+  ["cohort_updated", "Cohort Updated"],
+  ["cohort_deleted", "Cohort Deleted"],
   ["course_section_created", "Course Section Created"],
   ["course_section_updated", "Course Section Updated"],
   ["course_section_deleted", "Course Section Deleted"],
@@ -43,6 +46,7 @@ export const activityEntityOptions = [
   ["all", "All entities"],
   ["student", "Students"],
   ["course", "Courses"],
+  ["cohort", "Cohorts"],
   ["course_section", "Course sections"],
   ["lesson", "Lessons"],
   ["enrollment", "Enrollments"],
@@ -71,6 +75,7 @@ const entityLabels = Object.fromEntries(activityEntityOptions);
 
 const entityIconLabels: Record<string, string> = {
   certificate: "CE",
+  cohort: "CH",
   course: "CO",
   course_section: "CS",
   demo_data: "DM",
@@ -90,6 +95,7 @@ const entityIconLabels: Record<string, string> = {
 
 const entityIconClasses: Record<string, string> = {
   certificate: "border-amber-200 bg-amber-50 text-amber-700",
+  cohort: "border-cyan-200 bg-cyan-50 text-cyan-700",
   course: "border-blue-200 bg-blue-50 text-blue-700",
   course_section: "border-blue-200 bg-blue-50 text-blue-700",
   demo_data: "border-cyan-200 bg-cyan-50 text-cyan-700",

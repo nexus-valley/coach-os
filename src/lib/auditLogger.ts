@@ -95,6 +95,7 @@ function inferSeverity(action: string): AuditLogSeverity {
 
   if (
     [
+      "cohort_deleted",
       "course_section_deleted",
       "access_denied",
       "enrollment_deleted",

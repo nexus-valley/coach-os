@@ -1,3 +1,4 @@
+import { logActivity } from "@/src/lib/auditLogger";
 import type { Course } from "@/src/lib/courses";
 import { requireTenantPermission } from "@/src/lib/permissions";
 import type { Student } from "@/src/lib/students";
@@ -54,6 +55,35 @@ const cohortColumns =
 
 const cohortMemberColumns =
   "id,tenant_id,cohort_id,student_id,enrolled_at";
+
+async function getCohortStudentCount(params: {
+  cohortId: string;
+  tenantId: string;
+}) {
+  const supabase = getSupabaseClient();
+  const { count, error } = await supabase
+    .from("cohort_members")
+    .select("id", { count: "exact", head: true })
+    .eq("tenant_id", params.tenantId)
+    .eq("cohort_id", params.cohortId);
+
+  if (error) {
+    throw error;
+  }
+
+  return count ?? 0;
+}
+
+function getCohortAuditMetadata(cohort: Cohort, studentCount: number) {
+  return {
+    cohort_id: cohort.id,
+    cohort_name: cohort.name,
+    end_date: cohort.end_date,
+    linked_course_id: cohort.course_id,
+    start_date: cohort.start_date,
+    student_count: studentCount,
+  };
+}
 
 async function attachCohortRelations(cohorts: Cohort[], tenantId: string) {
   if (cohorts.length === 0) {
@@ -197,7 +227,19 @@ export async function createCohort(input: CohortInput) {
     throw error;
   }
 
-  return data as Cohort;
+  const cohort = data as Cohort;
+
+  await logActivity({
+    action: "cohort_created",
+    description: "Created cohort",
+    entityId: cohort.id,
+    entityName: cohort.name,
+    entityType: "cohort",
+    metadata: getCohortAuditMetadata(cohort, 0),
+    tenantId: cohort.tenant_id,
+  });
+
+  return cohort;
 }
 
 export async function updateCohort(input: UpdateCohortInput) {
@@ -232,7 +274,23 @@ export async function updateCohort(input: UpdateCohortInput) {
     throw error;
   }
 
-  return data as Cohort;
+  const cohort = data as Cohort;
+  const studentCount = await getCohortStudentCount({
+    cohortId: cohort.id,
+    tenantId: cohort.tenant_id,
+  });
+
+  await logActivity({
+    action: "cohort_updated",
+    description: "Updated cohort",
+    entityId: cohort.id,
+    entityName: cohort.name,
+    entityType: "cohort",
+    metadata: getCohortAuditMetadata(cohort, studentCount),
+    tenantId: cohort.tenant_id,
+  });
+
+  return cohort;
 }
 
 export async function deleteCohort(params: {
@@ -246,6 +304,24 @@ export async function deleteCohort(params: {
   });
 
   const supabase = getSupabaseClient();
+  const { data: existingCohort, error: existingError } = await supabase
+    .from("cohorts")
+    .select(cohortColumns)
+    .eq("tenant_id", params.tenantId)
+    .eq("id", params.cohortId)
+    .maybeSingle();
+
+  if (existingError) {
+    throw existingError;
+  }
+
+  const studentCount = existingCohort
+    ? await getCohortStudentCount({
+        cohortId: existingCohort.id,
+        tenantId: existingCohort.tenant_id,
+      })
+    : 0;
+
   const { error } = await supabase
     .from("cohorts")
     .delete()
@@ -254,6 +330,21 @@ export async function deleteCohort(params: {
 
   if (error) {
     throw error;
+  }
+
+  if (existingCohort) {
+    const cohort = existingCohort as Cohort;
+
+    await logActivity({
+      action: "cohort_deleted",
+      description: "Deleted cohort",
+      entityId: cohort.id,
+      entityName: cohort.name,
+      entityType: "cohort",
+      metadata: getCohortAuditMetadata(cohort, studentCount),
+      severity: "warning",
+      tenantId: cohort.tenant_id,
+    });
   }
 }
 
