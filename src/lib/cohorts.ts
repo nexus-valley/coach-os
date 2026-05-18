@@ -1,6 +1,8 @@
 import type { Course } from "@/src/lib/courses";
+import { requireTenantPermission } from "@/src/lib/permissions";
 import type { Student } from "@/src/lib/students";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
+import { getCurrentTrainerScope } from "@/src/lib/trainerAssignments";
 
 export type Cohort = {
   id: string;
@@ -104,10 +106,22 @@ async function attachCohortRelations(cohorts: Cohort[], tenantId: string) {
 
 export async function getCohortsForTenant(tenantId: string) {
   const supabase = getSupabaseClient();
-  const { data, error } = await supabase
+  const trainerScope = await getCurrentTrainerScope(tenantId);
+
+  if (trainerScope && trainerScope.cohortIds.length === 0) {
+    return [];
+  }
+
+  let query = supabase
     .from("cohorts")
     .select(cohortColumns)
-    .eq("tenant_id", tenantId)
+    .eq("tenant_id", tenantId);
+
+  if (trainerScope) {
+    query = query.in("id", trainerScope.cohortIds);
+  }
+
+  const { data, error } = await query
     .order("start_date", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false });
 
@@ -122,6 +136,12 @@ export async function getCohortById(params: {
   cohortId: string;
   tenantId: string;
 }) {
+  const trainerScope = await getCurrentTrainerScope(params.tenantId);
+
+  if (trainerScope && !trainerScope.cohortIds.includes(params.cohortId)) {
+    return null;
+  }
+
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
     .from("cohorts")
@@ -143,6 +163,12 @@ export async function getCohortById(params: {
 }
 
 export async function createCohort(input: CohortInput) {
+  await requireTenantPermission({
+    description: "Blocked cohort creation without course management permission.",
+    permission: "manage_courses",
+    tenantId: input.tenantId,
+  });
+
   const name = input.name.trim();
 
   if (!name) {
@@ -175,6 +201,12 @@ export async function createCohort(input: CohortInput) {
 }
 
 export async function updateCohort(input: UpdateCohortInput) {
+  await requireTenantPermission({
+    description: "Blocked cohort update without course management permission.",
+    permission: "manage_courses",
+    tenantId: input.tenantId,
+  });
+
   const name = input.name.trim();
 
   if (!name) {
@@ -207,6 +239,12 @@ export async function deleteCohort(params: {
   cohortId: string;
   tenantId: string;
 }) {
+  await requireTenantPermission({
+    description: "Blocked cohort deletion without delete permission.",
+    permission: "delete_records",
+    tenantId: params.tenantId,
+  });
+
   const supabase = getSupabaseClient();
   const { error } = await supabase
     .from("cohorts")
@@ -223,6 +261,12 @@ export async function getCohortMembers(params: {
   cohortId: string;
   tenantId: string;
 }) {
+  const trainerScope = await getCurrentTrainerScope(params.tenantId);
+
+  if (trainerScope && !trainerScope.cohortIds.includes(params.cohortId)) {
+    return [];
+  }
+
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
     .from("cohort_members")
@@ -270,12 +314,23 @@ export async function getCohortsForStudent(params: {
   studentId: string;
   tenantId: string;
 }) {
+  const trainerScope = await getCurrentTrainerScope(params.tenantId);
   const supabase = getSupabaseClient();
-  const { data, error } = await supabase
+  let query = supabase
     .from("cohort_members")
     .select(cohortMemberColumns)
     .eq("tenant_id", params.tenantId)
-    .eq("student_id", params.studentId)
+    .eq("student_id", params.studentId);
+
+  if (trainerScope) {
+    if (trainerScope.cohortIds.length === 0) {
+      return [];
+    }
+
+    query = query.in("cohort_id", trainerScope.cohortIds);
+  }
+
+  const { data, error } = await query
     .order("enrolled_at", { ascending: false });
 
   if (error) {
@@ -316,6 +371,12 @@ export async function addStudentToCohort(params: {
   studentId: string;
   tenantId: string;
 }) {
+  await requireTenantPermission({
+    description: "Blocked cohort member update without student management permission.",
+    permission: "manage_students",
+    tenantId: params.tenantId,
+  });
+
   const supabase = getSupabaseClient();
   const { data: existing, error: existingError } = await supabase
     .from("cohort_members")
@@ -359,6 +420,12 @@ export async function removeStudentFromCohort(params: {
   studentId: string;
   tenantId: string;
 }) {
+  await requireTenantPermission({
+    description: "Blocked cohort member removal without student management permission.",
+    permission: "manage_students",
+    tenantId: params.tenantId,
+  });
+
   const supabase = getSupabaseClient();
   const { error } = await supabase
     .from("cohort_members")

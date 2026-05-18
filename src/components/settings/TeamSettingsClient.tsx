@@ -13,6 +13,8 @@ import { Badge } from "@/src/components/ui/Badge";
 import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
 import { AccessDeniedCard } from "@/src/components/security/AccessDeniedCard";
+import { getCohortsForTenant, type CohortWithCourse } from "@/src/lib/cohorts";
+import { getCoursesForTenant, type Course } from "@/src/lib/courses";
 import {
   canAccessSettings,
   getRoleDescription,
@@ -35,6 +37,16 @@ import {
   updateTenantSettings,
   type TenantSettings,
 } from "@/src/lib/tenantSettings";
+import {
+  assignTrainerToCohort,
+  assignTrainerToCourse,
+  getTrainerAssignedCohorts,
+  getTrainerAssignedCourses,
+  removeTrainerFromCohort,
+  removeTrainerFromCourse,
+  type TrainerCohortAssignment,
+  type TrainerCourseAssignment,
+} from "@/src/lib/trainerAssignments";
 
 const manageableRoles: Exclude<MemberRole, "owner">[] = [
   "admin",
@@ -165,15 +177,29 @@ export function TeamSettingsClient() {
     useState<BrandingFormState>(emptyBrandingForm);
   const [brandingMessage, setBrandingMessage] = useState("");
   const [brandingSaving, setBrandingSaving] = useState(false);
+  const [cohorts, setCohorts] = useState<CohortWithCourse[]>([]);
+  const [courses, setCourses] = useState<Course[]>([]);
   const [currentRole, setCurrentRole] = useState<MemberRole | null>(null);
   const [currentUserId, setCurrentUserId] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [members, setMembers] = useState<TenantMemberWithProfile[]>([]);
   const [mutatingMemberId, setMutatingMemberId] = useState("");
+  const [selectedCohortByTrainer, setSelectedCohortByTrainer] = useState<
+    Record<string, string>
+  >({});
+  const [selectedCourseByTrainer, setSelectedCourseByTrainer] = useState<
+    Record<string, string>
+  >({});
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [tenantSettings, setTenantSettings] =
     useState<TenantSettings | null>(null);
+  const [trainerCohortAssignments, setTrainerCohortAssignments] = useState<
+    Record<string, TrainerCohortAssignment[]>
+  >({});
+  const [trainerCourseAssignments, setTrainerCourseAssignments] = useState<
+    Record<string, TrainerCourseAssignment[]>
+  >({});
 
   const loadTeam = useCallback(async (currentTenant: Tenant) => {
     const supabase = getSupabaseClient();
@@ -216,9 +242,51 @@ export function TeamSettingsClient() {
       return role;
     }
 
-    setMembers(await getTenantMembers(currentTenant.id));
+    const tenantMembers = await getTenantMembers(currentTenant.id);
+    setMembers(tenantMembers);
     return role;
   }, [router]);
+
+  const loadTrainerAssignments = useCallback(
+    async (currentTenant: Tenant, visibleMembers: TenantMemberWithProfile[]) => {
+      const trainers = visibleMembers.filter(
+        (member) => member.role === "trainer",
+      );
+
+      if (trainers.length === 0) {
+        setTrainerCourseAssignments({});
+        setTrainerCohortAssignments({});
+        return;
+      }
+
+      const pairs = await Promise.all(
+        trainers.map(async (trainer) => {
+          const [assignedCourses, assignedCohorts] = await Promise.all([
+            getTrainerAssignedCourses(currentTenant.id, trainer.user_id),
+            getTrainerAssignedCohorts(currentTenant.id, trainer.user_id),
+          ]);
+
+          return {
+            assignedCohorts,
+            assignedCourses,
+            trainerId: trainer.user_id,
+          };
+        }),
+      );
+
+      setTrainerCourseAssignments(
+        Object.fromEntries(
+          pairs.map((item) => [item.trainerId, item.assignedCourses]),
+        ),
+      );
+      setTrainerCohortAssignments(
+        Object.fromEntries(
+          pairs.map((item) => [item.trainerId, item.assignedCohorts]),
+        ),
+      );
+    },
+    [],
+  );
 
   useEffect(() => {
     let active = true;
@@ -243,11 +311,22 @@ export function TeamSettingsClient() {
           return;
         }
 
-        const settings = await getTenantSettings(currentTenant.id);
+        const [settings, tenantCourses, tenantCohorts, tenantMembers] =
+          await Promise.all([
+            getTenantSettings(currentTenant.id),
+            getCoursesForTenant(currentTenant.id),
+            getCohortsForTenant(currentTenant.id),
+            getTenantMembers(currentTenant.id),
+          ]);
 
         if (!active) {
           return;
         }
+
+        setCourses(tenantCourses);
+        setCohorts(tenantCohorts);
+        setMembers(tenantMembers);
+        await loadTrainerAssignments(currentTenant, tenantMembers);
 
         if (settings) {
           setBrandingForm(createBrandingForm(settings));
@@ -271,7 +350,7 @@ export function TeamSettingsClient() {
     return () => {
       active = false;
     };
-  }, [loadTeam, router]);
+  }, [loadTeam, loadTrainerAssignments, router]);
 
   async function refreshTeam() {
     if (!tenant) {
@@ -329,6 +408,114 @@ export function TeamSettingsClient() {
       await refreshTeam();
     } catch (caught) {
       setActionError(getErrorMessage(caught, "Unable to remove team member."));
+    } finally {
+      setMutatingMemberId("");
+    }
+  }
+
+  async function handleAssignTrainerCourse(member: TenantMemberWithProfile) {
+    if (!tenant || !canManageTeam(currentRole)) {
+      return;
+    }
+
+    const courseId = selectedCourseByTrainer[member.user_id];
+
+    if (!courseId) {
+      setActionError("Select a course to assign.");
+      return;
+    }
+
+    setMutatingMemberId(member.id);
+    setActionError("");
+
+    try {
+      await assignTrainerToCourse({
+        courseId,
+        tenantId: tenant.id,
+        trainerUserId: member.user_id,
+      });
+      await loadTrainerAssignments(tenant, members);
+    } catch (caught) {
+      setActionError(getErrorMessage(caught, "Unable to assign course."));
+    } finally {
+      setMutatingMemberId("");
+    }
+  }
+
+  async function handleAssignTrainerCohort(member: TenantMemberWithProfile) {
+    if (!tenant || !canManageTeam(currentRole)) {
+      return;
+    }
+
+    const cohortId = selectedCohortByTrainer[member.user_id];
+
+    if (!cohortId) {
+      setActionError("Select a cohort to assign.");
+      return;
+    }
+
+    setMutatingMemberId(member.id);
+    setActionError("");
+
+    try {
+      await assignTrainerToCohort({
+        cohortId,
+        tenantId: tenant.id,
+        trainerUserId: member.user_id,
+      });
+      await loadTrainerAssignments(tenant, members);
+    } catch (caught) {
+      setActionError(getErrorMessage(caught, "Unable to assign cohort."));
+    } finally {
+      setMutatingMemberId("");
+    }
+  }
+
+  async function handleRemoveTrainerCourse(
+    member: TenantMemberWithProfile,
+    courseId: string,
+  ) {
+    if (!tenant || !canManageTeam(currentRole)) {
+      return;
+    }
+
+    setMutatingMemberId(member.id);
+    setActionError("");
+
+    try {
+      await removeTrainerFromCourse({
+        courseId,
+        tenantId: tenant.id,
+        trainerUserId: member.user_id,
+      });
+      await loadTrainerAssignments(tenant, members);
+    } catch (caught) {
+      setActionError(getErrorMessage(caught, "Unable to remove course."));
+    } finally {
+      setMutatingMemberId("");
+    }
+  }
+
+  async function handleRemoveTrainerCohort(
+    member: TenantMemberWithProfile,
+    cohortId: string,
+  ) {
+    if (!tenant || !canManageTeam(currentRole)) {
+      return;
+    }
+
+    setMutatingMemberId(member.id);
+    setActionError("");
+
+    try {
+      await removeTrainerFromCohort({
+        cohortId,
+        tenantId: tenant.id,
+        trainerUserId: member.user_id,
+      });
+      await loadTrainerAssignments(tenant, members);
+    } catch (caught) {
+      setActionError(getErrorMessage(caught, "Unable to remove cohort."));
     } finally {
       setMutatingMemberId("");
     }
@@ -726,6 +913,213 @@ export function TeamSettingsClient() {
           </div>
         </Card>
       </section>
+
+      {canManage ? (
+        <section className="mt-8">
+          <Card className="border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/10">
+            <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
+              <div>
+                <Badge className="border-white/15 bg-white/10 text-white">
+                  Trainer assignments
+                </Badge>
+                <h3 className="mt-4 text-2xl font-semibold">
+                  Course and cohort visibility
+                </h3>
+                <p className="mt-2 text-sm leading-6 text-slate-400">
+                  Trainers only see the courses, cohorts, students, and
+                  enrollments assigned here.
+                </p>
+              </div>
+              <Badge tone="trainer">
+                {members.filter((member) => member.role === "trainer").length}{" "}
+                trainers
+              </Badge>
+            </div>
+
+            <div className="mt-7 space-y-5">
+              {members.filter((member) => member.role === "trainer").length ===
+              0 ? (
+                <div className="rounded-3xl border border-white/10 bg-white/5 p-6 text-sm text-slate-400">
+                  Change a team member role to Trainer to assign course and
+                  cohort visibility.
+                </div>
+              ) : (
+                members
+                  .filter((member) => member.role === "trainer")
+                  .map((member) => {
+                    const assignedCourses =
+                      trainerCourseAssignments[member.user_id] ?? [];
+                    const assignedCohorts =
+                      trainerCohortAssignments[member.user_id] ?? [];
+                    const displayName =
+                      member.profile?.full_name ||
+                      member.profile?.email ||
+                      "Trainer";
+
+                    return (
+                      <div
+                        className="rounded-3xl border border-white/10 bg-white/5 p-5"
+                        key={member.id}
+                      >
+                        <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">
+                          <div>
+                            <p className="font-semibold text-white">
+                              {displayName}
+                            </p>
+                            <p className="mt-1 text-sm text-slate-400">
+                              {member.profile?.email || member.user_id}
+                            </p>
+                          </div>
+                          <RoleBadge role="trainer" />
+                        </div>
+
+                        <div className="mt-5 grid gap-5 xl:grid-cols-2">
+                          <div>
+                            <p className="text-sm font-semibold text-slate-300">
+                              Assign Courses
+                            </p>
+                            <div className="mt-3 flex gap-2">
+                              <select
+                                className="h-11 min-w-0 flex-1 rounded-2xl border border-white/10 bg-white/10 px-3 text-sm text-white outline-none focus:border-teal-400/40 focus:ring-4 focus:ring-teal-400/10"
+                                onChange={(event) =>
+                                  setSelectedCourseByTrainer((current) => ({
+                                    ...current,
+                                    [member.user_id]: event.target.value,
+                                  }))
+                                }
+                                value={
+                                  selectedCourseByTrainer[member.user_id] ?? ""
+                                }
+                              >
+                                <option className="text-slate-950" value="">
+                                  Select course
+                                </option>
+                                {courses.map((course) => (
+                                  <option
+                                    className="text-slate-950"
+                                    key={course.id}
+                                    value={course.id}
+                                  >
+                                    {course.title}
+                                  </option>
+                                ))}
+                              </select>
+                              <Button
+                                disabled={mutatingMemberId === member.id}
+                                onClick={() => handleAssignTrainerCourse(member)}
+                                size="sm"
+                                type="button"
+                              >
+                                Assign
+                              </Button>
+                            </div>
+                            <div className="mt-3 flex flex-wrap gap-2">
+                              {assignedCourses.length === 0 ? (
+                                <span className="text-sm text-slate-500">
+                                  No course assignments.
+                                </span>
+                              ) : (
+                                assignedCourses.map((assignment) => (
+                                  <span
+                                    className="inline-flex items-center gap-2 rounded-full border border-teal-400/30 bg-teal-400/10 px-3 py-1 text-xs font-semibold text-teal-200"
+                                    key={assignment.id}
+                                  >
+                                    {assignment.course?.title ?? "Course"}
+                                    <button
+                                      className="text-teal-100 hover:text-white"
+                                      onClick={() =>
+                                        handleRemoveTrainerCourse(
+                                          member,
+                                          assignment.course_id,
+                                        )
+                                      }
+                                      type="button"
+                                    >
+                                      remove
+                                    </button>
+                                  </span>
+                                ))
+                              )}
+                            </div>
+                          </div>
+
+                          <div>
+                            <p className="text-sm font-semibold text-slate-300">
+                              Assign Cohorts
+                            </p>
+                            <div className="mt-3 flex gap-2">
+                              <select
+                                className="h-11 min-w-0 flex-1 rounded-2xl border border-white/10 bg-white/10 px-3 text-sm text-white outline-none focus:border-teal-400/40 focus:ring-4 focus:ring-teal-400/10"
+                                onChange={(event) =>
+                                  setSelectedCohortByTrainer((current) => ({
+                                    ...current,
+                                    [member.user_id]: event.target.value,
+                                  }))
+                                }
+                                value={
+                                  selectedCohortByTrainer[member.user_id] ?? ""
+                                }
+                              >
+                                <option className="text-slate-950" value="">
+                                  Select cohort
+                                </option>
+                                {cohorts.map((cohort) => (
+                                  <option
+                                    className="text-slate-950"
+                                    key={cohort.id}
+                                    value={cohort.id}
+                                  >
+                                    {cohort.name}
+                                  </option>
+                                ))}
+                              </select>
+                              <Button
+                                disabled={mutatingMemberId === member.id}
+                                onClick={() => handleAssignTrainerCohort(member)}
+                                size="sm"
+                                type="button"
+                              >
+                                Assign
+                              </Button>
+                            </div>
+                            <div className="mt-3 flex flex-wrap gap-2">
+                              {assignedCohorts.length === 0 ? (
+                                <span className="text-sm text-slate-500">
+                                  No cohort assignments.
+                                </span>
+                              ) : (
+                                assignedCohorts.map((assignment) => (
+                                  <span
+                                    className="inline-flex items-center gap-2 rounded-full border border-purple-400/30 bg-purple-400/10 px-3 py-1 text-xs font-semibold text-purple-200"
+                                    key={assignment.id}
+                                  >
+                                    {assignment.cohort?.name ?? "Cohort"}
+                                    <button
+                                      className="text-purple-100 hover:text-white"
+                                      onClick={() =>
+                                        handleRemoveTrainerCohort(
+                                          member,
+                                          assignment.cohort_id,
+                                        )
+                                      }
+                                      type="button"
+                                    >
+                                      remove
+                                    </button>
+                                  </span>
+                                ))
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+              )}
+            </div>
+          </Card>
+        </section>
+      ) : null}
 
       <section className="mt-6 grid gap-4 md:grid-cols-3">
         {roleDefinitions.map((definition) => (

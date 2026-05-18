@@ -12,6 +12,7 @@ import {
   type DashboardMetrics,
 } from "@/src/lib/dashboard";
 import { loadDemoDataForTenant } from "@/src/lib/demoSeed";
+import { canAccessPayments } from "@/src/lib/permissions";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 import { getCurrentMemberRole, type MemberRole } from "@/src/lib/team";
 import { getCurrentTenant, type Tenant } from "@/src/lib/tenant";
@@ -327,9 +328,11 @@ export function DashboardPageClient() {
         <Button href="/app/courses" size="lg" variant="secondary">
           Create Course
         </Button>
-        <Button href="/app/payments" size="lg" variant="secondary">
-          Record Payment
-        </Button>
+        {canAccessPayments(currentRole) ? (
+          <Button href="/app/payments" size="lg" variant="secondary">
+            Record Payment
+          </Button>
+        ) : null}
       </section>
 
       <section className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-6">

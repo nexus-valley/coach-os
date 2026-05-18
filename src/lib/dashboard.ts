@@ -4,6 +4,7 @@ import type { PaymentMethod, PaymentStatus } from "@/src/lib/payments";
 import { getReminderCounts } from "@/src/lib/reminders";
 import type { StudentStatus } from "@/src/lib/students";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
+import { getCurrentTrainerScope } from "@/src/lib/trainerAssignments";
 
 type DashboardPayment = {
   amount: number;
@@ -122,6 +123,96 @@ export async function getDashboardMetrics(
   tenantId: string,
 ): Promise<DashboardMetrics> {
   const supabase = getSupabaseClient();
+  const trainerScope = await getCurrentTrainerScope(tenantId);
+
+  if (trainerScope) {
+    const [courseRowsResult, enrollmentRowsResult, cohortMembersResult] =
+      await Promise.all([
+        trainerScope.courseIds.length
+          ? supabase
+              .from("courses")
+              .select("id,title,status")
+              .eq("tenant_id", tenantId)
+              .in("id", trainerScope.courseIds)
+          : Promise.resolve({ data: [], error: null }),
+        trainerScope.courseIds.length
+          ? supabase
+              .from("enrollments")
+              .select("id,student_id,course_id")
+              .eq("tenant_id", tenantId)
+              .in("course_id", trainerScope.courseIds)
+          : Promise.resolve({ data: [], error: null }),
+        trainerScope.cohortIds.length
+          ? supabase
+              .from("cohort_members")
+              .select("student_id")
+              .eq("tenant_id", tenantId)
+              .in("cohort_id", trainerScope.cohortIds)
+          : Promise.resolve({ data: [], error: null }),
+      ]);
+
+    if (courseRowsResult.error) {
+      throw courseRowsResult.error;
+    }
+
+    if (enrollmentRowsResult.error) {
+      throw enrollmentRowsResult.error;
+    }
+
+    if (cohortMembersResult.error) {
+      throw cohortMembersResult.error;
+    }
+
+    const enrollmentRows = (enrollmentRowsResult.data ?? []) as {
+      course_id: string;
+      id: string;
+      student_id: string;
+    }[];
+    const studentIds = Array.from(
+      new Set([
+        ...enrollmentRows.map((enrollment) => enrollment.student_id),
+        ...((cohortMembersResult.data ?? []) as { student_id: string }[]).map(
+          (member) => member.student_id,
+        ),
+      ]),
+    );
+    const recentStudentsResult = studentIds.length
+      ? await supabase
+          .from("students")
+          .select("id,full_name,email,phone,status,created_at")
+          .eq("tenant_id", tenantId)
+          .in("id", studentIds)
+          .order("created_at", { ascending: false })
+          .limit(5)
+      : { data: [], error: null };
+
+    if (recentStudentsResult.error) {
+      throw recentStudentsResult.error;
+    }
+
+    const courses = (courseRowsResult.data ?? []) as DashboardCourseLookup[];
+    const activeCourses = courses.filter(
+      (course) => course.status === "published",
+    ).length;
+
+    return {
+      activeAutomations: 0,
+      activeCourses: activeCourses > 0 ? activeCourses : courses.length,
+      courseRevenue: [],
+      paymentStatusSummary: {
+        completed: 0,
+        failed: 0,
+        pending: 0,
+      },
+      pendingPayments: 0,
+      pendingRemindersDue: 0,
+      recentPayments: [],
+      recentStudents: (recentStudentsResult.data ?? []) as DashboardRecentStudent[],
+      totalEnrollments: enrollmentRows.length,
+      totalRevenue: 0,
+      totalStudents: studentIds.length,
+    };
+  }
 
   const [
     studentsCountResult,

@@ -15,6 +15,12 @@ import {
   type Course,
   type CreateCourseInput,
 } from "@/src/lib/courses";
+import { getSupabaseClient } from "@/src/lib/supabaseClient";
+import {
+  canManageCourses,
+  getCurrentMemberRole,
+  type MemberRole,
+} from "@/src/lib/team";
 import { getCurrentTenant, type Tenant } from "@/src/lib/tenant";
 
 type CourseFormStatus = CreateCourseInput["status"];
@@ -40,6 +46,7 @@ function StatusBadge({ status }: { status: Course["status"] }) {
 export function CoursesPageClient() {
   const router = useRouter();
   const [courses, setCourses] = useState<Course[]>([]);
+  const [currentRole, setCurrentRole] = useState<MemberRole | null>(null);
   const [description, setDescription] = useState("");
   const [error, setError] = useState("");
   const [formOpen, setFormOpen] = useState(false);
@@ -66,7 +73,14 @@ export function CoursesPageClient() {
           return;
         }
 
-        const tenantCourses = await getCoursesForTenant(currentTenant.id);
+        const supabase = getSupabaseClient();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        const [tenantCourses, role] = await Promise.all([
+          getCoursesForTenant(currentTenant.id),
+          user ? getCurrentMemberRole(currentTenant.id, user.id) : null,
+        ]);
 
         if (!active) {
           return;
@@ -74,6 +88,7 @@ export function CoursesPageClient() {
 
         setTenant(currentTenant);
         setCourses(tenantCourses);
+        setCurrentRole(role);
       } catch (caught) {
         if (!active) {
           return;
@@ -139,6 +154,8 @@ export function CoursesPageClient() {
     }
   }
 
+  const canManage = canManageCourses(currentRole);
+
   return (
     <div className="mx-auto max-w-7xl">
       <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
@@ -154,13 +171,11 @@ export function CoursesPageClient() {
             workspace.
           </p>
         </div>
-        <Button
-          onClick={() => setFormOpen(true)}
-          size="lg"
-          type="button"
-        >
-          Create Course
-        </Button>
+        {canManage ? (
+          <Button onClick={() => setFormOpen(true)} size="lg" type="button">
+            Create Course
+          </Button>
+        ) : null}
       </div>
 
       <Card className="mt-8 border-white/10 bg-[#101214] p-5 text-white shadow-2xl shadow-black/10 sm:p-6">
@@ -200,7 +215,11 @@ export function CoursesPageClient() {
         </section>
       ) : courses.length === 0 ? (
         <EmptyState
-          action={{ label: "Create Course", onClick: () => setFormOpen(true) }}
+          action={
+            canManage
+              ? { label: "Create Course", onClick: () => setFormOpen(true) }
+              : undefined
+          }
           description="Create your first draft course to start shaping the learning experience, sections, lessons, and enrollments."
           icon="CU"
           title="No courses created yet"

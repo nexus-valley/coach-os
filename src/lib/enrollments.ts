@@ -1,6 +1,7 @@
 import { logActivity } from "@/src/lib/auditLogger";
 import { requireTenantPermission } from "@/src/lib/permissions";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
+import { getCurrentTrainerScope } from "@/src/lib/trainerAssignments";
 import type { Course } from "@/src/lib/courses";
 import type { Student } from "@/src/lib/students";
 
@@ -95,6 +96,21 @@ async function getEnrollmentsByFilter(
   filter?: { column: "course_id" | "student_id"; value: string },
 ) {
   const supabase = getSupabaseClient();
+  const trainerScope = await getCurrentTrainerScope(tenantId);
+
+  if (trainerScope) {
+    if (trainerScope.courseIds.length === 0) {
+      return [];
+    }
+
+    if (
+      filter?.column === "course_id" &&
+      !trainerScope.courseIds.includes(filter.value)
+    ) {
+      return [];
+    }
+  }
+
   let query = supabase
     .from("enrollments")
     .select(
@@ -105,6 +121,10 @@ async function getEnrollmentsByFilter(
 
   if (filter) {
     query = query.eq(filter.column, filter.value);
+  }
+
+  if (trainerScope) {
+    query = query.in("course_id", trainerScope.courseIds);
   }
 
   const { data, error } = await query;

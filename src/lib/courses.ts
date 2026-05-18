@@ -1,6 +1,7 @@
 import { logActivity } from "@/src/lib/auditLogger";
 import { requireTenantPermission } from "@/src/lib/permissions";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
+import { getCurrentTrainerScope } from "@/src/lib/trainerAssignments";
 
 export type CourseStatus = "draft" | "published" | "archived";
 export type LessonType = "text" | "video" | "pdf" | "quiz" | "assignment";
@@ -112,12 +113,24 @@ function createSlug(title: string) {
 
 export async function getCoursesForTenant(tenantId: string) {
   const supabase = getSupabaseClient();
-  const { data, error } = await supabase
+  const trainerScope = await getCurrentTrainerScope(tenantId);
+
+  if (trainerScope && trainerScope.courseIds.length === 0) {
+    return [];
+  }
+
+  let query = supabase
     .from("courses")
     .select(
       "id,tenant_id,title,slug,description,status,thumbnail_url,created_by,created_at,updated_at",
     )
-    .eq("tenant_id", tenantId)
+    .eq("tenant_id", tenantId);
+
+  if (trainerScope) {
+    query = query.in("id", trainerScope.courseIds);
+  }
+
+  const { data, error } = await query
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -192,6 +205,12 @@ export async function getCourseById(params: {
   courseId: string;
   tenantId: string;
 }) {
+  const trainerScope = await getCurrentTrainerScope(params.tenantId);
+
+  if (trainerScope && !trainerScope.courseIds.includes(params.courseId)) {
+    return null;
+  }
+
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
     .from("courses")

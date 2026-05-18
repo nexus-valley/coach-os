@@ -19,6 +19,7 @@ import {
 } from "@/src/lib/cohorts";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 import {
+  canManageCourses,
   canDeleteRecords,
   getCurrentMemberRole,
   type MemberRole,
@@ -83,6 +84,7 @@ export function CohortsPageClient() {
   const [success, setSuccess] = useState("");
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const canDelete = canDeleteRecords(currentRole);
+  const canManageCohorts = canManageCourses(currentRole);
 
   async function loadCohorts(currentTenant: Tenant) {
     const [tenantCohorts, tenantCourses] = await Promise.all([
@@ -272,9 +274,11 @@ export function CohortsPageClient() {
             context, and member visibility.
           </p>
         </div>
-        <Button onClick={openCreateForm} size="lg" type="button">
-          Create Cohort
-        </Button>
+        {canManageCohorts ? (
+          <Button onClick={openCreateForm} size="lg" type="button">
+            Create Cohort
+          </Button>
+        ) : null}
       </div>
 
       <Card className="mt-8 border-white/10 bg-[#101214] p-5 text-white shadow-2xl shadow-black/10 sm:p-6">
@@ -320,11 +324,15 @@ export function CohortsPageClient() {
         </section>
       ) : cohorts.length === 0 ? (
         <EmptyState
-          action={{
-            disabled: courses.length === 0,
-            label: "Create Cohort",
-            onClick: openCreateForm,
-          }}
+          action={
+            canManageCohorts
+              ? {
+                  disabled: courses.length === 0,
+                  label: "Create Cohort",
+                  onClick: openCreateForm,
+                }
+              : undefined
+          }
           description="Create a batch for a course, then add students from the cohort detail page or each student profile."
           icon="CO"
           title="No cohorts created yet"
@@ -367,15 +375,17 @@ export function CohortsPageClient() {
                   >
                     Open
                   </Link>
-                  <Button
-                    className="border-white/10"
-                    onClick={() => openEditForm(cohort)}
-                    size="sm"
-                    type="button"
-                    variant="secondary"
-                  >
-                    Edit
-                  </Button>
+                  {canManageCohorts ? (
+                    <Button
+                      className="border-white/10"
+                      onClick={() => openEditForm(cohort)}
+                      size="sm"
+                      type="button"
+                      variant="secondary"
+                    >
+                      Edit
+                    </Button>
+                  ) : null}
                   {canDelete ? (
                     <Button
                       className="text-red-300! hover:bg-red-500/10! hover:text-red-200!"

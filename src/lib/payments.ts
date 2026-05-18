@@ -102,6 +102,12 @@ async function getPaymentsByFilter(
   tenantId: string,
   filter?: { column: "student_id"; value: string },
 ) {
+  await requireTenantPermission({
+    description: "Blocked payment access without payment visibility permission.",
+    permission: "access_payments",
+    tenantId,
+  });
+
   const supabase = getSupabaseClient();
   let query = supabase
     .from("payments")
