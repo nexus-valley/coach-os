@@ -12,6 +12,8 @@ import { getSupabaseClient } from "@/src/lib/supabaseClient";
 import {
   acceptTeamInvitation,
   getInvitationByToken,
+  getTeamInvitationErrorMessage,
+  logTeamInvitationError,
   type TeamInvitationPreview,
 } from "@/src/lib/teamInvitations";
 
@@ -31,7 +33,7 @@ function formatDate(value: string) {
 }
 
 function getErrorMessage(caught: unknown, fallback: string) {
-  return caught instanceof Error ? caught.message : fallback;
+  return getTeamInvitationErrorMessage(caught, fallback);
 }
 
 export function InviteAcceptPageClient({ token }: InviteAcceptPageClientProps) {
@@ -97,6 +99,7 @@ export function InviteAcceptPageClient({ token }: InviteAcceptPageClientProps) {
       await acceptTeamInvitation(token);
       router.replace("/app");
     } catch (caught) {
+      logTeamInvitationError("Accept invitation button failed", caught);
       setError(getErrorMessage(caught, "Unable to accept this invitation."));
     } finally {
       setAccepting(false);

@@ -33,6 +33,42 @@ const invitationColumns =
 
 const invitationRoles: InvitationRole[] = ["admin", "staff", "trainer"];
 
+type SupabaseErrorLike = {
+  code?: string;
+  details?: string;
+  hint?: string;
+  message?: string;
+};
+
+export function getTeamInvitationErrorMessage(
+  caught: unknown,
+  fallback: string,
+) {
+  if (caught instanceof Error && caught.message) {
+    return caught.message;
+  }
+
+  if (caught && typeof caught === "object") {
+    const error = caught as SupabaseErrorLike;
+
+    return error.message || error.details || error.hint || fallback;
+  }
+
+  return fallback;
+}
+
+export function logTeamInvitationError(context: string, caught: unknown) {
+  const error = caught as SupabaseErrorLike;
+
+  console.error(`[CoachFort invitations] ${context}`, {
+    code: error?.code,
+    details: error?.details,
+    hint: error?.hint,
+    message: error?.message,
+    raw: caught,
+  });
+}
+
 function normalizeInviteEmail(email: string) {
   return email.trim().toLowerCase();
 }
@@ -319,15 +355,38 @@ export async function getInvitationByToken(token: string) {
 
 export async function acceptTeamInvitation(token: string) {
   const supabase = getSupabaseClient();
-  const { data, error } = await supabase
-    .rpc("accept_team_invitation", { invite_token: token })
-    .single();
+  const { data, error } = await supabase.rpc("accept_team_invitation", {
+    invite_token: token,
+  });
 
   if (error) {
+    logTeamInvitationError("accept_team_invitation RPC failed", error);
     throw error;
   }
 
-  const result = data as { role: InvitationRole; tenant_id: string };
+  const row = Array.isArray(data) ? data[0] : data;
+
+  if (!row) {
+    throw new Error("Invitation acceptance did not return a workspace.");
+  }
+
+  const rawResult = row as {
+    accepted_role?: InvitationRole;
+    accepted_tenant_id?: string;
+    role?: InvitationRole;
+    tenant_id?: string;
+  };
+  const result = {
+    role: rawResult.accepted_role ?? rawResult.role,
+    tenant_id: rawResult.accepted_tenant_id ?? rawResult.tenant_id,
+  };
+
+  if (!result.tenant_id || !result.role) {
+    console.error("[CoachFort invitations] Unexpected accept RPC response", {
+      raw: data,
+    });
+    throw new Error("Invitation acceptance returned an invalid response.");
+  }
 
   await logActivity({
     action: "invitation_accepted",
