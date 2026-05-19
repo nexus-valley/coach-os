@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 
 import { AuthInput } from "@/src/components/auth/AuthInput";
@@ -25,8 +26,18 @@ function getErrorMessage(error: unknown) {
   return "Unable to sign in. Please try again.";
 }
 
+function getSafeNextPath(value: string | null) {
+  if (!value || !value.startsWith("/") || value.startsWith("//")) {
+    return null;
+  }
+
+  return value;
+}
+
 export function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const nextPath = getSafeNextPath(searchParams.get("next"));
   const [email, setEmail] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -40,7 +51,7 @@ export function LoginForm() {
     try {
       const tenant = await signInWithPassword(email.trim(), password);
 
-      router.replace(tenant ? "/app" : "/onboarding");
+      router.replace(nextPath ?? (tenant ? "/app" : "/onboarding"));
     } catch (caught: unknown) {
       setError(getErrorMessage(caught));
     } finally {
@@ -50,7 +61,11 @@ export function LoginForm() {
 
   return (
     <form className="space-y-5" onSubmit={handleSubmit}>
-      <GoogleOAuthButton disabled={loading} onError={setError} />
+      <GoogleOAuthButton
+        disabled={loading}
+        onError={setError}
+        redirectPath={nextPath ?? undefined}
+      />
 
       <div className="flex items-center gap-3">
         <span className="h-px flex-1 bg-zinc-200" />

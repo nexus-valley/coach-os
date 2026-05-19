@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 
 import { AuthInput } from "@/src/components/auth/AuthInput";
@@ -8,8 +9,18 @@ import { GoogleOAuthButton } from "@/src/components/auth/GoogleOAuthButton";
 import { Button } from "@/src/components/ui/Button";
 import { signUpWithPassword } from "@/src/lib/auth";
 
+function getSafeNextPath(value: string | null) {
+  if (!value || !value.startsWith("/") || value.startsWith("//")) {
+    return null;
+  }
+
+  return value;
+}
+
 export function SignupForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const nextPath = getSafeNextPath(searchParams.get("next"));
   const [email, setEmail] = useState("");
   const [error, setError] = useState("");
   const [fullName, setFullName] = useState("");
@@ -27,7 +38,7 @@ export function SignupForm() {
         fullName: fullName.trim(),
         password,
       });
-      router.replace("/onboarding");
+      router.replace(nextPath ?? "/onboarding");
     } catch (caught) {
       setError(
         caught instanceof Error
@@ -40,7 +51,11 @@ export function SignupForm() {
 
   return (
     <form className="space-y-5" onSubmit={handleSubmit}>
-      <GoogleOAuthButton disabled={loading} onError={setError} />
+      <GoogleOAuthButton
+        disabled={loading}
+        onError={setError}
+        redirectPath={nextPath ?? undefined}
+      />
 
       <div className="flex items-center gap-3">
         <span className="h-px flex-1 bg-zinc-200" />

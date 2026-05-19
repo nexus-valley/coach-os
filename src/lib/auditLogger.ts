@@ -99,6 +99,7 @@ function inferSeverity(action: string): AuditLogSeverity {
       "course_section_deleted",
       "access_denied",
       "enrollment_deleted",
+      "invitation_revoked",
       "lesson_deleted",
       "payment_deleted",
       "payment_link_deleted",

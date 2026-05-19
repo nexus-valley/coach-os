@@ -7,6 +7,7 @@ import { signInWithGoogle } from "@/src/lib/auth";
 type GoogleOAuthButtonProps = {
   disabled?: boolean;
   onError: (message: string) => void;
+  redirectPath?: string;
 };
 
 function getErrorMessage(error: unknown) {
@@ -29,6 +30,7 @@ function getErrorMessage(error: unknown) {
 export function GoogleOAuthButton({
   disabled = false,
   onError,
+  redirectPath,
 }: GoogleOAuthButtonProps) {
   const [loading, setLoading] = useState(false);
 
@@ -37,7 +39,7 @@ export function GoogleOAuthButton({
     onError("");
 
     try {
-      await signInWithGoogle();
+      await signInWithGoogle(redirectPath);
     } catch (caught) {
       onError(getErrorMessage(caught));
       setLoading(false);

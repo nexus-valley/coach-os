@@ -17,6 +17,7 @@ import { getCohortsForTenant, type CohortWithCourse } from "@/src/lib/cohorts";
 import { getCoursesForTenant, type Course } from "@/src/lib/courses";
 import {
   canAccessSettings,
+  canInviteTeam,
   getRoleDescription,
 } from "@/src/lib/permissions";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
@@ -38,6 +39,15 @@ import {
   type TenantSettings,
 } from "@/src/lib/tenantSettings";
 import {
+  buildInvitationLink,
+  createTeamInvitation,
+  listTeamInvitations,
+  resendTeamInvitation,
+  revokeTeamInvitation,
+  type InvitationRole,
+  type TeamInvitation,
+} from "@/src/lib/teamInvitations";
+import {
   assignTrainerToCohort,
   assignTrainerToCourse,
   getTrainerAssignedCohorts,
@@ -53,6 +63,8 @@ const manageableRoles: Exclude<MemberRole, "owner">[] = [
   "staff",
   "trainer",
 ];
+
+const invitationRoles: InvitationRole[] = ["admin", "staff", "trainer"];
 
 type BrandingFormState = {
   brandColor: string;
@@ -121,6 +133,22 @@ function RoleBadge({ role }: { role: MemberRole }) {
   return <Badge tone="staff">{label}</Badge>;
 }
 
+function InvitationStatusBadge({ status }: { status: TeamInvitation["status"] }) {
+  if (status === "accepted") {
+    return <Badge tone="success">Accepted</Badge>;
+  }
+
+  if (status === "revoked") {
+    return <Badge tone="danger">Revoked</Badge>;
+  }
+
+  if (status === "expired") {
+    return <Badge tone="warning">Expired</Badge>;
+  }
+
+  return <Badge>Pending</Badge>;
+}
+
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("en", {
     day: "numeric",
@@ -182,8 +210,13 @@ export function TeamSettingsClient() {
   const [currentRole, setCurrentRole] = useState<MemberRole | null>(null);
   const [currentUserId, setCurrentUserId] = useState("");
   const [error, setError] = useState("");
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteMessage, setInviteMessage] = useState("");
+  const [inviteRole, setInviteRole] = useState<InvitationRole>("staff");
+  const [invitations, setInvitations] = useState<TeamInvitation[]>([]);
   const [loading, setLoading] = useState(true);
   const [members, setMembers] = useState<TenantMemberWithProfile[]>([]);
+  const [mutatingInvitationId, setMutatingInvitationId] = useState("");
   const [mutatingMemberId, setMutatingMemberId] = useState("");
   const [selectedCohortByTrainer, setSelectedCohortByTrainer] = useState<
     Record<string, string>
@@ -246,6 +279,10 @@ export function TeamSettingsClient() {
     setMembers(tenantMembers);
     return role;
   }, [router]);
+
+  const loadInvitations = useCallback(async (currentTenant: Tenant) => {
+    setInvitations(await listTeamInvitations(currentTenant.id));
+  }, []);
 
   const loadTrainerAssignments = useCallback(
     async (currentTenant: Tenant, visibleMembers: TenantMemberWithProfile[]) => {
@@ -311,12 +348,21 @@ export function TeamSettingsClient() {
           return;
         }
 
-        const [settings, tenantCourses, tenantCohorts, tenantMembers] =
+        const [
+          settings,
+          tenantCourses,
+          tenantCohorts,
+          tenantMembers,
+          tenantInvitations,
+        ] =
           await Promise.all([
             getTenantSettings(currentTenant.id),
             getCoursesForTenant(currentTenant.id),
             getCohortsForTenant(currentTenant.id),
             getTenantMembers(currentTenant.id),
+            canInviteTeam(role)
+              ? listTeamInvitations(currentTenant.id)
+              : Promise.resolve([]),
           ]);
 
         if (!active) {
@@ -326,6 +372,7 @@ export function TeamSettingsClient() {
         setCourses(tenantCourses);
         setCohorts(tenantCohorts);
         setMembers(tenantMembers);
+        setInvitations(tenantInvitations);
         await loadTrainerAssignments(currentTenant, tenantMembers);
 
         if (settings) {
@@ -350,7 +397,7 @@ export function TeamSettingsClient() {
     return () => {
       active = false;
     };
-  }, [loadTeam, loadTrainerAssignments, router]);
+  }, [loadInvitations, loadTeam, loadTrainerAssignments, router]);
 
   async function refreshTeam() {
     if (!tenant) {
@@ -358,6 +405,107 @@ export function TeamSettingsClient() {
     }
 
     await loadTeam(tenant);
+  }
+
+  async function refreshInvitations() {
+    if (!tenant || !canInviteTeam(currentRole)) {
+      return;
+    }
+
+    await loadInvitations(tenant);
+  }
+
+  async function handleCreateInvitation(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!tenant || !canInviteTeam(currentRole)) {
+      return;
+    }
+
+    setActionError("");
+    setInviteMessage("");
+    setMutatingInvitationId("new");
+
+    try {
+      const invitation = await createTeamInvitation({
+        email: inviteEmail,
+        role: inviteRole,
+        tenantId: tenant.id,
+      });
+
+      const inviteLink = buildInvitationLink(invitation.token);
+      setInviteEmail("");
+      setInviteRole("staff");
+      setInviteMessage(
+        `Invitation ready for ${invitation.email}. Copy link: ${inviteLink}`,
+      );
+      await refreshInvitations();
+    } catch (caught) {
+      setActionError(getErrorMessage(caught, "Unable to create invitation."));
+    } finally {
+      setMutatingInvitationId("");
+    }
+  }
+
+  async function handleCopyInvitation(invitation: TeamInvitation) {
+    setActionError("");
+
+    try {
+      await navigator.clipboard.writeText(buildInvitationLink(invitation.token));
+      setInviteMessage(`Invite link copied for ${invitation.email}.`);
+    } catch {
+      setActionError("Unable to copy invite link. Select and copy it manually.");
+    }
+  }
+
+  async function handleResendInvitation(invitation: TeamInvitation) {
+    if (!tenant || !canInviteTeam(currentRole)) {
+      return;
+    }
+
+    setActionError("");
+    setInviteMessage("");
+    setMutatingInvitationId(invitation.id);
+
+    try {
+      const refreshedInvitation = await resendTeamInvitation(invitation.id);
+      setInviteMessage(
+        `Invitation refreshed for ${refreshedInvitation.email}. Copy the new secure link.`,
+      );
+      await refreshInvitations();
+    } catch (caught) {
+      setActionError(getErrorMessage(caught, "Unable to resend invitation."));
+    } finally {
+      setMutatingInvitationId("");
+    }
+  }
+
+  async function handleRevokeInvitation(invitation: TeamInvitation) {
+    if (!tenant || !canInviteTeam(currentRole)) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Revoke the pending invitation for ${invitation.email}?`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setActionError("");
+    setInviteMessage("");
+    setMutatingInvitationId(invitation.id);
+
+    try {
+      await revokeTeamInvitation(invitation.id);
+      setInviteMessage(`Invitation revoked for ${invitation.email}.`);
+      await refreshInvitations();
+    } catch (caught) {
+      setActionError(getErrorMessage(caught, "Unable to revoke invitation."));
+    } finally {
+      setMutatingInvitationId("");
+    }
   }
 
   async function handleRoleChange(
@@ -566,6 +714,7 @@ export function TeamSettingsClient() {
   }
 
   const canManage = canManageTeam(currentRole);
+  const canInvite = canInviteTeam(currentRole);
   const previewBrandColor = getPreviewBrandColor(brandingForm.brandColor);
 
   if (loading) {
@@ -619,6 +768,12 @@ export function TeamSettingsClient() {
       {brandingMessage ? (
         <div className="mt-6 rounded-3xl border border-teal-400/30 bg-teal-400/10 p-4 text-sm text-teal-100">
           {brandingMessage}
+        </div>
+      ) : null}
+
+      {inviteMessage ? (
+        <div className="mt-6 rounded-3xl border border-teal-400/30 bg-teal-400/10 p-4 text-sm text-teal-100">
+          {inviteMessage}
         </div>
       ) : null}
 
@@ -913,6 +1068,149 @@ export function TeamSettingsClient() {
           </div>
         </Card>
       </section>
+
+      {canInvite ? (
+        <section className="mt-8">
+          <Card className="border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/10">
+            <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
+              <div>
+                <Badge className="border-white/15 bg-white/10 text-white">
+                  Invitations
+                </Badge>
+                <h3 className="mt-4 text-2xl font-semibold">
+                  Invite team members
+                </h3>
+                <p className="mt-2 text-sm leading-6 text-slate-400">
+                  Email sending will be connected later. For now, copy and
+                  share this secure invite link.
+                </p>
+              </div>
+              <Badge>{invitations.length} invites</Badge>
+            </div>
+
+            <form
+              className="mt-7 grid gap-3 lg:grid-cols-[1fr_12rem_auto]"
+              onSubmit={handleCreateInvitation}
+            >
+              <label className="block text-sm font-medium text-slate-300">
+                Email
+                <input
+                  className="mt-2 h-11 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-teal-400/50 focus:ring-4 focus:ring-teal-400/10"
+                  disabled={mutatingInvitationId === "new"}
+                  onChange={(event) => setInviteEmail(event.target.value)}
+                  placeholder="trainer@academy.com"
+                  required
+                  type="email"
+                  value={inviteEmail}
+                />
+              </label>
+              <label className="block text-sm font-medium text-slate-300">
+                Role
+                <select
+                  className="mt-2 h-11 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition focus:border-teal-400/50 focus:ring-4 focus:ring-teal-400/10"
+                  disabled={mutatingInvitationId === "new"}
+                  onChange={(event) =>
+                    setInviteRole(event.target.value as InvitationRole)
+                  }
+                  value={inviteRole}
+                >
+                  {invitationRoles.map((role) => (
+                    <option className="text-slate-950" key={role} value={role}>
+                      {role.charAt(0).toUpperCase() + role.slice(1)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="flex items-end">
+                <Button
+                  className="w-full"
+                  disabled={mutatingInvitationId === "new"}
+                  type="submit"
+                >
+                  {mutatingInvitationId === "new" ? "Creating..." : "Send Invite"}
+                </Button>
+              </div>
+            </form>
+
+            <div className="mt-7 divide-y divide-white/10 overflow-hidden rounded-3xl border border-white/10">
+              {invitations.length === 0 ? (
+                <div className="bg-white/5 p-6 text-sm text-slate-400">
+                  No invitations yet. Invite admins, staff, or trainers to this
+                  workspace.
+                </div>
+              ) : (
+                invitations.map((invitation) => {
+                  const disabled =
+                    mutatingInvitationId === invitation.id ||
+                    invitation.status === "accepted" ||
+                    invitation.status === "revoked";
+
+                  return (
+                    <div
+                      className="grid gap-4 bg-[#101214] p-4 xl:grid-cols-[1fr_auto_auto] xl:items-center"
+                      key={invitation.id}
+                    >
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-semibold text-white">
+                            {invitation.email}
+                          </p>
+                          <RoleBadge role={invitation.role} />
+                          <InvitationStatusBadge status={invitation.status} />
+                        </div>
+                        <p className="mt-2 text-sm text-slate-400">
+                          Expires {formatDate(invitation.expires_at)}
+                        </p>
+                        {invitation.status === "pending" ? (
+                          <p className="mt-2 break-all rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-400">
+                            {buildInvitationLink(invitation.token)}
+                          </p>
+                        ) : null}
+                      </div>
+
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          disabled={invitation.status !== "pending"}
+                          onClick={() => handleCopyInvitation(invitation)}
+                          size="sm"
+                          type="button"
+                          variant="secondary"
+                        >
+                          Copy Link
+                        </Button>
+                        <Button
+                          disabled={
+                            mutatingInvitationId === invitation.id ||
+                            invitation.status === "accepted" ||
+                            invitation.status === "revoked"
+                          }
+                          onClick={() => handleResendInvitation(invitation)}
+                          size="sm"
+                          type="button"
+                          variant="secondary"
+                        >
+                          Resend
+                        </Button>
+                      </div>
+
+                      <Button
+                        className="text-red-300! hover:bg-red-500/10! hover:text-red-200!"
+                        disabled={disabled || invitation.status !== "pending"}
+                        onClick={() => handleRevokeInvitation(invitation)}
+                        size="sm"
+                        type="button"
+                        variant="ghost"
+                      >
+                        Revoke
+                      </Button>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </Card>
+        </section>
+      ) : null}
 
       {canManage ? (
         <section className="mt-8">

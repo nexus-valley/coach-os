@@ -1,0 +1,342 @@
+import { logActivity } from "@/src/lib/auditLogger";
+import { requireTenantPermission, type MemberRole } from "@/src/lib/permissions";
+import { getSupabaseClient } from "@/src/lib/supabaseClient";
+
+export type InvitationRole = Exclude<MemberRole, "owner">;
+export type InvitationStatus = "pending" | "accepted" | "expired" | "revoked";
+
+export type TeamInvitation = {
+  accepted_at: string | null;
+  accepted_by: string | null;
+  created_at: string;
+  email: string;
+  expires_at: string;
+  id: string;
+  invited_by: string | null;
+  revoked_at: string | null;
+  role: InvitationRole;
+  status: InvitationStatus;
+  tenant_id: string;
+  token: string;
+  updated_at: string;
+};
+
+export type TeamInvitationPreview = Pick<
+  TeamInvitation,
+  "accepted_at" | "created_at" | "email" | "expires_at" | "id" | "revoked_at" | "role" | "status" | "tenant_id"
+> & {
+  tenant_name: string;
+};
+
+const invitationColumns =
+  "id,tenant_id,email,role,token,status,invited_by,accepted_by,expires_at,accepted_at,revoked_at,created_at,updated_at";
+
+const invitationRoles: InvitationRole[] = ["admin", "staff", "trainer"];
+
+function normalizeInviteEmail(email: string) {
+  return email.trim().toLowerCase();
+}
+
+function assertInvitationRole(role: InvitationRole) {
+  if (!invitationRoles.includes(role)) {
+    throw new Error("Select a valid team role.");
+  }
+}
+
+function createInviteToken() {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+
+  return btoa(String.fromCharCode(...bytes))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+}
+
+function getExpiryDate() {
+  const expiresAt = new Date();
+  expiresAt.setDate(expiresAt.getDate() + 7);
+  return expiresAt.toISOString();
+}
+
+function getInvitationStatus(invitation: TeamInvitation): InvitationStatus {
+  if (
+    invitation.status === "pending" &&
+    new Date(invitation.expires_at).getTime() <= Date.now()
+  ) {
+    return "expired";
+  }
+
+  return invitation.status;
+}
+
+export function buildInvitationLink(token: string, baseUrl?: string) {
+  const origin =
+    baseUrl ??
+    (typeof window !== "undefined" ? window.location.origin : "");
+
+  return origin ? `${origin}/invite/${token}` : `/invite/${token}`;
+}
+
+export async function createTeamInvitation(params: {
+  email: string;
+  role: InvitationRole;
+  tenantId: string;
+}) {
+  assertInvitationRole(params.role);
+
+  const email = normalizeInviteEmail(params.email);
+
+  if (!email) {
+    throw new Error("Invite email is required.");
+  }
+
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    throw new Error("Enter a valid email address.");
+  }
+
+  const { user } = await requireTenantPermission({
+    description: "Blocked team invitation creation without invite permission.",
+    permission: "invite_team",
+    tenantId: params.tenantId,
+  });
+
+  const supabase = getSupabaseClient();
+  const { data: existingInvitation, error: existingError } = await supabase
+    .from("team_invitations")
+    .select(invitationColumns)
+    .eq("tenant_id", params.tenantId)
+    .eq("email", email)
+    .eq("status", "pending")
+    .maybeSingle();
+
+  if (existingError) {
+    throw existingError;
+  }
+
+  if (existingInvitation) {
+    return existingInvitation as TeamInvitation;
+  }
+
+  const { data, error } = await supabase
+    .from("team_invitations")
+    .insert({
+      email,
+      expires_at: getExpiryDate(),
+      invited_by: user.id,
+      role: params.role,
+      status: "pending",
+      tenant_id: params.tenantId,
+      token: createInviteToken(),
+    })
+    .select(invitationColumns)
+    .single();
+
+  if (error) {
+    if (error.code === "23505") {
+      throw new Error("A pending invitation already exists for this email.");
+    }
+
+    throw error;
+  }
+
+  const invitation = data as TeamInvitation;
+
+  await logActivity({
+    action: "invitation_created",
+    description: `Invited ${invitation.email} as ${invitation.role}`,
+    entityId: invitation.id,
+    entityName: invitation.email,
+    entityType: "team_invitation",
+    metadata: {
+      email: invitation.email,
+      expires_at: invitation.expires_at,
+      role: invitation.role,
+    },
+    tenantId: invitation.tenant_id,
+  });
+
+  return invitation;
+}
+
+export async function listTeamInvitations(tenantId: string) {
+  await requireTenantPermission({
+    description: "Blocked team invitation list without invite permission.",
+    permission: "invite_team",
+    tenantId,
+  });
+
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from("team_invitations")
+    .select(invitationColumns)
+    .eq("tenant_id", tenantId)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    throw error;
+  }
+
+  return ((data ?? []) as TeamInvitation[]).map((invitation) => ({
+    ...invitation,
+    status: getInvitationStatus(invitation),
+  }));
+}
+
+export async function revokeTeamInvitation(invitationId: string) {
+  const supabase = getSupabaseClient();
+  const { data: existingInvitation, error: existingError } = await supabase
+    .from("team_invitations")
+    .select(invitationColumns)
+    .eq("id", invitationId)
+    .maybeSingle();
+
+  if (existingError) {
+    throw existingError;
+  }
+
+  if (!existingInvitation) {
+    throw new Error("Invitation not found.");
+  }
+
+  const invitation = existingInvitation as TeamInvitation;
+  await requireTenantPermission({
+    description: "Blocked team invitation revoke without invite permission.",
+    permission: "invite_team",
+    tenantId: invitation.tenant_id,
+  });
+
+  if (getInvitationStatus(invitation) !== "pending") {
+    throw new Error("Only pending invitations can be revoked.");
+  }
+
+  const { data, error } = await supabase
+    .from("team_invitations")
+    .update({
+      revoked_at: new Date().toISOString(),
+      status: "revoked",
+    })
+    .eq("tenant_id", invitation.tenant_id)
+    .eq("id", invitation.id)
+    .eq("status", "pending")
+    .select(invitationColumns)
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  const revokedInvitation = data as TeamInvitation;
+
+  await logActivity({
+    action: "invitation_revoked",
+    description: `Revoked invitation for ${revokedInvitation.email}`,
+    entityId: revokedInvitation.id,
+    entityName: revokedInvitation.email,
+    entityType: "team_invitation",
+    metadata: { email: revokedInvitation.email, role: revokedInvitation.role },
+    severity: "warning",
+    tenantId: revokedInvitation.tenant_id,
+  });
+
+  return revokedInvitation;
+}
+
+export async function resendTeamInvitation(invitationId: string) {
+  const supabase = getSupabaseClient();
+  const { data: existingInvitation, error: existingError } = await supabase
+    .from("team_invitations")
+    .select(invitationColumns)
+    .eq("id", invitationId)
+    .maybeSingle();
+
+  if (existingError) {
+    throw existingError;
+  }
+
+  if (!existingInvitation) {
+    throw new Error("Invitation not found.");
+  }
+
+  const invitation = existingInvitation as TeamInvitation;
+  await requireTenantPermission({
+    description: "Blocked team invitation resend without invite permission.",
+    permission: "invite_team",
+    tenantId: invitation.tenant_id,
+  });
+
+  if (invitation.status === "accepted" || invitation.status === "revoked") {
+    throw new Error("Accepted or revoked invitations cannot be resent.");
+  }
+
+  const { data, error } = await supabase
+    .from("team_invitations")
+    .update({
+      expires_at: getExpiryDate(),
+      status: "pending",
+      token: createInviteToken(),
+    })
+    .eq("tenant_id", invitation.tenant_id)
+    .eq("id", invitation.id)
+    .select(invitationColumns)
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  const resentInvitation = data as TeamInvitation;
+
+  await logActivity({
+    action: "invitation_resent",
+    description: `Refreshed invitation for ${resentInvitation.email}`,
+    entityId: resentInvitation.id,
+    entityName: resentInvitation.email,
+    entityType: "team_invitation",
+    metadata: {
+      email: resentInvitation.email,
+      expires_at: resentInvitation.expires_at,
+      role: resentInvitation.role,
+    },
+    tenantId: resentInvitation.tenant_id,
+  });
+
+  return resentInvitation;
+}
+
+export async function getInvitationByToken(token: string) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .rpc("get_team_invitation_by_token", { invite_token: token })
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  return (data as TeamInvitationPreview | null) ?? null;
+}
+
+export async function acceptTeamInvitation(token: string) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .rpc("accept_team_invitation", { invite_token: token })
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  const result = data as { role: InvitationRole; tenant_id: string };
+
+  await logActivity({
+    action: "invitation_accepted",
+    description: `Accepted team invitation as ${result.role}`,
+    entityName: result.role,
+    entityType: "team_invitation",
+    metadata: { role: result.role },
+    tenantId: result.tenant_id,
+  });
+
+  return result;
+}
