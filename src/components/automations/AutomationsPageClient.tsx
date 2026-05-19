@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
+import { AccessDeniedCard } from "@/src/components/security/AccessDeniedCard";
 import { Badge } from "@/src/components/ui/Badge";
 import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
@@ -21,6 +22,8 @@ import {
   type AutomationTriggerType,
 } from "@/src/lib/automations";
 import type { ReminderType } from "@/src/lib/reminders";
+import { logActivity } from "@/src/lib/auditLogger";
+import { canManageAutomations as canManageAutomationsForRole } from "@/src/lib/permissions";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 import { getCurrentMemberRole, type MemberRole } from "@/src/lib/team";
 import { getCurrentTenant, type Tenant } from "@/src/lib/tenant";
@@ -154,7 +157,7 @@ export function AutomationsPageClient() {
   const [success, setSuccess] = useState("");
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [triggerFilter, setTriggerFilter] = useState<TriggerFilter>("all");
-  const canManageAutomations = currentRole === "owner" || currentRole === "admin";
+  const canManageAutomations = canManageAutomationsForRole(currentRole);
 
   async function loadRules(currentTenant: Tenant) {
     setRules(await getAutomationRulesForTenant(currentTenant.id));
@@ -192,7 +195,10 @@ export function AutomationsPageClient() {
 
         setTenant(currentTenant);
         setCurrentRole(role);
-        await loadRules(currentTenant);
+
+        if (canManageAutomationsForRole(role)) {
+          await loadRules(currentTenant);
+        }
       } catch (caught) {
         if (!active) {
           return;
@@ -213,6 +219,20 @@ export function AutomationsPageClient() {
     };
   }, [router]);
 
+  useEffect(() => {
+    if (!loading && tenant && currentRole && !canManageAutomations) {
+      void logActivity({
+        action: "access_denied",
+        description: "Blocked automations page access attempt.",
+        entityName: "Automations",
+        entityType: "security",
+        metadata: { route: "/app/automations", role: currentRole },
+        severity: "warning",
+        tenantId: tenant.id,
+      });
+    }
+  }, [canManageAutomations, currentRole, loading, tenant]);
+
   const filteredRules = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
 
@@ -228,6 +248,12 @@ export function AutomationsPageClient() {
       return matchesStatus && matchesTrigger && matchesSearch;
     });
   }, [rules, search, statusFilter, triggerFilter]);
+
+  if (!loading && currentRole && !canManageAutomations) {
+    return (
+      <AccessDeniedCard description="Only workspace owners and admins can access automation rules." />
+    );
+  }
 
   function openCreateForm() {
     if (!canManageAutomations) {
