@@ -8,11 +8,19 @@ import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
 import { AccessDeniedCard } from "@/src/components/security/AccessDeniedCard";
 import {
+  formatResourceLimit,
+  getPlanDefinition,
+  getPlanDisplayName,
   getPlanLimits,
+  planOrder,
+  planResourceLabels,
+  type PlanKey,
+  type PlanResource,
+  type ResourceLimit,
+} from "@/src/lib/plans";
+import {
   getTenantSubscription,
   updateTenantPlanForTesting,
-  type LimitedResource,
-  type ResourceLimit,
   type SubscriptionPlan,
   type TenantSubscription,
 } from "@/src/lib/subscription";
@@ -20,59 +28,40 @@ import { getSupabaseClient } from "@/src/lib/supabaseClient";
 import { canAccessSubscription } from "@/src/lib/permissions";
 import { getCurrentMemberRole, type MemberRole } from "@/src/lib/team";
 import { getCurrentTenant, type Tenant } from "@/src/lib/tenant";
+import {
+  getTrialStatus,
+  getUsagePercent,
+  refreshWorkspaceUsageSnapshot,
+  type TrialStatus,
+  type WorkspaceUsage,
+} from "@/src/lib/usage";
 
-type UsageCounts = Record<LimitedResource, number>;
+type UsageCounts = WorkspaceUsage;
 
 const plans: {
   description: string;
-  plan: SubscriptionPlan;
+  plan: PlanKey;
   target: string;
-}[] = [
-  {
-    description: "Core workspace for testing CoachFort with a small audience.",
-    plan: "free",
-    target: "Solo coach validating a new offer",
-  },
-  {
-    description: "More room for a growing coaching business.",
-    plan: "starter",
-    target: "Active coach with multiple programs",
-  },
-  {
-    description: "Scale courses, cohorts, and automation volume.",
-    plan: "pro",
-    target: "Serious academy or coaching team",
-  },
-  {
-    description: "Unlimited foundation for high-volume operations.",
-    plan: "business",
-    target: "Established academy with broad catalog",
-  },
-];
+}[] = planOrder.map((plan) => {
+  const definition = getPlanDefinition(plan);
 
-const resourceLabels: Record<LimitedResource, string> = {
-  automations: "Automations",
-  cohorts: "Cohorts",
-  courses: "Courses",
-  students: "Students",
-};
-
-const resourceTables: Record<LimitedResource, string> = {
-  automations: "automation_rules",
-  cohorts: "cohorts",
-  courses: "courses",
-  students: "students",
-};
+  return {
+    description: definition.description,
+    plan,
+    target: definition.target,
+  };
+});
 
 const emptyUsage: UsageCounts = {
   automations: 0,
-  cohorts: 0,
   courses: 0,
   students: 0,
+  team_members: 0,
+  trainers: 0,
 };
 
 function formatPlan(plan: SubscriptionPlan) {
-  return plan.charAt(0).toUpperCase() + plan.slice(1);
+  return getPlanDisplayName(plan);
 }
 
 function formatStatus(value: string) {
@@ -92,56 +81,11 @@ function formatDate(value: string | null) {
 }
 
 function formatLimit(limit: ResourceLimit) {
-  return limit === "unlimited" ? "Unlimited" : limit.toLocaleString();
-}
-
-function getUsagePercent(used: number, limit: ResourceLimit) {
-  if (limit === "unlimited") {
-    return 100;
-  }
-
-  if (limit === 0) {
-    return 100;
-  }
-
-  return Math.min(100, Math.round((used / limit) * 100));
+  return formatResourceLimit(limit);
 }
 
 function getErrorMessage(caught: unknown, fallback: string) {
   return caught instanceof Error ? caught.message : fallback;
-}
-
-async function getResourceCount(
-  tenantId: string,
-  resourceType: LimitedResource,
-) {
-  const supabase = getSupabaseClient();
-  const { count, error } = await supabase
-    .from(resourceTables[resourceType])
-    .select("id", { count: "exact", head: true })
-    .eq("tenant_id", tenantId);
-
-  if (error) {
-    throw error;
-  }
-
-  return count ?? 0;
-}
-
-async function getUsageCounts(tenantId: string) {
-  const [students, courses, cohorts, automations] = await Promise.all([
-    getResourceCount(tenantId, "students"),
-    getResourceCount(tenantId, "courses"),
-    getResourceCount(tenantId, "cohorts"),
-    getResourceCount(tenantId, "automations"),
-  ]);
-
-  return {
-    automations,
-    cohorts,
-    courses,
-    students,
-  } satisfies UsageCounts;
 }
 
 function StatusBadge({ status }: { status: string }) {
@@ -166,7 +110,7 @@ function UsageCard({
   used,
 }: {
   limit: ResourceLimit;
-  resource: LimitedResource;
+  resource: PlanResource;
   used: number;
 }) {
   const percent = getUsagePercent(used, limit);
@@ -178,7 +122,7 @@ function UsageCard({
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-sm font-medium text-slate-400">
-            {resourceLabels[resource]}
+            {planResourceLabels[resource]}
           </p>
           <p className="mt-3 text-2xl font-semibold">
             {used.toLocaleString()}{" "}
@@ -232,6 +176,7 @@ export function SubscriptionPageClient() {
   const [subscription, setSubscription] =
     useState<TenantSubscription | null>(null);
   const [tenant, setTenant] = useState<Tenant | null>(null);
+  const [trialStatus, setTrialStatus] = useState<TrialStatus | null>(null);
   const [usage, setUsage] = useState<UsageCounts>(emptyUsage);
 
   const limits = useMemo(
@@ -286,14 +231,16 @@ export function SubscriptionPageClient() {
 
         const [currentSubscription, currentUsage] = await Promise.all([
           getTenantSubscription(currentTenant.id),
-          getUsageCounts(currentTenant.id),
+          refreshWorkspaceUsageSnapshot(currentTenant.id),
         ]);
+        const currentTrialStatus = await getTrialStatus(currentTenant.id);
 
         if (!active) {
           return;
         }
 
         setSubscription(currentSubscription);
+        setTrialStatus(currentTrialStatus);
         setUsage(currentUsage);
       } catch (caught) {
         if (!active) {
@@ -435,10 +382,31 @@ export function SubscriptionPageClient() {
           <div className="mt-5 rounded-3xl border border-amber-400/30 bg-amber-400/10 p-4 text-sm leading-6 text-amber-100">
             Testing only — payment gateway not connected yet.
           </div>
+          <div className="mt-5 rounded-3xl border border-white/10 bg-[#15181b] p-5 text-sm leading-6">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="font-semibold text-white">Trial status</p>
+              <Badge
+                className={
+                  trialStatus?.active
+                    ? "border-teal-400/30 bg-teal-400/10 text-teal-300"
+                    : "border-amber-400/30 bg-amber-400/10 text-amber-200"
+                }
+              >
+                {trialStatus?.active
+                  ? `${trialStatus.daysRemaining} days left`
+                  : trialStatus?.expired
+                    ? "Expired"
+                    : "Not active"}
+              </Badge>
+            </div>
+            <p className="mt-3 text-slate-400">
+              Trial ends: {formatDate(trialStatus?.endsAt ?? null)}
+            </p>
+          </div>
         </Card>
 
         <div className="grid gap-4 sm:grid-cols-2">
-          {(Object.keys(limits) as LimitedResource[]).map((resource) => (
+          {(Object.keys(limits) as PlanResource[]).map((resource) => (
             <UsageCard
               key={resource}
               limit={limits[resource]}
@@ -499,14 +467,14 @@ export function SubscriptionPageClient() {
                 </p>
 
                 <div className="mt-6 space-y-3 text-sm">
-                  {(Object.keys(planOptionLimits) as LimitedResource[]).map(
+                  {(Object.keys(planOptionLimits) as PlanResource[]).map(
                     (resource) => (
                       <div
                         className="flex items-center justify-between gap-4 border-b border-white/10 pb-3 last:border-b-0 last:pb-0"
                         key={resource}
                       >
                         <span className="text-slate-400">
-                          {resourceLabels[resource]}
+                          {planResourceLabels[resource]}
                         </span>
                         <span className="font-semibold text-white">
                           {formatLimit(planOptionLimits[resource])}

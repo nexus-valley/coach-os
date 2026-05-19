@@ -1,15 +1,23 @@
 import { logActivity } from "@/src/lib/auditLogger";
+import {
+  getPlanLimits,
+  getStoredPlanForPlanKey,
+  normalizePlanKey,
+  type PlanKey,
+  type PlanResource,
+  type ResourceLimit,
+} from "@/src/lib/plans";
 import { requireTenantPermission } from "@/src/lib/permissions";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 
-export type SubscriptionPlan = "free" | "starter" | "pro" | "business";
+export type SubscriptionPlan = PlanKey;
 export type SubscriptionStatus =
   | "active"
   | "trialing"
   | "past_due"
   | "cancelled";
-export type LimitedResource = "automations" | "cohorts" | "courses" | "students";
-export type ResourceLimit = number | "unlimited";
+export type LimitedResource = PlanResource;
+export type { ResourceLimit };
 
 export type TenantSubscription = {
   id: string;
@@ -25,7 +33,6 @@ export type PlanLimits = Record<LimitedResource, ResourceLimit>;
 const subscriptionSelect =
   "id,name,plan,subscription_status,plan_started_at,plan_renews_at";
 
-const validPlans: SubscriptionPlan[] = ["free", "starter", "pro", "business"];
 const validStatuses: SubscriptionStatus[] = [
   "active",
   "trialing",
@@ -33,37 +40,8 @@ const validStatuses: SubscriptionStatus[] = [
   "cancelled",
 ];
 
-const planLimits: Record<SubscriptionPlan, PlanLimits> = {
-  business: {
-    automations: "unlimited",
-    cohorts: "unlimited",
-    courses: "unlimited",
-    students: "unlimited",
-  },
-  free: {
-    automations: 1,
-    cohorts: 2,
-    courses: 2,
-    students: 25,
-  },
-  pro: {
-    automations: 25,
-    cohorts: 50,
-    courses: 50,
-    students: 1000,
-  },
-  starter: {
-    automations: 5,
-    cohorts: 10,
-    courses: 10,
-    students: 250,
-  },
-};
-
 function normalizePlan(value: unknown): SubscriptionPlan {
-  return validPlans.includes(value as SubscriptionPlan)
-    ? (value as SubscriptionPlan)
-    : "free";
+  return normalizePlanKey(value);
 }
 
 function normalizeStatus(value: unknown): SubscriptionStatus {
@@ -78,10 +56,6 @@ function normalizeSubscription(value: TenantSubscription): TenantSubscription {
     plan: normalizePlan(value.plan),
     subscription_status: normalizeStatus(value.subscription_status),
   };
-}
-
-export function getPlanLimits(plan: SubscriptionPlan) {
-  return planLimits[plan];
 }
 
 export function canCreateResource(
@@ -123,7 +97,7 @@ export async function updateTenantPlanForTesting(
   const { data, error } = await supabase
     .from("tenants")
     .update({
-      plan,
+      plan: getStoredPlanForPlanKey(plan),
       plan_started_at: new Date().toISOString(),
       subscription_status: "active",
     })
@@ -138,7 +112,7 @@ export async function updateTenantPlanForTesting(
   const subscription = normalizeSubscription(data as TenantSubscription);
 
   await logActivity({
-    action: "subscription_plan_changed",
+    action: "plan_updated",
     description: `Changed testing plan to ${subscription.plan}`,
     entityId: subscription.id,
     entityName: subscription.plan,

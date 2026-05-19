@@ -12,10 +12,27 @@ import {
   type DashboardMetrics,
 } from "@/src/lib/dashboard";
 import { loadDemoDataForTenant } from "@/src/lib/demoSeed";
+import {
+  formatResourceLimit,
+  getPlanDisplayName,
+  getPlanLimits,
+  planResourceLabels,
+  type PlanKey,
+  type PlanResource,
+  type ResourceLimit,
+} from "@/src/lib/plans";
 import { canAccessPayments } from "@/src/lib/permissions";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
+import { getTenantSubscription } from "@/src/lib/subscription";
 import { getCurrentMemberRole, type MemberRole } from "@/src/lib/team";
 import { getCurrentTenant, type Tenant } from "@/src/lib/tenant";
+import {
+  getTrialStatus,
+  getUsagePercent,
+  refreshWorkspaceUsageSnapshot,
+  type TrialStatus,
+  type WorkspaceUsage,
+} from "@/src/lib/usage";
 
 function formatCurrency(value: number, currency = "USD") {
   return new Intl.NumberFormat("en-US", {
@@ -60,6 +77,37 @@ function MetricCard({
   );
 }
 
+function UsageMiniCard({
+  label,
+  limit,
+  used,
+}: {
+  label: string;
+  limit: ResourceLimit;
+  used: number;
+}) {
+  const percent = getUsagePercent(used, limit);
+
+  return (
+    <div className="rounded-2xl border border-[#D8E8F0] bg-[#F6FBFE] p-4">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm font-semibold text-[#0B1F33]">{label}</p>
+        <p className="text-xs font-semibold text-[#425B76]">
+          {limit === "unlimited"
+            ? "Unlimited"
+            : `${used.toLocaleString()} / ${formatResourceLimit(limit)}`}
+        </p>
+      </div>
+      <div className="mt-3 h-2 overflow-hidden rounded-full bg-[#EAF7FC]">
+        <div
+          className="h-full rounded-full bg-[#145DA0]"
+          style={{ width: `${percent}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
 export function DashboardPageClient() {
   const router = useRouter();
   const [currentRole, setCurrentRole] = useState<MemberRole | null>(null);
@@ -74,7 +122,10 @@ export function DashboardPageClient() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
+  const [plan, setPlan] = useState<PlanKey>("free");
   const [tenant, setTenant] = useState<Tenant | null>(null);
+  const [trialStatus, setTrialStatus] = useState<TrialStatus | null>(null);
+  const [usage, setUsage] = useState<WorkspaceUsage | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -110,6 +161,16 @@ export function DashboardPageClient() {
             ? getCurrentMemberRole(currentTenant.id, user.id)
             : Promise.resolve(null),
         ]);
+        const canViewUsage = memberRole === "owner" || memberRole === "admin";
+        const [workspaceUsage, workspaceTrialStatus] = canViewUsage
+          ? await Promise.all([
+              refreshWorkspaceUsageSnapshot(currentTenant.id),
+              getTrialStatus(currentTenant.id),
+            ])
+          : [null, null];
+        const workspaceSubscription = canViewUsage
+          ? await getTenantSubscription(currentTenant.id)
+          : null;
 
         if (!active) {
           return;
@@ -117,6 +178,9 @@ export function DashboardPageClient() {
 
         setMetrics(dashboardMetrics);
         setCurrentRole(memberRole);
+        setPlan(workspaceSubscription?.plan ?? "free");
+        setTrialStatus(workspaceTrialStatus);
+        setUsage(workspaceUsage);
         setError("");
       } catch (caught) {
         if (!active) {
@@ -155,8 +219,13 @@ export function DashboardPageClient() {
         0,
       );
       const dashboardMetrics = await getDashboardMetrics(tenant.id);
+      const workspaceUsage =
+        currentRole === "owner" || currentRole === "admin"
+          ? await refreshWorkspaceUsageSnapshot(tenant.id)
+          : null;
 
       setMetrics(dashboardMetrics);
+      setUsage(workspaceUsage);
       setDemoMessage(
         addedCount > 0
           ? `Demo data loaded. Added ${addedCount} sample records.`
@@ -230,6 +299,8 @@ export function DashboardPageClient() {
     },
   ];
   const canLoadDemo = currentRole === "owner" || currentRole === "admin";
+  const canViewUsage = currentRole === "owner" || currentRole === "admin";
+  const limits = getPlanLimits(plan);
 
   return (
     <div className="mx-auto max-w-7xl">
@@ -320,6 +391,43 @@ export function DashboardPageClient() {
           </div>
         ) : null}
       </Card>
+
+      {canViewUsage && usage ? (
+        <Card className="mt-8 border-[#D8E8F0] bg-white p-6 text-[#0B1F33] shadow-2xl shadow-[#0B2A3D]/10">
+          <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
+            <div>
+              <Badge className="border-[#9ADDEA] bg-[#EAF8FC] text-[#0B6F87]">
+                Workspace usage
+              </Badge>
+              <h3 className="mt-4 text-xl font-semibold">
+                {getPlanDisplayName(plan)} plan limits
+              </h3>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-[#425B76]">
+                Usage is refreshed from tenant-scoped counts and cached for
+                billing readiness. Upgrade prompts are available to owner/admin
+                users when limits are reached.
+              </p>
+            </div>
+            <div className="rounded-2xl border border-[#D8E8F0] bg-[#F6FBFE] px-4 py-3 text-sm font-semibold text-[#425B76]">
+              {trialStatus?.active
+                ? `Trial: ${trialStatus.daysRemaining} days left`
+                : trialStatus?.expired
+                  ? "Trial expired"
+                  : "Trial status unavailable"}
+            </div>
+          </div>
+          <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+            {(Object.keys(limits) as PlanResource[]).map((resource) => (
+              <UsageMiniCard
+                key={resource}
+                label={planResourceLabels[resource]}
+                limit={limits[resource]}
+                used={usage[resource]}
+              />
+            ))}
+          </div>
+        </Card>
+      ) : null}
 
       <section className="mt-8 grid gap-4 md:grid-cols-3">
         <Button href="/app/students" size="lg">

@@ -2,6 +2,10 @@ import { logActivity } from "@/src/lib/auditLogger";
 import { requireTenantPermission } from "@/src/lib/permissions";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 import { getCurrentTrainerScope } from "@/src/lib/trainerAssignments";
+import {
+  enforceWorkspaceLimit,
+  refreshWorkspaceUsageSnapshot,
+} from "@/src/lib/usage";
 
 export type StudentStatus = "active" | "inactive" | "lead" | "blocked";
 
@@ -107,6 +111,7 @@ export async function createStudent(input: StudentInput) {
     permission: "manage_students",
     tenantId: input.tenantId,
   });
+  await enforceWorkspaceLimit(input.tenantId, "students");
 
   const supabase = getSupabaseClient();
   const {
@@ -159,6 +164,7 @@ export async function createStudent(input: StudentInput) {
     entityType: "student",
     tenantId: student.tenant_id,
   });
+  await refreshWorkspaceUsageSnapshot(student.tenant_id);
 
   return student;
 }
@@ -288,4 +294,6 @@ export async function deleteStudent(params: {
       tenantId: existingStudent.tenant_id,
     });
   }
+
+  await refreshWorkspaceUsageSnapshot(params.tenantId);
 }

@@ -2,6 +2,10 @@ import { logActivity } from "@/src/lib/auditLogger";
 import { requireTenantPermission } from "@/src/lib/permissions";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 import { getCurrentTrainerScope } from "@/src/lib/trainerAssignments";
+import {
+  enforceWorkspaceLimit,
+  refreshWorkspaceUsageSnapshot,
+} from "@/src/lib/usage";
 
 export type CourseStatus = "draft" | "published" | "archived";
 export type LessonType = "text" | "video" | "pdf" | "quiz" | "assignment";
@@ -146,6 +150,7 @@ export async function createCourse(input: CreateCourseInput) {
     permission: "manage_courses",
     tenantId: input.tenantId,
   });
+  await enforceWorkspaceLimit(input.tenantId, "courses");
 
   const supabase = getSupabaseClient();
   const {
@@ -197,6 +202,7 @@ export async function createCourse(input: CreateCourseInput) {
     metadata: { status: course.status },
     tenantId: course.tenant_id,
   });
+  await refreshWorkspaceUsageSnapshot(course.tenant_id);
 
   return course;
 }

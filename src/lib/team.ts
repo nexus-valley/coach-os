@@ -9,6 +9,10 @@ import {
   type MemberRole,
 } from "@/src/lib/permissions";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
+import {
+  enforceWorkspaceLimit,
+  refreshWorkspaceUsageSnapshot,
+} from "@/src/lib/usage";
 
 export {
   canDeleteRecords,
@@ -91,6 +95,22 @@ export async function updateTenantMemberRole(
   });
 
   const supabase = getSupabaseClient();
+  const { data: existingMember, error: existingError } = await supabase
+    .from("tenant_members")
+    .select(tenantMemberSelect)
+    .eq("tenant_id", tenantId)
+    .eq("id", memberId)
+    .neq("role", "owner")
+    .maybeSingle();
+
+  if (existingError) {
+    throw existingError;
+  }
+
+  if (role === "trainer" && existingMember?.role !== "trainer") {
+    await enforceWorkspaceLimit(tenantId, "trainers");
+  }
+
   const { data, error } = await supabase
     .from("tenant_members")
     .update({ role })
@@ -116,6 +136,7 @@ export async function updateTenantMemberRole(
     severity: "warning",
     tenantId: member.tenant_id,
   });
+  await refreshWorkspaceUsageSnapshot(member.tenant_id);
 
   return member;
 }
@@ -164,4 +185,6 @@ export async function removeTenantMember(tenantId: string, memberId: string) {
       tenantId: member.tenant_id,
     });
   }
+
+  await refreshWorkspaceUsageSnapshot(tenantId);
 }

@@ -1,6 +1,10 @@
 import { logActivity } from "@/src/lib/auditLogger";
 import { requireTenantPermission, type MemberRole } from "@/src/lib/permissions";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
+import {
+  enforceWorkspaceLimit,
+  refreshWorkspaceUsageSnapshot,
+} from "@/src/lib/usage";
 
 export type InvitationRole = Exclude<MemberRole, "owner">;
 export type InvitationStatus = "pending" | "accepted" | "expired" | "revoked";
@@ -136,7 +140,6 @@ export async function createTeamInvitation(params: {
     permission: "invite_team",
     tenantId: params.tenantId,
   });
-
   const supabase = getSupabaseClient();
   const { data: existingInvitation, error: existingError } = await supabase
     .from("team_invitations")
@@ -152,6 +155,17 @@ export async function createTeamInvitation(params: {
 
   if (existingInvitation) {
     return existingInvitation as TeamInvitation;
+  }
+
+  await enforceWorkspaceLimit(params.tenantId, "team_members", {
+    includePendingInvitations: true,
+  });
+
+  if (params.role === "trainer") {
+    await enforceWorkspaceLimit(params.tenantId, "trainers", {
+      includePendingInvitations: true,
+      trainerOnly: true,
+    });
   }
 
   const { data, error } = await supabase
@@ -396,6 +410,7 @@ export async function acceptTeamInvitation(token: string) {
     metadata: { role: result.role },
     tenantId: result.tenant_id,
   });
+  await refreshWorkspaceUsageSnapshot(result.tenant_id);
 
   return result;
 }

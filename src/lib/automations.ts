@@ -1,6 +1,10 @@
 import { createReminder, type ReminderType } from "@/src/lib/reminders";
 import { requireTenantPermission } from "@/src/lib/permissions";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
+import {
+  enforceWorkspaceLimit,
+  refreshWorkspaceUsageSnapshot,
+} from "@/src/lib/usage";
 
 export type AutomationTriggerType =
   | "payment_created"
@@ -122,6 +126,7 @@ export async function createAutomationRule(payload: AutomationRulePayload) {
     permission: "manage_automations",
     tenantId: payload.tenant_id,
   });
+  await enforceWorkspaceLimit(payload.tenant_id, "automations");
 
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
@@ -137,7 +142,10 @@ export async function createAutomationRule(payload: AutomationRulePayload) {
     throw error;
   }
 
-  return normalizeRule(data as AutomationRule);
+  const rule = normalizeRule(data as AutomationRule);
+  await refreshWorkspaceUsageSnapshot(rule.tenant_id);
+
+  return rule;
 }
 
 export async function updateAutomationRule(
@@ -211,6 +219,8 @@ export async function deleteAutomationRule(ruleId: string, tenantId: string) {
   if (error) {
     throw error;
   }
+
+  await refreshWorkspaceUsageSnapshot(tenantId);
 }
 
 export async function testAutomationRule(rule: AutomationRule, tenantId: string) {

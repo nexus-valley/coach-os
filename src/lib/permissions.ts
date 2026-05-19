@@ -22,6 +22,7 @@ const rolePermissions: Record<MemberRole, Permission[]> = {
     "access_activity",
     "access_payments",
     "access_settings",
+    "access_subscription",
     "delete_records",
     "invite_team",
     "manage_automations",

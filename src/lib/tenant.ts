@@ -1,3 +1,4 @@
+import { logActivity } from "@/src/lib/auditLogger";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 
 export type Tenant = {
@@ -204,7 +205,19 @@ export async function createWorkspace(params: {
   }
 
   if (!rpcError && rpcTenant) {
-    return rpcTenant as Tenant;
+    const tenant = rpcTenant as Tenant;
+
+    await logActivity({
+      action: "trial_started",
+      description: "Started 14-day workspace trial.",
+      entityId: tenant.id,
+      entityName: tenant.name,
+      entityType: "subscription",
+      metadata: { trialDays: 14 },
+      tenantId: tenant.id,
+    });
+
+    return tenant;
   }
 
   if (rpcError?.code !== "PGRST202") {
@@ -285,6 +298,16 @@ export async function createWorkspace(params: {
       ),
     );
   }
+
+  await logActivity({
+    action: "trial_started",
+    description: "Started 14-day workspace trial.",
+    entityId: tenant.id,
+    entityName: tenant.name,
+    entityType: "subscription",
+    metadata: { trialDays: 14 },
+    tenantId: tenant.id,
+  });
 
   return tenant;
 }
