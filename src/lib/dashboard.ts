@@ -41,9 +41,27 @@ export type DashboardCourseRevenue = {
   revenue: number;
 };
 
+export type DashboardSessionPreview = {
+  cohortName: string | null;
+  courseTitle: string | null;
+  id: string;
+  scheduled_start_at: string;
+  status: string;
+  title: string;
+};
+
+export type DashboardAttendanceSummary = {
+  attendancePercent: number | null;
+  lowAttendanceAlerts: number;
+  recentSessions: DashboardSessionPreview[];
+  totalMarkedAttendance: number;
+  upcomingSessions: DashboardSessionPreview[];
+};
+
 export type DashboardMetrics = {
   activeCourses: number;
   activeAutomations: number;
+  attendance: DashboardAttendanceSummary;
   courseRevenue: DashboardCourseRevenue[];
   paymentStatusSummary: Record<PaymentStatus, number>;
   pendingPayments: number;
@@ -68,6 +86,14 @@ type DashboardStudentLookup = {
 
 const paymentSelect =
   "id,tenant_id,student_id,course_id,amount,currency,payment_method,status,paid_at,created_at";
+
+const emptyAttendanceSummary: DashboardAttendanceSummary = {
+  attendancePercent: null,
+  lowAttendanceAlerts: 0,
+  recentSessions: [],
+  totalMarkedAttendance: 0,
+  upcomingSessions: [],
+};
 
 function sumCompletedRevenue(payments: DashboardPayment[]) {
   return payments
@@ -117,6 +143,204 @@ function buildCourseRevenue(
   return Array.from(revenueByCourse.values()).sort(
     (left, right) => right.revenue - left.revenue,
   );
+}
+
+async function loadSessionPreviews(
+  sessions: {
+    cohort_id: string | null;
+    course_id: string | null;
+    id: string;
+    scheduled_start_at: string;
+    status: string;
+    title: string;
+  }[],
+  tenantId: string,
+) {
+  if (sessions.length === 0) {
+    return [];
+  }
+
+  const supabase = getSupabaseClient();
+  const courseIds = Array.from(
+    new Set(sessions.map((session) => session.course_id).filter(Boolean)),
+  ) as string[];
+  const cohortIds = Array.from(
+    new Set(sessions.map((session) => session.cohort_id).filter(Boolean)),
+  ) as string[];
+
+  const [coursesResult, cohortsResult] = await Promise.all([
+    courseIds.length
+      ? supabase
+          .from("courses")
+          .select("id,title")
+          .eq("tenant_id", tenantId)
+          .in("id", courseIds)
+      : Promise.resolve({ data: [], error: null }),
+    cohortIds.length
+      ? supabase
+          .from("cohorts")
+          .select("id,name")
+          .eq("tenant_id", tenantId)
+          .in("id", cohortIds)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+
+  if (coursesResult.error) {
+    throw coursesResult.error;
+  }
+
+  if (cohortsResult.error) {
+    throw cohortsResult.error;
+  }
+
+  const courseById = new Map(
+    ((coursesResult.data ?? []) as { id: string; title: string }[]).map(
+      (course) => [course.id, course.title],
+    ),
+  );
+  const cohortById = new Map(
+    ((cohortsResult.data ?? []) as { id: string; name: string }[]).map(
+      (cohort) => [cohort.id, cohort.name],
+    ),
+  );
+
+  return sessions.map((session) => ({
+    cohortName: session.cohort_id
+      ? cohortById.get(session.cohort_id) ?? null
+      : null,
+    courseTitle: session.course_id
+      ? courseById.get(session.course_id) ?? null
+      : null,
+    id: session.id,
+    scheduled_start_at: session.scheduled_start_at,
+    status: session.status,
+    title: session.title,
+  })) satisfies DashboardSessionPreview[];
+}
+
+async function getAttendanceDashboardSummary(
+  tenantId: string,
+  trainerScope: Awaited<ReturnType<typeof getCurrentTrainerScope>>,
+) {
+  const supabase = getSupabaseClient();
+  const now = new Date().toISOString();
+  let scopedSessionIds: string[] | null = null;
+  let upcomingQuery = supabase
+    .from("sessions")
+    .select("id,title,status,scheduled_start_at,course_id,cohort_id")
+    .eq("tenant_id", tenantId)
+    .eq("status", "scheduled")
+    .gte("scheduled_start_at", now)
+    .order("scheduled_start_at", { ascending: true })
+    .limit(3);
+  let recentQuery = supabase
+    .from("sessions")
+    .select("id,title,status,scheduled_start_at,course_id,cohort_id")
+    .eq("tenant_id", tenantId)
+    .order("scheduled_start_at", { ascending: false })
+    .limit(3);
+
+  if (trainerScope) {
+    const filters: string[] = [];
+
+    if (trainerScope.courseIds.length > 0) {
+      filters.push(`course_id.in.(${trainerScope.courseIds.join(",")})`);
+    }
+
+    if (trainerScope.cohortIds.length > 0) {
+      filters.push(`cohort_id.in.(${trainerScope.cohortIds.join(",")})`);
+    }
+
+    if (filters.length === 0) {
+      return emptyAttendanceSummary;
+    }
+
+    upcomingQuery = upcomingQuery.or(filters.join(","));
+    recentQuery = recentQuery.or(filters.join(","));
+
+    const scopedSessionsResult = await supabase
+      .from("sessions")
+      .select("id")
+      .eq("tenant_id", tenantId)
+      .or(filters.join(","));
+
+    if (scopedSessionsResult.error) {
+      throw scopedSessionsResult.error;
+    }
+
+    scopedSessionIds = ((scopedSessionsResult.data ?? []) as { id: string }[]).map(
+      (session) => session.id,
+    );
+
+    if (scopedSessionIds.length === 0) {
+      return emptyAttendanceSummary;
+    }
+  }
+
+  let attendanceQuery = supabase
+    .from("attendance_records")
+    .select("status")
+    .eq("tenant_id", tenantId);
+
+  if (scopedSessionIds) {
+    attendanceQuery = attendanceQuery.in("session_id", scopedSessionIds);
+  }
+
+  const [upcomingResult, recentResult, attendanceResult] = await Promise.all([
+    upcomingQuery,
+    recentQuery,
+    attendanceQuery,
+  ]);
+
+  if (upcomingResult.error) {
+    throw upcomingResult.error;
+  }
+
+  if (recentResult.error) {
+    throw recentResult.error;
+  }
+
+  if (attendanceResult.error) {
+    throw attendanceResult.error;
+  }
+
+  const attendanceRows = (attendanceResult.data ?? []) as { status: string }[];
+  const attended = attendanceRows.filter(
+    (record) => record.status === "present" || record.status === "late",
+  ).length;
+  const absent = attendanceRows.filter((record) => record.status === "absent")
+    .length;
+
+  return {
+    attendancePercent:
+      attendanceRows.length > 0
+        ? Math.round((attended / attendanceRows.length) * 100)
+        : null,
+    lowAttendanceAlerts: absent,
+    recentSessions: await loadSessionPreviews(
+      (recentResult.data ?? []) as {
+        cohort_id: string | null;
+        course_id: string | null;
+        id: string;
+        scheduled_start_at: string;
+        status: string;
+        title: string;
+      }[],
+      tenantId,
+    ),
+    totalMarkedAttendance: attendanceRows.length,
+    upcomingSessions: await loadSessionPreviews(
+      (upcomingResult.data ?? []) as {
+        cohort_id: string | null;
+        course_id: string | null;
+        id: string;
+        scheduled_start_at: string;
+        status: string;
+        title: string;
+      }[],
+      tenantId,
+    ),
+  } satisfies DashboardAttendanceSummary;
 }
 
 export async function getDashboardMetrics(
@@ -195,9 +419,12 @@ export async function getDashboardMetrics(
       (course) => course.status === "published",
     ).length;
 
+    const attendance = await getAttendanceDashboardSummary(tenantId, trainerScope);
+
     return {
       activeAutomations: 0,
       activeCourses: activeCourses > 0 ? activeCourses : courses.length,
+      attendance,
       courseRevenue: [],
       paymentStatusSummary: {
         completed: 0,
@@ -223,6 +450,7 @@ export async function getDashboardMetrics(
     recentStudentsResult,
     reminderCounts,
     automationCounts,
+    attendance,
   ] = await Promise.all([
     supabase
       .from("students")
@@ -255,6 +483,7 @@ export async function getDashboardMetrics(
       .limit(5),
     getReminderCounts(tenantId),
     getAutomationRuleCounts(tenantId),
+    getAttendanceDashboardSummary(tenantId, null),
   ]);
 
   if (studentsCountResult.error) {
@@ -331,6 +560,7 @@ export async function getDashboardMetrics(
   return {
     activeAutomations: automationCounts.activeAutomations,
     activeCourses: publishedCourses > 0 ? publishedCourses : draftCourses,
+    attendance,
     courseRevenue: buildCourseRevenue(payments, coursesById),
     paymentStatusSummary: buildPaymentSummary(payments),
     pendingPayments: payments.filter((payment) => payment.status === "pending")

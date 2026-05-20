@@ -108,6 +108,50 @@ function UsageMiniCard({
   );
 }
 
+function SessionPreviewList({
+  emptyText,
+  sessions,
+}: {
+  emptyText: string;
+  sessions: DashboardMetrics["attendance"]["upcomingSessions"];
+}) {
+  if (sessions.length === 0) {
+    return (
+      <p className="rounded-2xl border border-dashed border-[#C7DDEA] bg-[#F6FBFE] p-4 text-sm text-[#425B76]">
+        {emptyText}
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {sessions.map((session) => (
+        <div
+          className="rounded-2xl border border-[#D8E8F0] bg-[#F6FBFE] p-4"
+          key={session.id}
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="font-semibold text-[#0B1F33]">{session.title}</p>
+              <p className="mt-1 text-sm text-[#425B76]">
+                {session.cohortName ??
+                  session.courseTitle ??
+                  "General session"}
+              </p>
+            </div>
+            <Badge tone={session.status === "completed" ? "success" : "warning"}>
+              {session.status}
+            </Badge>
+          </div>
+          <p className="mt-3 text-xs font-medium text-[#66788F]">
+            {formatDate(session.scheduled_start_at)}
+          </p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function DashboardPageClient() {
   const router = useRouter();
   const [currentRole, setCurrentRole] = useState<MemberRole | null>(null);
@@ -441,6 +485,71 @@ export function DashboardPageClient() {
             Record Payment
           </Button>
         ) : null}
+      </section>
+
+      <section className="mt-8 grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
+        <Card className="border-[#D8E8F0] bg-white p-6 text-[#0B1F33] shadow-2xl shadow-[#0B2A3D]/10">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <Badge tone="light">Attendance</Badge>
+              <h3 className="mt-4 text-xl font-semibold">
+                Attendance Snapshot
+              </h3>
+              <p className="mt-2 text-sm leading-6 text-[#425B76]">
+                Foundation metrics from marked sessions. Present and late count
+                as attended.
+              </p>
+            </div>
+            <Button href="/app/sessions" size="sm" variant="secondary">
+              View Sessions
+            </Button>
+          </div>
+          <div className="mt-6 grid gap-4 sm:grid-cols-3">
+            <div className="rounded-2xl border border-[#D8E8F0] bg-[#F6FBFE] p-4">
+              <p className="text-2xl font-semibold text-[#0B1F33]">
+                {metrics.attendance.attendancePercent === null
+                  ? "N/A"
+                  : `${metrics.attendance.attendancePercent}%`}
+              </p>
+              <p className="mt-1 text-sm text-[#66788F]">Attendance rate</p>
+            </div>
+            <div className="rounded-2xl border border-[#D8E8F0] bg-[#F6FBFE] p-4">
+              <p className="text-2xl font-semibold text-[#0B1F33]">
+                {metrics.attendance.totalMarkedAttendance}
+              </p>
+              <p className="mt-1 text-sm text-[#66788F]">Marked records</p>
+            </div>
+            <div className="rounded-2xl border border-[#D8E8F0] bg-[#F6FBFE] p-4">
+              <p className="text-2xl font-semibold text-[#0B1F33]">
+                {metrics.attendance.lowAttendanceAlerts}
+              </p>
+              <p className="mt-1 text-sm text-[#66788F]">Absent alerts</p>
+            </div>
+          </div>
+        </Card>
+
+        <Card className="border-[#D8E8F0] bg-white p-6 text-[#0B1F33] shadow-2xl shadow-[#0B2A3D]/10">
+          <div className="grid gap-6 lg:grid-cols-2">
+            <div>
+              <h3 className="text-xl font-semibold">Upcoming Sessions</h3>
+              <div className="mt-4">
+                <SessionPreviewList
+                  emptyText="No upcoming sessions scheduled."
+                  sessions={metrics.attendance.upcomingSessions}
+                />
+              </div>
+            </div>
+            <div>
+              <h3 className="text-xl font-semibold">Recent Sessions</h3>
+              <div className="mt-4">
+                <SessionPreviewList
+                  emptyText="No recent sessions available."
+                  sessions={metrics.attendance.recentSessions}
+                />
+              </div>
+            </div>
+          </div>
+        </Card>
       </section>
 
       <section className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-6">

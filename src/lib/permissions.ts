@@ -5,11 +5,13 @@ export type MemberRole = "owner" | "admin" | "staff" | "trainer";
 
 export type Permission =
   | "access_activity"
+  | "access_attendance"
   | "access_payments"
   | "access_settings"
   | "access_subscription"
   | "delete_records"
   | "invite_team"
+  | "manage_attendance"
   | "manage_automations"
   | "manage_courses"
   | "manage_payments"
@@ -20,11 +22,13 @@ export type Permission =
 const rolePermissions: Record<MemberRole, Permission[]> = {
   admin: [
     "access_activity",
+    "access_attendance",
     "access_payments",
     "access_settings",
     "access_subscription",
     "delete_records",
     "invite_team",
+    "manage_attendance",
     "manage_automations",
     "manage_courses",
     "manage_payments",
@@ -32,11 +36,13 @@ const rolePermissions: Record<MemberRole, Permission[]> = {
   ],
   owner: [
     "access_activity",
+    "access_attendance",
     "access_payments",
     "access_settings",
     "access_subscription",
     "delete_records",
     "invite_team",
+    "manage_attendance",
     "manage_automations",
     "manage_courses",
     "manage_payments",
@@ -44,13 +50,14 @@ const rolePermissions: Record<MemberRole, Permission[]> = {
     "manage_team",
     "manage_workspace",
   ],
-  staff: ["access_payments", "manage_students"],
-  trainer: ["manage_students"],
+  staff: ["access_attendance", "access_payments", "manage_students"],
+  trainer: ["access_attendance", "manage_attendance", "manage_students"],
 };
 
 const navAccess: Record<string, (role: MemberRole | null | undefined) => boolean> =
   {
     Activity: canAccessActivity,
+    Sessions: canAccessAttendance,
     Automations: canManageAutomations,
     Payments: canAccessPayments,
     "Payment Links": canManagePayments,
@@ -68,6 +75,10 @@ export function canAccessActivity(role: MemberRole | null | undefined) {
 
 export function canAccessPayments(role: MemberRole | null | undefined) {
   return hasPermission(role, "access_payments");
+}
+
+export function canAccessAttendance(role: MemberRole | null | undefined) {
+  return hasPermission(role, "access_attendance");
 }
 
 export function canAccessSettings(role: MemberRole | null | undefined) {
@@ -88,6 +99,10 @@ export function canInviteTeam(role: MemberRole | null | undefined) {
 
 export function canManageAutomations(role: MemberRole | null | undefined) {
   return hasPermission(role, "manage_automations");
+}
+
+export function canManageAttendance(role: MemberRole | null | undefined) {
+  return hasPermission(role, "manage_attendance");
 }
 
 export function canManageCourses(role: MemberRole | null | undefined) {

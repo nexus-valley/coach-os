@@ -38,6 +38,12 @@ export const activityActionOptions = [
   ["access_denied", "Access Denied"],
   ["team_member_removed", "Team Member Removed"],
   ["settings_updated", "Settings Updated"],
+  ["session_created", "Session Created"],
+  ["session_updated", "Session Updated"],
+  ["session_completed", "Session Completed"],
+  ["session_canceled", "Session Canceled"],
+  ["attendance_marked", "Attendance Marked"],
+  ["attendance_bulk_marked", "Attendance Bulk Marked"],
   ["subscription_plan_changed", "Subscription Plan Changed"],
   ["subscription_created", "Subscription Created"],
   ["subscription_canceled", "Subscription Canceled"],
@@ -77,6 +83,8 @@ export const activityEntityOptions = [
   ["trainer_assignment", "Trainer assignment"],
   ["team_member", "Team"],
   ["workspace_settings", "Settings"],
+  ["session", "Sessions"],
+  ["attendance_record", "Attendance"],
   ["demo_data", "Demo data"],
 ] as const;
 
@@ -102,6 +110,7 @@ const entityIconLabels: Record<string, string> = {
   payment_link: "PL",
   receipt: "RC",
   reminder: "RM",
+  session: "SE",
   security: "SC",
   subscription: "SB",
   invoice: "IN",
@@ -112,6 +121,7 @@ const entityIconLabels: Record<string, string> = {
   student: "ST",
   team_member: "TM",
   workspace_settings: "WS",
+  attendance_record: "AT",
 };
 
 const entityIconClasses: Record<string, string> = {
@@ -126,6 +136,7 @@ const entityIconClasses: Record<string, string> = {
   payment_link: "border-teal-200 bg-teal-50 text-teal-700",
   receipt: "border-emerald-200 bg-emerald-50 text-emerald-700",
   reminder: "border-orange-200 bg-orange-50 text-orange-700",
+  session: "border-cyan-200 bg-cyan-50 text-cyan-700",
   security: "border-red-200 bg-red-50 text-red-700",
   subscription: "border-amber-200 bg-amber-50 text-amber-700",
   invoice: "border-sky-200 bg-sky-50 text-sky-700",
@@ -136,6 +147,7 @@ const entityIconClasses: Record<string, string> = {
   student: "border-sky-200 bg-sky-50 text-sky-700",
   team_member: "border-purple-200 bg-purple-50 text-purple-700",
   workspace_settings: "border-slate-300 bg-slate-50 text-slate-700",
+  attendance_record: "border-emerald-200 bg-emerald-50 text-emerald-700",
 };
 
 export function formatActivityAction(action: string) {

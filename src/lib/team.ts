@@ -1,7 +1,9 @@
 import { logActivity } from "@/src/lib/auditLogger";
 import {
   canDeleteRecords,
+  canAccessAttendance,
   canManageCourses,
+  canManageAttendance,
   canManagePayments,
   canManageTeam,
   getMemberRoleForTenant,
@@ -15,7 +17,9 @@ import {
 } from "@/src/lib/usage";
 
 export {
+  canAccessAttendance,
   canDeleteRecords,
+  canManageAttendance,
   canManageCourses,
   canManagePayments,
   canManageTeam,

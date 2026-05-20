@@ -23,6 +23,7 @@ const navItems = [
   { href: "/app", label: "Dashboard" },
   { href: "/app/courses", label: "Courses" },
   { href: "/app/cohorts", label: "Cohorts" },
+  { href: "/app/sessions", label: "Sessions" },
   { href: "/app/students", label: "Students" },
   { href: "/app/student-portal", label: "Portal" },
   { href: "/app/enrollments", label: "Enrollments" },
@@ -124,6 +125,17 @@ function NavIcon({ label }: { label: string }) {
         <path d="M8 17V9" />
         <path d="M13 17V5" />
         <path d="M18 17v-4" />
+      </>
+    ),
+    Sessions: (
+      <>
+        <rect height="16" rx="2" width="18" x="3" y="4" />
+        <path d="M8 2v4" />
+        <path d="M16 2v4" />
+        <path d="M3 10h18" />
+        <path d="M8 15h.01" />
+        <path d="M12 15h.01" />
+        <path d="M16 15h.01" />
       </>
     ),
     Settings: (
