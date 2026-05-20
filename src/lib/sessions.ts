@@ -400,11 +400,13 @@ export async function createSession(input: SessionInput) {
 
 export async function updateSession(input: UpdateSessionInput) {
   const validated = validateSessionInput(input);
-  await ensureCanManageSession({
+  const { role, user } = await ensureCanManageSession({
     cohortId: input.cohortId,
     courseId: input.courseId,
     tenantId: input.tenantId,
   });
+  const trainerUserId =
+    role === "trainer" ? user.id : input.trainerUserId?.trim() || null;
 
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
@@ -416,7 +418,7 @@ export async function updateSession(input: UpdateSessionInput) {
       scheduled_end_at: validated.scheduledEndAt,
       scheduled_start_at: validated.scheduledStartAt,
       title: validated.title,
-      trainer_user_id: input.trainerUserId?.trim() || null,
+      trainer_user_id: trainerUserId,
     })
     .eq("tenant_id", input.tenantId)
     .eq("id", input.sessionId)

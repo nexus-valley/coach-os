@@ -75,10 +75,6 @@ async function ensureCanManageAttendanceForSession(
     throw new Error("You do not have permission to mark attendance.");
   }
 
-  if (role === "trainer" && session.trainer_user_id && session.trainer_user_id !== user.id) {
-    throw new Error("You can only mark attendance for your assigned sessions.");
-  }
-
   return { role, user };
 }
 
@@ -124,6 +120,57 @@ async function getStudentRows(
   }
 
   return (data ?? []) as AttendanceRosterItem["student"][];
+}
+
+async function getEligibleStudentIdsForSession(
+  session: TrainingSessionWithRelations,
+) {
+  if (session.cohort_id) {
+    const members = await getCohortMembers({
+      cohortId: session.cohort_id,
+      tenantId: session.tenant_id,
+    });
+
+    return new Set(members.map((member) => member.student_id));
+  }
+
+  if (session.course_id) {
+    const enrollments = await getEnrollmentsForCourse({
+      courseId: session.course_id,
+      tenantId: session.tenant_id,
+    });
+
+    return new Set(enrollments.map((enrollment) => enrollment.student_id));
+  }
+
+  return new Set<string>();
+}
+
+async function ensureStudentsBelongToSession(
+  session: TrainingSessionWithRelations,
+  studentIds: string[],
+) {
+  const eligibleStudentIds = await getEligibleStudentIdsForSession(session);
+  const invalidStudentId = studentIds.find(
+    (studentId) => !eligibleStudentIds.has(studentId),
+  );
+
+  if (invalidStudentId) {
+    await logActivity({
+      action: "access_denied",
+      description: "Blocked attendance marking outside session roster.",
+      entityId: session.id,
+      entityName: session.title,
+      entityType: "security",
+      metadata: {
+        invalidStudentId,
+        sessionId: session.id,
+      },
+      severity: "warning",
+      tenantId: session.tenant_id,
+    });
+    throw new Error("Attendance can only be marked for students in this session roster.");
+  }
 }
 
 export async function getSessionAttendance(params: {
@@ -218,6 +265,7 @@ export async function markAttendance(params: {
   }
 
   const { user } = await ensureCanManageAttendanceForSession(session);
+  await ensureStudentsBelongToSession(session, [params.studentId]);
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
     .from("attendance_records")
@@ -282,6 +330,10 @@ export async function bulkMarkAttendance(params: {
   }
 
   const { user } = await ensureCanManageAttendanceForSession(session);
+  await ensureStudentsBelongToSession(
+    session,
+    params.records.map((record) => record.studentId),
+  );
   const markedAt = new Date().toISOString();
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
