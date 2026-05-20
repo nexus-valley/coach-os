@@ -1,4 +1,5 @@
 import { logActivity } from "@/src/lib/auditLogger";
+import { createNotificationForTenantRoles } from "@/src/lib/notifications";
 import {
   getPlanDefinition,
   isWithinLimit,
@@ -399,6 +400,27 @@ export async function enforceWorkspaceLimit(
     severity: "warning",
     tenantId,
   });
+
+  try {
+    await createNotificationForTenantRoles({
+      actionUrl: "/app/subscription",
+      entityType: "usage",
+      message: `The ${label} limit for the ${result.plan} plan has been reached.`,
+      metadata: {
+        limit: limitText,
+        plan: result.plan,
+        resource,
+        used: result.used,
+      },
+      roles: ["owner", "admin"],
+      severity: "warning",
+      tenantId,
+      title: "Workspace limit reached",
+      type: "subscription_notice",
+    });
+  } catch {
+    // Limit notifications must not hide the original upgrade prompt.
+  }
 
   throw new Error(
     `You have reached the ${label} limit for your current plan. Upgrade your workspace plan to continue.`,

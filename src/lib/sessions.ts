@@ -7,6 +7,11 @@ import {
   getMemberRoleForTenant,
   type MemberRole,
 } from "@/src/lib/permissions";
+import {
+  createNotificationForTenantRoles,
+  createNotificationsForUsers,
+  getTenantMemberUserIds,
+} from "@/src/lib/notifications";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 import {
   getCurrentTrainerScope,
@@ -55,6 +60,67 @@ export type UpdateSessionInput = SessionInput & {
 
 const sessionColumns =
   "id,tenant_id,course_id,cohort_id,trainer_user_id,title,description,scheduled_start_at,scheduled_end_at,status,created_by,created_at,updated_at";
+
+async function notifySessionCreated(session: TrainingSession) {
+  try {
+    const adminUserIds = await getTenantMemberUserIds(session.tenant_id, [
+      "owner",
+      "admin",
+    ]);
+    const userIds = Array.from(
+      new Set([
+        ...adminUserIds,
+        ...(session.trainer_user_id ? [session.trainer_user_id] : []),
+      ]),
+    );
+
+    await createNotificationsForUsers({
+      actionUrl: `/app/sessions/${session.id}`,
+      entityId: session.id,
+      entityType: "session",
+      message: `Session scheduled for ${new Intl.DateTimeFormat("en", {
+        dateStyle: "medium",
+        timeStyle: "short",
+      }).format(new Date(session.scheduled_start_at))}.`,
+      metadata: {
+        cohortId: session.cohort_id,
+        courseId: session.course_id,
+        scheduledStartAt: session.scheduled_start_at,
+        trainerUserId: session.trainer_user_id,
+      },
+      severity: "info",
+      tenantId: session.tenant_id,
+      title: `Session created: ${session.title}`,
+      type: "session_reminder",
+      userIds,
+    });
+  } catch {
+    // Notifications are non-blocking for session creation.
+  }
+}
+
+async function notifySessionStatusChange(session: TrainingSession) {
+  try {
+    await createNotificationForTenantRoles({
+      actionUrl: `/app/sessions/${session.id}`,
+      entityId: session.id,
+      entityType: "session",
+      message: `Session status changed to ${session.status}.`,
+      metadata: {
+        cohortId: session.cohort_id,
+        courseId: session.course_id,
+        status: session.status,
+      },
+      roles: ["owner", "admin"],
+      severity: session.status === "canceled" ? "warning" : "info",
+      tenantId: session.tenant_id,
+      title: `Session ${session.status}: ${session.title}`,
+      type: "session_reminder",
+    });
+  } catch {
+    // Notifications are non-blocking for session updates.
+  }
+}
 
 async function getCurrentUserAndRole(tenantId: string) {
   const supabase = getSupabaseClient();
@@ -394,6 +460,7 @@ export async function createSession(input: SessionInput) {
     },
     tenantId: session.tenant_id,
   });
+  await notifySessionCreated(session);
 
   return session;
 }
@@ -500,6 +567,7 @@ async function updateSessionStatus(params: {
     severity: params.action === "session_canceled" ? "warning" : "info",
     tenantId: session.tenant_id,
   });
+  await notifySessionStatusChange(session);
 
   return session;
 }

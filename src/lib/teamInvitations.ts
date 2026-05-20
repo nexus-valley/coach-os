@@ -1,4 +1,5 @@
 import { logActivity } from "@/src/lib/auditLogger";
+import { createNotificationForTenantRoles } from "@/src/lib/notifications";
 import { requireTenantPermission, type MemberRole } from "@/src/lib/permissions";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 import {
@@ -110,6 +111,35 @@ function getInvitationStatus(invitation: TeamInvitation): InvitationStatus {
   return invitation.status;
 }
 
+async function notifyInvitationEvent(params: {
+  actionUrl?: string;
+  invitationEmail?: string;
+  message: string;
+  role?: InvitationRole;
+  severity?: "info" | "warning";
+  tenantId: string;
+  title: string;
+}) {
+  try {
+    await createNotificationForTenantRoles({
+      actionUrl: params.actionUrl ?? "/app/settings",
+      entityType: "team_invitation",
+      message: params.message,
+      metadata: {
+        email: params.invitationEmail,
+        role: params.role,
+      },
+      roles: ["owner", "admin"],
+      severity: params.severity ?? "info",
+      tenantId: params.tenantId,
+      title: params.title,
+      type: "invitation_notice",
+    });
+  } catch {
+    // Notifications are non-blocking for invitation workflows.
+  }
+}
+
 export function buildInvitationLink(token: string, baseUrl?: string) {
   const origin =
     baseUrl ??
@@ -205,6 +235,13 @@ export async function createTeamInvitation(params: {
     },
     tenantId: invitation.tenant_id,
   });
+  await notifyInvitationEvent({
+    invitationEmail: invitation.email,
+    message: `${invitation.email} was invited as ${invitation.role}.`,
+    role: invitation.role,
+    tenantId: invitation.tenant_id,
+    title: "Team invitation sent",
+  });
 
   return invitation;
 }
@@ -288,6 +325,14 @@ export async function revokeTeamInvitation(invitationId: string) {
     severity: "warning",
     tenantId: revokedInvitation.tenant_id,
   });
+  await notifyInvitationEvent({
+    invitationEmail: revokedInvitation.email,
+    message: `Invitation revoked for ${revokedInvitation.email}.`,
+    role: revokedInvitation.role,
+    severity: "warning",
+    tenantId: revokedInvitation.tenant_id,
+    title: "Team invitation revoked",
+  });
 
   return revokedInvitation;
 }
@@ -350,6 +395,13 @@ export async function resendTeamInvitation(invitationId: string) {
     },
     tenantId: resentInvitation.tenant_id,
   });
+  await notifyInvitationEvent({
+    invitationEmail: resentInvitation.email,
+    message: `Invitation link refreshed for ${resentInvitation.email}.`,
+    role: resentInvitation.role,
+    tenantId: resentInvitation.tenant_id,
+    title: "Team invitation resent",
+  });
 
   return resentInvitation;
 }
@@ -409,6 +461,12 @@ export async function acceptTeamInvitation(token: string) {
     entityType: "team_invitation",
     metadata: { role: result.role },
     tenantId: result.tenant_id,
+  });
+  await notifyInvitationEvent({
+    message: `Invitation accepted as ${result.role}.`,
+    role: result.role,
+    tenantId: result.tenant_id,
+    title: "Team invitation accepted",
   });
   await refreshWorkspaceUsageSnapshot(result.tenant_id);
 

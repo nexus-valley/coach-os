@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 
 import { CoachFortBrandAsset } from "@/src/components/branding/CoachFortBrandAsset";
+import { NotificationBell } from "@/src/components/notifications/NotificationBell";
 import { canAccessNavigationItem } from "@/src/lib/permissions";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 import { getCurrentMemberRole, type MemberRole } from "@/src/lib/team";
@@ -21,6 +22,7 @@ type AppShellProps = {
 
 const navItems = [
   { href: "/app", label: "Dashboard" },
+  { href: "/app/notifications", label: "Notifications" },
   { href: "/app/courses", label: "Courses" },
   { href: "/app/cohorts", label: "Cohorts" },
   { href: "/app/sessions", label: "Sessions" },
@@ -91,6 +93,12 @@ function NavIcon({ label }: { label: string }) {
         <path d="M5 12h.01" />
         <path d="M5 19h.01" />
         <rect height="20" rx="2" width="16" x="4" y="2" />
+      </>
+    ),
+    Notifications: (
+      <>
+        <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
+        <path d="M13.7 21a2 2 0 0 1-3.4 0" />
       </>
     ),
     Payments: (
@@ -289,11 +297,14 @@ export function AppShell({ activeItem = "Dashboard", children }: AppShellProps) 
                   </h1>
                 </div>
               </div>
-              <div
-                className="hidden items-center gap-3 rounded-full border border-[#9ADDEA] bg-[#EAF8FC] px-4 py-2 text-sm font-semibold text-[#0B2A3D] shadow-sm shadow-[#0B2A3D]/5 sm:flex"
-              >
-                <span className="h-2 w-2 rounded-full bg-[#14B8C6]" />
-                Workspace ready
+              <div className="flex items-center gap-3">
+                <NotificationBell />
+                <div
+                  className="hidden items-center gap-3 rounded-full border border-[#9ADDEA] bg-[#EAF8FC] px-4 py-2 text-sm font-semibold text-[#0B2A3D] shadow-sm shadow-[#0B2A3D]/5 sm:flex"
+                >
+                  <span className="h-2 w-2 rounded-full bg-[#14B8C6]" />
+                  Workspace ready
+                </div>
               </div>
             </div>
           </header>

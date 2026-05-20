@@ -6,6 +6,7 @@ import {
   getSessionById,
   type TrainingSessionWithRelations,
 } from "@/src/lib/sessions";
+import { createNotificationForTenantRoles } from "@/src/lib/notifications";
 import type { Student } from "@/src/lib/students";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 import { getCurrentMemberRole, type MemberRole } from "@/src/lib/team";
@@ -45,6 +46,39 @@ export type AttendanceSummary = {
 
 const attendanceColumns =
   "id,tenant_id,session_id,student_id,status,remarks,marked_by,marked_at,created_at";
+
+async function notifyAttendanceAlert(params: {
+  absentCount: number;
+  session: TrainingSessionWithRelations;
+}) {
+  if (params.absentCount <= 0) {
+    return;
+  }
+
+  try {
+    await createNotificationForTenantRoles({
+      actionUrl: `/app/sessions/${params.session.id}`,
+      entityId: params.session.id,
+      entityType: "attendance_record",
+      message: `${params.absentCount} student${
+        params.absentCount === 1 ? "" : "s"
+      } marked absent for ${params.session.title}.`,
+      metadata: {
+        absentCount: params.absentCount,
+        cohortId: params.session.cohort_id,
+        courseId: params.session.course_id,
+        sessionId: params.session.id,
+      },
+      roles: ["owner", "admin"],
+      severity: "warning",
+      tenantId: params.session.tenant_id,
+      title: `Attendance alert: ${params.session.title}`,
+      type: "attendance_alert",
+    });
+  } catch {
+    // Notifications are non-blocking for attendance marking.
+  }
+}
 
 async function getCurrentUserAndRole(tenantId: string) {
   const supabase = getSupabaseClient();
@@ -303,6 +337,10 @@ export async function markAttendance(params: {
     },
     tenantId: record.tenant_id,
   });
+  await notifyAttendanceAlert({
+    absentCount: record.status === "absent" ? 1 : 0,
+    session,
+  });
 
   return record;
 }
@@ -367,6 +405,11 @@ export async function bulkMarkAttendance(params: {
       sessionId: params.sessionId,
     },
     tenantId: params.tenantId,
+  });
+  await notifyAttendanceAlert({
+    absentCount: params.records.filter((record) => record.status === "absent")
+      .length,
+    session,
   });
 
   return (data ?? []) as AttendanceRecord[];

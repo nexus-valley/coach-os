@@ -13,6 +13,10 @@ import {
 } from "@/src/lib/dashboard";
 import { loadDemoDataForTenant } from "@/src/lib/demoSeed";
 import {
+  getUserNotifications,
+  type Notification,
+} from "@/src/lib/notifications";
+import {
   formatResourceLimit,
   getPlanDisplayName,
   getPlanLimits,
@@ -166,6 +170,7 @@ export function DashboardPageClient() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [plan, setPlan] = useState<PlanKey>("free");
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [trialStatus, setTrialStatus] = useState<TrialStatus | null>(null);
@@ -215,12 +220,19 @@ export function DashboardPageClient() {
         const workspaceSubscription = canViewUsage
           ? await getTenantSubscription(currentTenant.id)
           : null;
+        const recentNotifications = user
+          ? await getUserNotifications(currentTenant.id, {
+              limit: 5,
+              status: "all",
+            })
+          : [];
 
         if (!active) {
           return;
         }
 
         setMetrics(dashboardMetrics);
+        setNotifications(recentNotifications);
         setCurrentRole(memberRole);
         setPlan(workspaceSubscription?.plan ?? "free");
         setTrialStatus(workspaceTrialStatus);
@@ -345,6 +357,11 @@ export function DashboardPageClient() {
   const canLoadDemo = currentRole === "owner" || currentRole === "admin";
   const canViewUsage = currentRole === "owner" || currentRole === "admin";
   const limits = getPlanLimits(plan);
+  const criticalNotifications = notifications.filter(
+    (notification) =>
+      notification.severity === "critical" &&
+      notification.status !== "archived",
+  );
 
   return (
     <div className="mx-auto max-w-7xl">
@@ -548,6 +565,93 @@ export function DashboardPageClient() {
                 />
               </div>
             </div>
+          </div>
+        </Card>
+      </section>
+
+      <section className="mt-8 grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
+        <Card className="border-[#D8E8F0] bg-white p-6 text-[#0B1F33] shadow-2xl shadow-[#0B2A3D]/10">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <Badge tone={criticalNotifications.length ? "danger" : "light"}>
+                Critical alerts
+              </Badge>
+              <h3 className="mt-4 text-xl font-semibold">Workspace Alerts</h3>
+              <p className="mt-2 text-sm leading-6 text-[#425B76]">
+                Important subscription, system, and operational notices.
+              </p>
+            </div>
+            <Button href="/app/notifications" size="sm" variant="secondary">
+              View All
+            </Button>
+          </div>
+          <div className="mt-6 space-y-3">
+            {criticalNotifications.length === 0 ? (
+              <p className="rounded-2xl border border-dashed border-[#C7DDEA] bg-[#F6FBFE] p-4 text-sm text-[#425B76]">
+                No critical alerts right now.
+              </p>
+            ) : (
+              criticalNotifications.slice(0, 3).map((notification) => (
+                <div
+                  className="rounded-2xl border border-red-100 bg-red-50 p-4"
+                  key={notification.id}
+                >
+                  <p className="font-semibold text-red-800">
+                    {notification.title}
+                  </p>
+                  <p className="mt-1 text-sm leading-5 text-red-700">
+                    {notification.message}
+                  </p>
+                </div>
+              ))
+            )}
+          </div>
+        </Card>
+
+        <Card className="border-[#D8E8F0] bg-white p-6 text-[#0B1F33] shadow-2xl shadow-[#0B2A3D]/10">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <Badge tone="light">Notifications</Badge>
+              <h3 className="mt-4 text-xl font-semibold">Recent Updates</h3>
+              <p className="mt-2 text-sm leading-6 text-[#425B76]">
+                Latest in-app communication across sessions, attendance,
+                billing, invitations, and system events.
+              </p>
+            </div>
+          </div>
+          <div className="mt-6 space-y-3">
+            {notifications.length === 0 ? (
+              <p className="rounded-2xl border border-dashed border-[#C7DDEA] bg-[#F6FBFE] p-4 text-sm text-[#425B76]">
+                No notifications yet.
+              </p>
+            ) : (
+              notifications.slice(0, 5).map((notification) => (
+                <div
+                  className="rounded-2xl border border-[#D8E8F0] bg-[#F6FBFE] p-4"
+                  key={notification.id}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-semibold text-[#0B1F33]">
+                        {notification.title}
+                      </p>
+                      <p className="mt-1 text-sm leading-5 text-[#425B76]">
+                        {notification.message}
+                      </p>
+                    </div>
+                    <Badge
+                      className={
+                        notification.status === "unread"
+                          ? "border-[#9ADDEA] bg-[#EAF8FC] text-[#0B6F87]"
+                          : "border-[#D8E8F0] bg-white text-[#425B76]"
+                      }
+                    >
+                      {notification.status}
+                    </Badge>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </Card>
       </section>

@@ -1,4 +1,5 @@
 import { logActivity } from "@/src/lib/auditLogger";
+import { createNotificationForTenantRoles } from "@/src/lib/notifications";
 import { requireTenantPermission } from "@/src/lib/permissions";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 
@@ -151,6 +152,32 @@ async function generateInvoiceNumber() {
   return `CF-INV-${String((count ?? 0) + 1).padStart(6, "0")}`;
 }
 
+async function notifyBillingEvent(params: {
+  actionUrl?: string;
+  entityId: string;
+  message: string;
+  severity?: "info" | "warning";
+  tenantId: string;
+  title: string;
+  type?: "invoice_notice" | "payment_reminder" | "subscription_notice";
+}) {
+  try {
+    await createNotificationForTenantRoles({
+      actionUrl: params.actionUrl ?? "/app/subscription",
+      entityId: params.entityId,
+      entityType: "invoice",
+      message: params.message,
+      roles: ["owner", "admin"],
+      severity: params.severity ?? "info",
+      tenantId: params.tenantId,
+      title: params.title,
+      type: params.type ?? "invoice_notice",
+    });
+  } catch {
+    // Notifications are non-blocking for billing foundation workflows.
+  }
+}
+
 export async function getInvoices(tenantId: string) {
   await requireTenantPermission({
     description: "Blocked invoice access without billing permission.",
@@ -279,6 +306,12 @@ export async function createDraftInvoice(input: CreateDraftInvoiceInput) {
     metadata: { totalAmount: invoice.total_amount },
     tenantId: input.tenantId,
   });
+  await notifyBillingEvent({
+    entityId: invoice.id,
+    message: `Draft invoice ${invoice.invoice_number} is ready for review.`,
+    tenantId: input.tenantId,
+    title: `Invoice created: ${invoice.invoice_number}`,
+  });
 
   return {
     ...invoice,
@@ -356,6 +389,13 @@ export async function markInvoicePaid(params: {
       provider: "manual",
     },
     tenantId: params.tenantId,
+  });
+  await notifyBillingEvent({
+    entityId: invoice.id,
+    message: `Manual payment recorded for ${invoice.invoice_number}.`,
+    tenantId: params.tenantId,
+    title: `Invoice paid: ${invoice.invoice_number}`,
+    type: "invoice_notice",
   });
 
   return {

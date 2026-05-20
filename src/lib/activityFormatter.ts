@@ -44,6 +44,10 @@ export const activityActionOptions = [
   ["session_canceled", "Session Canceled"],
   ["attendance_marked", "Attendance Marked"],
   ["attendance_bulk_marked", "Attendance Bulk Marked"],
+  ["notification_created", "Notification Created"],
+  ["notification_read", "Notification Read"],
+  ["notification_archived", "Notification Archived"],
+  ["communication_logged", "Communication Logged"],
   ["subscription_plan_changed", "Subscription Plan Changed"],
   ["subscription_created", "Subscription Created"],
   ["subscription_canceled", "Subscription Canceled"],
@@ -85,6 +89,8 @@ export const activityEntityOptions = [
   ["workspace_settings", "Settings"],
   ["session", "Sessions"],
   ["attendance_record", "Attendance"],
+  ["notification", "Notifications"],
+  ["communication_log", "Communication logs"],
   ["demo_data", "Demo data"],
 ] as const;
 
@@ -122,6 +128,8 @@ const entityIconLabels: Record<string, string> = {
   team_member: "TM",
   workspace_settings: "WS",
   attendance_record: "AT",
+  communication_log: "CL",
+  notification: "NT",
 };
 
 const entityIconClasses: Record<string, string> = {
@@ -148,6 +156,8 @@ const entityIconClasses: Record<string, string> = {
   team_member: "border-purple-200 bg-purple-50 text-purple-700",
   workspace_settings: "border-slate-300 bg-slate-50 text-slate-700",
   attendance_record: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  communication_log: "border-slate-300 bg-slate-50 text-slate-700",
+  notification: "border-cyan-200 bg-cyan-50 text-cyan-700",
 };
 
 export function formatActivityAction(action: string) {

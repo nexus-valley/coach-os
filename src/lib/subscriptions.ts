@@ -1,4 +1,5 @@
 import { logActivity } from "@/src/lib/auditLogger";
+import { createNotificationForTenantRoles } from "@/src/lib/notifications";
 import { getPlanDisplayName, normalizePlanKey } from "@/src/lib/plans";
 import { requireTenantPermission } from "@/src/lib/permissions";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
@@ -110,6 +111,30 @@ async function getTenantFallbackSubscription(tenantId: string) {
   } satisfies BillingSubscription;
 }
 
+async function notifySubscriptionEvent(params: {
+  entityId?: string;
+  message: string;
+  severity?: "critical" | "info" | "warning";
+  tenantId: string;
+  title: string;
+}) {
+  try {
+    await createNotificationForTenantRoles({
+      actionUrl: "/app/subscription",
+      entityId: params.entityId,
+      entityType: "subscription",
+      message: params.message,
+      roles: ["owner", "admin"],
+      severity: params.severity ?? "info",
+      tenantId: params.tenantId,
+      title: params.title,
+      type: "subscription_notice",
+    });
+  } catch {
+    // Notifications are non-blocking for subscription foundation workflows.
+  }
+}
+
 export async function getCurrentSubscription(tenantId: string) {
   await requireTenantPermission({
     description: "Blocked billing subscription access without billing permission.",
@@ -180,6 +205,12 @@ export async function createSubscription(input: CreateSubscriptionInput) {
     },
     tenantId: input.tenantId,
   });
+  await notifySubscriptionEvent({
+    entityId: subscription.id,
+    message: `${getPlanDisplayName(subscription.plan_code)} subscription foundation is active in ${subscription.status} state.`,
+    tenantId: input.tenantId,
+    title: "Subscription created",
+  });
 
   return subscription;
 }
@@ -222,6 +253,13 @@ export async function cancelSubscription(tenantId: string, subscriptionId: strin
     metadata: { billingCycle: subscription.billing_cycle },
     severity: "critical",
     tenantId,
+  });
+  await notifySubscriptionEvent({
+    entityId: subscription.id,
+    message: `${getPlanDisplayName(subscription.plan_code)} subscription was canceled.`,
+    severity: "critical",
+    tenantId,
+    title: "Subscription canceled",
   });
 
   return subscription;
