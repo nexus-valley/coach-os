@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { Badge } from "@/src/components/ui/Badge";
 import {
+  getSafeNotificationActionUrl,
   getUnreadNotificationCount,
   getUserNotifications,
   markNotificationRead,
@@ -238,10 +239,14 @@ export function NotificationBell() {
                           Mark read
                         </button>
                       ) : null}
-                      {notification.action_url ? (
+                      {getSafeNotificationActionUrl(notification.action_url) ? (
                         <Link
                           className="font-semibold text-[#145DA0]"
-                          href={notification.action_url}
+                          href={
+                            getSafeNotificationActionUrl(
+                              notification.action_url,
+                            ) ?? "/app/notifications"
+                          }
                           onClick={() => setOpen(false)}
                         >
                           Open

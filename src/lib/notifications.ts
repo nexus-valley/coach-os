@@ -51,6 +51,7 @@ export type NotificationPreferences = {
 
 export type NotificationFilters = {
   limit?: number;
+  severity?: NotificationSeverity | "all";
   status?: NotificationStatus | "all";
   type?: NotificationType | "all";
 };
@@ -76,6 +77,16 @@ function normalizeNotification(row: Notification) {
     ...row,
     metadata_json: row.metadata_json ?? {},
   } satisfies Notification;
+}
+
+export function getSafeNotificationActionUrl(
+  actionUrl: string | null | undefined,
+) {
+  if (!actionUrl || !actionUrl.startsWith("/") || actionUrl.startsWith("//")) {
+    return null;
+  }
+
+  return actionUrl;
 }
 
 async function getCurrentUser() {
@@ -253,6 +264,10 @@ export async function getUserNotifications(
 
   if (filters.status && filters.status !== "all") {
     query = query.eq("status", filters.status);
+  }
+
+  if (filters.severity && filters.severity !== "all") {
+    query = query.eq("severity", filters.severity);
   }
 
   if (filters.type && filters.type !== "all") {

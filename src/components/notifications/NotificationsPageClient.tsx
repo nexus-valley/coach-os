@@ -9,9 +9,11 @@ import { Card } from "@/src/components/ui/Card";
 import { FeedbackAlert } from "@/src/components/ui/FeedbackAlert";
 import {
   archiveNotification,
+  getSafeNotificationActionUrl,
   getUserNotifications,
   markNotificationRead,
   type Notification,
+  type NotificationSeverity,
   type NotificationStatus,
   type NotificationType,
 } from "@/src/lib/notifications";
@@ -34,6 +36,14 @@ const typeOptions: { label: string; value: NotificationType | "all" }[] = [
   { label: "Subscriptions", value: "subscription_notice" },
   { label: "System", value: "system_notice" },
 ];
+
+const severityOptions: { label: string; value: NotificationSeverity | "all" }[] =
+  [
+    { label: "All severity", value: "all" },
+    { label: "Info", value: "info" },
+    { label: "Warning", value: "warning" },
+    { label: "Critical", value: "critical" },
+  ];
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("en", {
@@ -72,6 +82,7 @@ export function NotificationsPageClient() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [severity, setSeverity] = useState<NotificationSeverity | "all">("all");
   const [status, setStatus] = useState<NotificationStatus | "all">("all");
   const [tenantId, setTenantId] = useState<string | null>(null);
   const [type, setType] = useState<NotificationType | "all">("all");
@@ -92,7 +103,11 @@ export function NotificationsPageClient() {
     [notifications],
   );
 
-  async function loadNotifications(nextStatus = status, nextType = type) {
+  async function loadNotifications(
+    nextStatus = status,
+    nextType = type,
+    nextSeverity = severity,
+  ) {
     setLoading(true);
 
     try {
@@ -105,6 +120,7 @@ export function NotificationsPageClient() {
       setTenantId(tenant.id);
       const rows = await getUserNotifications(tenant.id, {
         limit: 100,
+        severity: nextSeverity,
         status: nextStatus,
         type: nextType,
       });
@@ -135,6 +151,7 @@ export function NotificationsPageClient() {
         setTenantId(tenant.id);
         const rows = await getUserNotifications(tenant.id, {
           limit: 100,
+          severity,
           status,
           type,
         });
@@ -159,7 +176,7 @@ export function NotificationsPageClient() {
     return () => {
       active = false;
     };
-  }, [status, type]);
+  }, [severity, status, type]);
 
   async function handleStatusChange(nextStatus: NotificationStatus | "all") {
     setStatus(nextStatus);
@@ -167,6 +184,12 @@ export function NotificationsPageClient() {
 
   async function handleTypeChange(nextType: NotificationType | "all") {
     setType(nextType);
+  }
+
+  async function handleSeverityChange(
+    nextSeverity: NotificationSeverity | "all",
+  ) {
+    setSeverity(nextSeverity);
   }
 
   async function handleMarkRead(notificationId: string) {
@@ -271,22 +294,44 @@ export function NotificationsPageClient() {
               </button>
             ))}
           </div>
-          <label className="flex flex-col gap-2 text-sm font-semibold text-[#425B76] sm:w-64">
-            Type
-            <select
-              className="h-11 rounded-2xl border border-[#D8E8F0] bg-white px-4 text-sm font-medium text-[#0B1F33] outline-none focus:border-[#2ECBEA]"
-              onChange={(event) =>
-                handleTypeChange(event.target.value as NotificationType | "all")
-              }
-              value={type}
-            >
-              {typeOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="flex flex-col gap-2 text-sm font-semibold text-[#425B76] sm:w-64">
+              Type
+              <select
+                className="h-11 rounded-2xl border border-[#D8E8F0] bg-white px-4 text-sm font-medium text-[#0B1F33] outline-none focus:border-[#2ECBEA]"
+                onChange={(event) =>
+                  handleTypeChange(
+                    event.target.value as NotificationType | "all",
+                  )
+                }
+                value={type}
+              >
+                {typeOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-2 text-sm font-semibold text-[#425B76] sm:w-64">
+              Severity
+              <select
+                className="h-11 rounded-2xl border border-[#D8E8F0] bg-white px-4 text-sm font-medium text-[#0B1F33] outline-none focus:border-[#2ECBEA]"
+                onChange={(event) =>
+                  handleSeverityChange(
+                    event.target.value as NotificationSeverity | "all",
+                  )
+                }
+                value={severity}
+              >
+                {severityOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
         </div>
       </Card>
 
@@ -354,9 +399,12 @@ export function NotificationsPageClient() {
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2 lg:justify-end">
-                  {notification.action_url ? (
+                  {getSafeNotificationActionUrl(notification.action_url) ? (
                     <Button
-                      href={notification.action_url}
+                      href={
+                        getSafeNotificationActionUrl(notification.action_url) ??
+                        "/app/notifications"
+                      }
                       size="sm"
                       variant="secondary"
                     >
