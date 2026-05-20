@@ -85,6 +85,7 @@ function inferSeverity(action: string): AuditLogSeverity {
       "student_deleted",
       "subscription_plan_changed",
       "plan_updated",
+      "subscription_canceled",
       "team_member_removed",
       "trial_expired",
       "certificate_revoked",

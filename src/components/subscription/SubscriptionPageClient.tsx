@@ -7,11 +7,17 @@ import { Badge } from "@/src/components/ui/Badge";
 import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
 import { AccessDeniedCard } from "@/src/components/security/AccessDeniedCard";
+import { getBillingSummary } from "@/src/lib/billing";
+import type {
+  InvoiceWithItems,
+  PaymentTransaction,
+} from "@/src/lib/invoices";
 import {
   formatResourceLimit,
   getPlanDefinition,
   getPlanDisplayName,
   getPlanLimits,
+  normalizePlanKey,
   planOrder,
   planResourceLabels,
   type PlanKey,
@@ -24,6 +30,10 @@ import {
   type SubscriptionPlan,
   type TenantSubscription,
 } from "@/src/lib/subscription";
+import type {
+  BillingSubscription,
+  SubscriptionAccessState,
+} from "@/src/lib/subscriptions";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 import { canAccessSubscription } from "@/src/lib/permissions";
 import { getCurrentMemberRole, type MemberRole } from "@/src/lib/team";
@@ -37,6 +47,13 @@ import {
 } from "@/src/lib/usage";
 
 type UsageCounts = WorkspaceUsage;
+
+type BillingSummary = {
+  accessState: SubscriptionAccessState;
+  invoices: InvoiceWithItems[];
+  paymentHistory: PaymentTransaction[];
+  subscription: BillingSubscription | null;
+};
 
 const plans: {
   description: string;
@@ -64,6 +81,10 @@ function formatPlan(plan: SubscriptionPlan) {
   return getPlanDisplayName(plan);
 }
 
+function normalizeBillingPlan(plan: string) {
+  return normalizePlanKey(plan);
+}
+
 function formatStatus(value: string) {
   return value.replace("_", " ");
 }
@@ -78,6 +99,13 @@ function formatDate(value: string | null) {
     month: "short",
     year: "numeric",
   }).format(new Date(value));
+}
+
+function formatCurrency(value: number, currency = "INR") {
+  return new Intl.NumberFormat("en-IN", {
+    currency,
+    style: "currency",
+  }).format(value);
 }
 
 function formatLimit(limit: ResourceLimit) {
@@ -102,6 +130,26 @@ function StatusBadge({ status }: { status: string }) {
       {formatStatus(status)}
     </Badge>
   );
+}
+
+function BillingStatusBadge({ status }: { status: string }) {
+  if (status === "active" || status === "paid" || status === "success") {
+    return <Badge tone="success">{formatStatus(status)}</Badge>;
+  }
+
+  if (status === "trialing" || status === "draft" || status === "pending") {
+    return <Badge tone="admin">{formatStatus(status)}</Badge>;
+  }
+
+  if (status === "past_due" || status === "overdue") {
+    return <Badge tone="warning">{formatStatus(status)}</Badge>;
+  }
+
+  if (status === "canceled" || status === "expired" || status === "failed") {
+    return <Badge tone="danger">{formatStatus(status)}</Badge>;
+  }
+
+  return <Badge>{formatStatus(status)}</Badge>;
 }
 
 function UsageCard({
@@ -169,12 +217,17 @@ export function SubscriptionPageClient() {
   const router = useRouter();
   const [actionError, setActionError] = useState("");
   const [actionMessage, setActionMessage] = useState("");
+  const [billingSummary, setBillingSummary] = useState<BillingSummary | null>(
+    null,
+  );
   const [currentRole, setCurrentRole] = useState<MemberRole | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [mutatingPlan, setMutatingPlan] = useState<SubscriptionPlan | "">("");
   const [subscription, setSubscription] =
     useState<TenantSubscription | null>(null);
+  const [selectedInvoice, setSelectedInvoice] =
+    useState<InvoiceWithItems | null>(null);
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [trialStatus, setTrialStatus] = useState<TrialStatus | null>(null);
   const [usage, setUsage] = useState<UsageCounts>(emptyUsage);
@@ -229,9 +282,11 @@ export function SubscriptionPageClient() {
           return;
         }
 
-        const [currentSubscription, currentUsage] = await Promise.all([
+        const [currentSubscription, currentUsage, currentBillingSummary] =
+          await Promise.all([
           getTenantSubscription(currentTenant.id),
           refreshWorkspaceUsageSnapshot(currentTenant.id),
+          getBillingSummary(currentTenant.id),
         ]);
         const currentTrialStatus = await getTrialStatus(currentTenant.id);
 
@@ -240,6 +295,7 @@ export function SubscriptionPageClient() {
         }
 
         setSubscription(currentSubscription);
+        setBillingSummary(currentBillingSummary);
         setTrialStatus(currentTrialStatus);
         setUsage(currentUsage);
       } catch (caught) {
@@ -417,6 +473,208 @@ export function SubscriptionPageClient() {
         </div>
       </section>
 
+      <section className="mt-8 grid gap-5 xl:grid-cols-[0.95fr_1.05fr]">
+        <Card className="border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/10">
+          <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
+            <div>
+              <Badge className="border-teal-400/30 bg-teal-400/10 text-teal-300">
+                Billing lifecycle
+              </Badge>
+              <h3 className="mt-4 text-2xl font-semibold">
+                Subscription foundation
+              </h3>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
+                Billing records are ready for future Razorpay or Stripe
+                integration. No live gateway calls are made yet.
+              </p>
+            </div>
+            {billingSummary ? (
+              <BillingStatusBadge status={billingSummary.accessState} />
+            ) : null}
+          </div>
+
+          <div className="mt-6 grid gap-4 sm:grid-cols-2">
+            <div className="rounded-3xl border border-white/10 bg-[#15181b] p-5">
+              <p className="text-sm text-slate-500">Billing plan</p>
+              <p className="mt-2 text-xl font-semibold">
+                {billingSummary?.subscription
+                  ? formatPlan(
+                      normalizeBillingPlan(
+                        billingSummary.subscription.plan_code,
+                      ),
+                    )
+                  : formatPlan(subscription.plan)}
+              </p>
+            </div>
+            <div className="rounded-3xl border border-white/10 bg-[#15181b] p-5">
+              <p className="text-sm text-slate-500">Billing cycle</p>
+              <p className="mt-2 text-xl font-semibold">
+                {billingSummary?.subscription?.billing_cycle ?? "monthly"}
+              </p>
+            </div>
+            <div className="rounded-3xl border border-white/10 bg-[#15181b] p-5">
+              <p className="text-sm text-slate-500">Renewal date</p>
+              <p className="mt-2 text-xl font-semibold">
+                {formatDate(billingSummary?.subscription?.renewal_at ?? null)}
+              </p>
+            </div>
+            <div className="rounded-3xl border border-white/10 bg-[#15181b] p-5">
+              <p className="text-sm text-slate-500">Amount</p>
+              <p className="mt-2 text-xl font-semibold">
+                {formatCurrency(
+                  billingSummary?.subscription?.amount ?? 0,
+                  billingSummary?.subscription?.currency ?? "INR",
+                )}
+              </p>
+            </div>
+          </div>
+        </Card>
+
+        <Card className="border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/10">
+          <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
+            <div>
+              <Badge className="border-white/15 bg-white/10 text-white">
+                GST-ready billing
+              </Badge>
+              <h3 className="mt-4 text-2xl font-semibold">
+                Invoice foundation
+              </h3>
+              <p className="mt-2 text-sm leading-6 text-slate-400">
+                Invoices support billing name, email, address, GST number, tax
+                amount, and itemized line totals for future paid billing.
+              </p>
+            </div>
+          </div>
+          <div className="mt-6 rounded-3xl border border-amber-400/30 bg-amber-400/10 p-4 text-sm leading-6 text-amber-100">
+            Live payment collection, webhooks, email invoices, and PDFs are not
+            connected in this foundation module.
+          </div>
+        </Card>
+      </section>
+
+      <section className="mt-8 grid gap-5 xl:grid-cols-2">
+        <Card className="overflow-hidden border-white/10 bg-[#101214] text-white shadow-2xl shadow-black/10">
+          <div className="flex flex-col justify-between gap-4 border-b border-white/10 p-6 sm:flex-row sm:items-center">
+            <div>
+              <Badge className="border-white/15 bg-white/10 text-white">
+                Invoice history
+              </Badge>
+              <h3 className="mt-4 text-2xl font-semibold">Invoices</h3>
+            </div>
+            <p className="text-sm text-slate-400">
+              {billingSummary?.invoices.length ?? 0} records
+            </p>
+          </div>
+          {!billingSummary || billingSummary.invoices.length === 0 ? (
+            <div className="p-8 text-center">
+              <p className="font-semibold">No billing invoices yet</p>
+              <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-400">
+                Draft, issued, paid, and overdue invoices will appear here once
+                billing workflows are activated.
+              </p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-[760px] w-full text-left text-sm">
+                <thead className="border-b border-white/10 text-xs uppercase text-slate-500">
+                  <tr>
+                    <th className="px-5 py-4">Invoice</th>
+                    <th className="px-5 py-4">Status</th>
+                    <th className="px-5 py-4">Total</th>
+                    <th className="px-5 py-4">Due</th>
+                    <th className="px-5 py-4">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/10">
+                  {billingSummary.invoices.map((invoice) => (
+                    <tr key={invoice.id}>
+                      <td className="px-5 py-4 font-semibold">
+                        {invoice.invoice_number}
+                      </td>
+                      <td className="px-5 py-4">
+                        <BillingStatusBadge status={invoice.status} />
+                      </td>
+                      <td className="px-5 py-4 font-semibold">
+                        {formatCurrency(invoice.total_amount, invoice.currency)}
+                      </td>
+                      <td className="px-5 py-4 text-slate-400">
+                        {formatDate(invoice.due_at)}
+                      </td>
+                      <td className="px-5 py-4">
+                        <Button
+                          onClick={() => setSelectedInvoice(invoice)}
+                          size="sm"
+                          type="button"
+                          variant="secondary"
+                        >
+                          View
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+
+        <Card className="overflow-hidden border-white/10 bg-[#101214] text-white shadow-2xl shadow-black/10">
+          <div className="flex flex-col justify-between gap-4 border-b border-white/10 p-6 sm:flex-row sm:items-center">
+            <div>
+              <Badge className="border-white/15 bg-white/10 text-white">
+                Payment history
+              </Badge>
+              <h3 className="mt-4 text-2xl font-semibold">
+                Billing payments
+              </h3>
+            </div>
+            <p className="text-sm text-slate-400">
+              {billingSummary?.paymentHistory.length ?? 0} records
+            </p>
+          </div>
+          {!billingSummary || billingSummary.paymentHistory.length === 0 ? (
+            <div className="p-8 text-center">
+              <p className="font-semibold">No billing payments yet</p>
+              <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-400">
+                Manual, Razorpay, and Stripe transaction records will appear
+                here after payment collection is connected.
+              </p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-[760px] w-full text-left text-sm">
+                <thead className="border-b border-white/10 text-xs uppercase text-slate-500">
+                  <tr>
+                    <th className="px-5 py-4">Provider</th>
+                    <th className="px-5 py-4">Status</th>
+                    <th className="px-5 py-4">Amount</th>
+                    <th className="px-5 py-4">Date</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/10">
+                  {billingSummary.paymentHistory.map((payment) => (
+                    <tr key={payment.id}>
+                      <td className="px-5 py-4 font-semibold">
+                        {formatStatus(payment.provider)}
+                      </td>
+                      <td className="px-5 py-4">
+                        <BillingStatusBadge status={payment.status} />
+                      </td>
+                      <td className="px-5 py-4 font-semibold">
+                        {formatCurrency(payment.amount, payment.currency)}
+                      </td>
+                      <td className="px-5 py-4 text-slate-400">
+                        {formatDate(payment.created_at)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+      </section>
+
       <section className="mt-8">
         <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
           <div>
@@ -512,6 +770,101 @@ export function SubscriptionPageClient() {
           })}
         </div>
       </section>
+
+      {selectedInvoice ? (
+        <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-black/70 px-4 py-4 backdrop-blur-sm sm:items-center">
+          <Card className="w-full max-w-3xl border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/40 sm:p-8">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <Badge className="border-white/15 bg-white/10 text-white">
+                  Invoice detail
+                </Badge>
+                <h3 className="mt-4 text-2xl font-semibold">
+                  {selectedInvoice.invoice_number}
+                </h3>
+              </div>
+              <button
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 text-sm font-semibold text-slate-400 transition hover:bg-white/10 hover:text-white"
+                onClick={() => setSelectedInvoice(null)}
+                type="button"
+              >
+                X
+              </button>
+            </div>
+            <div className="mt-6 grid gap-4 sm:grid-cols-3">
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <p className="text-xs uppercase text-slate-500">Status</p>
+                <div className="mt-2">
+                  <BillingStatusBadge status={selectedInvoice.status} />
+                </div>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <p className="text-xs uppercase text-slate-500">Total</p>
+                <p className="mt-2 font-semibold">
+                  {formatCurrency(
+                    selectedInvoice.total_amount,
+                    selectedInvoice.currency,
+                  )}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <p className="text-xs uppercase text-slate-500">GST number</p>
+                <p className="mt-2 font-semibold">
+                  {selectedInvoice.gst_number || "Not added"}
+                </p>
+              </div>
+            </div>
+            <div className="mt-6 rounded-3xl border border-white/10 bg-white/5 p-5">
+              <p className="font-semibold">Billing details</p>
+              <div className="mt-4 grid gap-3 text-sm text-slate-300 sm:grid-cols-2">
+                <p>Name: {selectedInvoice.billing_name || "Not added"}</p>
+                <p>Email: {selectedInvoice.billing_email || "Not added"}</p>
+                <p className="sm:col-span-2">
+                  Address: {selectedInvoice.billing_address || "Not added"}
+                </p>
+              </div>
+            </div>
+            <div className="mt-6 overflow-x-auto rounded-3xl border border-white/10">
+              <table className="min-w-[620px] w-full text-left text-sm">
+                <thead className="border-b border-white/10 text-xs uppercase text-slate-500">
+                  <tr>
+                    <th className="px-5 py-4">Item</th>
+                    <th className="px-5 py-4">Qty</th>
+                    <th className="px-5 py-4">Unit</th>
+                    <th className="px-5 py-4">Tax</th>
+                    <th className="px-5 py-4">Line total</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/10">
+                  {selectedInvoice.items.length === 0 ? (
+                    <tr>
+                      <td className="px-5 py-5 text-slate-400" colSpan={5}>
+                        No line items attached.
+                      </td>
+                    </tr>
+                  ) : (
+                    selectedInvoice.items.map((item) => (
+                      <tr key={item.id}>
+                        <td className="px-5 py-4 font-semibold">
+                          {item.description}
+                        </td>
+                        <td className="px-5 py-4">{item.quantity}</td>
+                        <td className="px-5 py-4">
+                          {formatCurrency(item.unit_price, selectedInvoice.currency)}
+                        </td>
+                        <td className="px-5 py-4">{item.tax_percent}%</td>
+                        <td className="px-5 py-4 font-semibold">
+                          {formatCurrency(item.line_total, selectedInvoice.currency)}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </div>
+      ) : null}
     </div>
   );
 }
