@@ -28,6 +28,7 @@ const statusTabs: (NotificationStatus | "all")[] = [
 
 const typeOptions: { label: string; value: NotificationType | "all" }[] = [
   { label: "All types", value: "all" },
+  { label: "Assignments", value: "assignment_notice" },
   { label: "Sessions", value: "session_reminder" },
   { label: "Attendance", value: "attendance_alert" },
   { label: "Payments", value: "payment_reminder" },

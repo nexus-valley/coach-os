@@ -26,6 +26,7 @@ const navItems = [
   { href: "/app/courses", label: "Courses" },
   { href: "/app/cohorts", label: "Cohorts" },
   { href: "/app/sessions", label: "Sessions" },
+  { href: "/app/assignments", label: "Assignments" },
   { href: "/app/students", label: "Students" },
   { href: "/app/student-portal", label: "Portal" },
   { href: "/app/enrollments", label: "Enrollments" },
@@ -60,6 +61,15 @@ function NavIcon({ label }: { label: string }) {
     Automations: (
       <>
         <path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z" />
+      </>
+    ),
+    Assignments: (
+      <>
+        <path d="M8 6h8" />
+        <path d="M8 10h8" />
+        <path d="M8 14h5" />
+        <rect height="18" rx="2" width="14" x="5" y="3" />
+        <path d="M9 19h6" />
       </>
     ),
     Cohorts: (

@@ -573,6 +573,98 @@ export function DashboardPageClient() {
         <Card className="border-[#D8E8F0] bg-white p-6 text-[#0B1F33] shadow-2xl shadow-[#0B2A3D]/10">
           <div className="flex items-start justify-between gap-4">
             <div>
+              <Badge tone="light">Homework</Badge>
+              <h3 className="mt-4 text-xl font-semibold">
+                Assignment Snapshot
+              </h3>
+              <p className="mt-2 text-sm leading-6 text-[#425B76]">
+                Foundation metrics for submissions, reviews, overdue work, and
+                grading readiness.
+              </p>
+            </div>
+            <Button href="/app/assignments" size="sm" variant="secondary">
+              View Assignments
+            </Button>
+          </div>
+          <div className="mt-6 grid gap-4 sm:grid-cols-2">
+            <div className="rounded-2xl border border-[#D8E8F0] bg-[#F6FBFE] p-4">
+              <p className="text-2xl font-semibold text-[#0B1F33]">
+                {metrics.assignments.totalAssignments}
+              </p>
+              <p className="mt-1 text-sm text-[#66788F]">Assignments</p>
+            </div>
+            <div className="rounded-2xl border border-[#D8E8F0] bg-[#F6FBFE] p-4">
+              <p className="text-2xl font-semibold text-[#0B1F33]">
+                {metrics.assignments.pendingReviews}
+              </p>
+              <p className="mt-1 text-sm text-[#66788F]">Pending reviews</p>
+            </div>
+            <div className="rounded-2xl border border-[#D8E8F0] bg-[#F6FBFE] p-4">
+              <p className="text-2xl font-semibold text-[#0B1F33]">
+                {metrics.assignments.overdueAssignments}
+              </p>
+              <p className="mt-1 text-sm text-[#66788F]">Overdue</p>
+            </div>
+            <div className="rounded-2xl border border-[#D8E8F0] bg-[#F6FBFE] p-4">
+              <p className="text-2xl font-semibold text-[#0B1F33]">
+                {metrics.assignments.averageScore ?? "N/A"}
+              </p>
+              <p className="mt-1 text-sm text-[#66788F]">Average score</p>
+            </div>
+          </div>
+        </Card>
+
+        <Card className="border-[#D8E8F0] bg-white p-6 text-[#0B1F33] shadow-2xl shadow-[#0B2A3D]/10">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h3 className="text-xl font-semibold">Upcoming Assignments</h3>
+              <p className="mt-2 text-sm leading-6 text-[#425B76]">
+                Published homework due next for this workspace.
+              </p>
+            </div>
+          </div>
+          <div className="mt-6 space-y-3">
+            {metrics.assignments.upcomingAssignments.length === 0 ? (
+              <p className="rounded-2xl border border-dashed border-[#C7DDEA] bg-[#F6FBFE] p-4 text-sm text-[#425B76]">
+                No upcoming assignments.
+              </p>
+            ) : (
+              metrics.assignments.upcomingAssignments.map((assignment) => (
+                <div
+                  className="rounded-2xl border border-[#D8E8F0] bg-[#F6FBFE] p-4"
+                  key={assignment.id}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-semibold text-[#0B1F33]">
+                        {assignment.title}
+                      </p>
+                      <p className="mt-1 text-sm text-[#425B76]">
+                        Due{" "}
+                        {assignment.due_at
+                          ? formatDate(assignment.due_at)
+                          : "date not set"}
+                      </p>
+                    </div>
+                    <Button
+                      href={`/app/assignments/${assignment.id}`}
+                      size="sm"
+                      variant="secondary"
+                    >
+                      Open
+                    </Button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </Card>
+      </section>
+
+      <section className="mt-8 grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
+        <Card className="border-[#D8E8F0] bg-white p-6 text-[#0B1F33] shadow-2xl shadow-[#0B2A3D]/10">
+          <div className="flex items-start justify-between gap-4">
+            <div>
               <Badge tone={criticalNotifications.length ? "danger" : "light"}>
                 Critical alerts
               </Badge>

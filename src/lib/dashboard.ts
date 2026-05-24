@@ -58,9 +58,26 @@ export type DashboardAttendanceSummary = {
   upcomingSessions: DashboardSessionPreview[];
 };
 
+export type DashboardAssignmentPreview = {
+  due_at: string | null;
+  id: string;
+  status: string;
+  title: string;
+};
+
+export type DashboardAssignmentSummary = {
+  averageScore: number | null;
+  overdueAssignments: number;
+  pendingReviews: number;
+  submissionRate: number | null;
+  totalAssignments: number;
+  upcomingAssignments: DashboardAssignmentPreview[];
+};
+
 export type DashboardMetrics = {
   activeCourses: number;
   activeAutomations: number;
+  assignments: DashboardAssignmentSummary;
   attendance: DashboardAttendanceSummary;
   courseRevenue: DashboardCourseRevenue[];
   paymentStatusSummary: Record<PaymentStatus, number>;
@@ -93,6 +110,15 @@ const emptyAttendanceSummary: DashboardAttendanceSummary = {
   recentSessions: [],
   totalMarkedAttendance: 0,
   upcomingSessions: [],
+};
+
+const emptyAssignmentSummary: DashboardAssignmentSummary = {
+  averageScore: null,
+  overdueAssignments: 0,
+  pendingReviews: 0,
+  submissionRate: null,
+  totalAssignments: 0,
+  upcomingAssignments: [],
 };
 
 function sumCompletedRevenue(payments: DashboardPayment[]) {
@@ -343,6 +369,126 @@ async function getAttendanceDashboardSummary(
   } satisfies DashboardAttendanceSummary;
 }
 
+async function getAssignmentDashboardSummary(
+  tenantId: string,
+  trainerScope: Awaited<ReturnType<typeof getCurrentTrainerScope>>,
+) {
+  const supabase = getSupabaseClient();
+  const now = new Date().toISOString();
+  let assignmentIds: string[] | null = null;
+  let assignmentsQuery = supabase
+    .from("assignments")
+    .select("id,title,status,due_at,course_id,cohort_id")
+    .eq("tenant_id", tenantId);
+
+  if (trainerScope) {
+    const filters: string[] = [];
+
+    if (trainerScope.courseIds.length > 0) {
+      filters.push(`course_id.in.(${trainerScope.courseIds.join(",")})`);
+    }
+
+    if (trainerScope.cohortIds.length > 0) {
+      filters.push(`cohort_id.in.(${trainerScope.cohortIds.join(",")})`);
+    }
+
+    if (filters.length === 0) {
+      return emptyAssignmentSummary;
+    }
+
+    assignmentsQuery = assignmentsQuery.or(filters.join(","));
+  }
+
+  const assignmentsResult = await assignmentsQuery.order("due_at", {
+    ascending: true,
+    nullsFirst: false,
+  });
+
+  if (assignmentsResult.error) {
+    const message = assignmentsResult.error.message?.toLowerCase() ?? "";
+
+    if (
+      assignmentsResult.error.code === "42P01" ||
+      assignmentsResult.error.code === "PGRST205" ||
+      message.includes("schema cache") ||
+      message.includes("does not exist")
+    ) {
+      return emptyAssignmentSummary;
+    }
+
+    throw assignmentsResult.error;
+  }
+
+  const assignments = (assignmentsResult.data ?? []) as {
+    due_at: string | null;
+    id: string;
+    status: string;
+    title: string;
+  }[];
+  assignmentIds = assignments.map((assignment) => assignment.id);
+
+  if (assignmentIds.length === 0) {
+    return emptyAssignmentSummary;
+  }
+
+  const submissionsResult = await supabase
+    .from("assignment_submissions")
+    .select("assignment_id,status,score")
+    .eq("tenant_id", tenantId)
+    .in("assignment_id", assignmentIds);
+
+  if (submissionsResult.error) {
+    throw submissionsResult.error;
+  }
+
+  const submissions = (submissionsResult.data ?? []) as {
+    score: number | null;
+    status: string;
+  }[];
+  const submitted = submissions.filter((submission) =>
+    ["late", "reviewed", "submitted"].includes(submission.status),
+  ).length;
+  const scores = submissions
+    .map((submission) => submission.score)
+    .filter((score): score is number => score !== null);
+
+  return {
+    averageScore:
+      scores.length > 0
+        ? Math.round(
+            (scores.reduce((total, score) => total + Number(score || 0), 0) /
+              scores.length) *
+              10,
+          ) / 10
+        : null,
+    overdueAssignments: assignments.filter(
+      (assignment) =>
+        assignment.status === "published" &&
+        assignment.due_at &&
+        assignment.due_at < now,
+    ).length,
+    pendingReviews: submissions.filter((submission) =>
+      ["late", "submitted"].includes(submission.status),
+    ).length,
+    submissionRate:
+      submissions.length > 0 ? Math.round((submitted / submissions.length) * 100) : null,
+    totalAssignments: assignments.length,
+    upcomingAssignments: assignments
+      .filter(
+        (assignment) =>
+          assignment.status === "published" &&
+          (!assignment.due_at || assignment.due_at >= now),
+      )
+      .slice(0, 3)
+      .map((assignment) => ({
+        due_at: assignment.due_at,
+        id: assignment.id,
+        status: assignment.status,
+        title: assignment.title,
+      })),
+  } satisfies DashboardAssignmentSummary;
+}
+
 export async function getDashboardMetrics(
   tenantId: string,
 ): Promise<DashboardMetrics> {
@@ -419,11 +565,15 @@ export async function getDashboardMetrics(
       (course) => course.status === "published",
     ).length;
 
-    const attendance = await getAttendanceDashboardSummary(tenantId, trainerScope);
+    const [attendance, assignments] = await Promise.all([
+      getAttendanceDashboardSummary(tenantId, trainerScope),
+      getAssignmentDashboardSummary(tenantId, trainerScope),
+    ]);
 
     return {
       activeAutomations: 0,
       activeCourses: activeCourses > 0 ? activeCourses : courses.length,
+      assignments,
       attendance,
       courseRevenue: [],
       paymentStatusSummary: {
@@ -451,6 +601,7 @@ export async function getDashboardMetrics(
     reminderCounts,
     automationCounts,
     attendance,
+    assignments,
   ] = await Promise.all([
     supabase
       .from("students")
@@ -484,6 +635,7 @@ export async function getDashboardMetrics(
     getReminderCounts(tenantId),
     getAutomationRuleCounts(tenantId),
     getAttendanceDashboardSummary(tenantId, null),
+    getAssignmentDashboardSummary(tenantId, null),
   ]);
 
   if (studentsCountResult.error) {
@@ -560,6 +712,7 @@ export async function getDashboardMetrics(
   return {
     activeAutomations: automationCounts.activeAutomations,
     activeCourses: publishedCourses > 0 ? publishedCourses : draftCourses,
+    assignments,
     attendance,
     courseRevenue: buildCourseRevenue(payments, coursesById),
     paymentStatusSummary: buildPaymentSummary(payments),
