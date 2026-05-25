@@ -956,7 +956,16 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
                 {student.full_name}
               </h2>
             </div>
-            <StudentStatusBadge status={student.status} />
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                href={`/app/student-portal/${student.id}`}
+                size="sm"
+                variant="secondary"
+              >
+                Preview Student Portal
+              </Button>
+              <StudentStatusBadge status={student.status} />
+            </div>
           </div>
 
           <div className="mt-8 grid gap-4 border-t border-white/10 pt-6 sm:grid-cols-2 lg:grid-cols-4">

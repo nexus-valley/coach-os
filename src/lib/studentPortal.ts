@@ -4,9 +4,26 @@ import type {
   Lesson,
 } from "@/src/lib/courses";
 import { syncEnrollmentCompletion } from "@/src/lib/certificates";
+import {
+  getCohortsForStudent,
+  type CohortWithCourse,
+  type StudentCohortMembership,
+} from "@/src/lib/cohorts";
 import type { Enrollment, EnrollmentStatus } from "@/src/lib/enrollments";
-import type { Student } from "@/src/lib/students";
+import { logActivity } from "@/src/lib/auditLogger";
+import {
+  canAccessAttendance,
+  canAccessPayments,
+  canManageStudents,
+  getMemberRoleForTenant,
+} from "@/src/lib/permissions";
+import type { AttendanceStatus } from "@/src/lib/attendance";
+import type { AssignmentStatus } from "@/src/lib/assignments";
+import type { PaymentLinkStatus } from "@/src/lib/paymentLinks";
+import type { PaymentStatus } from "@/src/lib/payments";
+import { getStudentById, type Student } from "@/src/lib/students";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
+import type { MemberRole } from "@/src/lib/team";
 
 export type LessonProgressStatus =
   | "not_started"
@@ -56,6 +73,126 @@ export type StudentCourseAccess = {
   sections: PortalSection[];
 };
 
+export type StudentPortalAttendanceRecord = {
+  id: string;
+  marked_at: string;
+  remarks: string | null;
+  session: {
+    id: string;
+    scheduled_start_at: string;
+    status: string;
+    title: string;
+  } | null;
+  status: AttendanceStatus;
+};
+
+export type StudentPortalAttendance = {
+  absent: number;
+  excused: number;
+  late: number;
+  percent: number | null;
+  present: number;
+  records: StudentPortalAttendanceRecord[];
+  total: number;
+};
+
+export type StudentPortalAssignment = {
+  assignment: {
+    cohort_id: string | null;
+    course_id: string | null;
+    due_at: string | null;
+    id: string;
+    max_score: number | null;
+    status: AssignmentStatus;
+    title: string;
+  };
+  cohort: Pick<CohortWithCourse, "id" | "name"> | null;
+  course: Pick<Course, "id" | "title"> | null;
+  submission: {
+    feedback: string | null;
+    reviewed_at: string | null;
+    score: number | null;
+    status: "late" | "pending" | "reviewed" | "submitted";
+    submitted_at: string | null;
+  } | null;
+};
+
+export type StudentPortalCertificate = {
+  certificateNumber: string;
+  courseTitle: string;
+  enrollmentId: string;
+  issuedAt: string;
+};
+
+export type StudentPortalPayment = {
+  amount: number;
+  courseTitle: string | null;
+  currency: string;
+  id: string;
+  paidAt: string | null;
+  receiptNumber: string | null;
+  status: PaymentStatus;
+};
+
+export type StudentPortalPaymentLink = {
+  amount: number;
+  courseTitle: string | null;
+  currency: string;
+  expiresAt: string | null;
+  id: string;
+  paymentUrl: string | null;
+  status: PaymentLinkStatus;
+};
+
+export type StudentPortalPayments = {
+  paidCount: number;
+  paymentLinks: StudentPortalPaymentLink[];
+  payments: StudentPortalPayment[];
+  pendingCount: number;
+};
+
+export type StudentPortalSession = {
+  cohort: Pick<CohortWithCourse, "id" | "name"> | null;
+  course: Pick<Course, "id" | "title"> | null;
+  id: string;
+  scheduled_end_at: string | null;
+  scheduled_start_at: string;
+  status: string;
+  title: string;
+};
+
+export type StudentPortalNotification = {
+  created_at: string;
+  id: string;
+  message: string;
+  severity: "critical" | "info" | "warning";
+  title: string;
+  type: string;
+};
+
+export type StudentPortalOverview = {
+  activeCohorts: StudentCohortMembership[];
+  assignments: StudentPortalAssignment[];
+  attendance: StudentPortalAttendance;
+  certificates: StudentPortalCertificate[];
+  courses: StudentPortalCourse[];
+  notifications: StudentPortalNotification[];
+  payments: StudentPortalPayments;
+  sessions: {
+    recent: StudentPortalSession[];
+    upcoming: StudentPortalSession[];
+  };
+  student: Student;
+  summary: {
+    attendancePercent: number | null;
+    completedCertificates: number;
+    enrolledCourses: number;
+    paidPayments: number;
+    pendingAssignments: number;
+    pendingPayments: number;
+  };
+};
+
 const studentSelect =
   "id,tenant_id,full_name,email,phone,status,source,notes,created_by,created_at,updated_at";
 
@@ -74,6 +211,48 @@ function getProgressPercentage(completed: number, total: number) {
   }
 
   return Math.round((completed / total) * 100);
+}
+
+function canPreviewStudentPortal(role: MemberRole | null | undefined) {
+  return (
+    role === "owner" ||
+    role === "admin" ||
+    canManageStudents(role) ||
+    canAccessAttendance(role)
+  );
+}
+
+async function getCurrentUserAndRole(tenantId: string) {
+  const supabase = getSupabaseClient();
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
+
+  if (error) {
+    throw error;
+  }
+
+  if (!user) {
+    throw new Error("You must be logged in to preview the student portal.");
+  }
+
+  const role = await getMemberRoleForTenant(tenantId, user.id);
+
+  if (!canPreviewStudentPortal(role)) {
+    await logActivity({
+      action: "access_denied",
+      description: "Blocked student portal preview without permission.",
+      entityName: "Student Portal",
+      entityType: "security",
+      metadata: { role, route: "/app/student-portal" },
+      severity: "warning",
+      tenantId,
+    });
+    throw new Error("You do not have permission to preview student portals.");
+  }
+
+  return { role, user };
 }
 
 async function getLessonCountsForCourses(tenantId: string, courseIds: string[]) {
@@ -137,6 +316,7 @@ async function getLessonCountsForCourses(tenantId: string, courseIds: string[]) 
 }
 
 export async function getPortalStudentsForTenant(tenantId: string) {
+  await getCurrentUserAndRole(tenantId);
   const supabase = getSupabaseClient();
   const { data: enrollmentsData, error: enrollmentsError } = await supabase
     .from("enrollments")
@@ -219,23 +399,15 @@ export async function getPortalStudentsForTenant(tenantId: string) {
   }) as PortalStudentSummary[];
 }
 
-export async function getStudentPortalOverview(params: {
+export async function getStudentPortalCourses(params: {
   studentId: string;
   tenantId: string;
 }) {
+  await getCurrentUserAndRole(params.tenantId);
   const supabase = getSupabaseClient();
-  const { data: studentData, error: studentError } = await supabase
-    .from("students")
-    .select(studentSelect)
-    .eq("tenant_id", params.tenantId)
-    .eq("id", params.studentId)
-    .maybeSingle();
+  const student = await getStudentById(params);
 
-  if (studentError) {
-    throw studentError;
-  }
-
-  if (!studentData) {
+  if (!student) {
     return null;
   }
 
@@ -335,8 +507,542 @@ export async function getStudentPortalOverview(params: {
 
   return {
     courses: coursesSummary,
-    student: studentData as Student,
+    student,
   };
+}
+
+function createScopedOrFilter(params: {
+  cohortIds: string[];
+  courseIds: string[];
+}) {
+  const filters: string[] = [];
+
+  if (params.courseIds.length > 0) {
+    filters.push(`course_id.in.(${params.courseIds.join(",")})`);
+  }
+
+  if (params.cohortIds.length > 0) {
+    filters.push(`cohort_id.in.(${params.cohortIds.join(",")})`);
+  }
+
+  return filters.join(",");
+}
+
+async function getPortalScope(params: { studentId: string; tenantId: string }) {
+  const [courseOverview, activeCohorts] = await Promise.all([
+    getStudentPortalCourses(params),
+    getCohortsForStudent(params),
+  ]);
+
+  if (!courseOverview) {
+    return null;
+  }
+
+  return {
+    activeCohorts,
+    courseIds: courseOverview.courses.map((course) => course.course.id),
+    courses: courseOverview.courses,
+    cohortIds: activeCohorts
+      .map((membership) => membership.cohort_id)
+      .filter(Boolean),
+    student: courseOverview.student,
+  };
+}
+
+export async function getStudentPortalAttendance(params: {
+  studentId: string;
+  tenantId: string;
+}) {
+  await getCurrentUserAndRole(params.tenantId);
+  const student = await getStudentById(params);
+
+  if (!student) {
+    return null;
+  }
+
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from("attendance_records")
+    .select("id,tenant_id,session_id,student_id,status,remarks,marked_at")
+    .eq("tenant_id", params.tenantId)
+    .eq("student_id", params.studentId)
+    .order("marked_at", { ascending: false });
+
+  if (error) {
+    throw error;
+  }
+
+  const records = (data ?? []) as {
+    id: string;
+    marked_at: string;
+    remarks: string | null;
+    session_id: string;
+    status: AttendanceStatus;
+  }[];
+  const sessionIds = Array.from(new Set(records.map((record) => record.session_id)));
+  const sessionsResult = sessionIds.length
+    ? await supabase
+        .from("sessions")
+        .select("id,title,status,scheduled_start_at")
+        .eq("tenant_id", params.tenantId)
+        .in("id", sessionIds)
+    : { data: [], error: null };
+
+  if (sessionsResult.error) {
+    throw sessionsResult.error;
+  }
+
+  const sessionById = new Map(
+    ((sessionsResult.data ?? []) as {
+      id: string;
+      scheduled_start_at: string;
+      status: string;
+      title: string;
+    }[]).map((session) => [session.id, session]),
+  );
+  const summary = {
+    absent: 0,
+    excused: 0,
+    late: 0,
+    present: 0,
+  };
+
+  for (const record of records) {
+    summary[record.status] += 1;
+  }
+
+  const total = records.length;
+  const percent =
+    total > 0 ? Math.round(((summary.present + summary.late) / total) * 100) : null;
+
+  return {
+    ...summary,
+    percent,
+    records: records.map((record) => ({
+      id: record.id,
+      marked_at: record.marked_at,
+      remarks: record.remarks,
+      session: sessionById.get(record.session_id) ?? null,
+      status: record.status,
+    })),
+    total,
+  } satisfies StudentPortalAttendance;
+}
+
+export async function getStudentPortalSessions(params: {
+  studentId: string;
+  tenantId: string;
+}) {
+  const scope = await getPortalScope(params);
+
+  if (!scope) {
+    return { recent: [], upcoming: [] };
+  }
+
+  if (scope.courseIds.length === 0 && scope.cohortIds.length === 0) {
+    return { recent: [], upcoming: [] };
+  }
+
+  const supabase = getSupabaseClient();
+  let query = supabase
+    .from("sessions")
+    .select(
+      "id,tenant_id,course_id,cohort_id,title,scheduled_start_at,scheduled_end_at,status",
+    )
+    .eq("tenant_id", params.tenantId);
+  const scopedFilter = createScopedOrFilter(scope);
+
+  if (scopedFilter) {
+    query = query.or(scopedFilter);
+  }
+
+  const { data, error } = await query.order("scheduled_start_at", {
+    ascending: true,
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  const courseById = new Map(
+    scope.courses.map((course) => [
+      course.course.id,
+      { id: course.course.id, title: course.course.title },
+    ]),
+  );
+  const cohortById = new Map(
+    scope.activeCohorts
+      .filter((membership) => membership.cohort)
+      .map((membership) => [
+        membership.cohort_id,
+        {
+          id: membership.cohort_id,
+          name: membership.cohort?.name ?? "Cohort",
+        },
+      ]),
+  );
+  const now = Date.now();
+  const sessions = ((data ?? []) as {
+    cohort_id: string | null;
+    course_id: string | null;
+    id: string;
+    scheduled_end_at: string | null;
+    scheduled_start_at: string;
+    status: string;
+    title: string;
+  }[]).map((session) => ({
+    cohort: session.cohort_id ? cohortById.get(session.cohort_id) ?? null : null,
+    course: session.course_id ? courseById.get(session.course_id) ?? null : null,
+    id: session.id,
+    scheduled_end_at: session.scheduled_end_at,
+    scheduled_start_at: session.scheduled_start_at,
+    status: session.status,
+    title: session.title,
+  })) satisfies StudentPortalSession[];
+
+  return {
+    recent: sessions
+      .filter((session) => new Date(session.scheduled_start_at).getTime() < now)
+      .slice(-6)
+      .reverse(),
+    upcoming: sessions
+      .filter(
+        (session) =>
+          session.status === "scheduled" &&
+          new Date(session.scheduled_start_at).getTime() >= now,
+      )
+      .slice(0, 6),
+  };
+}
+
+export async function getStudentPortalAssignments(params: {
+  studentId: string;
+  tenantId: string;
+}) {
+  const scope = await getPortalScope(params);
+
+  if (!scope) {
+    return [];
+  }
+
+  if (scope.courseIds.length === 0 && scope.cohortIds.length === 0) {
+    return [];
+  }
+
+  const supabase = getSupabaseClient();
+  let query = supabase
+    .from("assignments")
+    .select(
+      "id,tenant_id,course_id,cohort_id,title,max_score,due_at,status,created_at",
+    )
+    .eq("tenant_id", params.tenantId)
+    .eq("status", "published");
+  const scopedFilter = createScopedOrFilter(scope);
+
+  if (scopedFilter) {
+    query = query.or(scopedFilter);
+  }
+
+  const { data, error } = await query
+    .order("due_at", { ascending: true, nullsFirst: false })
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    throw error;
+  }
+
+  const assignments = (data ?? []) as {
+    cohort_id: string | null;
+    course_id: string | null;
+    due_at: string | null;
+    id: string;
+    max_score: number | null;
+    status: AssignmentStatus;
+    title: string;
+  }[];
+  const assignmentIds = assignments.map((assignment) => assignment.id);
+  const submissionsResult = assignmentIds.length
+    ? await supabase
+        .from("assignment_submissions")
+        .select("assignment_id,status,score,feedback,submitted_at,reviewed_at")
+        .eq("tenant_id", params.tenantId)
+        .eq("student_id", params.studentId)
+        .in("assignment_id", assignmentIds)
+    : { data: [], error: null };
+
+  if (submissionsResult.error) {
+    throw submissionsResult.error;
+  }
+
+  const submissionByAssignment = new Map(
+    ((submissionsResult.data ?? []) as {
+      assignment_id: string;
+      feedback: string | null;
+      reviewed_at: string | null;
+      score: number | null;
+      status: "late" | "pending" | "reviewed" | "submitted";
+      submitted_at: string | null;
+    }[]).map((submission) => [submission.assignment_id, submission]),
+  );
+  const courseById = new Map(
+    scope.courses.map((course) => [
+      course.course.id,
+      { id: course.course.id, title: course.course.title },
+    ]),
+  );
+  const cohortById = new Map(
+    scope.activeCohorts
+      .filter((membership) => membership.cohort)
+      .map((membership) => [
+        membership.cohort_id,
+        {
+          id: membership.cohort_id,
+          name: membership.cohort?.name ?? "Cohort",
+        },
+      ]),
+  );
+
+  return assignments.map((assignment) => ({
+    assignment,
+    cohort: assignment.cohort_id
+      ? cohortById.get(assignment.cohort_id) ?? null
+      : null,
+    course: assignment.course_id
+      ? courseById.get(assignment.course_id) ?? null
+      : null,
+    submission: submissionByAssignment.get(assignment.id) ?? null,
+  })) satisfies StudentPortalAssignment[];
+}
+
+export async function getStudentPortalCertificates(params: {
+  studentId: string;
+  tenantId: string;
+}) {
+  const courseOverview = await getStudentPortalCourses(params);
+
+  if (!courseOverview) {
+    return [];
+  }
+
+  return courseOverview.courses
+    .filter(
+      (course) =>
+        course.enrollment.status === "completed" &&
+        Boolean(course.enrollment.completed_at),
+    )
+    .map((course, index) => ({
+      certificateNumber: `CERT-${new Date(
+        course.enrollment.completed_at ?? course.enrollment.enrolled_at,
+      ).getFullYear()}-${String(index + 1).padStart(4, "0")}`,
+      courseTitle: course.course.title,
+      enrollmentId: course.enrollment.id,
+      issuedAt: course.enrollment.completed_at ?? course.enrollment.enrolled_at,
+    })) satisfies StudentPortalCertificate[];
+}
+
+export async function getStudentPortalPayments(params: {
+  studentId: string;
+  tenantId: string;
+}) {
+  const { role } = await getCurrentUserAndRole(params.tenantId);
+
+  if (!canAccessPayments(role)) {
+    return {
+      paidCount: 0,
+      paymentLinks: [],
+      payments: [],
+      pendingCount: 0,
+    } satisfies StudentPortalPayments;
+  }
+
+  const student = await getStudentById(params);
+
+  if (!student) {
+    return {
+      paidCount: 0,
+      paymentLinks: [],
+      payments: [],
+      pendingCount: 0,
+    } satisfies StudentPortalPayments;
+  }
+
+  const supabase = getSupabaseClient();
+  const [paymentsResult, linksResult] = await Promise.all([
+    supabase
+      .from("payments")
+      .select("id,course_id,amount,currency,status,paid_at,receipt_number")
+      .eq("tenant_id", params.tenantId)
+      .eq("student_id", params.studentId)
+      .order("paid_at", { ascending: false }),
+    supabase
+      .from("payment_links")
+      .select("id,course_id,amount,currency,status,expires_at,payment_url")
+      .eq("tenant_id", params.tenantId)
+      .eq("student_id", params.studentId)
+      .order("created_at", { ascending: false }),
+  ]);
+
+  if (paymentsResult.error) {
+    throw paymentsResult.error;
+  }
+
+  if (linksResult.error) {
+    throw linksResult.error;
+  }
+
+  const courseIds = Array.from(
+    new Set([
+      ...((paymentsResult.data ?? []) as { course_id: string | null }[])
+        .map((payment) => payment.course_id)
+        .filter(Boolean),
+      ...((linksResult.data ?? []) as { course_id: string | null }[])
+        .map((link) => link.course_id)
+        .filter(Boolean),
+    ]),
+  ) as string[];
+  const coursesResult = courseIds.length
+    ? await supabase
+        .from("courses")
+        .select("id,title")
+        .eq("tenant_id", params.tenantId)
+        .in("id", courseIds)
+    : { data: [], error: null };
+
+  if (coursesResult.error) {
+    throw coursesResult.error;
+  }
+
+  const courseById = new Map(
+    ((coursesResult.data ?? []) as Pick<Course, "id" | "title">[]).map(
+      (course) => [course.id, course.title],
+    ),
+  );
+  const payments = ((paymentsResult.data ?? []) as {
+    amount: number;
+    course_id: string | null;
+    currency: string;
+    id: string;
+    paid_at: string | null;
+    receipt_number: string | null;
+    status: PaymentStatus;
+  }[]).map((payment) => ({
+    amount: Number(payment.amount),
+    courseTitle: payment.course_id
+      ? courseById.get(payment.course_id) ?? null
+      : null,
+    currency: payment.currency,
+    id: payment.id,
+    paidAt: payment.paid_at,
+    receiptNumber: payment.receipt_number,
+    status: payment.status,
+  }));
+  const paymentLinks = ((linksResult.data ?? []) as {
+    amount: number;
+    course_id: string | null;
+    currency: string;
+    expires_at: string | null;
+    id: string;
+    payment_url: string | null;
+    status: PaymentLinkStatus;
+  }[]).map((link) => ({
+    amount: Number(link.amount),
+    courseTitle: link.course_id ? courseById.get(link.course_id) ?? null : null,
+    currency: link.currency,
+    expiresAt: link.expires_at,
+    id: link.id,
+    paymentUrl: link.payment_url,
+    status: link.status,
+  }));
+
+  return {
+    paidCount: payments.filter((payment) => payment.status === "completed").length,
+    paymentLinks,
+    payments,
+    pendingCount:
+      payments.filter((payment) => payment.status === "pending").length +
+      paymentLinks.filter((link) => link.status === "created" || link.status === "sent")
+        .length,
+  } satisfies StudentPortalPayments;
+}
+
+export async function getStudentPortalNotifications(params: {
+  studentId: string;
+  tenantId: string;
+}) {
+  void params;
+
+  return [] satisfies StudentPortalNotification[];
+}
+
+export async function getStudentPortalOverview(params: {
+  studentId: string;
+  tenantId: string;
+}) {
+  await getCurrentUserAndRole(params.tenantId);
+  const scope = await getPortalScope(params);
+
+  if (!scope) {
+    return null;
+  }
+
+  const [attendance, assignments, certificates, payments, sessions, notifications] =
+    await Promise.all([
+      getStudentPortalAttendance(params),
+      getStudentPortalAssignments(params),
+      getStudentPortalCertificates(params),
+      getStudentPortalPayments(params),
+      getStudentPortalSessions(params),
+      getStudentPortalNotifications(params),
+    ]);
+  const pendingAssignments = assignments.filter(
+    (assignment) =>
+      !assignment.submission ||
+      assignment.submission.status === "pending" ||
+      assignment.submission.status === "late",
+  ).length;
+
+  await logActivity({
+    action: "student_portal_previewed",
+    description: "Previewed student portal",
+    entityId: scope.student.id,
+    entityName: scope.student.full_name,
+    entityType: "student",
+    metadata: {
+      student_id: scope.student.id,
+      student_name: scope.student.full_name,
+    },
+    tenantId: params.tenantId,
+  });
+
+  return {
+    activeCohorts: scope.activeCohorts,
+    assignments,
+    attendance:
+      attendance ??
+      ({
+        absent: 0,
+        excused: 0,
+        late: 0,
+        percent: null,
+        present: 0,
+        records: [],
+        total: 0,
+      } satisfies StudentPortalAttendance),
+    certificates,
+    courses: scope.courses,
+    notifications,
+    payments,
+    sessions,
+    student: scope.student,
+    summary: {
+      attendancePercent: attendance?.percent ?? null,
+      completedCertificates: certificates.length,
+      enrolledCourses: scope.courses.length,
+      paidPayments: payments.paidCount,
+      pendingAssignments,
+      pendingPayments: payments.pendingCount,
+    },
+  } satisfies StudentPortalOverview;
 }
 
 export async function getStudentCourseAccess(params: {
@@ -344,6 +1050,13 @@ export async function getStudentCourseAccess(params: {
   studentId: string;
   tenantId: string;
 }) {
+  await getCurrentUserAndRole(params.tenantId);
+  const student = await getStudentById(params);
+
+  if (!student) {
+    return null;
+  }
+
   const supabase = getSupabaseClient();
   const [{ data: courseData, error: courseError }, sectionsResult, lessonsResult, progressResult] =
     await Promise.all([
@@ -433,6 +1146,13 @@ export async function updateLessonProgress(params: {
   studentId: string;
   tenantId: string;
 }) {
+  const { role } = await getCurrentUserAndRole(params.tenantId);
+  const student = await getStudentById(params);
+
+  if (!student || !canManageStudents(role)) {
+    throw new Error("You do not have permission to update portal progress.");
+  }
+
   const supabase = getSupabaseClient();
   const completedAt =
     params.status === "completed" ? new Date().toISOString() : null;

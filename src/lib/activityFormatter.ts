@@ -5,6 +5,7 @@ export const activityActionOptions = [
   ["student_created", "Student Created"],
   ["student_updated", "Student Updated"],
   ["student_deleted", "Student Deleted"],
+  ["student_portal_previewed", "Student Portal Previewed"],
   ["course_created", "Course Created"],
   ["cohort_created", "Cohort Created"],
   ["cohort_updated", "Cohort Updated"],

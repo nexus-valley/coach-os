@@ -1,6 +1,6 @@
 import { RouteGuard } from "@/src/components/auth/RouteGuard";
 import { AppShell } from "@/src/components/layout/AppShell";
-import { StudentCourseAccessClient } from "@/src/components/student-portal/StudentCourseAccessClient";
+import { StudentPortalPreviewClient } from "@/src/components/student-portal/StudentPortalPreviewClient";
 
 type StudentPortalDetailPageProps = {
   params: Promise<{
@@ -16,7 +16,7 @@ export default async function StudentPortalDetailPage({
   return (
     <RouteGuard mode="app">
       <AppShell activeItem="Portal">
-        <StudentCourseAccessClient studentId={studentId} />
+        <StudentPortalPreviewClient studentId={studentId} />
       </AppShell>
     </RouteGuard>
   );
