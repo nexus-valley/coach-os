@@ -38,6 +38,7 @@ export const activityActionOptions = [
   ["access_denied", "Access Denied"],
   ["team_member_removed", "Team Member Removed"],
   ["settings_updated", "Settings Updated"],
+  ["workspace_branding_updated", "Workspace Branding Updated"],
   ["session_created", "Session Created"],
   ["session_updated", "Session Updated"],
   ["session_completed", "Session Completed"],

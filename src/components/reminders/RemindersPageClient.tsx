@@ -21,6 +21,11 @@ import {
 import { getStudentsForTenant, type Student } from "@/src/lib/students";
 import { getCurrentTenant, type Tenant } from "@/src/lib/tenant";
 import {
+  getTenantSettings,
+  getWorkspaceBranding,
+  type TenantSettings,
+} from "@/src/lib/tenantSettings";
+import {
   buildReminderWhatsAppMessage,
   buildWhatsAppShareUrl,
 } from "@/src/lib/whatsapp";
@@ -141,18 +146,23 @@ export function RemindersPageClient() {
   const [students, setStudents] = useState<Student[]>([]);
   const [success, setSuccess] = useState("");
   const [tenant, setTenant] = useState<Tenant | null>(null);
+  const [tenantSettings, setTenantSettings] =
+    useState<TenantSettings | null>(null);
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
 
   async function loadReminderContext(currentTenant: Tenant) {
-    const [tenantReminders, tenantStudents, tenantCourses] = await Promise.all([
-      getRemindersForTenant(currentTenant.id),
-      getStudentsForTenant(currentTenant.id),
-      getCoursesForTenant(currentTenant.id),
-    ]);
+    const [tenantReminders, tenantStudents, tenantCourses, settings] =
+      await Promise.all([
+        getRemindersForTenant(currentTenant.id),
+        getStudentsForTenant(currentTenant.id),
+        getCoursesForTenant(currentTenant.id),
+        getTenantSettings(currentTenant.id),
+      ]);
 
     setReminders(tenantReminders);
     setStudents(tenantStudents);
     setCourses(tenantCourses);
+    setTenantSettings(settings);
   }
 
   useEffect(() => {
@@ -210,6 +220,7 @@ export function RemindersPageClient() {
   }, [reminders, search, statusFilter, typeFilter]);
 
   const overdueCount = reminders.filter(isOverdue).length;
+  const workspaceBranding = getWorkspaceBranding(tenantSettings, tenant);
 
   async function refreshReminders() {
     if (!tenant) {
@@ -317,7 +328,7 @@ export function RemindersPageClient() {
       dueDate: formatDateTime(reminder.due_at),
       reminderTitle: reminder.title,
       studentName: reminder.student?.full_name,
-      workspaceName: tenant?.name ?? "CoachFort",
+      workspaceName: workspaceBranding.displayName,
     });
 
     return buildWhatsAppShareUrl(reminder.student?.phone, message);
@@ -350,7 +361,7 @@ export function RemindersPageClient() {
               Current workspace
             </p>
             <p className="mt-1 text-xl font-semibold">
-              {tenant?.name ?? "Loading workspace..."}
+              {workspaceBranding.displayName}
             </p>
           </div>
           <label className="block">

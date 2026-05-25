@@ -243,6 +243,7 @@ export async function createWorkspace(params: {
         name: workspaceName,
         owner_user_id: user.id,
         slug,
+        workspace_display_name: workspaceName,
       })
       .select("id,name,slug,category,owner_user_id")
       .single();

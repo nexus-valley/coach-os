@@ -13,8 +13,8 @@ import type { PaymentWithRelations } from "@/src/lib/payments";
 import { getPaymentReceipt } from "@/src/lib/receipts";
 import { getCurrentTenant, type Tenant } from "@/src/lib/tenant";
 import {
-  getSafeTenantBrandColor,
   getTenantSettings,
+  getWorkspaceBranding,
   type TenantSettings,
 } from "@/src/lib/tenantSettings";
 import {
@@ -141,9 +141,9 @@ export function ReceiptPageClient({ paymentId }: ReceiptPageClientProps) {
     );
   }
 
-  const brandColor = getSafeTenantBrandColor(tenantSettings?.brand_color);
-  const workspaceName =
-    tenantSettings?.name || tenant?.name || "CoachFort Workspace";
+  const workspaceBranding = getWorkspaceBranding(tenantSettings, tenant);
+  const brandColor = workspaceBranding.brandColor;
+  const workspaceName = workspaceBranding.displayName;
   function handleShareReceipt() {
     if (!payment) {
       return;
@@ -199,12 +199,12 @@ export function ReceiptPageClient({ paymentId }: ReceiptPageClientProps) {
             style={{ borderColor: `${brandColor}44` }}
           >
             <div className="flex gap-4">
-              {tenantSettings?.logo_url ? (
+              {workspaceBranding.logoUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   alt={`${workspaceName} logo`}
                   className="h-14 w-14 rounded-2xl object-contain"
-                  src={tenantSettings.logo_url}
+                  src={workspaceBranding.logoUrl}
                 />
               ) : (
                 <CoachFortBrandAsset className="h-14 w-14" variant="appIcon" />
@@ -304,9 +304,10 @@ export function ReceiptPageClient({ paymentId }: ReceiptPageClientProps) {
             </p>
           </div>
 
-          {tenantSettings?.support_email ||
-          tenantSettings?.support_phone ||
-          tenantSettings?.website_url ? (
+          {workspaceBranding.supportText ||
+          workspaceBranding.websiteUrl ||
+          workspaceBranding.addressLines.length > 0 ||
+          workspaceBranding.receiptFooterText ? (
             <div className="mt-8 rounded-3xl border border-[#D8E8F0] bg-white p-5 print:border-slate-200 print:bg-white">
               <p
                 className="text-sm font-semibold print:text-slate-600"
@@ -314,15 +315,18 @@ export function ReceiptPageClient({ paymentId }: ReceiptPageClientProps) {
               >
                 Support
               </p>
-              <div className="mt-3 grid gap-2 text-sm text-[#5D7185] print:text-black sm:grid-cols-3">
-                {tenantSettings.support_email ? (
-                  <p>{tenantSettings.support_email}</p>
+              <div className="mt-3 grid gap-2 text-sm text-[#5D7185] print:text-black sm:grid-cols-2">
+                {workspaceBranding.supportText ? (
+                  <p>{workspaceBranding.supportText}</p>
                 ) : null}
-                {tenantSettings.support_phone ? (
-                  <p>{tenantSettings.support_phone}</p>
+                {workspaceBranding.websiteUrl ? (
+                  <p>{workspaceBranding.websiteUrl}</p>
                 ) : null}
-                {tenantSettings.website_url ? (
-                  <p>{tenantSettings.website_url}</p>
+                {workspaceBranding.addressLines.length > 0 ? (
+                  <p>{workspaceBranding.addressLines.join(", ")}</p>
+                ) : null}
+                {workspaceBranding.receiptFooterText ? (
+                  <p>{workspaceBranding.receiptFooterText}</p>
                 ) : null}
               </div>
             </div>

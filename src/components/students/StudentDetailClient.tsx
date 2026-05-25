@@ -62,6 +62,11 @@ import {
 } from "@/src/lib/team";
 import { getCurrentTenant, type Tenant } from "@/src/lib/tenant";
 import {
+  getTenantSettings,
+  getWorkspaceBranding,
+  type TenantSettings,
+} from "@/src/lib/tenantSettings";
+import {
   buildGeneralFollowUpMessage,
   buildPaymentReminderMessage,
   buildWhatsAppShareUrl,
@@ -210,6 +215,8 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
     StudentCohortMembership[]
   >([]);
   const [tenant, setTenant] = useState<Tenant | null>(null);
+  const [tenantSettings, setTenantSettings] =
+    useState<TenantSettings | null>(null);
   const [whatsAppMessage, setWhatsAppMessage] = useState(
     defaultWhatsAppFollowUp,
   );
@@ -245,17 +252,29 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
     (enrollment) => enrollment.id === paymentLinkForm.enrollmentId,
   );
   const paymentLinkPreviewUrl =
-    paymentLinkForm.paymentUrl.trim() ||
-    (Number(paymentLinkForm.amount) > 0
-      ? buildManualUpiPaymentUrl(Number(paymentLinkForm.amount))
-      : "upi://pay?pa=YOUR_UPI_ID&pn=CoachFort&am=AMOUNT&cu=INR");
+    (() => {
+      const workspaceBranding = getWorkspaceBranding(tenantSettings, tenant);
+
+      return (
+        paymentLinkForm.paymentUrl.trim() ||
+        (Number(paymentLinkForm.amount) > 0
+          ? buildManualUpiPaymentUrl(
+              Number(paymentLinkForm.amount),
+              tenantSettings,
+            )
+          : `upi://pay?pa=YOUR_UPI_ID&pn=${encodeURIComponent(
+              workspaceBranding.displayName,
+            )}&am=AMOUNT&cu=INR`)
+      );
+    })();
   function getPaymentLinkWhatsAppUrl(link: PaymentLinkWithRelations) {
+    const workspaceBranding = getWorkspaceBranding(tenantSettings, tenant);
     const message = buildPaymentReminderMessage({
       amount: formatCurrencyForPaymentLink(link.amount, link.currency || "INR"),
       courseName: link.course?.title,
       paymentUrl: link.payment_url,
       studentName: student?.full_name,
-      workspaceName: tenant?.name ?? "CoachFort",
+      workspaceName: workspaceBranding.displayName,
     });
 
     return buildWhatsAppShareUrl(student?.phone, message);
@@ -273,10 +292,11 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
       return;
     }
 
+    const workspaceBranding = getWorkspaceBranding(tenantSettings, tenant);
     const message = buildGeneralFollowUpMessage({
       message: whatsAppMessage.trim() || defaultWhatsAppFollowUp,
       studentName: student.full_name,
-      workspaceName: tenant?.name ?? "CoachFort",
+      workspaceName: workspaceBranding.displayName,
     });
     const shareUrl = buildWhatsAppShareUrl(student.phone, message);
 
@@ -318,6 +338,7 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
           studentCohortMemberships,
           studentPayments,
           studentPaymentLinks,
+          settings,
           memberRole,
         ] =
           await Promise.all([
@@ -337,6 +358,7 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
             }),
             getPaymentsByStudent(studentId, currentTenant.id),
             getPaymentLinksByStudent(studentId, currentTenant.id),
+            getTenantSettings(currentTenant.id),
             user
               ? getCurrentMemberRole(currentTenant.id, user.id)
               : Promise.resolve(null),
@@ -347,6 +369,7 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
         }
 
         setTenant(currentTenant);
+        setTenantSettings(settings);
         setStudent(currentStudent);
         setCurrentRole(memberRole);
         setCourses(tenantCourses);
@@ -973,7 +996,9 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
 
         <Card className="border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/20">
           <p className="text-sm font-semibold text-slate-400">Workspace</p>
-          <h3 className="mt-3 text-2xl font-semibold">{tenant?.name}</h3>
+          <h3 className="mt-3 text-2xl font-semibold">
+            {getWorkspaceBranding(tenantSettings, tenant).displayName}
+          </h3>
           <p className="mt-3 text-sm leading-6 text-slate-400">
             This CRM record is scoped to the current tenant and cannot be loaded
             without the matching workspace id.

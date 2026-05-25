@@ -33,6 +33,7 @@ const rolePermissions: Record<MemberRole, Permission[]> = {
     "manage_courses",
     "manage_payments",
     "manage_students",
+    "manage_workspace",
   ],
   owner: [
     "access_activity",

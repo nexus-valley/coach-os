@@ -4,6 +4,11 @@ import type { Student } from "@/src/lib/students";
 import { logActivity } from "@/src/lib/auditLogger";
 import { requireTenantPermission } from "@/src/lib/permissions";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
+import {
+  getTenantSettings,
+  getWorkspaceBranding,
+  type TenantSettings,
+} from "@/src/lib/tenantSettings";
 
 export type PaymentLinkStatus =
   | "created"
@@ -55,12 +60,16 @@ export type CreatePaymentLinkPayload = {
 const paymentLinkSelect =
   "id,tenant_id,student_id,course_id,enrollment_id,amount,currency,provider,provider_link_id,payment_url,status,description,expires_at,paid_at,created_by,created_at,updated_at";
 
-function createManualUpiLink(amount: number) {
+function createManualUpiLink(
+  amount: number,
+  tenantSettings?: TenantSettings | null,
+) {
+  const workspaceBranding = getWorkspaceBranding(tenantSettings);
   const params = new URLSearchParams({
     am: amount.toFixed(2),
     cu: "INR",
     pa: "YOUR_UPI_ID",
-    pn: "CoachFort",
+    pn: workspaceBranding.displayName,
   });
 
   return `upi://pay?${params.toString()}`;
@@ -164,8 +173,11 @@ async function getPaymentLinksByFilter(
   return attachPaymentLinkRelations((data ?? []) as PaymentLink[], tenantId);
 }
 
-export function buildManualUpiPaymentUrl(amount: number) {
-  return createManualUpiLink(amount);
+export function buildManualUpiPaymentUrl(
+  amount: number,
+  tenantSettings?: TenantSettings | null,
+) {
+  return createManualUpiLink(amount, tenantSettings);
 }
 
 export async function getPaymentLinksForTenant(tenantId: string) {
@@ -211,8 +223,10 @@ export async function createPaymentLink(payload: CreatePaymentLinkPayload) {
     throw new Error("Amount must be greater than zero.");
   }
 
+  const tenantSettings = await getTenantSettings(payload.tenant_id);
   const paymentUrl =
-    payload.payment_url.trim() || createManualUpiLink(payload.amount);
+    payload.payment_url.trim() ||
+    createManualUpiLink(payload.amount, tenantSettings);
 
   const { data, error } = await supabase
     .from("payment_links")

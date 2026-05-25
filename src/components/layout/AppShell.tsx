@@ -13,6 +13,7 @@ import {
   defaultTenantBrandColor,
   getSafeTenantBrandColor,
   getTenantSettings,
+  getWorkspaceBranding,
 } from "@/src/lib/tenantSettings";
 
 type AppShellProps = {
@@ -182,6 +183,7 @@ function NavIcon({ label }: { label: string }) {
 export function AppShell({ activeItem = "Dashboard", children }: AppShellProps) {
   const [brandColor, setBrandColor] = useState(defaultTenantBrandColor);
   const [currentRole, setCurrentRole] = useState<MemberRole | null>(null);
+  const [workspaceName, setWorkspaceName] = useState("CoachFort");
 
   useEffect(() => {
     let active = true;
@@ -206,8 +208,11 @@ export function AppShell({ activeItem = "Dashboard", children }: AppShellProps) 
         ]);
 
         if (active) {
+          const branding = getWorkspaceBranding(settings, currentTenant);
+
           setBrandColor(getSafeTenantBrandColor(settings?.brand_color));
           setCurrentRole(role);
+          setWorkspaceName(branding.displayName);
         }
       } catch {
         if (active) {
@@ -300,10 +305,10 @@ export function AppShell({ activeItem = "Dashboard", children }: AppShellProps) 
                 />
                 <div>
                   <p className="text-xs font-semibold text-[#5D7185]">
-                    by Nexus Valley
+                    powered by CoachFort
                   </p>
-                  <h1 className="mt-1 text-xl font-semibold text-[#0B2A3D]">
-                    CoachFort
+                  <h1 className="mt-1 max-w-[14rem] truncate text-xl font-semibold text-[#0B2A3D] sm:max-w-[22rem]">
+                    {workspaceName}
                   </h1>
                 </div>
               </div>

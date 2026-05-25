@@ -11,6 +11,11 @@ import {
   type PortalStudentSummary,
 } from "@/src/lib/studentPortal";
 import { getCurrentTenant, type Tenant } from "@/src/lib/tenant";
+import {
+  getTenantSettings,
+  getWorkspaceBranding,
+  type TenantSettings,
+} from "@/src/lib/tenantSettings";
 
 function getSearchText(summary: PortalStudentSummary) {
   return [
@@ -43,6 +48,8 @@ export function StudentPortalPageClient() {
   const [search, setSearch] = useState("");
   const [students, setStudents] = useState<PortalStudentSummary[]>([]);
   const [tenant, setTenant] = useState<Tenant | null>(null);
+  const [tenantSettings, setTenantSettings] =
+    useState<TenantSettings | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -60,15 +67,17 @@ export function StudentPortalPageClient() {
           return;
         }
 
-        const portalStudents = await getPortalStudentsForTenant(
-          currentTenant.id,
-        );
+        const [portalStudents, settings] = await Promise.all([
+          getPortalStudentsForTenant(currentTenant.id),
+          getTenantSettings(currentTenant.id),
+        ]);
 
         if (!active) {
           return;
         }
 
         setTenant(currentTenant);
+        setTenantSettings(settings);
         setStudents(portalStudents);
       } catch (caught) {
         if (!active) {
@@ -103,6 +112,7 @@ export function StudentPortalPageClient() {
       getSearchText(student).includes(normalizedSearch),
     );
   }, [search, students]);
+  const workspaceBranding = getWorkspaceBranding(tenantSettings, tenant);
 
   return (
     <div className="mx-auto max-w-7xl">
@@ -112,7 +122,7 @@ export function StudentPortalPageClient() {
             Internal preview
           </Badge>
           <h2 className="mt-5 text-3xl font-semibold tracking-normal text-white sm:text-4xl">
-            Student Portal
+            {workspaceBranding.displayName} Portal
           </h2>
           <p className="mt-3 max-w-2xl text-base leading-7 text-slate-400">
             Preview the student-facing course access experience for enrolled
@@ -131,7 +141,7 @@ export function StudentPortalPageClient() {
               Current workspace
             </p>
             <p className="mt-1 text-xl font-semibold">
-              {tenant?.name ?? "Loading workspace..."}
+              {workspaceBranding.displayName}
             </p>
           </div>
           <label className="block">

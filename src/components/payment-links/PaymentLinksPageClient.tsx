@@ -27,6 +27,11 @@ import {
 import { getStudentsForTenant, type Student } from "@/src/lib/students";
 import { getCurrentTenant, type Tenant } from "@/src/lib/tenant";
 import {
+  getTenantSettings,
+  getWorkspaceBranding,
+  type TenantSettings,
+} from "@/src/lib/tenantSettings";
+import {
   buildPaymentReminderMessage,
   buildWhatsAppShareUrl,
 } from "@/src/lib/whatsapp";
@@ -176,6 +181,8 @@ export function PaymentLinksPageClient() {
   const [students, setStudents] = useState<Student[]>([]);
   const [success, setSuccess] = useState("");
   const [tenant, setTenant] = useState<Tenant | null>(null);
+  const [tenantSettings, setTenantSettings] =
+    useState<TenantSettings | null>(null);
 
   const filteredLinks = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
@@ -199,18 +206,26 @@ export function PaymentLinksPageClient() {
   );
 
   async function loadContext(currentTenant: Tenant) {
-    const [tenantLinks, tenantStudents, tenantCourses, tenantEnrollments] =
+    const [
+      tenantLinks,
+      tenantStudents,
+      tenantCourses,
+      tenantEnrollments,
+      settings,
+    ] =
       await Promise.all([
         getPaymentLinksForTenant(currentTenant.id),
         getStudentsForTenant(currentTenant.id),
         getCoursesForTenant(currentTenant.id),
         getEnrollmentsForTenant(currentTenant.id),
+        getTenantSettings(currentTenant.id),
       ]);
 
     setLinks(tenantLinks);
     setStudents(tenantStudents);
     setCourses(tenantCourses);
     setEnrollments(tenantEnrollments);
+    setTenantSettings(settings);
   }
 
   useEffect(() => {
@@ -428,11 +443,14 @@ export function PaymentLinksPageClient() {
     }
   }
 
+  const workspaceBranding = getWorkspaceBranding(tenantSettings, tenant);
   const previewUrl =
     form.paymentUrl.trim() ||
     (Number(form.amount) > 0
-      ? buildManualUpiPaymentUrl(Number(form.amount))
-      : "upi://pay?pa=YOUR_UPI_ID&pn=CoachFort&am=AMOUNT&cu=INR");
+      ? buildManualUpiPaymentUrl(Number(form.amount), tenantSettings)
+      : `upi://pay?pa=YOUR_UPI_ID&pn=${encodeURIComponent(
+          workspaceBranding.displayName,
+        )}&am=AMOUNT&cu=INR`);
 
   function getPaymentLinkShareUrl(link: PaymentLinkWithRelations) {
     const message = buildPaymentReminderMessage({
@@ -440,7 +458,7 @@ export function PaymentLinksPageClient() {
       courseName: link.course?.title,
       paymentUrl: link.payment_url,
       studentName: link.student?.full_name,
-      workspaceName: tenant?.name ?? "CoachFort",
+      workspaceName: workspaceBranding.displayName,
     });
 
     return buildWhatsAppShareUrl(link.student?.phone, message);
@@ -478,7 +496,7 @@ export function PaymentLinksPageClient() {
               Current workspace
             </p>
             <p className="mt-1 text-xl font-semibold">
-              {tenant?.name ?? "Loading workspace..."}
+              {workspaceBranding.displayName}
             </p>
           </div>
           <label className="block">

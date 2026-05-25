@@ -13,8 +13,8 @@ import {
 } from "@/src/lib/certificates";
 import { getCurrentTenant, type Tenant } from "@/src/lib/tenant";
 import {
-  getSafeTenantBrandColor,
   getTenantSettings,
+  getWorkspaceBranding,
   type TenantSettings,
 } from "@/src/lib/tenantSettings";
 import {
@@ -130,9 +130,9 @@ export function CertificatePageClient({
     );
   }
 
-  const brandColor = getSafeTenantBrandColor(tenantSettings?.brand_color);
-  const workspaceName =
-    tenantSettings?.name || tenant?.name || "CoachFort Workspace";
+  const workspaceBranding = getWorkspaceBranding(tenantSettings, tenant);
+  const brandColor = workspaceBranding.brandColor;
+  const workspaceName = workspaceBranding.displayName;
   function handleShareCertificate() {
     if (!certificate) {
       return;
@@ -182,12 +182,12 @@ export function CertificatePageClient({
             className="flex min-h-[680px] flex-col items-center justify-center border-4 p-8 text-center sm:p-12"
             style={{ borderColor: brandColor }}
           >
-            {tenantSettings?.logo_url ? (
+            {workspaceBranding.logoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 alt={`${workspaceName} logo`}
                 className="mb-6 h-16 w-16 rounded-2xl object-contain"
-                src={tenantSettings.logo_url}
+                src={workspaceBranding.logoUrl}
               />
             ) : (
               <CoachFortBrandAsset
@@ -245,7 +245,7 @@ export function CertificatePageClient({
             </div>
 
             <p className="mt-12 text-sm font-semibold text-slate-600">
-              Issued by {workspaceName}
+              Issued by {workspaceBranding.certificateIssuerName}
             </p>
           </div>
         </section>

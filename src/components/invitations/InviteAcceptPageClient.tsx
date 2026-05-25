@@ -121,7 +121,9 @@ export function InviteAcceptPageClient({ token }: InviteAcceptPageClientProps) {
               />
               <Badge className="mt-6">Team Invitation</Badge>
               <h1 className="mt-5 text-3xl font-semibold tracking-normal text-[#0B1F33] sm:text-4xl">
-                Join a CoachFort workspace
+                {invitation
+                  ? `Join ${invitation.tenant_name}`
+                  : "Join a CoachFort workspace"}
               </h1>
             </div>
             {status ? <Badge tone={status === "pending" ? "success" : "warning"}>{status}</Badge> : null}

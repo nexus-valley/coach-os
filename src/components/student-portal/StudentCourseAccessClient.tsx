@@ -17,6 +17,11 @@ import {
 } from "@/src/lib/studentPortal";
 import type { Student } from "@/src/lib/students";
 import { getCurrentTenant, type Tenant } from "@/src/lib/tenant";
+import {
+  getTenantSettings,
+  getWorkspaceBranding,
+  type TenantSettings,
+} from "@/src/lib/tenantSettings";
 
 type StudentCourseAccessClientProps = {
   studentId: string;
@@ -85,6 +90,8 @@ export function StudentCourseAccessClient({
   const [overview, setOverview] = useState<StudentPortalOverview | null>(null);
   const [selectedCourseId, setSelectedCourseId] = useState("");
   const [tenant, setTenant] = useState<Tenant | null>(null);
+  const [tenantSettings, setTenantSettings] =
+    useState<TenantSettings | null>(null);
 
   const selectedCourseSummary = useMemo(
     () =>
@@ -121,16 +128,20 @@ export function StudentCourseAccessClient({
           return;
         }
 
-        const currentOverview = await getStudentPortalOverview({
-          studentId,
-          tenantId: currentTenant.id,
-        });
+        const [currentOverview, settings] = await Promise.all([
+          getStudentPortalOverview({
+            studentId,
+            tenantId: currentTenant.id,
+          }),
+          getTenantSettings(currentTenant.id),
+        ]);
 
         if (!active) {
           return;
         }
 
         setTenant(currentTenant);
+        setTenantSettings(settings);
         setOverview(currentOverview);
 
         if (!currentOverview) {
@@ -255,6 +266,8 @@ export function StudentCourseAccessClient({
     );
   }
 
+  const workspaceBranding = getWorkspaceBranding(tenantSettings, tenant);
+
   return (
     <div className="mx-auto max-w-7xl">
       <Link
@@ -286,7 +299,9 @@ export function StudentCourseAccessClient({
 
         <Card className="border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/20">
           <p className="text-sm font-semibold text-slate-400">Workspace</p>
-          <h3 className="mt-3 text-2xl font-semibold">{tenant?.name}</h3>
+          <h3 className="mt-3 text-2xl font-semibold">
+            {workspaceBranding.displayName}
+          </h3>
           <p className="mt-3 text-sm leading-6 text-slate-400">
             {overview.courses.length} enrolled{" "}
             {overview.courses.length === 1 ? "course" : "courses"} available

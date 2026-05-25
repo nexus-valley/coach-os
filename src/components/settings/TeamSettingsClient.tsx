@@ -12,12 +12,12 @@ import {
 import { Badge } from "@/src/components/ui/Badge";
 import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
-import { AccessDeniedCard } from "@/src/components/security/AccessDeniedCard";
 import { getCohortsForTenant, type CohortWithCourse } from "@/src/lib/cohorts";
 import { getCoursesForTenant, type Course } from "@/src/lib/courses";
 import {
   canAccessSettings,
   canInviteTeam,
+  canManageWorkspace,
   getRoleDescription,
 } from "@/src/lib/permissions";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
@@ -34,6 +34,7 @@ import { getCurrentTenant, type Tenant } from "@/src/lib/tenant";
 import {
   defaultTenantBrandColor,
   getTenantSettings,
+  getWorkspaceBranding,
   getSafeTenantBrandColor,
   updateTenantSettings,
   type TenantSettings,
@@ -67,21 +68,39 @@ const manageableRoles: Exclude<MemberRole, "owner">[] = [
 const invitationRoles: InvitationRole[] = ["admin", "staff", "trainer"];
 
 type BrandingFormState = {
+  addressLine1: string;
+  addressLine2: string;
   brandColor: string;
+  certificateIssuerName: string;
+  city: string;
+  country: string;
   logoUrl: string;
-  name: string;
+  postalCode: string;
+  receiptFooterText: string;
+  state: string;
   supportEmail: string;
   supportPhone: string;
   websiteUrl: string;
+  whatsappNumber: string;
+  workspaceDisplayName: string;
 };
 
 const emptyBrandingForm: BrandingFormState = {
+  addressLine1: "",
+  addressLine2: "",
   brandColor: defaultTenantBrandColor,
+  certificateIssuerName: "",
+  city: "",
+  country: "",
   logoUrl: "",
-  name: "",
+  postalCode: "",
+  receiptFooterText: "",
+  state: "",
   supportEmail: "",
   supportPhone: "",
   websiteUrl: "",
+  whatsappNumber: "",
+  workspaceDisplayName: "",
 };
 
 const roleDefinitions: {
@@ -162,13 +181,24 @@ function getErrorMessage(caught: unknown, fallback: string) {
 }
 
 function createBrandingForm(settings: TenantSettings): BrandingFormState {
+  const branding = getWorkspaceBranding(settings);
+
   return {
+    addressLine1: settings.address_line_1 ?? "",
+    addressLine2: settings.address_line_2 ?? "",
     brandColor: getSafeTenantBrandColor(settings.brand_color),
+    certificateIssuerName: settings.certificate_issuer_name ?? "",
+    city: settings.city ?? "",
+    country: settings.country ?? "",
     logoUrl: settings.logo_url ?? "",
-    name: settings.name,
+    postalCode: settings.postal_code ?? "",
+    receiptFooterText: settings.receipt_footer_text ?? "",
+    state: settings.state ?? "",
     supportEmail: settings.support_email ?? "",
     supportPhone: settings.support_phone ?? "",
     websiteUrl: settings.website_url ?? "",
+    whatsappNumber: settings.whatsapp_number ?? "",
+    workspaceDisplayName: branding.displayName,
   };
 }
 
@@ -344,7 +374,22 @@ export function TeamSettingsClient() {
         setTenant(currentTenant);
         const role = await loadTeam(currentTenant);
 
-        if (!active || !role || !canAccessSettings(role)) {
+        if (!active || !role) {
+          return;
+        }
+
+        if (!canAccessSettings(role)) {
+          const settings = await getTenantSettings(currentTenant.id);
+
+          if (!active) {
+            return;
+          }
+
+          if (settings) {
+            setBrandingForm(createBrandingForm(settings));
+            setTenantSettings(settings);
+          }
+
           return;
         }
 
@@ -684,7 +729,7 @@ export function TeamSettingsClient() {
   async function handleBrandingSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!tenant || !canManageTeam(currentRole)) {
+    if (!tenant || !canManageWorkspace(currentRole)) {
       return;
     }
 
@@ -714,8 +759,11 @@ export function TeamSettingsClient() {
   }
 
   const canManage = canManageTeam(currentRole);
+  const canManageBranding = canManageWorkspace(currentRole);
   const canInvite = canInviteTeam(currentRole);
   const previewBrandColor = getPreviewBrandColor(brandingForm.brandColor);
+  const previewDisplayName =
+    brandingForm.workspaceDisplayName.trim() || tenant?.name || "Workspace";
 
   if (loading) {
     return (
@@ -723,14 +771,6 @@ export function TeamSettingsClient() {
         <Card className="h-72 animate-pulse border-white/10 bg-[#101214]">
           <span className="sr-only">Loading team settings</span>
         </Card>
-      </div>
-    );
-  }
-
-  if (currentRole && !canAccessSettings(currentRole)) {
-    return (
-      <div className="mx-auto max-w-7xl">
-        <AccessDeniedCard description="Workspace settings and team management are available to owners and admins only." />
       </div>
     );
   }
@@ -793,21 +833,23 @@ export function TeamSettingsClient() {
               </p>
             </div>
             <p className="rounded-full border border-white/10 bg-white/10 px-4 py-2 text-sm text-slate-300">
-              {canManage ? "Owner editable" : "Read only"}
+              {canManageBranding ? "Owner/admin editable" : "Read only"}
             </p>
           </div>
 
           <form className="mt-7 grid gap-5" onSubmit={handleBrandingSubmit}>
             <div className="grid gap-5 md:grid-cols-2">
               <label className="block text-sm font-medium text-slate-300">
-                Workspace Name
+                Institute / Academy Name
                 <input
                   className="mt-2 h-11 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition placeholder:text-slate-500 disabled:cursor-not-allowed disabled:bg-slate-900 disabled:text-slate-500 focus:border-teal-400/50 focus:ring-4 focus:ring-teal-400/10"
-                  disabled={!canManage || brandingSaving}
-                  onChange={(event) => handleBrandingChange("name", event)}
+                  disabled={!canManageBranding || brandingSaving}
+                  onChange={(event) =>
+                    handleBrandingChange("workspaceDisplayName", event)
+                  }
                   placeholder="Nexus Valley Academy"
                   required
-                  value={brandingForm.name}
+                  value={brandingForm.workspaceDisplayName}
                 />
               </label>
 
@@ -817,7 +859,7 @@ export function TeamSettingsClient() {
                   <input
                     aria-label="Brand color picker"
                     className="h-11 w-14 rounded-2xl border border-white/10 bg-white/10 p-1 disabled:cursor-not-allowed disabled:opacity-50"
-                    disabled={!canManage || brandingSaving}
+                    disabled={!canManageBranding || brandingSaving}
                     onChange={(event) =>
                       handleBrandingChange("brandColor", event)
                     }
@@ -826,7 +868,7 @@ export function TeamSettingsClient() {
                   />
                   <input
                     className="h-11 min-w-0 flex-1 rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition placeholder:text-slate-500 disabled:cursor-not-allowed disabled:bg-slate-900 disabled:text-slate-500 focus:border-teal-400/50 focus:ring-4 focus:ring-teal-400/10"
-                    disabled={!canManage || brandingSaving}
+                    disabled={!canManageBranding || brandingSaving}
                     onChange={(event) =>
                       handleBrandingChange("brandColor", event)
                     }
@@ -841,7 +883,7 @@ export function TeamSettingsClient() {
               Logo URL
               <input
                 className="mt-2 h-11 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition placeholder:text-slate-500 disabled:cursor-not-allowed disabled:bg-slate-900 disabled:text-slate-500 focus:border-teal-400/50 focus:ring-4 focus:ring-teal-400/10"
-                disabled={!canManage || brandingSaving}
+                disabled={!canManageBranding || brandingSaving}
                 onChange={(event) => handleBrandingChange("logoUrl", event)}
                 placeholder="https://example.com/logo.png"
                 type="url"
@@ -854,7 +896,7 @@ export function TeamSettingsClient() {
                 Support Email
                 <input
                   className="mt-2 h-11 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition placeholder:text-slate-500 disabled:cursor-not-allowed disabled:bg-slate-900 disabled:text-slate-500 focus:border-teal-400/50 focus:ring-4 focus:ring-teal-400/10"
-                  disabled={!canManage || brandingSaving}
+                  disabled={!canManageBranding || brandingSaving}
                   onChange={(event) =>
                     handleBrandingChange("supportEmail", event)
                   }
@@ -868,7 +910,7 @@ export function TeamSettingsClient() {
                 Support Phone
                 <input
                   className="mt-2 h-11 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition placeholder:text-slate-500 disabled:cursor-not-allowed disabled:bg-slate-900 disabled:text-slate-500 focus:border-teal-400/50 focus:ring-4 focus:ring-teal-400/10"
-                  disabled={!canManage || brandingSaving}
+                  disabled={!canManageBranding || brandingSaving}
                   onChange={(event) =>
                     handleBrandingChange("supportPhone", event)
                   }
@@ -881,7 +923,7 @@ export function TeamSettingsClient() {
                 Website URL
                 <input
                   className="mt-2 h-11 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition placeholder:text-slate-500 disabled:cursor-not-allowed disabled:bg-slate-900 disabled:text-slate-500 focus:border-teal-400/50 focus:ring-4 focus:ring-teal-400/10"
-                  disabled={!canManage || brandingSaving}
+                  disabled={!canManageBranding || brandingSaving}
                   onChange={(event) => handleBrandingChange("websiteUrl", event)}
                   placeholder="https://example.com"
                   type="url"
@@ -890,7 +932,100 @@ export function TeamSettingsClient() {
               </label>
             </div>
 
-            {canManage ? (
+            <div className="grid gap-5 md:grid-cols-3">
+              <label className="block text-sm font-medium text-slate-300">
+                WhatsApp Number
+                <input
+                  className="mt-2 h-11 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition placeholder:text-slate-500 disabled:cursor-not-allowed disabled:bg-slate-900 disabled:text-slate-500 focus:border-teal-400/50 focus:ring-4 focus:ring-teal-400/10"
+                  disabled={!canManageBranding || brandingSaving}
+                  onChange={(event) =>
+                    handleBrandingChange("whatsappNumber", event)
+                  }
+                  placeholder="+91 98765 43210"
+                  value={brandingForm.whatsappNumber}
+                />
+              </label>
+
+              <label className="block text-sm font-medium text-slate-300">
+                Certificate Issuer Name
+                <input
+                  className="mt-2 h-11 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition placeholder:text-slate-500 disabled:cursor-not-allowed disabled:bg-slate-900 disabled:text-slate-500 focus:border-teal-400/50 focus:ring-4 focus:ring-teal-400/10"
+                  disabled={!canManageBranding || brandingSaving}
+                  onChange={(event) =>
+                    handleBrandingChange("certificateIssuerName", event)
+                  }
+                  placeholder="Academy Director"
+                  value={brandingForm.certificateIssuerName}
+                />
+              </label>
+
+              <label className="block text-sm font-medium text-slate-300">
+                Receipt Footer Text
+                <input
+                  className="mt-2 h-11 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition placeholder:text-slate-500 disabled:cursor-not-allowed disabled:bg-slate-900 disabled:text-slate-500 focus:border-teal-400/50 focus:ring-4 focus:ring-teal-400/10"
+                  disabled={!canManageBranding || brandingSaving}
+                  onChange={(event) =>
+                    handleBrandingChange("receiptFooterText", event)
+                  }
+                  placeholder="Thank you for learning with us."
+                  value={brandingForm.receiptFooterText}
+                />
+              </label>
+            </div>
+
+            <div className="grid gap-5 md:grid-cols-2">
+              <label className="block text-sm font-medium text-slate-300">
+                Address Line 1
+                <input
+                  className="mt-2 h-11 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition placeholder:text-slate-500 disabled:cursor-not-allowed disabled:bg-slate-900 disabled:text-slate-500 focus:border-teal-400/50 focus:ring-4 focus:ring-teal-400/10"
+                  disabled={!canManageBranding || brandingSaving}
+                  onChange={(event) =>
+                    handleBrandingChange("addressLine1", event)
+                  }
+                  placeholder="Building, street"
+                  value={brandingForm.addressLine1}
+                />
+              </label>
+
+              <label className="block text-sm font-medium text-slate-300">
+                Address Line 2
+                <input
+                  className="mt-2 h-11 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition placeholder:text-slate-500 disabled:cursor-not-allowed disabled:bg-slate-900 disabled:text-slate-500 focus:border-teal-400/50 focus:ring-4 focus:ring-teal-400/10"
+                  disabled={!canManageBranding || brandingSaving}
+                  onChange={(event) =>
+                    handleBrandingChange("addressLine2", event)
+                  }
+                  placeholder="Area, landmark"
+                  value={brandingForm.addressLine2}
+                />
+              </label>
+            </div>
+
+            <div className="grid gap-5 md:grid-cols-4">
+              {[
+                ["city", "City"],
+                ["state", "State"],
+                ["country", "Country"],
+                ["postalCode", "Postal Code"],
+              ].map(([field, label]) => (
+                <label
+                  className="block text-sm font-medium text-slate-300"
+                  key={field}
+                >
+                  {label}
+                  <input
+                    className="mt-2 h-11 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition placeholder:text-slate-500 disabled:cursor-not-allowed disabled:bg-slate-900 disabled:text-slate-500 focus:border-teal-400/50 focus:ring-4 focus:ring-teal-400/10"
+                    disabled={!canManageBranding || brandingSaving}
+                    onChange={(event) =>
+                      handleBrandingChange(field as keyof BrandingFormState, event)
+                    }
+                    value={brandingForm[field as keyof BrandingFormState]}
+                  />
+                </label>
+              ))}
+            </div>
+
+            {canManageBranding ? (
               <div className="flex justify-end">
                 <Button disabled={brandingSaving} type="submit">
                   {brandingSaving ? "Saving..." : "Save Branding"}
@@ -914,7 +1049,7 @@ export function TeamSettingsClient() {
             {brandingForm.logoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                alt={`${brandingForm.name || "Workspace"} logo`}
+                alt={`${previewDisplayName} logo`}
                 className="h-14 w-14 rounded-2xl border border-white/10 object-cover"
                 src={brandingForm.logoUrl}
               />
@@ -923,14 +1058,12 @@ export function TeamSettingsClient() {
                 className="flex h-14 w-14 items-center justify-center rounded-2xl text-sm font-bold text-black"
                 style={{ backgroundColor: previewBrandColor }}
               >
-                {brandingForm.name.trim().slice(0, 2).toUpperCase() || "CO"}
+                {previewDisplayName.trim().slice(0, 2).toUpperCase() || "CO"}
               </div>
             )}
-            <h3 className="mt-5 text-2xl font-semibold">
-              {brandingForm.name || tenant?.name || "Workspace"}
-            </h3>
+            <h3 className="mt-5 text-2xl font-semibold">{previewDisplayName}</h3>
             <p className="mt-2 text-sm text-slate-400">
-              {tenantSettings?.slug ?? "workspace"} · CoachFort workspace
+              {tenantSettings?.slug ?? "workspace"} | powered by CoachFort
             </p>
             <div className="mt-6 flex flex-wrap gap-3">
               <span
@@ -949,11 +1082,31 @@ export function TeamSettingsClient() {
                 Primary action
               </span>
             </div>
+            <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-4 text-sm leading-6 text-slate-300">
+              <p>
+                {brandingForm.supportEmail ||
+                  brandingForm.supportPhone ||
+                  brandingForm.whatsappNumber ||
+                  "Support contact will appear here."}
+              </p>
+              <p className="mt-2 text-slate-500">
+                {[
+                  brandingForm.addressLine1,
+                  brandingForm.addressLine2,
+                  brandingForm.city,
+                  brandingForm.state,
+                  brandingForm.postalCode,
+                  brandingForm.country,
+                ]
+                  .filter(Boolean)
+                  .join(", ") || "Address will appear on receipts."}
+              </p>
+            </div>
           </div>
-          {!canManage ? (
+          {!canManageBranding ? (
             <p className="mt-5 text-sm leading-6 text-slate-400">
-              Branding can be edited by workspace owners only. Your current
-              role can view these settings.
+              Branding can be edited by workspace owners and admins only. Your
+              current role can view these settings.
             </p>
           ) : null}
         </Card>
@@ -965,7 +1118,7 @@ export function TeamSettingsClient() {
             Current workspace
           </p>
           <h3 className="mt-3 text-2xl font-semibold">
-            {tenant?.name ?? "Workspace"}
+            {previewDisplayName}
           </h3>
           <div className="mt-6 rounded-3xl border border-teal-400/30 bg-teal-400/10 p-5">
             <p className="text-sm font-semibold text-teal-300">
