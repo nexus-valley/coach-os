@@ -112,16 +112,34 @@ async function notifyThreadParticipants(params: {
       return;
     }
 
-    const participants = await getConversationParticipants({
-      tenantId: params.tenantId,
-      threadId: params.message.thread_id,
-    });
-    const userIds = participants
-      .map((participant) => participant.user_id)
-      .filter(
-        (userId): userId is string =>
-          Boolean(userId) && userId !== params.senderUserId,
-      );
+    let userIds: string[] = [];
+
+    if (thread.thread_type === "announcement") {
+      const supabase = getSupabaseClient();
+      const { data, error } = await supabase
+        .from("tenant_members")
+        .select("user_id")
+        .eq("tenant_id", params.tenantId);
+
+      if (error) {
+        throw error;
+      }
+
+      userIds = ((data ?? []) as { user_id: string }[])
+        .map((member) => member.user_id)
+        .filter((userId) => userId !== params.senderUserId);
+    } else {
+      const participants = await getConversationParticipants({
+        tenantId: params.tenantId,
+        threadId: params.message.thread_id,
+      });
+      userIds = participants
+        .map((participant) => participant.user_id)
+        .filter(
+          (userId): userId is string =>
+            Boolean(userId) && userId !== params.senderUserId,
+        );
+    }
 
     if (userIds.length === 0) {
       return;

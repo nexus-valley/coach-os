@@ -65,6 +65,8 @@ export const activityActionOptions = [
   ["message_deleted", "Message Deleted"],
   ["conversation_archived", "Conversation Archived"],
   ["conversation_locked", "Conversation Locked"],
+  ["report_viewed", "Report Viewed"],
+  ["report_exported", "Report Exported"],
   ["subscription_plan_changed", "Subscription Plan Changed"],
   ["subscription_created", "Subscription Created"],
   ["subscription_canceled", "Subscription Canceled"],
@@ -112,6 +114,7 @@ export const activityEntityOptions = [
   ["communication_log", "Communication logs"],
   ["conversation", "Conversations"],
   ["conversation_message", "Conversation messages"],
+  ["report", "Reports"],
   ["demo_data", "Demo data"],
 ] as const;
 
@@ -155,6 +158,7 @@ const entityIconLabels: Record<string, string> = {
   conversation: "CV",
   conversation_message: "MS",
   notification: "NT",
+  report: "RP",
 };
 
 const entityIconClasses: Record<string, string> = {
@@ -187,6 +191,7 @@ const entityIconClasses: Record<string, string> = {
   conversation: "border-cyan-200 bg-cyan-50 text-cyan-700",
   conversation_message: "border-blue-200 bg-blue-50 text-blue-700",
   notification: "border-cyan-200 bg-cyan-50 text-cyan-700",
+  report: "border-indigo-200 bg-indigo-50 text-indigo-700",
 };
 
 export function formatActivityAction(action: string) {

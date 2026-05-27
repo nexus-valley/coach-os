@@ -492,12 +492,13 @@ export async function getConversationThreads(
       participantThreadIds,
       studentIds,
     });
+    const trainerFilters = ["thread_type.eq.announcement"];
 
-    if (!scopedFilter) {
-      return [];
+    if (scopedFilter) {
+      trainerFilters.push(scopedFilter);
     }
 
-    query = query.or(scopedFilter);
+    query = query.or(trainerFilters.join(","));
   }
 
   const { data, error } = await query;

@@ -168,7 +168,8 @@ to authenticated
 using (
   public.has_tenant_role(tenant_id, auth.uid(), array['trainer'])
   and (
-    exists (
+    thread_type = 'announcement'
+    or exists (
       select 1
       from public.conversation_participants cp
       where cp.thread_id = conversation_threads.id
@@ -484,7 +485,8 @@ using (
         or (
           public.has_tenant_role(ct.tenant_id, auth.uid(), array['trainer'])
           and (
-            exists (
+            ct.thread_type = 'announcement'
+            or exists (
               select 1
               from public.conversation_participants cp
               where cp.thread_id = ct.id

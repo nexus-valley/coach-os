@@ -1030,6 +1030,7 @@ export async function getStudentPortalConversations(params: {
     .order("updated_at", { ascending: false })
     .limit(8);
   const filters = [
+    "thread_type.eq.announcement",
     `student_id.eq.${params.studentId}`,
     ...scope.courseIds.map((courseId) => `course_id.eq.${courseId}`),
     ...scope.cohortIds.map((cohortId) => `cohort_id.eq.${cohortId}`),
