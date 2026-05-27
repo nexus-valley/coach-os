@@ -717,6 +717,80 @@ export function DashboardPageClient() {
         <Card className="border-[#D8E8F0] bg-white p-6 text-[#0B1F33] shadow-2xl shadow-[#0B2A3D]/10">
           <div className="flex items-start justify-between gap-4">
             <div>
+              <Badge tone="light">Messages</Badge>
+              <h3 className="mt-4 text-xl font-semibold">
+                Communication Snapshot
+              </h3>
+              <p className="mt-2 text-sm leading-6 text-[#425B76]">
+                Asynchronous announcements, discussions, direct messages, and
+                internal notes.
+              </p>
+            </div>
+            <Button href="/app/messages" size="sm" variant="secondary">
+              Open Messages
+            </Button>
+          </div>
+          <div className="mt-6 grid gap-4 sm:grid-cols-2">
+            <div className="rounded-2xl border border-[#D8E8F0] bg-[#F6FBFE] p-4">
+              <p className="text-2xl font-semibold text-[#0B1F33]">
+                {metrics.conversations.totalThreads}
+              </p>
+              <p className="mt-1 text-sm text-[#66788F]">Threads</p>
+            </div>
+            <div className="rounded-2xl border border-[#D8E8F0] bg-[#F6FBFE] p-4">
+              <p className="text-2xl font-semibold text-[#0B1F33]">
+                {metrics.conversations.unreadThreads}
+              </p>
+              <p className="mt-1 text-sm text-[#66788F]">Unread threads</p>
+            </div>
+          </div>
+        </Card>
+
+        <Card className="border-[#D8E8F0] bg-white p-6 text-[#0B1F33] shadow-2xl shadow-[#0B2A3D]/10">
+          <h3 className="text-xl font-semibold">Recent Messages</h3>
+          <p className="mt-2 text-sm leading-6 text-[#425B76]">
+            Latest communication threads visible to your role.
+          </p>
+          <div className="mt-6 space-y-3">
+            {metrics.conversations.recentThreads.length === 0 ? (
+              <p className="rounded-2xl border border-dashed border-[#C7DDEA] bg-[#F6FBFE] p-4 text-sm text-[#425B76]">
+                No message threads yet.
+              </p>
+            ) : (
+              metrics.conversations.recentThreads.map((thread) => (
+                <div
+                  className="rounded-2xl border border-[#D8E8F0] bg-[#F6FBFE] p-4"
+                  key={thread.id}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-semibold text-[#0B1F33]">
+                        {thread.title}
+                      </p>
+                      <p className="mt-1 line-clamp-1 text-sm text-[#425B76]">
+                        {thread.recentMessage ||
+                          thread.threadType.replaceAll("_", " ")}
+                      </p>
+                    </div>
+                    <Button
+                      href={`/app/messages/${thread.id}`}
+                      size="sm"
+                      variant="secondary"
+                    >
+                      Open
+                    </Button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </Card>
+      </section>
+
+      <section className="mt-8 grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
+        <Card className="border-[#D8E8F0] bg-white p-6 text-[#0B1F33] shadow-2xl shadow-[#0B2A3D]/10">
+          <div className="flex items-start justify-between gap-4">
+            <div>
               <Badge tone={criticalNotifications.length ? "danger" : "light"}>
                 Critical alerts
               </Badge>

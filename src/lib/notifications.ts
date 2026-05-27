@@ -9,6 +9,7 @@ import { getSupabaseClient } from "@/src/lib/supabaseClient";
 export type NotificationType =
   | "attendance_alert"
   | "assignment_notice"
+  | "communication_notice"
   | "invitation_notice"
   | "invoice_notice"
   | "live_session_notice"

@@ -59,6 +59,12 @@ export const activityActionOptions = [
   ["notification_read", "Notification Read"],
   ["notification_archived", "Notification Archived"],
   ["communication_logged", "Communication Logged"],
+  ["conversation_created", "Conversation Created"],
+  ["message_sent", "Message Sent"],
+  ["message_edited", "Message Edited"],
+  ["message_deleted", "Message Deleted"],
+  ["conversation_archived", "Conversation Archived"],
+  ["conversation_locked", "Conversation Locked"],
   ["subscription_plan_changed", "Subscription Plan Changed"],
   ["subscription_created", "Subscription Created"],
   ["subscription_canceled", "Subscription Canceled"],
@@ -104,6 +110,8 @@ export const activityEntityOptions = [
   ["assignment_submission", "Assignment submissions"],
   ["notification", "Notifications"],
   ["communication_log", "Communication logs"],
+  ["conversation", "Conversations"],
+  ["conversation_message", "Conversation messages"],
   ["demo_data", "Demo data"],
 ] as const;
 
@@ -144,6 +152,8 @@ const entityIconLabels: Record<string, string> = {
   assignment: "AS",
   assignment_submission: "HW",
   communication_log: "CL",
+  conversation: "CV",
+  conversation_message: "MS",
   notification: "NT",
 };
 
@@ -174,6 +184,8 @@ const entityIconClasses: Record<string, string> = {
   assignment: "border-indigo-200 bg-indigo-50 text-indigo-700",
   assignment_submission: "border-violet-200 bg-violet-50 text-violet-700",
   communication_log: "border-slate-300 bg-slate-50 text-slate-700",
+  conversation: "border-cyan-200 bg-cyan-50 text-cyan-700",
+  conversation_message: "border-blue-200 bg-blue-50 text-blue-700",
   notification: "border-cyan-200 bg-cyan-50 text-cyan-700",
 };
 

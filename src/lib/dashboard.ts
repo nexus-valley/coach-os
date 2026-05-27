@@ -1,5 +1,10 @@
 import { getAutomationRuleCounts } from "@/src/lib/automations";
+import {
+  getConversationThreads,
+  type ConversationThreadType,
+} from "@/src/lib/conversations";
 import type { CourseStatus } from "@/src/lib/courses";
+import { getUnreadThreadCount } from "@/src/lib/messages";
 import type { PaymentMethod, PaymentStatus } from "@/src/lib/payments";
 import type {
   SessionDeliveryMode,
@@ -83,11 +88,26 @@ export type DashboardAssignmentSummary = {
   upcomingAssignments: DashboardAssignmentPreview[];
 };
 
+export type DashboardConversationPreview = {
+  id: string;
+  recentMessage: string | null;
+  threadType: ConversationThreadType;
+  title: string;
+  updatedAt: string;
+};
+
+export type DashboardConversationSummary = {
+  recentThreads: DashboardConversationPreview[];
+  totalThreads: number;
+  unreadThreads: number;
+};
+
 export type DashboardMetrics = {
   activeCourses: number;
   activeAutomations: number;
   assignments: DashboardAssignmentSummary;
   attendance: DashboardAttendanceSummary;
+  conversations: DashboardConversationSummary;
   courseRevenue: DashboardCourseRevenue[];
   paymentStatusSummary: Record<PaymentStatus, number>;
   pendingPayments: number;
@@ -134,6 +154,12 @@ const emptyAssignmentSummary: DashboardAssignmentSummary = {
   submissionRate: null,
   totalAssignments: 0,
   upcomingAssignments: [],
+};
+
+const emptyConversationSummary: DashboardConversationSummary = {
+  recentThreads: [],
+  totalThreads: 0,
+  unreadThreads: 0,
 };
 
 function sumCompletedRevenue(payments: DashboardPayment[]) {
@@ -540,6 +566,29 @@ async function getAssignmentDashboardSummary(
   } satisfies DashboardAssignmentSummary;
 }
 
+async function getConversationDashboardSummary(tenantId: string) {
+  try {
+    const [threads, unreadThreads] = await Promise.all([
+      getConversationThreads(tenantId),
+      getUnreadThreadCount(tenantId),
+    ]);
+
+    return {
+      recentThreads: threads.slice(0, 4).map((thread) => ({
+        id: thread.id,
+        recentMessage: thread.recentMessage?.message ?? null,
+        threadType: thread.thread_type,
+        title: thread.title ?? "Conversation",
+        updatedAt: thread.updated_at,
+      })),
+      totalThreads: threads.length,
+      unreadThreads,
+    } satisfies DashboardConversationSummary;
+  } catch {
+    return emptyConversationSummary;
+  }
+}
+
 export async function getDashboardMetrics(
   tenantId: string,
 ): Promise<DashboardMetrics> {
@@ -616,9 +665,10 @@ export async function getDashboardMetrics(
       (course) => course.status === "published",
     ).length;
 
-    const [attendance, assignments] = await Promise.all([
+    const [attendance, assignments, conversations] = await Promise.all([
       getAttendanceDashboardSummary(tenantId, trainerScope),
       getAssignmentDashboardSummary(tenantId, trainerScope),
+      getConversationDashboardSummary(tenantId),
     ]);
 
     return {
@@ -626,6 +676,7 @@ export async function getDashboardMetrics(
       activeCourses: activeCourses > 0 ? activeCourses : courses.length,
       assignments,
       attendance,
+      conversations,
       courseRevenue: [],
       paymentStatusSummary: {
         completed: 0,
@@ -653,6 +704,7 @@ export async function getDashboardMetrics(
     automationCounts,
     attendance,
     assignments,
+    conversations,
   ] = await Promise.all([
     supabase
       .from("students")
@@ -687,6 +739,7 @@ export async function getDashboardMetrics(
     getAutomationRuleCounts(tenantId),
     getAttendanceDashboardSummary(tenantId, null),
     getAssignmentDashboardSummary(tenantId, null),
+    getConversationDashboardSummary(tenantId),
   ]);
 
   if (studentsCountResult.error) {
@@ -765,6 +818,7 @@ export async function getDashboardMetrics(
     activeCourses: publishedCourses > 0 ? publishedCourses : draftCourses,
     assignments,
     attendance,
+    conversations,
     courseRevenue: buildCourseRevenue(payments, coursesById),
     paymentStatusSummary: buildPaymentSummary(payments),
     pendingPayments: payments.filter((payment) => payment.status === "pending")

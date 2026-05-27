@@ -179,6 +179,14 @@ export type StudentPortalNotification = {
   type: string;
 };
 
+export type StudentPortalConversation = {
+  created_at: string;
+  id: string;
+  thread_type: string;
+  title: string | null;
+  updated_at: string;
+};
+
 export type StudentPortalOverview = {
   activeCohorts: StudentCohortMembership[];
   assignments: StudentPortalAssignment[];
@@ -186,6 +194,7 @@ export type StudentPortalOverview = {
   certificates: StudentPortalCertificate[];
   courses: StudentPortalCourse[];
   notifications: StudentPortalNotification[];
+  conversations: StudentPortalConversation[];
   payments: StudentPortalPayments;
   sessions: {
     recent: StudentPortalSession[];
@@ -1002,6 +1011,60 @@ export async function getStudentPortalNotifications(params: {
   return [] satisfies StudentPortalNotification[];
 }
 
+export async function getStudentPortalConversations(params: {
+  studentId: string;
+  tenantId: string;
+}) {
+  const scope = await getPortalScope(params);
+
+  if (!scope) {
+    return [];
+  }
+
+  const supabase = getSupabaseClient();
+  let query = supabase
+    .from("conversation_threads")
+    .select("id,title,thread_type,created_at,updated_at,course_id,cohort_id,student_id")
+    .eq("tenant_id", params.tenantId)
+    .neq("status", "archived")
+    .order("updated_at", { ascending: false })
+    .limit(8);
+  const filters = [
+    `student_id.eq.${params.studentId}`,
+    ...scope.courseIds.map((courseId) => `course_id.eq.${courseId}`),
+    ...scope.cohortIds.map((cohortId) => `cohort_id.eq.${cohortId}`),
+  ];
+
+  if (filters.length > 0) {
+    query = query.or(filters.join(","));
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    const message = error.message?.toLowerCase() ?? "";
+
+    if (
+      error.code === "42P01" ||
+      error.code === "PGRST205" ||
+      message.includes("schema cache") ||
+      message.includes("does not exist")
+    ) {
+      return [];
+    }
+
+    throw error;
+  }
+
+  return ((data ?? []) as StudentPortalConversation[]).map((thread) => ({
+    created_at: thread.created_at,
+    id: thread.id,
+    thread_type: thread.thread_type,
+    title: thread.title,
+    updated_at: thread.updated_at,
+  }));
+}
+
 export async function getStudentPortalOverview(params: {
   studentId: string;
   tenantId: string;
@@ -1013,7 +1076,15 @@ export async function getStudentPortalOverview(params: {
     return null;
   }
 
-  const [attendance, assignments, certificates, payments, sessions, notifications] =
+  const [
+    attendance,
+    assignments,
+    certificates,
+    payments,
+    sessions,
+    notifications,
+    conversations,
+  ] =
     await Promise.all([
       getStudentPortalAttendance(params),
       getStudentPortalAssignments(params),
@@ -1021,6 +1092,7 @@ export async function getStudentPortalOverview(params: {
       getStudentPortalPayments(params),
       getStudentPortalSessions(params),
       getStudentPortalNotifications(params),
+      getStudentPortalConversations(params),
     ]);
   const pendingAssignments = assignments.filter(
     (assignment) =>
@@ -1058,6 +1130,7 @@ export async function getStudentPortalOverview(params: {
       } satisfies StudentPortalAttendance),
     certificates,
     courses: scope.courses,
+    conversations,
     notifications,
     payments,
     sessions,

@@ -433,6 +433,34 @@ export function StudentPortalPreviewClient({
       <section className="mt-6 grid gap-6 xl:grid-cols-2">
         <Card className="border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/10">
           <Badge className="border-white/15 bg-white/10 text-white">
+            Announcements & Discussions
+          </Badge>
+          <div className="mt-5 space-y-3">
+            {overview.conversations.length === 0 ? (
+              <p className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-400">
+                Student-related announcements and discussions will appear here.
+              </p>
+            ) : (
+              overview.conversations.map((thread) => (
+                <div
+                  className="rounded-2xl border border-white/10 bg-white/5 p-4"
+                  key={thread.id}
+                >
+                  <p className="font-semibold">
+                    {thread.title || "Conversation"}
+                  </p>
+                  <p className="mt-2 text-sm text-slate-400">
+                    {formatStatus(thread.thread_type)} | Updated{" "}
+                    {formatDate(thread.updated_at)}
+                  </p>
+                </div>
+              ))
+            )}
+          </div>
+        </Card>
+
+        <Card className="border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/10">
+          <Badge className="border-white/15 bg-white/10 text-white">
             Payments
           </Badge>
           <div className="mt-5 space-y-3">
