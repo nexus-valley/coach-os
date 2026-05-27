@@ -21,6 +21,10 @@ import type { AttendanceStatus } from "@/src/lib/attendance";
 import type { AssignmentStatus } from "@/src/lib/assignments";
 import type { PaymentLinkStatus } from "@/src/lib/paymentLinks";
 import type { PaymentStatus } from "@/src/lib/payments";
+import type {
+  SessionDeliveryMode,
+  SessionMeetingProvider,
+} from "@/src/lib/sessions";
 import { getStudentById, type Student } from "@/src/lib/students";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 import type { MemberRole } from "@/src/lib/team";
@@ -154,10 +158,15 @@ export type StudentPortalPayments = {
 export type StudentPortalSession = {
   cohort: Pick<CohortWithCourse, "id" | "name"> | null;
   course: Pick<Course, "id" | "title"> | null;
+  delivery_mode: SessionDeliveryMode;
   id: string;
+  join_available_from: string | null;
+  meeting_provider: SessionMeetingProvider | null;
+  meeting_url: string | null;
   scheduled_end_at: string | null;
   scheduled_start_at: string;
   status: string;
+  timezone: string;
   title: string;
 };
 
@@ -647,7 +656,7 @@ export async function getStudentPortalSessions(params: {
   let query = supabase
     .from("sessions")
     .select(
-      "id,tenant_id,course_id,cohort_id,title,scheduled_start_at,scheduled_end_at,status",
+      "id,tenant_id,course_id,cohort_id,title,delivery_mode,meeting_provider,meeting_url,join_available_from,timezone,scheduled_start_at,scheduled_end_at,status",
     )
     .eq("tenant_id", params.tenantId);
   const scopedFilter = createScopedOrFilter(scope);
@@ -685,18 +694,28 @@ export async function getStudentPortalSessions(params: {
   const sessions = ((data ?? []) as {
     cohort_id: string | null;
     course_id: string | null;
+    delivery_mode: SessionDeliveryMode;
     id: string;
+    join_available_from: string | null;
+    meeting_provider: SessionMeetingProvider | null;
+    meeting_url: string | null;
     scheduled_end_at: string | null;
     scheduled_start_at: string;
     status: string;
+    timezone: string;
     title: string;
   }[]).map((session) => ({
     cohort: session.cohort_id ? cohortById.get(session.cohort_id) ?? null : null,
     course: session.course_id ? courseById.get(session.course_id) ?? null : null,
+    delivery_mode: session.delivery_mode ?? "offline",
     id: session.id,
+    join_available_from: session.join_available_from,
+    meeting_provider: session.meeting_provider,
+    meeting_url: session.meeting_url,
     scheduled_end_at: session.scheduled_end_at,
     scheduled_start_at: session.scheduled_start_at,
     status: session.status,
+    timezone: session.timezone ?? "Asia/Kolkata",
     title: session.title,
   })) satisfies StudentPortalSession[];
 
@@ -713,6 +732,15 @@ export async function getStudentPortalSessions(params: {
       )
       .slice(0, 6),
   };
+}
+
+export async function getStudentUpcomingLiveClasses(params: {
+  studentId: string;
+  tenantId: string;
+}) {
+  const sessions = await getStudentPortalSessions(params);
+
+  return sessions.upcoming;
 }
 
 export async function getStudentPortalAssignments(params: {

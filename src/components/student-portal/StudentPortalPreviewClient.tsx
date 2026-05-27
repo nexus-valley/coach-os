@@ -59,6 +59,10 @@ function formatStatus(value: string) {
   return value.replaceAll("_", " ");
 }
 
+function formatDelivery(value: string) {
+  return value.replace("_", " ").replace(/^\w/, (letter) => letter.toUpperCase());
+}
+
 function AssignmentStatusBadge({ assignment }: { assignment: StudentPortalAssignment }) {
   const status = assignment.submission?.status ?? "pending";
 
@@ -315,10 +319,41 @@ export function StudentPortalPreviewClient({
                   className="rounded-2xl border border-white/10 bg-white/5 p-4"
                   key={session.id}
                 >
-                  <p className="font-semibold">{session.title}</p>
-                  <p className="mt-2 text-sm text-slate-400">
-                    {formatDateTime(session.scheduled_start_at)}
-                  </p>
+                  <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
+                    <div>
+                      <div className="flex flex-wrap gap-2">
+                        <Badge className="border-white/15 bg-white/10 text-white">
+                          {formatDelivery(session.delivery_mode)}
+                        </Badge>
+                        {session.meeting_provider ? (
+                          <Badge
+                            className="border-white/15 bg-white/10"
+                            style={{ color: branding.brandColor }}
+                          >
+                            {formatDelivery(session.meeting_provider)}
+                          </Badge>
+                        ) : null}
+                      </div>
+                      <p className="mt-3 font-semibold">{session.title}</p>
+                      <p className="mt-2 text-sm text-slate-400">
+                        {formatDateTime(session.scheduled_start_at)} |{" "}
+                        {session.course?.title ||
+                          session.cohort?.name ||
+                          "General class"}
+                      </p>
+                    </div>
+                    {session.meeting_url ? (
+                      <a
+                        className="inline-flex h-10 items-center justify-center rounded-full px-4 text-sm font-semibold text-black transition hover:-translate-y-0.5"
+                        href={session.meeting_url}
+                        rel="noreferrer"
+                        style={{ backgroundColor: branding.brandColor }}
+                        target="_blank"
+                      >
+                        Join Class
+                      </a>
+                    ) : null}
+                  </div>
                 </div>
               ))
             )}

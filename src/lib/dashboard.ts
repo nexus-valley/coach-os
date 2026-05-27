@@ -1,6 +1,10 @@
 import { getAutomationRuleCounts } from "@/src/lib/automations";
 import type { CourseStatus } from "@/src/lib/courses";
 import type { PaymentMethod, PaymentStatus } from "@/src/lib/payments";
+import type {
+  SessionDeliveryMode,
+  SessionMeetingProvider,
+} from "@/src/lib/sessions";
 import { getReminderCounts } from "@/src/lib/reminders";
 import type { StudentStatus } from "@/src/lib/students";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
@@ -44,7 +48,10 @@ export type DashboardCourseRevenue = {
 export type DashboardSessionPreview = {
   cohortName: string | null;
   courseTitle: string | null;
+  deliveryMode: SessionDeliveryMode;
   id: string;
+  meetingProvider: SessionMeetingProvider | null;
+  meetingUrl: string | null;
   scheduled_start_at: string;
   status: string;
   title: string;
@@ -52,8 +59,10 @@ export type DashboardSessionPreview = {
 
 export type DashboardAttendanceSummary = {
   attendancePercent: number | null;
+  deliveryModeBreakdown: Record<SessionDeliveryMode, number>;
   lowAttendanceAlerts: number;
   recentSessions: DashboardSessionPreview[];
+  todaysSessions: DashboardSessionPreview[];
   totalMarkedAttendance: number;
   upcomingSessions: DashboardSessionPreview[];
 };
@@ -106,8 +115,14 @@ const paymentSelect =
 
 const emptyAttendanceSummary: DashboardAttendanceSummary = {
   attendancePercent: null,
+  deliveryModeBreakdown: {
+    hybrid: 0,
+    offline: 0,
+    online: 0,
+  },
   lowAttendanceAlerts: 0,
   recentSessions: [],
+  todaysSessions: [],
   totalMarkedAttendance: 0,
   upcomingSessions: [],
 };
@@ -175,7 +190,10 @@ async function loadSessionPreviews(
   sessions: {
     cohort_id: string | null;
     course_id: string | null;
+    delivery_mode?: SessionDeliveryMode | null;
     id: string;
+    meeting_provider?: SessionMeetingProvider | null;
+    meeting_url?: string | null;
     scheduled_start_at: string;
     status: string;
     title: string;
@@ -237,7 +255,10 @@ async function loadSessionPreviews(
     courseTitle: session.course_id
       ? courseById.get(session.course_id) ?? null
       : null,
+    deliveryMode: session.delivery_mode ?? "offline",
     id: session.id,
+    meetingProvider: session.meeting_provider ?? null,
+    meetingUrl: session.meeting_url ?? null,
     scheduled_start_at: session.scheduled_start_at,
     status: session.status,
     title: session.title,
@@ -250,10 +271,16 @@ async function getAttendanceDashboardSummary(
 ) {
   const supabase = getSupabaseClient();
   const now = new Date().toISOString();
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const todayEnd = new Date(todayStart);
+  todayEnd.setDate(todayEnd.getDate() + 1);
   let scopedSessionIds: string[] | null = null;
   let upcomingQuery = supabase
     .from("sessions")
-    .select("id,title,status,scheduled_start_at,course_id,cohort_id")
+    .select(
+      "id,title,status,scheduled_start_at,course_id,cohort_id,delivery_mode,meeting_provider,meeting_url",
+    )
     .eq("tenant_id", tenantId)
     .eq("status", "scheduled")
     .gte("scheduled_start_at", now)
@@ -261,10 +288,22 @@ async function getAttendanceDashboardSummary(
     .limit(3);
   let recentQuery = supabase
     .from("sessions")
-    .select("id,title,status,scheduled_start_at,course_id,cohort_id")
+    .select(
+      "id,title,status,scheduled_start_at,course_id,cohort_id,delivery_mode,meeting_provider,meeting_url",
+    )
     .eq("tenant_id", tenantId)
     .order("scheduled_start_at", { ascending: false })
     .limit(3);
+  let todayQuery = supabase
+    .from("sessions")
+    .select(
+      "id,title,status,scheduled_start_at,course_id,cohort_id,delivery_mode,meeting_provider,meeting_url",
+    )
+    .eq("tenant_id", tenantId)
+    .gte("scheduled_start_at", todayStart.toISOString())
+    .lt("scheduled_start_at", todayEnd.toISOString())
+    .order("scheduled_start_at", { ascending: true })
+    .limit(5);
 
   if (trainerScope) {
     const filters: string[] = [];
@@ -283,6 +322,7 @@ async function getAttendanceDashboardSummary(
 
     upcomingQuery = upcomingQuery.or(filters.join(","));
     recentQuery = recentQuery.or(filters.join(","));
+    todayQuery = todayQuery.or(filters.join(","));
 
     const scopedSessionsResult = await supabase
       .from("sessions")
@@ -312,9 +352,10 @@ async function getAttendanceDashboardSummary(
     attendanceQuery = attendanceQuery.in("session_id", scopedSessionIds);
   }
 
-  const [upcomingResult, recentResult, attendanceResult] = await Promise.all([
+  const [upcomingResult, recentResult, todayResult, attendanceResult] = await Promise.all([
     upcomingQuery,
     recentQuery,
+    todayQuery,
     attendanceQuery,
   ]);
 
@@ -330,6 +371,10 @@ async function getAttendanceDashboardSummary(
     throw attendanceResult.error;
   }
 
+  if (todayResult.error) {
+    throw todayResult.error;
+  }
+
   const attendanceRows = (attendanceResult.data ?? []) as { status: string }[];
   const attended = attendanceRows.filter(
     (record) => record.status === "present" || record.status === "late",
@@ -337,35 +382,41 @@ async function getAttendanceDashboardSummary(
   const absent = attendanceRows.filter((record) => record.status === "absent")
     .length;
 
+  const upcomingSessions = (upcomingResult.data ?? []) as {
+    cohort_id: string | null;
+    course_id: string | null;
+    delivery_mode?: SessionDeliveryMode | null;
+    id: string;
+    meeting_provider?: SessionMeetingProvider | null;
+    meeting_url?: string | null;
+    scheduled_start_at: string;
+    status: string;
+    title: string;
+  }[];
+  const recentSessions = (recentResult.data ?? []) as typeof upcomingSessions;
+  const todaysSessions = (todayResult.data ?? []) as typeof upcomingSessions;
+  const deliveryModeBreakdown = [...upcomingSessions, ...todaysSessions].reduce<
+    Record<SessionDeliveryMode, number>
+  >(
+    (summary, session) => {
+      const mode = session.delivery_mode ?? "offline";
+      summary[mode] += 1;
+      return summary;
+    },
+    { hybrid: 0, offline: 0, online: 0 },
+  );
+
   return {
     attendancePercent:
       attendanceRows.length > 0
         ? Math.round((attended / attendanceRows.length) * 100)
         : null,
+    deliveryModeBreakdown,
     lowAttendanceAlerts: absent,
-    recentSessions: await loadSessionPreviews(
-      (recentResult.data ?? []) as {
-        cohort_id: string | null;
-        course_id: string | null;
-        id: string;
-        scheduled_start_at: string;
-        status: string;
-        title: string;
-      }[],
-      tenantId,
-    ),
+    recentSessions: await loadSessionPreviews(recentSessions, tenantId),
+    todaysSessions: await loadSessionPreviews(todaysSessions, tenantId),
     totalMarkedAttendance: attendanceRows.length,
-    upcomingSessions: await loadSessionPreviews(
-      (upcomingResult.data ?? []) as {
-        cohort_id: string | null;
-        course_id: string | null;
-        id: string;
-        scheduled_start_at: string;
-        status: string;
-        title: string;
-      }[],
-      tenantId,
-    ),
+    upcomingSessions: await loadSessionPreviews(upcomingSessions, tenantId),
   } satisfies DashboardAttendanceSummary;
 }
 

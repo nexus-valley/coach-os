@@ -15,6 +15,8 @@ import { canAccessAttendance, canManageAttendance } from "@/src/lib/permissions"
 import {
   createSession,
   getSessionsForTenant,
+  type SessionDeliveryMode,
+  type SessionMeetingProvider,
   type SessionStatus,
   type TrainingSessionWithRelations,
 } from "@/src/lib/sessions";
@@ -26,8 +28,16 @@ type SessionFormState = {
   cohortId: string;
   courseId: string;
   description: string;
+  deliveryMode: SessionDeliveryMode;
+  joinAvailableFrom: string;
+  meetingId: string;
+  meetingNotes: string;
+  meetingPasscode: string;
+  meetingProvider: SessionMeetingProvider | "";
+  meetingUrl: string;
   scheduledEndAt: string;
   scheduledStartAt: string;
+  timezone: string;
   title: string;
 };
 
@@ -35,9 +45,30 @@ const emptyForm: SessionFormState = {
   cohortId: "",
   courseId: "",
   description: "",
+  deliveryMode: "offline",
+  joinAvailableFrom: "",
+  meetingId: "",
+  meetingNotes: "",
+  meetingPasscode: "",
+  meetingProvider: "",
+  meetingUrl: "",
   scheduledEndAt: "",
   scheduledStartAt: "",
+  timezone: "Asia/Kolkata",
   title: "",
+};
+
+const deliveryModeLabels: Record<SessionDeliveryMode, string> = {
+  hybrid: "Hybrid",
+  offline: "Offline",
+  online: "Online",
+};
+
+const providerLabels: Record<SessionMeetingProvider, string> = {
+  custom: "Custom",
+  google_meet: "Google Meet",
+  microsoft_teams: "Microsoft Teams",
+  zoom: "Zoom",
 };
 
 function getErrorMessage(caught: unknown, fallback: string) {
@@ -65,6 +96,20 @@ function getStatusTone(status: SessionStatus): "danger" | "success" | "warning" 
   }
 
   return "warning";
+}
+
+function getDeliveryTone(
+  deliveryMode: SessionDeliveryMode,
+): "admin" | "light" | "staff" {
+  if (deliveryMode === "online") {
+    return "admin";
+  }
+
+  if (deliveryMode === "hybrid") {
+    return "light";
+  }
+
+  return "staff";
 }
 
 function toDateTimeLocalValue(date: Date) {
@@ -217,9 +262,17 @@ export function SessionsPageClient() {
         cohortId: form.cohortId || null,
         courseId: form.courseId || null,
         description: form.description,
+        deliveryMode: form.deliveryMode,
+        joinAvailableFrom: form.joinAvailableFrom || null,
+        meetingId: form.meetingId,
+        meetingNotes: form.meetingNotes,
+        meetingPasscode: form.meetingPasscode,
+        meetingProvider: form.meetingProvider || null,
+        meetingUrl: form.meetingUrl,
         scheduledEndAt: form.scheduledEndAt,
         scheduledStartAt: form.scheduledStartAt,
         tenantId: tenant.id,
+        timezone: form.timezone,
         title: form.title,
       });
       setFormOpen(false);
@@ -346,9 +399,14 @@ export function SessionsPageClient() {
               >
                 <div>
                   <div className="flex flex-wrap items-start justify-between gap-3">
-                    <Badge tone={getStatusTone(session.status)}>
-                      {session.status}
-                    </Badge>
+                    <div className="flex flex-wrap gap-2">
+                      <Badge tone={getStatusTone(session.status)}>
+                        {session.status}
+                      </Badge>
+                      <Badge tone={getDeliveryTone(session.delivery_mode)}>
+                        {deliveryModeLabels[session.delivery_mode]}
+                      </Badge>
+                    </div>
                     <span className="text-xs font-medium text-[#66788F]">
                       {formatDateTime(session.scheduled_start_at)}
                     </span>
@@ -364,6 +422,25 @@ export function SessionsPageClient() {
                   <p className="mt-4 line-clamp-3 text-sm leading-6 text-[#425B76]">
                     {session.description || "No session notes added yet."}
                   </p>
+                  {session.meeting_provider || session.meeting_url ? (
+                    <div className="mt-4 flex flex-wrap items-center gap-2">
+                      {session.meeting_provider ? (
+                        <Badge tone="light">
+                          {providerLabels[session.meeting_provider]}
+                        </Badge>
+                      ) : null}
+                      {session.meeting_url ? (
+                        <a
+                          className="inline-flex h-10 items-center justify-center rounded-full border border-[#D8E8F0] bg-white px-4 text-sm font-semibold text-[#0B2A3D] shadow-sm transition hover:-translate-y-0.5 hover:border-[#2ECBEA]/60 hover:bg-[#F3FAFD]"
+                          href={session.meeting_url}
+                          rel="noreferrer"
+                          target="_blank"
+                        >
+                          Join Class
+                        </a>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </div>
                 <div className="mt-8 border-t border-[#D8E8F0] pt-5">
                   <div className="grid grid-cols-2 gap-3 text-sm">
@@ -519,6 +596,140 @@ export function SessionsPageClient() {
                 </label>
               </div>
 
+              <div className="grid gap-4 sm:grid-cols-3">
+                <label className="block">
+                  <span className="text-sm font-medium text-[#425B76]">
+                    Delivery
+                  </span>
+                  <select
+                    className="mt-2 h-12 w-full rounded-2xl border border-[#D8E8F0] bg-white px-4 text-sm text-[#0B1F33] outline-none transition focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        deliveryMode: event.target.value as SessionDeliveryMode,
+                      }))
+                    }
+                    value={form.deliveryMode}
+                  >
+                    <option value="offline">Offline</option>
+                    <option value="online">Online</option>
+                    <option value="hybrid">Hybrid</option>
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="text-sm font-medium text-[#425B76]">
+                    Provider
+                  </span>
+                  <select
+                    className="mt-2 h-12 w-full rounded-2xl border border-[#D8E8F0] bg-white px-4 text-sm text-[#0B1F33] outline-none transition focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        meetingProvider: event.target
+                          .value as SessionMeetingProvider | "",
+                      }))
+                    }
+                    value={form.meetingProvider}
+                  >
+                    <option value="">No provider</option>
+                    <option value="zoom">Zoom</option>
+                    <option value="google_meet">Google Meet</option>
+                    <option value="microsoft_teams">Microsoft Teams</option>
+                    <option value="custom">Custom</option>
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="text-sm font-medium text-[#425B76]">
+                    Timezone
+                  </span>
+                  <input
+                    className="mt-2 h-12 w-full rounded-2xl border border-[#D8E8F0] bg-white px-4 text-sm text-[#0B1F33] outline-none transition placeholder:text-[#66788F] focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        timezone: event.target.value,
+                      }))
+                    }
+                    placeholder="Asia/Kolkata"
+                    type="text"
+                    value={form.timezone}
+                  />
+                </label>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="block">
+                  <span className="text-sm font-medium text-[#425B76]">
+                    Meeting link
+                  </span>
+                  <input
+                    className="mt-2 h-12 w-full rounded-2xl border border-[#D8E8F0] bg-white px-4 text-sm text-[#0B1F33] outline-none transition placeholder:text-[#66788F] focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        meetingUrl: event.target.value,
+                      }))
+                    }
+                    placeholder="https://meet.google.com/..."
+                    type="url"
+                    value={form.meetingUrl}
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-sm font-medium text-[#425B76]">
+                    Join opens from
+                  </span>
+                  <input
+                    className="mt-2 h-12 w-full rounded-2xl border border-[#D8E8F0] bg-white px-4 text-sm text-[#0B1F33] outline-none transition focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        joinAvailableFrom: event.target.value,
+                      }))
+                    }
+                    type="datetime-local"
+                    value={form.joinAvailableFrom}
+                  />
+                </label>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="block">
+                  <span className="text-sm font-medium text-[#425B76]">
+                    Meeting ID
+                  </span>
+                  <input
+                    className="mt-2 h-12 w-full rounded-2xl border border-[#D8E8F0] bg-white px-4 text-sm text-[#0B1F33] outline-none transition placeholder:text-[#66788F] focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        meetingId: event.target.value,
+                      }))
+                    }
+                    placeholder="Optional meeting ID"
+                    type="text"
+                    value={form.meetingId}
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-sm font-medium text-[#425B76]">
+                    Passcode
+                  </span>
+                  <input
+                    className="mt-2 h-12 w-full rounded-2xl border border-[#D8E8F0] bg-white px-4 text-sm text-[#0B1F33] outline-none transition placeholder:text-[#66788F] focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        meetingPasscode: event.target.value,
+                      }))
+                    }
+                    placeholder="Optional passcode"
+                    type="text"
+                    value={form.meetingPasscode}
+                  />
+                </label>
+              </div>
+
               <label className="block">
                 <span className="text-sm font-medium text-[#425B76]">
                   Description
@@ -533,6 +744,23 @@ export function SessionsPageClient() {
                   }
                   placeholder="Agenda, delivery notes, or class context."
                   value={form.description}
+                />
+              </label>
+
+              <label className="block">
+                <span className="text-sm font-medium text-[#425B76]">
+                  Meeting notes
+                </span>
+                <textarea
+                  className="mt-2 min-h-20 w-full resize-none rounded-2xl border border-[#D8E8F0] bg-white px-4 py-3 text-sm leading-6 text-[#0B1F33] outline-none transition placeholder:text-[#66788F] focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      meetingNotes: event.target.value,
+                    }))
+                  }
+                  placeholder="Room number, join instructions, or host notes."
+                  value={form.meetingNotes}
                 />
               </label>
 

@@ -11,6 +11,7 @@ export type NotificationType =
   | "assignment_notice"
   | "invitation_notice"
   | "invoice_notice"
+  | "live_session_notice"
   | "payment_reminder"
   | "session_reminder"
   | "subscription_notice"

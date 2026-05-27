@@ -115,9 +115,11 @@ function UsageMiniCard({
 function SessionPreviewList({
   emptyText,
   sessions,
+  showJoin = false,
 }: {
   emptyText: string;
   sessions: DashboardMetrics["attendance"]["upcomingSessions"];
+  showJoin?: boolean;
 }) {
   if (sessions.length === 0) {
     return (
@@ -147,9 +149,33 @@ function SessionPreviewList({
               {session.status}
             </Badge>
           </div>
-          <p className="mt-3 text-xs font-medium text-[#66788F]">
-            {formatDate(session.scheduled_start_at)}
-          </p>
+          <div className="mt-3 flex flex-wrap items-center gap-2 text-xs font-medium text-[#66788F]">
+            <span>{formatDate(session.scheduled_start_at)}</span>
+            <Badge
+              tone={
+                session.deliveryMode === "online"
+                  ? "admin"
+                  : session.deliveryMode === "hybrid"
+                    ? "light"
+                    : "staff"
+              }
+            >
+              {session.deliveryMode}
+            </Badge>
+            {session.meetingProvider ? (
+              <Badge tone="light">{session.meetingProvider.replace("_", " ")}</Badge>
+            ) : null}
+          </div>
+          {showJoin && session.meetingUrl ? (
+            <a
+              className="mt-3 inline-flex h-9 items-center justify-center rounded-full border border-[#D8E8F0] bg-white px-3 text-xs font-semibold text-[#0B2A3D] transition hover:-translate-y-0.5 hover:border-[#2ECBEA]/60 hover:bg-[#F3FAFD]"
+              href={session.meetingUrl}
+              rel="noreferrer"
+              target="_blank"
+            >
+              Start Class
+            </a>
+          ) : null}
         </div>
       ))}
     </div>
@@ -543,16 +569,42 @@ export function DashboardPageClient() {
               <p className="mt-1 text-sm text-[#66788F]">Absent alerts</p>
             </div>
           </div>
+          <div className="mt-5 grid gap-3 sm:grid-cols-3">
+            {(["online", "hybrid", "offline"] as const).map((mode) => (
+              <div
+                className="rounded-2xl border border-[#D8E8F0] bg-white p-3"
+                key={mode}
+              >
+                <p className="text-lg font-semibold text-[#0B1F33]">
+                  {metrics.attendance.deliveryModeBreakdown[mode]}
+                </p>
+                <p className="mt-1 text-xs capitalize text-[#66788F]">
+                  {mode} upcoming
+                </p>
+              </div>
+            ))}
+          </div>
         </Card>
 
         <Card className="border-[#D8E8F0] bg-white p-6 text-[#0B1F33] shadow-2xl shadow-[#0B2A3D]/10">
-          <div className="grid gap-6 lg:grid-cols-2">
+          <div className="grid gap-6 lg:grid-cols-3">
+            <div>
+              <h3 className="text-xl font-semibold">Today&apos;s Classes</h3>
+              <div className="mt-4">
+                <SessionPreviewList
+                  emptyText="No classes scheduled today."
+                  sessions={metrics.attendance.todaysSessions}
+                  showJoin
+                />
+              </div>
+            </div>
             <div>
               <h3 className="text-xl font-semibold">Upcoming Sessions</h3>
               <div className="mt-4">
                 <SessionPreviewList
                   emptyText="No upcoming sessions scheduled."
                   sessions={metrics.attendance.upcomingSessions}
+                  showJoin
                 />
               </div>
             </div>

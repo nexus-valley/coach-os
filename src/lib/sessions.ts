@@ -20,6 +20,12 @@ import {
 } from "@/src/lib/trainerAssignments";
 
 export type SessionStatus = "scheduled" | "completed" | "canceled";
+export type SessionDeliveryMode = "hybrid" | "offline" | "online";
+export type SessionMeetingProvider =
+  | "custom"
+  | "google_meet"
+  | "microsoft_teams"
+  | "zoom";
 
 export type TrainingSession = {
   cohort_id: string | null;
@@ -27,11 +33,20 @@ export type TrainingSession = {
   created_at: string;
   created_by: string | null;
   description: string | null;
+  delivery_mode: SessionDeliveryMode;
   id: string;
+  join_available_from: string | null;
+  meeting_id: string | null;
+  meeting_notes: string | null;
+  meeting_passcode: string | null;
+  meeting_provider: SessionMeetingProvider | null;
+  meeting_url: string | null;
+  recording_url: string | null;
   scheduled_end_at: string | null;
   scheduled_start_at: string;
   status: SessionStatus;
   tenant_id: string;
+  timezone: string;
   title: string;
   trainer_user_id: string | null;
   updated_at: string;
@@ -47,9 +62,18 @@ export type SessionInput = {
   cohortId?: string | null;
   courseId?: string | null;
   description: string;
+  deliveryMode?: SessionDeliveryMode;
+  joinAvailableFrom?: string | null;
+  meetingId?: string | null;
+  meetingNotes?: string | null;
+  meetingPasscode?: string | null;
+  meetingProvider?: SessionMeetingProvider | null;
+  meetingUrl?: string | null;
+  recordingUrl?: string | null;
   scheduledEndAt: string;
   scheduledStartAt: string;
   tenantId: string;
+  timezone?: string | null;
   title: string;
   trainerUserId?: string | null;
 };
@@ -59,7 +83,13 @@ export type UpdateSessionInput = SessionInput & {
 };
 
 const sessionColumns =
-  "id,tenant_id,course_id,cohort_id,trainer_user_id,title,description,scheduled_start_at,scheduled_end_at,status,created_by,created_at,updated_at";
+  "id,tenant_id,course_id,cohort_id,trainer_user_id,title,description,delivery_mode,meeting_provider,meeting_url,meeting_id,meeting_passcode,meeting_notes,timezone,join_available_from,recording_url,scheduled_start_at,scheduled_end_at,status,created_by,created_at,updated_at";
+
+const deliveryModeLabels: Record<SessionDeliveryMode, string> = {
+  hybrid: "Hybrid",
+  offline: "Offline",
+  online: "Online",
+};
 
 async function notifySessionCreated(session: TrainingSession) {
   try {
@@ -78,20 +108,29 @@ async function notifySessionCreated(session: TrainingSession) {
       actionUrl: `/app/sessions/${session.id}`,
       entityId: session.id,
       entityType: "session",
-      message: `Session scheduled for ${new Intl.DateTimeFormat("en", {
+      message: `${deliveryModeLabels[session.delivery_mode]} class scheduled for ${new Intl.DateTimeFormat("en", {
         dateStyle: "medium",
         timeStyle: "short",
       }).format(new Date(session.scheduled_start_at))}.`,
       metadata: {
         cohortId: session.cohort_id,
         courseId: session.course_id,
+        deliveryMode: session.delivery_mode,
+        event:
+          session.delivery_mode === "offline"
+            ? "session_created"
+            : "live_session_scheduled",
+        meetingProvider: session.meeting_provider,
         scheduledStartAt: session.scheduled_start_at,
         trainerUserId: session.trainer_user_id,
       },
       severity: "info",
       tenantId: session.tenant_id,
-      title: `Session created: ${session.title}`,
-      type: "session_reminder",
+      title: `${deliveryModeLabels[session.delivery_mode]} class scheduled: ${session.title}`,
+      type:
+        session.delivery_mode === "offline"
+          ? "session_reminder"
+          : "live_session_notice",
       userIds,
     });
   } catch {
@@ -105,17 +144,84 @@ async function notifySessionStatusChange(session: TrainingSession) {
       actionUrl: `/app/sessions/${session.id}`,
       entityId: session.id,
       entityType: "session",
-      message: `Session status changed to ${session.status}.`,
+      message: `${deliveryModeLabels[session.delivery_mode]} class status changed to ${session.status}.`,
       metadata: {
         cohortId: session.cohort_id,
         courseId: session.course_id,
+        deliveryMode: session.delivery_mode,
+        event:
+          session.status === "canceled" && session.delivery_mode !== "offline"
+            ? "live_session_canceled"
+            : "session_status_updated",
+        meetingProvider: session.meeting_provider,
         status: session.status,
       },
       roles: ["owner", "admin"],
       severity: session.status === "canceled" ? "warning" : "info",
       tenantId: session.tenant_id,
-      title: `Session ${session.status}: ${session.title}`,
-      type: "session_reminder",
+      title: `${deliveryModeLabels[session.delivery_mode]} class ${session.status}: ${session.title}`,
+      type:
+        session.delivery_mode === "offline"
+          ? "session_reminder"
+          : "live_session_notice",
+    });
+  } catch {
+    // Notifications are non-blocking for session updates.
+  }
+}
+
+async function notifySessionUpdated(session: TrainingSession) {
+  try {
+    await createNotificationForTenantRoles({
+      actionUrl: `/app/sessions/${session.id}`,
+      entityId: session.id,
+      entityType: "session",
+      message: `${deliveryModeLabels[session.delivery_mode]} class updated for ${new Intl.DateTimeFormat("en", {
+        dateStyle: "medium",
+        timeStyle: "short",
+      }).format(new Date(session.scheduled_start_at))}.`,
+      metadata: {
+        cohortId: session.cohort_id,
+        courseId: session.course_id,
+        deliveryMode: session.delivery_mode,
+        event:
+          session.delivery_mode === "offline"
+            ? "session_updated"
+            : "live_session_updated",
+        meetingProvider: session.meeting_provider,
+        scheduledStartAt: session.scheduled_start_at,
+      },
+      roles: ["owner", "admin"],
+      severity: "info",
+      tenantId: session.tenant_id,
+      title: `${deliveryModeLabels[session.delivery_mode]} class updated: ${session.title}`,
+      type:
+        session.delivery_mode === "offline"
+          ? "session_reminder"
+          : "live_session_notice",
+    });
+  } catch {
+    // Notifications are non-blocking for session updates.
+  }
+}
+
+async function notifyMeetingDetailsUpdated(session: TrainingSession) {
+  try {
+    await createNotificationForTenantRoles({
+      actionUrl: `/app/sessions/${session.id}`,
+      entityId: session.id,
+      entityType: "session",
+      message: `Meeting details were updated for ${session.title}.`,
+      metadata: {
+        deliveryMode: session.delivery_mode,
+        meetingProvider: session.meeting_provider,
+        scheduledStartAt: session.scheduled_start_at,
+      },
+      roles: ["owner", "admin"],
+      severity: "info",
+      tenantId: session.tenant_id,
+      title: `Meeting details updated: ${session.title}`,
+      type: "live_session_notice",
     });
   } catch {
     // Notifications are non-blocking for session updates.
@@ -201,10 +307,51 @@ function normalizeDateTimeInput(value: string) {
   return value ? new Date(value).toISOString() : null;
 }
 
+function normalizeOptionalDateTimeInput(value: string | null | undefined) {
+  return value ? new Date(value).toISOString() : null;
+}
+
+function normalizeOptionalText(value: string | null | undefined) {
+  const normalized = value?.trim();
+
+  return normalized ? normalized : null;
+}
+
+function normalizeTimezone(value: string | null | undefined) {
+  return normalizeOptionalText(value) ?? "Asia/Kolkata";
+}
+
+function normalizeOptionalUrl(value: string | null | undefined, label: string) {
+  const normalized = normalizeOptionalText(value);
+
+  if (!normalized) {
+    return null;
+  }
+
+  try {
+    const url = new URL(normalized);
+
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      throw new Error("Invalid protocol");
+    }
+
+    return url.toString();
+  } catch {
+    throw new Error(`${label} must be a valid http or https URL.`);
+  }
+}
+
 function validateSessionInput(input: SessionInput) {
   const title = input.title.trim();
   const scheduledStartAt = normalizeDateTimeInput(input.scheduledStartAt);
   const scheduledEndAt = normalizeDateTimeInput(input.scheduledEndAt);
+  const deliveryMode = input.deliveryMode ?? "offline";
+  const meetingProvider = input.meetingProvider ?? null;
+  const meetingUrl = normalizeOptionalUrl(input.meetingUrl, "Meeting URL");
+  const recordingUrl = normalizeOptionalUrl(input.recordingUrl, "Recording URL");
+  const joinAvailableFrom = normalizeOptionalDateTimeInput(
+    input.joinAvailableFrom,
+  );
 
   if (!title) {
     throw new Error("Session title is required.");
@@ -222,7 +369,20 @@ function validateSessionInput(input: SessionInput) {
     throw new Error("Session end time cannot be before start time.");
   }
 
-  return { scheduledEndAt, scheduledStartAt, title };
+  return {
+    deliveryMode,
+    joinAvailableFrom,
+    meetingId: normalizeOptionalText(input.meetingId),
+    meetingNotes: normalizeOptionalText(input.meetingNotes),
+    meetingPasscode: normalizeOptionalText(input.meetingPasscode),
+    meetingProvider,
+    meetingUrl,
+    recordingUrl,
+    scheduledEndAt,
+    scheduledStartAt,
+    timezone: normalizeTimezone(input.timezone),
+    title,
+  };
 }
 
 function applyTrainerSessionScope<T extends { or: (filters: string) => T }>(
@@ -431,9 +591,18 @@ export async function createSession(input: SessionInput) {
       course_id: input.courseId || null,
       created_by: user.id,
       description: input.description.trim() || null,
+      delivery_mode: validated.deliveryMode,
+      join_available_from: validated.joinAvailableFrom,
+      meeting_id: validated.meetingId,
+      meeting_notes: validated.meetingNotes,
+      meeting_passcode: validated.meetingPasscode,
+      meeting_provider: validated.meetingProvider,
+      meeting_url: validated.meetingUrl,
+      recording_url: validated.recordingUrl,
       scheduled_end_at: validated.scheduledEndAt,
       scheduled_start_at: validated.scheduledStartAt,
       tenant_id: input.tenantId,
+      timezone: validated.timezone,
       title: validated.title,
       trainer_user_id: trainerUserId,
     })
@@ -447,20 +616,25 @@ export async function createSession(input: SessionInput) {
   const session = data as TrainingSession;
 
   await logActivity({
-    action: "session_created",
-    description: "Created class session",
+    action:
+      session.delivery_mode === "offline"
+        ? "session_created"
+        : "live_session_scheduled",
+    description: `Created ${deliveryModeLabels[session.delivery_mode].toLowerCase()} class session`,
     entityId: session.id,
     entityName: session.title,
     entityType: "session",
     metadata: {
       cohortId: session.cohort_id,
       courseId: session.course_id,
+      deliveryMode: session.delivery_mode,
+      meetingProvider: session.meeting_provider,
       scheduledStartAt: session.scheduled_start_at,
       trainerUserId: session.trainer_user_id,
     },
     tenantId: session.tenant_id,
   });
-  await notifySessionCreated(session);
+  await notifySessionUpdated(session);
 
   return session;
 }
@@ -482,8 +656,17 @@ export async function updateSession(input: UpdateSessionInput) {
       cohort_id: input.cohortId || null,
       course_id: input.courseId || null,
       description: input.description.trim() || null,
+      delivery_mode: validated.deliveryMode,
+      join_available_from: validated.joinAvailableFrom,
+      meeting_id: validated.meetingId,
+      meeting_notes: validated.meetingNotes,
+      meeting_passcode: validated.meetingPasscode,
+      meeting_provider: validated.meetingProvider,
+      meeting_url: validated.meetingUrl,
+      recording_url: validated.recordingUrl,
       scheduled_end_at: validated.scheduledEndAt,
       scheduled_start_at: validated.scheduledStartAt,
+      timezone: validated.timezone,
       title: validated.title,
       trainer_user_id: trainerUserId,
     })
@@ -499,19 +682,25 @@ export async function updateSession(input: UpdateSessionInput) {
   const session = data as TrainingSession;
 
   await logActivity({
-    action: "session_updated",
-    description: "Updated class session",
+    action:
+      session.delivery_mode === "offline"
+        ? "session_updated"
+        : "live_session_updated",
+    description: `Updated ${deliveryModeLabels[session.delivery_mode].toLowerCase()} class session`,
     entityId: session.id,
     entityName: session.title,
     entityType: "session",
     metadata: {
       cohortId: session.cohort_id,
       courseId: session.course_id,
+      deliveryMode: session.delivery_mode,
+      meetingProvider: session.meeting_provider,
       scheduledStartAt: session.scheduled_start_at,
       status: session.status,
     },
     tenantId: session.tenant_id,
   });
+  await notifySessionCreated(session);
 
   return session;
 }
@@ -562,6 +751,8 @@ async function updateSessionStatus(params: {
     metadata: {
       cohortId: session.cohort_id,
       courseId: session.course_id,
+      deliveryMode: session.delivery_mode,
+      meetingProvider: session.meeting_provider,
       status: session.status,
     },
     severity: params.action === "session_canceled" ? "warning" : "info",
@@ -596,6 +787,138 @@ export async function completeSession(params: {
     status: "completed",
     tenantId: params.tenantId,
   });
+}
+
+export async function createLiveSession(input: SessionInput) {
+  return createSession({
+    ...input,
+    deliveryMode: input.deliveryMode ?? "online",
+  });
+}
+
+export async function updateMeetingDetails(input: {
+  deliveryMode?: SessionDeliveryMode;
+  joinAvailableFrom?: string | null;
+  meetingId?: string | null;
+  meetingNotes?: string | null;
+  meetingPasscode?: string | null;
+  meetingProvider?: SessionMeetingProvider | null;
+  meetingUrl?: string | null;
+  recordingUrl?: string | null;
+  sessionId: string;
+  tenantId: string;
+  timezone?: string | null;
+}) {
+  const existing = await getSessionById({
+    sessionId: input.sessionId,
+    tenantId: input.tenantId,
+  });
+
+  if (!existing) {
+    throw new Error("Session not found in this workspace.");
+  }
+
+  await ensureCanManageSession({
+    cohortId: existing.cohort_id,
+    courseId: existing.course_id,
+    tenantId: input.tenantId,
+  });
+
+  const validated = validateSessionInput({
+    cohortId: existing.cohort_id,
+    courseId: existing.course_id,
+    description: existing.description ?? "",
+    deliveryMode: input.deliveryMode ?? existing.delivery_mode,
+    joinAvailableFrom:
+      input.joinAvailableFrom === undefined
+        ? existing.join_available_from
+        : input.joinAvailableFrom,
+    meetingId: input.meetingId === undefined ? existing.meeting_id : input.meetingId,
+    meetingNotes:
+      input.meetingNotes === undefined ? existing.meeting_notes : input.meetingNotes,
+    meetingPasscode:
+      input.meetingPasscode === undefined
+        ? existing.meeting_passcode
+        : input.meetingPasscode,
+    meetingProvider:
+      input.meetingProvider === undefined
+        ? existing.meeting_provider
+        : input.meetingProvider,
+    meetingUrl:
+      input.meetingUrl === undefined ? existing.meeting_url : input.meetingUrl,
+    recordingUrl:
+      input.recordingUrl === undefined ? existing.recording_url : input.recordingUrl,
+    scheduledEndAt: existing.scheduled_end_at ?? "",
+    scheduledStartAt: existing.scheduled_start_at,
+    tenantId: input.tenantId,
+    timezone: input.timezone ?? existing.timezone,
+    title: existing.title,
+    trainerUserId: existing.trainer_user_id,
+  });
+
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from("sessions")
+    .update({
+      delivery_mode: validated.deliveryMode,
+      join_available_from: validated.joinAvailableFrom,
+      meeting_id: validated.meetingId,
+      meeting_notes: validated.meetingNotes,
+      meeting_passcode: validated.meetingPasscode,
+      meeting_provider: validated.meetingProvider,
+      meeting_url: validated.meetingUrl,
+      recording_url: validated.recordingUrl,
+      timezone: validated.timezone,
+    })
+    .eq("tenant_id", input.tenantId)
+    .eq("id", input.sessionId)
+    .select(sessionColumns)
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  const session = data as TrainingSession;
+
+  await logActivity({
+    action: "meeting_details_updated",
+    description: "Updated class meeting details",
+    entityId: session.id,
+    entityName: session.title,
+    entityType: "session",
+    metadata: {
+      deliveryMode: session.delivery_mode,
+      meetingProvider: session.meeting_provider,
+      scheduledStartAt: session.scheduled_start_at,
+    },
+    tenantId: session.tenant_id,
+  });
+  await notifyMeetingDetailsUpdated(session);
+
+  return session;
+}
+
+export async function getUpcomingLiveSessions(tenantId: string, limit = 8) {
+  const sessions = await getSessionsForTenant(tenantId);
+  const now = Date.now();
+
+  return sessions
+    .filter(
+      (session) =>
+        session.status === "scheduled" &&
+        new Date(session.scheduled_start_at).getTime() >= now,
+    )
+    .sort(
+      (left, right) =>
+        new Date(left.scheduled_start_at).getTime() -
+        new Date(right.scheduled_start_at).getTime(),
+    )
+    .slice(0, limit);
+}
+
+export async function getTrainerUpcomingLiveClasses(tenantId: string) {
+  return getUpcomingLiveSessions(tenantId);
 }
 
 export function canRoleManageSessions(role: MemberRole | null | undefined) {

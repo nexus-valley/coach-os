@@ -22,6 +22,8 @@ import {
   cancelSession,
   completeSession,
   getSessionById,
+  type SessionDeliveryMode,
+  type SessionMeetingProvider,
   type TrainingSessionWithRelations,
 } from "@/src/lib/sessions";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
@@ -42,6 +44,19 @@ type AttendanceDraft = Record<
 >;
 
 const statuses: AttendanceStatus[] = ["present", "absent", "late", "excused"];
+
+const deliveryModeLabels: Record<SessionDeliveryMode, string> = {
+  hybrid: "Hybrid",
+  offline: "Offline",
+  online: "Online",
+};
+
+const providerLabels: Record<SessionMeetingProvider, string> = {
+  custom: "Custom",
+  google_meet: "Google Meet",
+  microsoft_teams: "Microsoft Teams",
+  zoom: "Zoom",
+};
 
 function getErrorMessage(caught: unknown, fallback: string) {
   return caught instanceof Error ? caught.message : fallback;
@@ -80,6 +95,18 @@ function SessionStatusBadge({ status }: { status: string }) {
   }
 
   return <Badge tone="warning">scheduled</Badge>;
+}
+
+function DeliveryBadge({ deliveryMode }: { deliveryMode: SessionDeliveryMode }) {
+  if (deliveryMode === "online") {
+    return <Badge tone="admin">Online</Badge>;
+  }
+
+  if (deliveryMode === "hybrid") {
+    return <Badge tone="light">Hybrid</Badge>;
+  }
+
+  return <Badge tone="staff">Offline</Badge>;
 }
 
 function buildDraft(roster: AttendanceRosterItem[]) {
@@ -335,7 +362,15 @@ export function SessionDetailClient({ sessionId }: SessionDetailClientProps) {
         <Card className="border-[#D8E8F0] bg-white p-6 shadow-2xl shadow-[#0B2A3D]/10 sm:p-8">
           <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <SessionStatusBadge status={session.status} />
+              <div className="flex flex-wrap gap-2">
+                <SessionStatusBadge status={session.status} />
+                <DeliveryBadge deliveryMode={session.delivery_mode} />
+                {session.meeting_provider ? (
+                  <Badge tone="light">
+                    {providerLabels[session.meeting_provider]}
+                  </Badge>
+                ) : null}
+              </div>
               <h2 className="mt-5 text-4xl font-semibold leading-tight tracking-normal text-[#0B1F33]">
                 {session.title}
               </h2>
@@ -387,7 +422,68 @@ export function SessionDetailClient({ sessionId }: SessionDetailClientProps) {
                 {formatDateTime(session.scheduled_end_at)}
               </p>
             </div>
+            <div>
+              <p className="text-sm text-[#66788F]">Delivery mode</p>
+              <p className="mt-2 font-semibold text-[#0B1F33]">
+                {deliveryModeLabels[session.delivery_mode]}
+              </p>
+            </div>
+            <div>
+              <p className="text-sm text-[#66788F]">Timezone</p>
+              <p className="mt-2 font-semibold text-[#0B1F33]">
+                {session.timezone || "Asia/Kolkata"}
+              </p>
+            </div>
           </div>
+
+          {session.meeting_url ||
+          session.meeting_id ||
+          session.meeting_passcode ||
+          session.meeting_notes ? (
+            <div className="mt-6 rounded-3xl border border-[#D8E8F0] bg-[#F6FBFE] p-5">
+              <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
+                <div>
+                  <p className="text-sm font-semibold text-[#66788F]">
+                    Meeting details
+                  </p>
+                  <p className="mt-2 text-sm leading-6 text-[#425B76]">
+                    {session.meeting_notes ||
+                      "Meeting provider details for this class."}
+                  </p>
+                </div>
+                {session.meeting_url ? (
+                  <a
+                    className="inline-flex h-10 items-center justify-center rounded-full bg-[#145DA0] px-4 text-sm font-semibold text-white shadow-md shadow-[#145DA0]/15 transition hover:-translate-y-0.5 hover:bg-[#0F4C81]"
+                    href={session.meeting_url}
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    Join Class
+                  </a>
+                ) : null}
+              </div>
+              <div className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
+                <div>
+                  <p className="text-[#66788F]">Meeting ID</p>
+                  <p className="mt-1 font-semibold text-[#0B1F33]">
+                    {session.meeting_id || "Not set"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[#66788F]">Passcode</p>
+                  <p className="mt-1 font-semibold text-[#0B1F33]">
+                    {session.meeting_passcode || "Not set"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[#66788F]">Join opens</p>
+                  <p className="mt-1 font-semibold text-[#0B1F33]">
+                    {formatDateTime(session.join_available_from)}
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : null}
         </Card>
 
         <Card className="border-[#D8E8F0] bg-white p-6 shadow-2xl shadow-[#0B2A3D]/10">
