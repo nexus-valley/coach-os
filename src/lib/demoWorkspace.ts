@@ -15,6 +15,7 @@ export type DemoWorkspaceStatus = {
 export type DemoSeedSummary = {
   assignments: number;
   attendance: number;
+  automations: number;
   cohorts: number;
   conversations: number;
   courses: number;
@@ -104,6 +105,7 @@ const demoCourses = [
 const emptySummary: DemoSeedSummary = {
   assignments: 0,
   attendance: 0,
+  automations: 0,
   cohorts: 0,
   conversations: 0,
   courses: 0,
@@ -119,6 +121,11 @@ const emptySummary: DemoSeedSummary = {
 };
 
 const resetOrder = [
+  "automation_run_logs",
+  "automation_runs",
+  "automation_rule_actions",
+  "automation_rule_conditions",
+  "automation_rules",
   "conversation_messages",
   "conversation_participants",
   "conversation_threads",
@@ -506,6 +513,112 @@ async function seedDemoConversations(params: {
   }
 
   return params.summary.conversations;
+}
+
+async function seedDemoAutomations(params: {
+  batchId: string;
+  summary: DemoSeedSummary;
+  tenantId: string;
+  userId: string;
+}) {
+  const ruleInputs = [
+    {
+      actionMessage:
+        "Demo placeholder: notify the team when a new student is added.",
+      actionTitle: "Welcome workflow",
+      name: "New student welcome workflow",
+      status: "active",
+      triggerType: "student_created",
+    },
+    {
+      actionMessage:
+        "Demo placeholder: follow up when attendance drops below the academy threshold.",
+      actionTitle: "Low attendance follow-up",
+      name: "Low attendance alert workflow",
+      status: "active",
+      triggerType: "attendance_low",
+    },
+    {
+      actionMessage:
+        "Demo placeholder: payment provider integration will send this later.",
+      actionTitle: "Trial expiring reminder",
+      name: "Trial expiring billing workflow",
+      status: "draft",
+      triggerType: "trial_expiring",
+    },
+  ];
+
+  for (const [index, ruleInput] of ruleInputs.entries()) {
+    const rule = await insertTracked("automation_rules", {
+      action_type:
+        index === 1 ? "create_reminder" : "create_notification",
+      config: {
+        message: ruleInput.actionMessage,
+        title: ruleInput.actionTitle,
+      },
+      created_by: params.userId,
+      description: "Demo record - workflow engine foundation automation.",
+      execution_mode: "instant",
+      is_active: ruleInput.status === "active",
+      metadata_json: { seedBatchId: params.batchId },
+      name: ruleInput.name,
+      status: ruleInput.status,
+      tenant_id: params.tenantId,
+      trigger_type: ruleInput.triggerType,
+    }, params);
+
+    await insertTracked("automation_rule_actions", {
+      action_type:
+        index === 1 ? "create_reminder" : "create_notification",
+      config_json: {
+        message: ruleInput.actionMessage,
+        title: ruleInput.actionTitle,
+      },
+      rule_id: rule.id,
+      sort_order: 0,
+      tenant_id: params.tenantId,
+    }, params);
+
+    if (index === 1) {
+      await insertTracked("automation_rule_conditions", {
+        condition_type: "less_than",
+        operator: "less_than",
+        rule_id: rule.id,
+        sort_order: 0,
+        tenant_id: params.tenantId,
+        value_json: { field: "metadata.attendancePercent", value: 75 },
+      }, params);
+    }
+
+    const run = await insertTracked("automation_runs", {
+      completed_at: addDays(-index, 13),
+      entity_id: null,
+      entity_type: "demo_data",
+      error_message:
+        index === 2
+          ? "Demo failure example - provider not configured."
+          : null,
+      metadata_json: { seedBatchId: params.batchId },
+      rule_id: rule.id,
+      started_at: addDays(-index, 12),
+      status: index === 2 ? "failed" : "success",
+      tenant_id: params.tenantId,
+      trigger_source: ruleInput.triggerType,
+    }, params);
+
+    await insertTracked("automation_run_logs", {
+      log_level: index === 2 ? "error" : "info",
+      message:
+        index === 2
+          ? "Demo failed run for future retry/provider readiness."
+          : "Demo automation run completed successfully.",
+      metadata_json: { seedBatchId: params.batchId },
+      run_id: run.id,
+      tenant_id: params.tenantId,
+    }, params);
+
+    params.summary.automations += 1;
+  }
 }
 
 async function updateWorkspaceBranding(
@@ -958,6 +1071,12 @@ export async function seedDemoWorkspace(tenantId: string) {
   }
 
   await seedDemoConversations({
+    batchId,
+    summary,
+    tenantId,
+    userId,
+  });
+  await seedDemoAutomations({
     batchId,
     summary,
     tenantId,

@@ -11,74 +11,94 @@ import { EmptyState } from "@/src/components/ui/EmptyState";
 import { FeedbackAlert } from "@/src/components/ui/FeedbackAlert";
 import {
   createAutomationRule,
-  deleteAutomationRule,
   getAutomationRulesForTenant,
-  testAutomationRule,
+  getAutomationRuns,
   toggleAutomationRule,
   updateAutomationRule,
   type AutomationActionType,
+  type AutomationConditionType,
+  type AutomationExecutionMode,
   type AutomationRule,
-  type AutomationRuleConfig,
+  type AutomationRulePayload,
+  type AutomationRuleStatus,
+  type AutomationRun,
   type AutomationTriggerType,
 } from "@/src/lib/automations";
-import type { ReminderType } from "@/src/lib/reminders";
+import { runAutomationRule } from "@/src/lib/automationRunner";
 import { logActivity } from "@/src/lib/auditLogger";
 import { canManageAutomations as canManageAutomationsForRole } from "@/src/lib/permissions";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 import { getCurrentMemberRole, type MemberRole } from "@/src/lib/team";
 import { getCurrentTenant, type Tenant } from "@/src/lib/tenant";
 
-type StatusFilter = "all" | "active" | "inactive";
+type StatusFilter = "all" | AutomationRuleStatus;
 type TriggerFilter = "all" | AutomationTriggerType;
 
 type AutomationFormState = {
+  actionConfigMessage: string;
+  actionConfigTitle: string;
   actionType: AutomationActionType;
-  dueOffsetDays: string;
-  isActive: boolean;
+  conditionField: string;
+  conditionType: AutomationConditionType;
+  conditionValue: string;
+  description: string;
+  executionMode: AutomationExecutionMode;
   name: string;
-  reminderDescription: string;
-  reminderTitle: string;
-  reminderType: ReminderType;
+  status: AutomationRuleStatus;
   triggerType: AutomationTriggerType;
 };
 
 const emptyForm: AutomationFormState = {
-  actionType: "create_reminder",
-  dueOffsetDays: "1",
-  isActive: true,
+  actionConfigMessage: "",
+  actionConfigTitle: "",
+  actionType: "create_notification",
+  conditionField: "",
+  conditionType: "equals",
+  conditionValue: "",
+  description: "",
+  executionMode: "instant",
   name: "",
-  reminderDescription: "",
-  reminderTitle: "",
-  reminderType: "general",
-  triggerType: "payment_created",
+  status: "draft",
+  triggerType: "student_created",
 };
 
-const statusFilters: StatusFilter[] = ["all", "active", "inactive"];
-const triggerFilters: TriggerFilter[] = [
-  "all",
-  "payment_created",
-  "enrollment_created",
-  "student_created",
-  "course_completed",
-];
+const statusFilters: StatusFilter[] = ["all", "active", "inactive", "draft"];
 const triggerTypes: AutomationTriggerType[] = [
-  "payment_created",
-  "enrollment_created",
   "student_created",
-  "course_completed",
+  "payment_received",
+  "assignment_overdue",
+  "attendance_low",
+  "session_scheduled",
+  "trial_expiring",
+  "certificate_issued",
 ];
-const reminderTypes: ReminderType[] = [
-  "general",
-  "payment",
-  "course_followup",
-  "student_followup",
+const actionTypes: AutomationActionType[] = [
+  "create_notification",
+  "create_reminder",
+  "send_email_placeholder",
+  "send_whatsapp_placeholder",
+  "add_internal_note",
+  "generate_task_placeholder",
+];
+const conditionTypes: AutomationConditionType[] = [
+  "equals",
+  "not_equals",
+  "greater_than",
+  "less_than",
+  "contains",
+  "date_before",
+  "date_after",
 ];
 
 function formatLabel(value: string) {
-  return value.replace("_", " ");
+  return value.replace(/_/g, " ");
 }
 
-function formatDate(value: string) {
+function formatDate(value: string | null) {
+  if (!value) {
+    return "Not set";
+  }
+
   return new Intl.DateTimeFormat("en", {
     day: "numeric",
     month: "short",
@@ -90,55 +110,116 @@ function getErrorMessage(caught: unknown, fallback: string) {
   return caught instanceof Error ? caught.message : fallback;
 }
 
+function statusTone(status: AutomationRuleStatus) {
+  if (status === "active") {
+    return "border-teal-400/30 bg-teal-400/10 text-teal-300";
+  }
+
+  if (status === "draft") {
+    return "border-amber-400/30 bg-amber-400/10 text-amber-200";
+  }
+
+  return "border-white/10 bg-white/10 text-slate-300";
+}
+
+function runStatusTone(status: AutomationRun["status"]) {
+  if (status === "success") {
+    return "success" as const;
+  }
+
+  if (status === "failed") {
+    return "danger" as const;
+  }
+
+  if (status === "skipped") {
+    return "warning" as const;
+  }
+
+  return "light" as const;
+}
+
 function formFromRule(rule: AutomationRule): AutomationFormState {
+  const firstAction = rule.actions[0];
+  const firstCondition = rule.conditions[0];
+
   return {
-    actionType: rule.action_type,
-    dueOffsetDays: String(rule.config.due_offset_days),
-    isActive: rule.is_active,
+    actionConfigMessage:
+      typeof firstAction?.config_json.message === "string"
+        ? firstAction.config_json.message
+        : "",
+    actionConfigTitle:
+      typeof firstAction?.config_json.title === "string"
+        ? firstAction.config_json.title
+        : "",
+    actionType: firstAction?.action_type ?? rule.action_type,
+    conditionField:
+      typeof firstCondition?.value_json.field === "string"
+        ? firstCondition.value_json.field
+        : "",
+    conditionType: firstCondition?.condition_type ?? "equals",
+    conditionValue:
+      typeof firstCondition?.value_json.value === "string"
+        ? firstCondition.value_json.value
+        : "",
+    description: rule.description ?? "",
+    executionMode: rule.execution_mode,
     name: rule.name,
-    reminderDescription: rule.config.reminder_description,
-    reminderTitle: rule.config.reminder_title,
-    reminderType: rule.config.reminder_type,
+    status: rule.status,
     triggerType: rule.trigger_type,
   };
 }
 
-function configFromForm(form: AutomationFormState): AutomationRuleConfig {
+function payloadFromForm(
+  form: AutomationFormState,
+  tenantId: string,
+): AutomationRulePayload {
+  const conditions =
+    form.conditionField.trim() || form.conditionValue.trim()
+      ? [
+          {
+            condition_type: form.conditionType,
+            operator: form.conditionType,
+            value_json: {
+              field: form.conditionField.trim() || "entityType",
+              value: form.conditionValue.trim(),
+            },
+          },
+        ]
+      : [];
+
   return {
-    due_offset_days: Number(form.dueOffsetDays) || 0,
-    reminder_description: form.reminderDescription,
-    reminder_title: form.reminderTitle,
-    reminder_type: form.reminderType,
+    actions: [
+      {
+        action_type: form.actionType,
+        config_json: {
+          message:
+            form.actionConfigMessage.trim() ||
+            "Automation placeholder executed inside CoachFort.",
+          title: form.actionConfigTitle.trim() || form.name.trim(),
+        },
+      },
+    ],
+    conditions,
+    description: form.description,
+    execution_mode: form.executionMode,
+    name: form.name,
+    status: form.status,
+    tenant_id: tenantId,
+    trigger_type: form.triggerType,
   };
 }
 
 function getSearchText(rule: AutomationRule) {
   return [
     rule.name,
+    rule.description,
+    rule.status,
     rule.trigger_type,
-    rule.action_type,
-    rule.config.reminder_title,
-    rule.config.reminder_description,
+    rule.actions.map((action) => action.action_type).join(" "),
   ]
     .filter(Boolean)
     .join(" ")
     .toLowerCase();
-}
-
-function ActiveBadge({ active }: { active: boolean }) {
-  if (active) {
-    return (
-      <Badge className="border-teal-400/30 bg-teal-400/10 text-teal-300">
-        Active
-      </Badge>
-    );
-  }
-
-  return (
-    <Badge className="border-white/10 bg-white/10 text-slate-300">
-      Inactive
-    </Badge>
-  );
 }
 
 export function AutomationsPageClient() {
@@ -152,6 +233,7 @@ export function AutomationsPageClient() {
   const [loading, setLoading] = useState(true);
   const [mutatingId, setMutatingId] = useState("");
   const [rules, setRules] = useState<AutomationRule[]>([]);
+  const [runs, setRuns] = useState<AutomationRun[]>([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [success, setSuccess] = useState("");
@@ -159,8 +241,14 @@ export function AutomationsPageClient() {
   const [triggerFilter, setTriggerFilter] = useState<TriggerFilter>("all");
   const canManageAutomations = canManageAutomationsForRole(currentRole);
 
-  async function loadRules(currentTenant: Tenant) {
-    setRules(await getAutomationRulesForTenant(currentTenant.id));
+  async function loadAutomationData(currentTenant: Tenant) {
+    const [ruleRows, runRows] = await Promise.all([
+      getAutomationRulesForTenant(currentTenant.id),
+      getAutomationRuns(currentTenant.id, 12),
+    ]);
+
+    setRules(ruleRows);
+    setRuns(runRows);
   }
 
   useEffect(() => {
@@ -197,7 +285,7 @@ export function AutomationsPageClient() {
         setCurrentRole(role);
 
         if (canManageAutomationsForRole(role)) {
-          await loadRules(currentTenant);
+          await loadAutomationData(currentTenant);
         }
       } catch (caught) {
         if (!active) {
@@ -238,8 +326,7 @@ export function AutomationsPageClient() {
 
     return rules.filter((rule) => {
       const matchesStatus =
-        statusFilter === "all" ||
-        (statusFilter === "active" ? rule.is_active : !rule.is_active);
+        statusFilter === "all" || rule.status === statusFilter;
       const matchesTrigger =
         triggerFilter === "all" || rule.trigger_type === triggerFilter;
       const matchesSearch =
@@ -248,6 +335,8 @@ export function AutomationsPageClient() {
       return matchesStatus && matchesTrigger && matchesSearch;
     });
   }, [rules, search, statusFilter, triggerFilter]);
+  const failedRuns = runs.filter((run) => run.status === "failed").length;
+  const successfulRuns = runs.filter((run) => run.status === "success").length;
 
   if (!loading && currentRole && !canManageAutomations) {
     return (
@@ -279,12 +368,10 @@ export function AutomationsPageClient() {
     setFormOpen(true);
   }
 
-  async function refreshRules() {
-    if (!tenant) {
-      return;
+  async function refreshAutomationData() {
+    if (tenant) {
+      await loadAutomationData(tenant);
     }
-
-    await loadRules(tenant);
   }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -300,35 +387,18 @@ export function AutomationsPageClient() {
     setSuccess("");
 
     try {
-      if (!form.name.trim()) {
-        throw new Error("Automation name is required.");
-      }
-
-      if (Number(form.dueOffsetDays) < 0) {
-        throw new Error("Due offset days cannot be negative.");
-      }
-
-      const payload = {
-        action_type: form.actionType,
-        config: configFromForm(form),
-        is_active: form.isActive,
-        name: form.name,
-        trigger_type: form.triggerType,
-      };
+      const payload = payloadFromForm(form, tenant.id);
 
       if (editingRule) {
         await updateAutomationRule(editingRule.id, tenant.id, payload);
       } else {
-        await createAutomationRule({
-          ...payload,
-          tenant_id: tenant.id,
-        });
+        await createAutomationRule(payload);
       }
 
       setFormOpen(false);
       setEditingRule(null);
       setForm(emptyForm);
-      await refreshRules();
+      await refreshAutomationData();
       setSuccess(editingRule ? "Automation updated." : "Automation created.");
     } catch (caught) {
       setActionError(getErrorMessage(caught, "Unable to save automation."));
@@ -347,10 +417,12 @@ export function AutomationsPageClient() {
     setSuccess("");
 
     try {
-      await toggleAutomationRule(rule.id, tenant.id, !rule.is_active);
-      await refreshRules();
+      await toggleAutomationRule(rule.id, tenant.id, rule.status !== "active");
+      await refreshAutomationData();
       setSuccess(
-        rule.is_active ? "Automation deactivated." : "Automation activated.",
+        rule.status === "active"
+          ? "Automation deactivated."
+          : "Automation activated.",
       );
     } catch (caught) {
       setActionError(getErrorMessage(caught, "Unable to update automation."));
@@ -369,36 +441,21 @@ export function AutomationsPageClient() {
     setSuccess("");
 
     try {
-      await testAutomationRule(rule, tenant.id);
-      setSuccess(`Test reminder created from "${rule.name}".`);
+      const result = await runAutomationRule(rule, {
+        entityType: "automation",
+        metadata: { manualTest: true },
+        tenantId: tenant.id,
+        triggerSource: "manual_test",
+      });
+
+      await refreshAutomationData();
+      setSuccess(
+        result.status === "success"
+          ? `Automation "${rule.name}" executed.`
+          : `Automation "${rule.name}" ${result.status}.`,
+      );
     } catch (caught) {
       setActionError(getErrorMessage(caught, "Unable to test automation."));
-    } finally {
-      setMutatingId("");
-    }
-  }
-
-  async function handleDelete(rule: AutomationRule) {
-    if (!tenant || !canManageAutomations) {
-      return;
-    }
-
-    const confirmed = window.confirm(`Delete ${rule.name}?`);
-
-    if (!confirmed) {
-      return;
-    }
-
-    setMutatingId(rule.id);
-    setActionError("");
-    setSuccess("");
-
-    try {
-      await deleteAutomationRule(rule.id, tenant.id);
-      await refreshRules();
-      setSuccess("Automation deleted.");
-    } catch (caught) {
-      setActionError(getErrorMessage(caught, "Unable to delete automation."));
     } finally {
       setMutatingId("");
     }
@@ -409,14 +466,15 @@ export function AutomationsPageClient() {
       <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
         <div>
           <Badge className="border-teal-400/30 bg-teal-400/10 text-teal-300">
-            Automation rules
+            Workflow engine
           </Badge>
           <h2 className="mt-5 text-3xl font-semibold tracking-normal text-white sm:text-4xl">
             Automations
           </h2>
           <p className="mt-3 max-w-2xl text-base leading-7 text-slate-400">
-            Define simple internal rules that can create reminders from business
-            events. No external messaging or background workers are connected.
+            Build internal workflows with triggers, conditions, placeholder
+            actions, and run logging. External providers and cron workers are
+            intentionally not connected yet.
           </p>
         </div>
         {canManageAutomations ? (
@@ -426,7 +484,28 @@ export function AutomationsPageClient() {
         ) : null}
       </div>
 
-      <Card className="mt-8 border-white/10 bg-[#101214] p-5 text-white shadow-2xl shadow-black/10 sm:p-6">
+      <section className="mt-8 grid gap-4 md:grid-cols-4">
+        <Card className="border-white/10 bg-[#101214] p-5 text-white">
+          <p className="text-sm text-slate-400">Rules</p>
+          <p className="mt-2 text-3xl font-semibold">{rules.length}</p>
+        </Card>
+        <Card className="border-white/10 bg-[#101214] p-5 text-white">
+          <p className="text-sm text-slate-400">Active</p>
+          <p className="mt-2 text-3xl font-semibold">
+            {rules.filter((rule) => rule.status === "active").length}
+          </p>
+        </Card>
+        <Card className="border-white/10 bg-[#101214] p-5 text-white">
+          <p className="text-sm text-slate-400">Successful runs</p>
+          <p className="mt-2 text-3xl font-semibold">{successfulRuns}</p>
+        </Card>
+        <Card className="border-white/10 bg-[#101214] p-5 text-white">
+          <p className="text-sm text-slate-400">Failed runs</p>
+          <p className="mt-2 text-3xl font-semibold">{failedRuns}</p>
+        </Card>
+      </section>
+
+      <Card className="mt-6 border-white/10 bg-[#101214] p-5 text-white shadow-2xl shadow-black/10 sm:p-6">
         <div className="grid gap-4 lg:grid-cols-[1fr_1fr_auto_auto] lg:items-end">
           <div>
             <p className="text-sm font-medium text-slate-400">
@@ -457,7 +536,7 @@ export function AutomationsPageClient() {
             >
               {statusFilters.map((status) => (
                 <option className="text-slate-950" key={status} value={status}>
-                  {status}
+                  {formatLabel(status)}
                 </option>
               ))}
             </select>
@@ -471,7 +550,7 @@ export function AutomationsPageClient() {
               }
               value={triggerFilter}
             >
-              {triggerFilters.map((trigger) => (
+              {(["all", ...triggerTypes] as TriggerFilter[]).map((trigger) => (
                 <option
                   className="text-slate-950"
                   key={trigger}
@@ -523,7 +602,7 @@ export function AutomationsPageClient() {
               ? { label: "Create Automation", onClick: openCreateForm }
               : undefined
           }
-          description="Create a rule to define reminder behavior for future workflow automation."
+          description="Create a draft workflow with a trigger, optional condition, and placeholder action."
           icon="AU"
           title="No automation rules found"
         />
@@ -531,17 +610,14 @@ export function AutomationsPageClient() {
         <section className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {filteredRules.map((rule) => (
             <Card
-              className={[
-                "flex min-h-80 flex-col justify-between p-6 text-white shadow-2xl shadow-black/10",
-                rule.is_active
-                  ? "border-white/10 bg-[#101214]"
-                  : "border-white/10 bg-[#15181b] opacity-75",
-              ].join(" ")}
+              className="flex min-h-80 flex-col justify-between border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/10"
               key={rule.id}
             >
               <div>
                 <div className="flex flex-wrap items-start justify-between gap-3">
-                  <ActiveBadge active={rule.is_active} />
+                  <Badge className={statusTone(rule.status)}>
+                    {formatLabel(rule.status)}
+                  </Badge>
                   <Badge className="border-white/15 bg-white/10 text-white">
                     {formatLabel(rule.trigger_type)}
                   </Badge>
@@ -549,93 +625,117 @@ export function AutomationsPageClient() {
                 <h3 className="mt-5 text-2xl font-semibold leading-tight">
                   {rule.name}
                 </h3>
+                <p className="mt-3 text-sm leading-6 text-slate-400">
+                  {rule.description || "No description added."}
+                </p>
                 <div className="mt-5 space-y-2 text-sm text-slate-400">
                   <p>
-                    Action:{" "}
+                    Mode:{" "}
                     <span className="text-white">
-                      {formatLabel(rule.action_type)}
+                      {formatLabel(rule.execution_mode)}
                     </span>
                   </p>
                   <p>
-                    Reminder:{" "}
-                    <span className="text-white">
-                      {rule.config.reminder_title || "Untitled reminder"}
-                    </span>
+                    Actions:{" "}
+                    <span className="text-white">{rule.actions.length}</span>
                   </p>
                   <p>
-                    Type:{" "}
-                    <span className="text-white">
-                      {formatLabel(rule.config.reminder_type)}
-                    </span>
-                  </p>
-                  <p>
-                    Due offset:{" "}
-                    <span className="text-white">
-                      {rule.config.due_offset_days} days
-                    </span>
+                    Conditions:{" "}
+                    <span className="text-white">{rule.conditions.length}</span>
                   </p>
                   <p>Created {formatDate(rule.created_at)}</p>
                 </div>
               </div>
               <div className="mt-7 flex flex-wrap gap-2 border-t border-white/10 pt-5">
-                {canManageAutomations ? (
-                  <>
-                    <Button
-                      disabled={mutatingId === rule.id}
-                      onClick={() => handleToggle(rule)}
-                      size="sm"
-                      type="button"
-                      variant="secondary"
-                    >
-                      {rule.is_active ? "Deactivate" : "Activate"}
-                    </Button>
-                    <Button
-                      disabled={mutatingId === `test-${rule.id}`}
-                      onClick={() => handleTest(rule)}
-                      size="sm"
-                      type="button"
-                    >
-                      {mutatingId === `test-${rule.id}`
-                        ? "Testing..."
-                        : "Test rule"}
-                    </Button>
-                    <Button
-                      onClick={() => openEditForm(rule)}
-                      size="sm"
-                      type="button"
-                      variant="secondary"
-                    >
-                      Edit
-                    </Button>
-                    <Button
-                      className="text-red-300! hover:bg-red-500/10! hover:text-red-200!"
-                      disabled={mutatingId === rule.id}
-                      onClick={() => handleDelete(rule)}
-                      size="sm"
-                      type="button"
-                      variant="ghost"
-                    >
-                      Delete
-                    </Button>
-                  </>
-                ) : (
-                  <Badge className="border-white/10 bg-white/10 text-slate-300">
-                    View only
-                  </Badge>
-                )}
+                <Button
+                  disabled={mutatingId === rule.id}
+                  onClick={() => handleToggle(rule)}
+                  size="sm"
+                  type="button"
+                  variant="secondary"
+                >
+                  {rule.status === "active" ? "Disable" : "Enable"}
+                </Button>
+                <Button
+                  disabled={mutatingId === `test-${rule.id}`}
+                  onClick={() => handleTest(rule)}
+                  size="sm"
+                  type="button"
+                >
+                  {mutatingId === `test-${rule.id}` ? "Running..." : "Run test"}
+                </Button>
+                <Button
+                  onClick={() => openEditForm(rule)}
+                  size="sm"
+                  type="button"
+                  variant="secondary"
+                >
+                  Edit
+                </Button>
               </div>
             </Card>
           ))}
         </section>
       )}
 
+      <section className="mt-8">
+        <Card className="border-white/10 bg-[#101214] p-6 text-white">
+          <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+            <div>
+              <Badge className="border-white/15 bg-white/10 text-white">
+                Run history
+              </Badge>
+              <h3 className="mt-4 text-xl font-semibold">Recent executions</h3>
+            </div>
+            <Button
+              onClick={refreshAutomationData}
+              type="button"
+              variant="secondary"
+            >
+              Refresh
+            </Button>
+          </div>
+          <div className="mt-5 space-y-3">
+            {runs.length === 0 ? (
+              <p className="rounded-2xl border border-dashed border-white/10 p-4 text-sm text-slate-400">
+                No automation runs have been recorded yet.
+              </p>
+            ) : (
+              runs.map((run) => (
+                <div
+                  className="flex flex-col justify-between gap-3 rounded-2xl border border-white/10 bg-white/5 p-4 sm:flex-row sm:items-center"
+                  key={run.id}
+                >
+                  <div>
+                    <p className="font-semibold">
+                      {formatLabel(run.trigger_source ?? "manual")}
+                    </p>
+                    <p className="mt-1 text-sm text-slate-400">
+                      Started {formatDate(run.started_at)}
+                    </p>
+                    {run.error_message ? (
+                      <p className="mt-1 text-sm text-red-200">
+                        {run.error_message}
+                      </p>
+                    ) : null}
+                  </div>
+                  <Badge tone={runStatusTone(run.status)}>
+                    {formatLabel(run.status)}
+                  </Badge>
+                </div>
+              ))
+            )}
+          </div>
+        </Card>
+      </section>
+
       {formOpen ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-black/70 px-4 py-4 backdrop-blur-sm sm:items-center">
-          <Card className="w-full max-w-2xl border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/40 sm:p-8">
+          <Card className="w-full max-w-3xl border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/40 sm:p-8">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-sm font-semibold text-slate-500">
-                  {editingRule ? "Edit automation" : "New automation"}
+                  {editingRule ? "Edit workflow" : "New workflow"}
                 </p>
                 <h3 className="mt-2 text-2xl font-semibold">
                   {editingRule ? "Edit Automation" : "Create Automation"}
@@ -663,14 +763,31 @@ export function AutomationsPageClient() {
                       name: event.target.value,
                     }))
                   }
-                  placeholder="Payment follow-up reminder"
+                  placeholder="Low attendance warning"
                   required
                   type="text"
                   value={form.name}
                 />
               </label>
 
-              <div className="grid gap-4 sm:grid-cols-2">
+              <label className="block">
+                <span className="text-sm font-medium text-slate-300">
+                  Description
+                </span>
+                <textarea
+                  className="mt-2 min-h-20 w-full resize-none rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm leading-6 text-white outline-none transition placeholder:text-slate-400 focus:border-teal-400/40 focus:bg-white/15 focus:ring-4 focus:ring-teal-400/10"
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      description: event.target.value,
+                    }))
+                  }
+                  placeholder="Describe what this automation is meant to do."
+                  value={form.description}
+                />
+              </label>
+
+              <div className="grid gap-4 sm:grid-cols-3">
                 <label className="block">
                   <span className="text-sm font-medium text-slate-300">
                     Trigger
@@ -698,114 +815,163 @@ export function AutomationsPageClient() {
                 </label>
                 <label className="block">
                   <span className="text-sm font-medium text-slate-300">
-                    Action
+                    Status
                   </span>
                   <select
                     className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition focus:border-teal-400/40 focus:bg-white/15 focus:ring-4 focus:ring-teal-400/10"
                     onChange={(event) =>
                       setForm((current) => ({
                         ...current,
-                        actionType: event.target.value as AutomationActionType,
+                        status: event.target.value as AutomationRuleStatus,
                       }))
                     }
-                    value={form.actionType}
+                    value={form.status}
                   >
-                    <option className="text-slate-950" value="create_reminder">
-                      create reminder
+                    {(["draft", "active", "inactive"] as AutomationRuleStatus[]).map(
+                      (status) => (
+                        <option
+                          className="text-slate-950"
+                          key={status}
+                          value={status}
+                        >
+                          {formatLabel(status)}
+                        </option>
+                      ),
+                    )}
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="text-sm font-medium text-slate-300">
+                    Mode
+                  </span>
+                  <select
+                    className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition focus:border-teal-400/40 focus:bg-white/15 focus:ring-4 focus:ring-teal-400/10"
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        executionMode: event.target.value as AutomationExecutionMode,
+                      }))
+                    }
+                    value={form.executionMode}
+                  >
+                    <option className="text-slate-950" value="instant">
+                      Instant
+                    </option>
+                    <option className="text-slate-950" value="scheduled">
+                      Scheduled placeholder
                     </option>
                   </select>
                 </label>
               </div>
 
-              <label className="block">
-                <span className="text-sm font-medium text-slate-300">
-                  Reminder title template
-                </span>
-                <input
-                  className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition placeholder:text-slate-400 focus:border-teal-400/40 focus:bg-white/15 focus:ring-4 focus:ring-teal-400/10"
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      reminderTitle: event.target.value,
-                    }))
-                  }
-                  placeholder="Follow up on new payment"
-                  type="text"
-                  value={form.reminderTitle}
-                />
-              </label>
-
-              <label className="block">
-                <span className="text-sm font-medium text-slate-300">
-                  Reminder description template
-                </span>
-                <textarea
-                  className="mt-2 min-h-24 w-full resize-none rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm leading-6 text-white outline-none transition placeholder:text-slate-400 focus:border-teal-400/40 focus:bg-white/15 focus:ring-4 focus:ring-teal-400/10"
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      reminderDescription: event.target.value,
-                    }))
-                  }
-                  placeholder="Internal follow-up generated by automation."
-                  value={form.reminderDescription}
-                />
-              </label>
-
-              <div className="grid gap-4 sm:grid-cols-3">
-                <label className="block">
-                  <span className="text-sm font-medium text-slate-300">
-                    Reminder type
-                  </span>
-                  <select
-                    className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition focus:border-teal-400/40 focus:bg-white/15 focus:ring-4 focus:ring-teal-400/10"
+              <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
+                <p className="font-semibold">Optional condition</p>
+                <div className="mt-4 grid gap-4 sm:grid-cols-3">
+                  <input
+                    className="h-12 rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none placeholder:text-slate-400"
                     onChange={(event) =>
                       setForm((current) => ({
                         ...current,
-                        reminderType: event.target.value as ReminderType,
+                        conditionField: event.target.value,
                       }))
                     }
-                    value={form.reminderType}
+                    placeholder="metadata.score"
+                    value={form.conditionField}
+                  />
+                  <select
+                    className="h-12 rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none"
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        conditionType: event.target.value as AutomationConditionType,
+                      }))
+                    }
+                    value={form.conditionType}
                   >
-                    {reminderTypes.map((type) => (
-                      <option className="text-slate-950" key={type} value={type}>
-                        {formatLabel(type)}
+                    {conditionTypes.map((condition) => (
+                      <option
+                        className="text-slate-950"
+                        key={condition}
+                        value={condition}
+                      >
+                        {formatLabel(condition)}
                       </option>
                     ))}
                   </select>
-                </label>
-                <label className="block">
+                  <input
+                    className="h-12 rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none placeholder:text-slate-400"
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        conditionValue: event.target.value,
+                      }))
+                    }
+                    placeholder="value"
+                    value={form.conditionValue}
+                  />
+                </div>
+              </div>
+
+              <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
+                <p className="font-semibold">Action</p>
+                <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                  <label className="block">
+                    <span className="text-sm font-medium text-slate-300">
+                      Action type
+                    </span>
+                    <select
+                      className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none"
+                      onChange={(event) =>
+                        setForm((current) => ({
+                          ...current,
+                          actionType: event.target.value as AutomationActionType,
+                        }))
+                      }
+                      value={form.actionType}
+                    >
+                      {actionTypes.map((action) => (
+                        <option
+                          className="text-slate-950"
+                          key={action}
+                          value={action}
+                        >
+                          {formatLabel(action)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="block">
+                    <span className="text-sm font-medium text-slate-300">
+                      Title
+                    </span>
+                    <input
+                      className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none placeholder:text-slate-400"
+                      onChange={(event) =>
+                        setForm((current) => ({
+                          ...current,
+                          actionConfigTitle: event.target.value,
+                        }))
+                      }
+                      placeholder="Automation notice"
+                      value={form.actionConfigTitle}
+                    />
+                  </label>
+                </div>
+                <label className="mt-4 block">
                   <span className="text-sm font-medium text-slate-300">
-                    Due offset days
+                    Message
                   </span>
-                  <input
-                    className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition placeholder:text-slate-400 focus:border-teal-400/40 focus:bg-white/15 focus:ring-4 focus:ring-teal-400/10"
-                    min="0"
+                  <textarea
+                    className="mt-2 min-h-20 w-full resize-none rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm leading-6 text-white outline-none placeholder:text-slate-400"
                     onChange={(event) =>
                       setForm((current) => ({
                         ...current,
-                        dueOffsetDays: event.target.value,
+                        actionConfigMessage: event.target.value,
                       }))
                     }
-                    type="number"
-                    value={form.dueOffsetDays}
+                    placeholder="Placeholder message or internal note."
+                    value={form.actionConfigMessage}
                   />
-                </label>
-                <label className="flex items-end gap-3 rounded-2xl border border-white/10 bg-white/10 px-4 py-3">
-                  <input
-                    checked={form.isActive}
-                    className="h-4 w-4 accent-teal-400"
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        isActive: event.target.checked,
-                      }))
-                    }
-                    type="checkbox"
-                  />
-                  <span className="text-sm font-semibold text-white">
-                    Active
-                  </span>
                 </label>
               </div>
 

@@ -112,6 +112,8 @@ function inferSeverity(action: string): AuditLogSeverity {
       "role_changed",
       "session_canceled",
       "billing_profile_updated",
+      "automation_disabled",
+      "automation_failed",
       "feature_limit_warning",
       "subscription_status_changed",
       "workspace_limit_reached",

@@ -182,6 +182,11 @@ const adminActions = [
   "invitation_revoked",
   "demo_workspace_seeded",
   "demo_workspace_reset",
+  "automation_created",
+  "automation_updated",
+  "automation_enabled",
+  "automation_disabled",
+  "automation_failed",
 ];
 
 const communicationActions = [
@@ -631,6 +636,8 @@ function buildOperationalAlerts(params: {
   failedInvites: number;
   failedPaymentLinks: number;
   inactiveAutomations: number;
+  failedAutomationRuns: number;
+  draftAutomations: number;
   overdueAssignments: number;
   pendingReminders: number;
   trainers: number;
@@ -693,6 +700,24 @@ function buildOperationalAlerts(params: {
     });
   }
 
+  if (params.failedAutomationRuns > 0) {
+    alerts.push({
+      description: `${params.failedAutomationRuns} automation run${params.failedAutomationRuns === 1 ? "" : "s"} failed recently.`,
+      key: "failed-automation-runs",
+      severity: "warning",
+      title: "Automation failures detected",
+    });
+  }
+
+  if (params.draftAutomations > 0) {
+    alerts.push({
+      description: `${params.draftAutomations} workflow draft${params.draftAutomations === 1 ? "" : "s"} are waiting to be activated.`,
+      key: "draft-automations",
+      severity: "attention",
+      title: "Automation drafts pending",
+    });
+  }
+
   if (params.failedInvites > 0 || params.failedPaymentLinks > 0) {
     alerts.push({
       description: `${params.failedInvites} failed/revoked invite${params.failedInvites === 1 ? "" : "s"} and ${params.failedPaymentLinks} failed/expired payment link${params.failedPaymentLinks === 1 ? "" : "s"} found.`,
@@ -726,6 +751,8 @@ export async function getOperationsConsoleData(
     trainersCount,
     activeAutomations,
     inactiveAutomations,
+    failedAutomationRuns,
+    draftAutomations,
     upcomingSessions,
     overdueAssignments,
     pendingReminders,
@@ -820,6 +847,18 @@ export async function getOperationsConsoleData(
 
         return getCount(result as CountResult);
       },
+      0,
+    ),
+    optionalOperationQuery(
+      "countFailedAutomationRuns",
+      "automation_runs",
+      () => countExactWithStatus("automation_runs", tenantId, "failed"),
+      0,
+    ),
+    optionalOperationQuery(
+      "countDraftAutomations",
+      "automation_rules",
+      () => countExactWithStatus("automation_rules", tenantId, "draft"),
       0,
     ),
     optionalOperationQuery(
@@ -968,8 +1007,10 @@ export async function getOperationsConsoleData(
     ...limitWarnings,
     ...buildOperationalAlerts({
       activeAutomations,
+      draftAutomations,
       coursesWithoutCohorts,
       failedInvites,
+      failedAutomationRuns,
       failedPaymentLinks,
       inactiveAutomations,
       overdueAssignments,
@@ -1061,6 +1102,13 @@ export async function getOperationsConsoleData(
       label: "Inactive automations",
       tone: inactiveAutomations > 0 ? "slate" : "emerald",
       value: inactiveAutomations.toLocaleString(),
+    },
+    {
+      helper: "Failed automation workflow runs.",
+      key: "failedAutomationRuns",
+      label: "Automation failures",
+      tone: failedAutomationRuns > 0 ? "rose" : "emerald",
+      value: failedAutomationRuns.toLocaleString(),
     },
     {
       helper: "Recent permission-sensitive activity events.",
