@@ -5,8 +5,10 @@ import { refreshWorkspaceUsageSnapshot } from "@/src/lib/usage";
 
 export type DemoWorkspaceStatus = {
   batchId: string | null;
+  conversationThreadCount: number;
   lastLoadedAt: string | null;
   loaded: boolean;
+  needsConversationBackfill: boolean;
   recordCount: number;
 };
 
@@ -214,8 +216,10 @@ function isMissingMetadataColumnError(error: { code?: string; message?: string }
 function getEmptyDemoStatus(): DemoWorkspaceStatus {
   return {
     batchId: null,
+    conversationThreadCount: 0,
     lastLoadedAt: null,
     loaded: false,
+    needsConversationBackfill: false,
     recordCount: 0,
   };
 }
@@ -299,6 +303,167 @@ async function insertTracked<T extends CreatedRecord>(
   return created;
 }
 
+async function getTenantConversationThreadCount(tenantId: string) {
+  const supabase = getSupabaseClient();
+  const { count, error } = await supabase
+    .from("conversation_threads")
+    .select("id", { count: "exact", head: true })
+    .eq("tenant_id", tenantId);
+
+  if (error) {
+    return 0;
+  }
+
+  return count ?? 0;
+}
+
+async function getFirstDemoCourse(tenantId: string) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from("courses")
+    .select("id")
+    .eq("tenant_id", tenantId)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  return (data as CreatedRecord | null) ?? null;
+}
+
+async function getFirstDemoCohort(tenantId: string) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from("cohorts")
+    .select("id,course_id")
+    .eq("tenant_id", tenantId)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  return (data as (CreatedRecord & { course_id: string | null }) | null) ?? null;
+}
+
+async function ensureDemoConversationCourseAndCohort(params: {
+  batchId: string;
+  tenantId: string;
+  userId: string;
+}) {
+  let course = await getFirstDemoCourse(params.tenantId);
+
+  if (!course) {
+    course = await insertTracked("courses", {
+      created_by: params.userId,
+      description: "Demo record - communication foundation course.",
+      slug: `demo-communication-foundation-${params.batchId.slice(0, 8)}`,
+      status: "published",
+      tenant_id: params.tenantId,
+      title: "Demo Communication Foundation",
+    }, params);
+  }
+
+  let cohort = await getFirstDemoCohort(params.tenantId);
+
+  if (!cohort) {
+    cohort = await insertTracked("cohorts", {
+      course_id: course.id,
+      description: "Demo record - communication foundation cohort.",
+      end_date: toDateOnly(60),
+      name: "Demo Communication Cohort",
+      start_date: toDateOnly(0),
+      tenant_id: params.tenantId,
+    }, params) as CreatedRecord & { course_id: string | null };
+    cohort.course_id = course.id;
+  }
+
+  return { cohort, course };
+}
+
+async function seedDemoConversations(params: {
+  batchId: string;
+  summary: DemoSeedSummary;
+  tenantId: string;
+  userId: string;
+}) {
+  const existingThreads = await getTenantConversationThreadCount(params.tenantId);
+
+  if (existingThreads > 0) {
+    return 0;
+  }
+
+  const { cohort, course } = await ensureDemoConversationCourseAndCohort(params);
+  const threadInputs = [
+    {
+      cohortId: null,
+      courseId: null,
+      messages: [
+        "Welcome to the BrightPath Academy demo workspace.",
+        "Use messages for announcements, course discussions, and cohort updates.",
+      ],
+      title: "Welcome to BrightPath Academy",
+      type: "announcement",
+    },
+    {
+      cohortId: null,
+      courseId: course.id,
+      messages: ["Use this thread for NEET Biology concept questions."],
+      title: "NEET Biology discussion",
+      type: "course_discussion",
+    },
+    {
+      cohortId: cohort.id,
+      courseId: cohort.course_id ?? course.id,
+      messages: ["Weekend batch updates and class reminders appear here."],
+      title: "JEE Weekend Batch updates",
+      type: "cohort_discussion",
+    },
+  ];
+
+  for (const threadInput of threadInputs) {
+    const thread = await insertTracked("conversation_threads", {
+      cohort_id: threadInput.cohortId,
+      course_id: threadInput.courseId,
+      created_by: params.userId,
+      description: "Demo record - sample communication thread.",
+      status: "active",
+      tenant_id: params.tenantId,
+      thread_type: threadInput.type,
+      title: threadInput.title,
+    }, params);
+    params.summary.conversations += 1;
+
+    await insertTracked("conversation_participants", {
+      last_read_at: null,
+      role: "owner",
+      tenant_id: params.tenantId,
+      thread_id: thread.id,
+      user_id: params.userId,
+    }, params);
+
+    for (const message of threadInput.messages) {
+      await insertTracked("conversation_messages", {
+        message,
+        message_type:
+          threadInput.type === "announcement" ? "announcement" : "text",
+        metadata_json: { seedBatchId: params.batchId },
+        sender_user_id: params.userId,
+        status: "sent",
+        tenant_id: params.tenantId,
+        thread_id: thread.id,
+      }, params);
+    }
+  }
+
+  return params.summary.conversations;
+}
+
 async function updateWorkspaceBranding(
   tenantId: string,
   params: { batchId: string; userId: string },
@@ -373,12 +538,16 @@ export async function getDemoWorkspaceStatus(
     DemoSeedRecord,
     "created_at" | "seed_batch_id"
   >[];
+  const recordCount = count ?? rows.length;
+  const conversationThreadCount = await getTenantConversationThreadCount(tenantId);
 
   return {
     batchId: rows[0]?.seed_batch_id ?? null,
+    conversationThreadCount,
     lastLoadedAt: rows[0]?.created_at ?? null,
-    loaded: (count ?? rows.length) > 0,
-    recordCount: count ?? rows.length,
+    loaded: recordCount > 0,
+    needsConversationBackfill: recordCount > 0 && conversationThreadCount === 0,
+    recordCount,
   };
 }
 
@@ -388,11 +557,38 @@ export async function seedDemoWorkspace(tenantId: string) {
   const status = await getDemoWorkspaceStatus(tenantId);
 
   if (status.loaded) {
+    const summary = { ...emptySummary };
+
+    if (status.needsConversationBackfill) {
+      const batchId = status.batchId ?? createBatchId();
+      await seedDemoConversations({
+        batchId,
+        summary,
+        tenantId,
+        userId,
+      });
+      await logActivity({
+        action: "demo_workspace_seeded",
+        description: "Backfilled tracked demo message threads.",
+        entityName: "BrightPath Academy demo messages",
+        entityType: "demo_data",
+        metadata: { seedBatchId: batchId, summary },
+        tenantId,
+      });
+
+      return {
+        batchId,
+        alreadyLoaded: false,
+        status: await getDemoWorkspaceStatus(tenantId),
+        summary,
+      };
+    }
+
     return {
       batchId: status.batchId,
       alreadyLoaded: true,
       status,
-      summary: { ...emptySummary },
+      summary,
     };
   }
 
@@ -717,61 +913,12 @@ export async function seedDemoWorkspace(tenantId: string) {
     summary.notifications += 1;
   }
 
-  const threadInputs = [
-    {
-      cohort: null,
-      course: null,
-      message: "Welcome to the BrightPath Academy demo workspace.",
-      title: "Welcome to BrightPath Academy",
-      type: "announcement",
-    },
-    {
-      cohort: null,
-      course: courses[0],
-      message: "Use this thread for NEET Biology concept questions.",
-      title: "NEET Biology discussion",
-      type: "course_discussion",
-    },
-    {
-      cohort: cohorts[1],
-      course: courses[1],
-      message: "Weekend batch updates and class reminders appear here.",
-      title: "JEE Weekend Batch updates",
-      type: "cohort_discussion",
-    },
-  ];
-
-  for (const threadInput of threadInputs) {
-    const thread = await insertTracked("conversation_threads", {
-      cohort_id: threadInput.cohort?.id ?? null,
-      course_id: threadInput.course?.id ?? null,
-      created_by: userId,
-      description: "Demo record - sample communication thread.",
-      status: "active",
-      tenant_id: tenantId,
-      thread_type: threadInput.type,
-      title: threadInput.title,
-    }, { batchId, tenantId, userId });
-    summary.conversations += 1;
-
-    await insertTracked("conversation_participants", {
-      last_read_at: null,
-      role: "owner",
-      tenant_id: tenantId,
-      thread_id: thread.id,
-      user_id: userId,
-    }, { batchId, tenantId, userId });
-
-    await insertTracked("conversation_messages", {
-      message: threadInput.message,
-      message_type: threadInput.type === "announcement" ? "announcement" : "text",
-      metadata_json: { seedBatchId: batchId },
-      sender_user_id: userId,
-      status: "sent",
-      tenant_id: tenantId,
-      thread_id: thread.id,
-    }, { batchId, tenantId, userId });
-  }
+  await seedDemoConversations({
+    batchId,
+    summary,
+    tenantId,
+    userId,
+  });
 
   await refreshWorkspaceUsageSnapshot(tenantId);
   await logActivity({

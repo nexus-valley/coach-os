@@ -496,6 +496,9 @@ export function DashboardPageClient() {
                   {demoStatus.loaded ? "Demo data loaded" : "Not loaded"}
                 </Badge>
                 <span>{demoStatus.recordCount} tracked records</span>
+                {demoStatus.needsConversationBackfill ? (
+                  <span>Message threads need backfill</span>
+                ) : null}
                 {demoStatus.lastLoadedAt ? (
                   <span>Loaded {formatDate(demoStatus.lastLoadedAt)}</span>
                 ) : null}
@@ -510,11 +513,19 @@ export function DashboardPageClient() {
           {canLoadDemo ? (
             <div className="flex flex-col gap-3 sm:flex-row lg:justify-end">
               <Button
-                disabled={demoLoading || demoResetting || demoStatus?.loaded}
+                disabled={
+                  demoLoading ||
+                  demoResetting ||
+                  Boolean(demoStatus?.loaded && !demoStatus.needsConversationBackfill)
+                }
                 onClick={handleLoadDemoData}
                 type="button"
               >
-                {demoLoading ? "Loading..." : "Load Demo Data"}
+                {demoLoading
+                  ? "Loading..."
+                  : demoStatus?.needsConversationBackfill
+                    ? "Backfill Messages"
+                    : "Load Demo Data"}
               </Button>
               <Button
                 disabled={demoLoading || demoResetting || !demoStatus?.loaded}
