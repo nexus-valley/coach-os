@@ -1,5 +1,6 @@
 import { logActivity, type AuditLog } from "@/src/lib/auditLogger";
 import { safeGetUnreadThreadCount } from "@/src/lib/messages";
+import { safeOptionalQuery } from "@/src/lib/optionalQuery";
 import {
   canAccessOperations,
   getMemberRoleForTenant,
@@ -204,33 +205,27 @@ function isRecoverableAnalyticsError(error: { code?: string; message?: string } 
 
 function getCount(result: CountResult) {
   if (result.error) {
-    if (isRecoverableAnalyticsError(result.error)) {
-      return 0;
-    }
-
     throw result.error;
   }
 
   return result.count ?? 0;
 }
 
-async function withAnalyticsFallback<T>(
+async function optionalOperationQuery<T>(
+  helper: string,
+  table: string,
   loader: () => Promise<T>,
   fallback: T,
 ) {
-  try {
-    return await loader();
-  } catch (caught) {
-    if (
-      caught &&
-      typeof caught === "object" &&
-      isRecoverableAnalyticsError(caught as { code?: string; message?: string })
-    ) {
-      return fallback;
-    }
-
-    throw caught;
-  }
+  return safeOptionalQuery(
+    {
+      area: "operations.getOperationsConsoleData",
+      helper,
+      table,
+    },
+    loader,
+    fallback,
+  );
 }
 
 async function getSafeTenantSettings(tenantId: string) {
@@ -719,56 +714,185 @@ export async function getOperationsConsoleData(
     unreadMessageThreads,
     latestActivity,
   ] = await Promise.all([
-    getSafeTenantSettings(tenantId),
-    getSafeTenantSubscription(tenantId),
-    withAnalyticsFallback(() => getTrialStatus(tenantId), emptyTrial),
-    withAnalyticsFallback(
+    optionalOperationQuery<SafeTenantSettings | null>(
+      "getSafeTenantSettings",
+      "tenants",
+      () => getSafeTenantSettings(tenantId),
+      null,
+    ),
+    optionalOperationQuery<SafeTenantSubscription>(
+      "getSafeTenantSubscription",
+      "tenants",
+      () => getSafeTenantSubscription(tenantId),
+      { plan: "free" },
+    ),
+    optionalOperationQuery(
+      "getTrialStatus",
+      "tenants",
+      () => getTrialStatus(tenantId),
+      emptyTrial,
+    ),
+    optionalOperationQuery(
+      "refreshWorkspaceUsageSnapshot",
+      "tenants",
       () => refreshWorkspaceUsageSnapshot(tenantId),
       emptyUsage,
     ),
-    countExactWithStatus("students", tenantId, "active"),
-    countExactWithStatus("courses", tenantId, "published"),
-    countExact("cohorts", tenantId),
-    countExactWithStatus("enrollments", tenantId, "active"),
-    countTrainers(tenantId),
-    supabase
-      .from("automation_rules")
-      .select("id", { count: "exact", head: true })
-      .eq("tenant_id", tenantId)
-      .eq("is_active", true)
-      .then((result) => getCount(result as CountResult)),
-    supabase
-      .from("automation_rules")
-      .select("id", { count: "exact", head: true })
-      .eq("tenant_id", tenantId)
-      .eq("is_active", false)
-      .gte("updated_at", last30Days.toISOString())
-      .then((result) => getCount(result as CountResult)),
-    countUpcomingSessions(tenantId),
-    countOverdueAssignments(tenantId),
-    countPendingReminders(tenantId),
-    countExactWithStatus("notifications", tenantId, "unread"),
-    countExactWithStatus("conversation_threads", tenantId, "active"),
-    supabase
-      .from("conversation_threads")
-      .select("id", { count: "exact", head: true })
-      .eq("tenant_id", tenantId)
-      .eq("thread_type", "announcement")
-      .gte("created_at", last30Days.toISOString())
-      .then((result) => getCount(result as CountResult)),
-    countExactInStatus("team_invitations", tenantId, ["expired", "revoked"], last30Days.toISOString()),
-    countExactInStatus("payment_links", tenantId, [
-      "cancelled",
-      "expired",
-      "failed",
-    ], last30Days.toISOString()),
-    countExactInStatus("invoices", tenantId, ["issued", "overdue"]),
-    withAnalyticsFallback(() => getCoursesAndCohorts(tenantId), {
-      cohorts: [],
-      courses: [],
-    }),
-    withAnalyticsFallback(() => safeGetUnreadThreadCount(tenantId), 0),
-    withAnalyticsFallback(() => getLatestActivity(tenantId), []),
+    optionalOperationQuery(
+      "countActiveStudents",
+      "students",
+      () => countExactWithStatus("students", tenantId, "active"),
+      0,
+    ),
+    optionalOperationQuery(
+      "countPublishedCourses",
+      "courses",
+      () => countExactWithStatus("courses", tenantId, "published"),
+      0,
+    ),
+    optionalOperationQuery(
+      "countCohorts",
+      "cohorts",
+      () => countExact("cohorts", tenantId),
+      0,
+    ),
+    optionalOperationQuery(
+      "countActiveEnrollments",
+      "enrollments",
+      () => countExactWithStatus("enrollments", tenantId, "active"),
+      0,
+    ),
+    optionalOperationQuery(
+      "countTrainers",
+      "tenant_members",
+      () => countTrainers(tenantId),
+      0,
+    ),
+    optionalOperationQuery(
+      "countActiveAutomations",
+      "automation_rules",
+      async () => {
+        const result = await supabase
+          .from("automation_rules")
+          .select("id", { count: "exact", head: true })
+          .eq("tenant_id", tenantId)
+          .eq("is_active", true);
+
+        return getCount(result as CountResult);
+      },
+      0,
+    ),
+    optionalOperationQuery(
+      "countInactiveAutomations",
+      "automation_rules",
+      async () => {
+        const result = await supabase
+          .from("automation_rules")
+          .select("id", { count: "exact", head: true })
+          .eq("tenant_id", tenantId)
+          .eq("is_active", false)
+          .gte("updated_at", last30Days.toISOString());
+
+        return getCount(result as CountResult);
+      },
+      0,
+    ),
+    optionalOperationQuery(
+      "countUpcomingSessions",
+      "sessions",
+      () => countUpcomingSessions(tenantId),
+      0,
+    ),
+    optionalOperationQuery(
+      "countOverdueAssignments",
+      "assignments",
+      () => countOverdueAssignments(tenantId),
+      0,
+    ),
+    optionalOperationQuery(
+      "countPendingReminders",
+      "reminders",
+      () => countPendingReminders(tenantId),
+      0,
+    ),
+    optionalOperationQuery(
+      "countUnreadNotifications",
+      "notifications",
+      () => countExactWithStatus("notifications", tenantId, "unread"),
+      0,
+    ),
+    optionalOperationQuery(
+      "countActiveConversationThreads",
+      "conversation_threads",
+      () => countExactWithStatus("conversation_threads", tenantId, "active"),
+      0,
+    ),
+    optionalOperationQuery(
+      "countRecentAnnouncements",
+      "conversation_threads",
+      async () => {
+        const result = await supabase
+          .from("conversation_threads")
+          .select("id", { count: "exact", head: true })
+          .eq("tenant_id", tenantId)
+          .eq("thread_type", "announcement")
+          .gte("created_at", last30Days.toISOString());
+
+        return getCount(result as CountResult);
+      },
+      0,
+    ),
+    optionalOperationQuery(
+      "countFailedInvites",
+      "team_invitations",
+      () =>
+        countExactInStatus(
+          "team_invitations",
+          tenantId,
+          ["expired", "revoked"],
+          last30Days.toISOString(),
+        ),
+      0,
+    ),
+    optionalOperationQuery(
+      "countFailedPaymentLinks",
+      "payment_links",
+      () =>
+        countExactInStatus(
+          "payment_links",
+          tenantId,
+          ["cancelled", "expired", "failed"],
+          last30Days.toISOString(),
+        ),
+      0,
+    ),
+    optionalOperationQuery(
+      "countUnpaidInvoices",
+      "invoices",
+      () => countExactInStatus("invoices", tenantId, ["issued", "overdue"]),
+      0,
+    ),
+    optionalOperationQuery(
+      "getCoursesAndCohorts",
+      "courses/cohorts",
+      () => getCoursesAndCohorts(tenantId),
+      {
+        cohorts: [],
+        courses: [],
+      },
+    ),
+    optionalOperationQuery(
+      "safeGetUnreadThreadCount",
+      "conversation_messages",
+      () => safeGetUnreadThreadCount(tenantId),
+      0,
+    ),
+    optionalOperationQuery(
+      "getLatestActivity",
+      "audit_logs",
+      () => getLatestActivity(tenantId),
+      [],
+    ),
   ]);
 
   const courseIdsWithCohorts = new Set(
@@ -779,10 +903,22 @@ export async function getOperationsConsoleData(
   const coursesWithoutCohorts = coursesAndCohorts.courses.filter(
     (course) => course.status === "published" && !courseIdsWithCohorts.has(course.id),
   ).length;
+  const [paymentCount, paymentLinkCount] = await Promise.all([
+    optionalOperationQuery(
+      "countPaymentsForReadiness",
+      "payments",
+      () => countExact("payments", tenantId),
+      0,
+    ),
+    optionalOperationQuery(
+      "countPaymentLinksForReadiness",
+      "payment_links",
+      () => countExact("payment_links", tenantId),
+      0,
+    ),
+  ]);
   const paymentReady =
-    (await countExact("payments", tenantId)) > 0 ||
-    (await countExact("payment_links", tenantId)) > 0 ||
-    unpaidInvoices > 0;
+    paymentCount > 0 || paymentLinkCount > 0 || unpaidInvoices > 0;
   const brandingConfigured = Boolean(
     settings?.workspace_display_name?.trim() &&
       settings?.brand_color?.trim() &&

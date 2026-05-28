@@ -14,12 +14,15 @@ import { getCoursesForTenant, type Course } from "@/src/lib/courses";
 import {
   createConversationThread,
   isConversationSystemAvailable,
-  isRecoverableConversationError,
   safeGetConversationThreads,
   type ConversationThreadType,
   type ConversationThreadWithMeta,
 } from "@/src/lib/conversations";
 import { safeGetUnreadThreadCount } from "@/src/lib/messages";
+import {
+  logOptionalQueryFailure,
+  safeOptionalQuery,
+} from "@/src/lib/optionalQuery";
 import { getCurrentTenant, type Tenant } from "@/src/lib/tenant";
 import { getTenantMembers, type TenantMemberWithProfile } from "@/src/lib/team";
 
@@ -52,24 +55,6 @@ const threadTypeOptions: { label: string; value: ConversationThreadType | "all" 
 
 function getErrorMessage(caught: unknown, fallback: string) {
   return caught instanceof Error ? caught.message : fallback;
-}
-
-async function withPassiveFallback<T>(loader: () => Promise<T>, fallback: T) {
-  try {
-    return await loader();
-  } catch (caught) {
-    if (
-      caught &&
-      typeof caught === "object" &&
-      isRecoverableConversationError(
-        caught as { code?: string; message?: string },
-      )
-    ) {
-      return fallback;
-    }
-
-    throw caught;
-  }
 }
 
 function formatDate(value: string) {
@@ -125,21 +110,63 @@ export function MessagesPageClient() {
   ) => {
     const [available, rows, tenantCourses, tenantCohorts, tenantMembers, unread] =
       await Promise.all([
-        isConversationSystemAvailable(currentTenant.id),
-        safeGetConversationThreads(currentTenant.id, { threadType: nextFilter }),
-        withPassiveFallback<Course[]>(
+        safeOptionalQuery(
+          {
+            area: "messages.loadWorkspace",
+            helper: "isConversationSystemAvailable",
+            table: "conversation_threads",
+          },
+          () => isConversationSystemAvailable(currentTenant.id),
+          false,
+        ),
+        safeOptionalQuery<ConversationThreadWithMeta[]>(
+          {
+            area: "messages.loadWorkspace",
+            helper: "safeGetConversationThreads",
+            table: "conversation_threads",
+          },
+          () =>
+            safeGetConversationThreads(currentTenant.id, {
+              threadType: nextFilter,
+            }),
+          [],
+        ),
+        safeOptionalQuery<Course[]>(
+          {
+            area: "messages.loadWorkspace",
+            helper: "getCoursesForTenant",
+            table: "courses",
+          },
           () => getCoursesForTenant(currentTenant.id),
           [],
         ),
-        withPassiveFallback<CohortWithCourse[]>(
+        safeOptionalQuery<CohortWithCourse[]>(
+          {
+            area: "messages.loadWorkspace",
+            helper: "getCohortsForTenant",
+            table: "cohorts",
+          },
           () => getCohortsForTenant(currentTenant.id),
           [],
         ),
-        withPassiveFallback<TenantMemberWithProfile[]>(
+        safeOptionalQuery<TenantMemberWithProfile[]>(
+          {
+            area: "messages.loadWorkspace",
+            helper: "getTenantMembers",
+            table: "tenant_members",
+          },
           () => getTenantMembers(currentTenant.id),
           [],
         ),
-        safeGetUnreadThreadCount(currentTenant.id),
+        safeOptionalQuery(
+          {
+            area: "messages.loadWorkspace",
+            helper: "safeGetUnreadThreadCount",
+            table: "conversation_messages",
+          },
+          () => safeGetUnreadThreadCount(currentTenant.id),
+          0,
+        ),
       ]);
 
     setConversationAvailable(available);
@@ -170,6 +197,14 @@ export function MessagesPageClient() {
         await loadWorkspace(currentTenant);
       } catch (caught) {
         if (active) {
+          logOptionalQueryFailure(
+            {
+              area: "messages.pageLoad",
+              helper: "load",
+              table: "workspace/messages",
+            },
+            caught,
+          );
           setError(getErrorMessage(caught, "Unable to load messages."));
         }
       } finally {

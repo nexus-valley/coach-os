@@ -5,6 +5,7 @@ import {
   getMemberRoleForTenant,
   type MemberRole,
 } from "@/src/lib/permissions";
+import { logOptionalQueryFailure } from "@/src/lib/optionalQuery";
 import type { Student } from "@/src/lib/students";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 import { getCurrentTrainerScope } from "@/src/lib/trainerAssignments";
@@ -371,6 +372,20 @@ async function attachThreadMeta(
       if (!isRecoverableConversationError(result.error)) {
         throw result.error;
       }
+
+      logOptionalQueryFailure(
+        {
+          area: "conversations.attachThreadMeta",
+          helper: "relatedEntityPreload",
+          table:
+            result === coursesResult
+              ? "courses"
+              : result === cohortsResult
+                ? "cohorts"
+                : "students",
+        },
+        result.error,
+      );
     }
   }
 
@@ -398,8 +413,19 @@ async function attachThreadMeta(
     ? []
     : ((participantsResult.data ?? []) as { thread_id: string }[]);
 
-  if (participantsResult.error && !isRecoverableConversationError(participantsResult.error)) {
-    throw participantsResult.error;
+  if (participantsResult.error) {
+    if (!isRecoverableConversationError(participantsResult.error)) {
+      throw participantsResult.error;
+    }
+
+    logOptionalQueryFailure(
+      {
+        area: "conversations.attachThreadMeta",
+        helper: "participantCounts",
+        table: "conversation_participants",
+      },
+      participantsResult.error,
+    );
   }
 
   for (const row of participantRows) {
@@ -413,8 +439,19 @@ async function attachThreadMeta(
         thread_id: string;
       })[]);
 
-  if (messagesResult.error && !isRecoverableConversationError(messagesResult.error)) {
-    throw messagesResult.error;
+  if (messagesResult.error) {
+    if (!isRecoverableConversationError(messagesResult.error)) {
+      throw messagesResult.error;
+    }
+
+    logOptionalQueryFailure(
+      {
+        area: "conversations.attachThreadMeta",
+        helper: "recentMessages",
+        table: "conversation_messages",
+      },
+      messagesResult.error,
+    );
   }
 
   for (const message of messageRows) {
@@ -434,6 +471,17 @@ async function attachThreadMeta(
     !isRecoverableConversationError(ownParticipantsResult.error)
   ) {
     throw ownParticipantsResult.error;
+  }
+
+  if (ownParticipantsResult.error) {
+    logOptionalQueryFailure(
+      {
+        area: "conversations.attachThreadMeta",
+        helper: "ownParticipantReadState",
+        table: "conversation_participants",
+      },
+      ownParticipantsResult.error,
+    );
   }
 
   const ownParticipantRows = ownParticipantsResult.error
@@ -540,6 +588,14 @@ export async function getConversationThreads(
 
   if (error) {
     if (isMissingTableError(error)) {
+      logOptionalQueryFailure(
+        {
+          area: "conversations.getConversationThreads",
+          helper: "conversationThreadSelect",
+          table: "conversation_threads",
+        },
+        error,
+      );
       return [];
     }
 
@@ -559,13 +615,37 @@ export async function isConversationSystemAvailable(tenantId: string) {
       .eq("tenant_id", tenantId)
       .limit(1);
 
-    return !error || !isRecoverableConversationError(error);
+    if (error) {
+      if (isRecoverableConversationError(error)) {
+        logOptionalQueryFailure(
+          {
+            area: "conversations.isConversationSystemAvailable",
+            helper: "conversationThreadHead",
+            table: "conversation_threads",
+          },
+          error,
+        );
+        return false;
+      }
+
+      throw error;
+    }
+
+    return true;
   } catch (caught) {
     if (
       caught &&
       typeof caught === "object" &&
       isRecoverableConversationError(caught as { code?: string; message?: string })
     ) {
+      logOptionalQueryFailure(
+        {
+          area: "conversations.isConversationSystemAvailable",
+          helper: "conversationThreadHead",
+          table: "conversation_threads",
+        },
+        caught,
+      );
       return false;
     }
 
@@ -585,6 +665,14 @@ export async function safeGetConversationThreads(
       typeof caught === "object" &&
       isRecoverableConversationError(caught as { code?: string; message?: string })
     ) {
+      logOptionalQueryFailure(
+        {
+          area: "conversations.safeGetConversationThreads",
+          helper: "getConversationThreads",
+          table: "conversation_threads",
+        },
+        caught,
+      );
       return [];
     }
 

@@ -9,6 +9,7 @@ import {
   createNotificationsForUsers,
   type NotificationSeverity,
 } from "@/src/lib/notifications";
+import { logOptionalQueryFailure } from "@/src/lib/optionalQuery";
 import { getMemberRoleForTenant } from "@/src/lib/permissions";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 
@@ -381,6 +382,14 @@ export async function getUnreadThreadCount(tenantId: string) {
 
   if (participantsResult.error) {
     if (isMissingTableError(participantsResult.error)) {
+      logOptionalQueryFailure(
+        {
+          area: "messages.getUnreadThreadCount",
+          helper: "participantReadState",
+          table: "conversation_participants",
+        },
+        participantsResult.error,
+      );
       return 0;
     }
 
@@ -407,6 +416,14 @@ export async function getUnreadThreadCount(tenantId: string) {
 
   if (messagesResult.error) {
     if (isMissingTableError(messagesResult.error)) {
+      logOptionalQueryFailure(
+        {
+          area: "messages.getUnreadThreadCount",
+          helper: "unreadMessageSelect",
+          table: "conversation_messages",
+        },
+        messagesResult.error,
+      );
       return 0;
     }
 
@@ -447,6 +464,14 @@ export async function safeGetUnreadThreadCount(tenantId: string) {
       typeof caught === "object" &&
       isRecoverableConversationError(caught as { code?: string; message?: string })
     ) {
+      logOptionalQueryFailure(
+        {
+          area: "messages.safeGetUnreadThreadCount",
+          helper: "getUnreadThreadCount",
+          table: "conversation_messages",
+        },
+        caught,
+      );
       return 0;
     }
 

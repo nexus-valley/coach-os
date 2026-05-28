@@ -19,6 +19,7 @@ import {
   type OperationsStatus,
   type OperationsUsageItem,
 } from "@/src/lib/operations";
+import { logOptionalQueryFailure } from "@/src/lib/optionalQuery";
 import { getCurrentTenant, type Tenant } from "@/src/lib/tenant";
 
 const metricToneClass: Record<OperationsMetric["tone"], string> = {
@@ -274,6 +275,15 @@ export function OperationsPageClient() {
         if (!active) {
           return;
         }
+
+        logOptionalQueryFailure(
+          {
+            area: "operations.pageLoad",
+            helper: "loadOperations",
+            table: "operations",
+          },
+          caught,
+        );
 
         const message = getErrorMessage(
           caught,
