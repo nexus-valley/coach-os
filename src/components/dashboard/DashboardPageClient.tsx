@@ -442,6 +442,11 @@ export function DashboardPageClient() {
       label: "Active Automations",
       value: String(metrics.activeAutomations),
     },
+    {
+      detail: "Automation runs that need workflow review",
+      label: "Automation Failures",
+      value: String(metrics.failedAutomationRuns),
+    },
   ];
   const canLoadDemo = currentRole === "owner" || currentRole === "admin";
   const canViewUsage = currentRole === "owner" || currentRole === "admin";

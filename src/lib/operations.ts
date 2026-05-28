@@ -133,6 +133,12 @@ type CohortRow = {
   name: string;
 };
 
+type AutomationRunSignal = {
+  error_message: string | null;
+  started_at: string;
+  trigger_source: string | null;
+};
+
 type SafeTenantSettings = {
   brand_color?: string | null;
   support_email?: string | null;
@@ -383,6 +389,71 @@ async function countExactWithStatus(
     .eq("status", status);
 
   return getCount(result as CountResult);
+}
+
+async function countExactWithStatusSince(
+  table: string,
+  tenantId: string,
+  status: string,
+  since: string,
+) {
+  const supabase = getSupabaseClient();
+  const result = await supabase
+    .from(table)
+    .select("id", { count: "exact", head: true })
+    .eq("tenant_id", tenantId)
+    .eq("status", status)
+    .gte("started_at", since);
+
+  return getCount(result as CountResult);
+}
+
+async function getAutomationRunSignals(tenantId: string, since: string) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from("automation_runs")
+    .select("trigger_source,status,error_message,started_at")
+    .eq("tenant_id", tenantId)
+    .gte("started_at", since)
+    .order("started_at", { ascending: false })
+    .limit(100);
+
+  if (error) {
+    if (isRecoverableAnalyticsError(error)) {
+      return {
+        latestFailure: null,
+        topTrigger: null,
+      };
+    }
+
+    throw error;
+  }
+
+  const runs = (data ?? []) as (AutomationRunSignal & { status: string })[];
+  const triggerCounts = new Map<string, number>();
+
+  for (const run of runs) {
+    if (!run.trigger_source) {
+      continue;
+    }
+
+    triggerCounts.set(run.trigger_source, (triggerCounts.get(run.trigger_source) ?? 0) + 1);
+  }
+
+  const topTrigger = Array.from(triggerCounts.entries()).sort(
+    (left, right) => right[1] - left[1],
+  )[0];
+
+  return {
+    latestFailure:
+      runs.find((run) => run.status === "failed") ?? null,
+    topTrigger: topTrigger
+      ? {
+          count: topTrigger[1],
+          trigger: topTrigger[0],
+        }
+      : null,
+  };
 }
 
 async function countExactInStatus(
@@ -738,6 +809,8 @@ export async function getOperationsConsoleData(
   const now = new Date();
   const last30Days = new Date(now);
   last30Days.setDate(now.getDate() - 30);
+  const last24Hours = new Date(now);
+  last24Hours.setDate(now.getDate() - 1);
 
   const [
     settings,
@@ -752,6 +825,9 @@ export async function getOperationsConsoleData(
     activeAutomations,
     inactiveAutomations,
     failedAutomationRuns,
+    automationRunsLast24Hours,
+    failedAutomationRunsLast24Hours,
+    automationRunSignals,
     draftAutomations,
     upcomingSessions,
     overdueAssignments,
@@ -854,6 +930,38 @@ export async function getOperationsConsoleData(
       "automation_runs",
       () => countExactWithStatus("automation_runs", tenantId, "failed"),
       0,
+    ),
+    optionalOperationQuery(
+      "countAutomationRunsLast24Hours",
+      "automation_runs",
+      async () => {
+        const result = await supabase
+          .from("automation_runs")
+          .select("id", { count: "exact", head: true })
+          .eq("tenant_id", tenantId)
+          .gte("started_at", last24Hours.toISOString());
+
+        return getCount(result as CountResult);
+      },
+      0,
+    ),
+    optionalOperationQuery(
+      "countFailedAutomationRunsLast24Hours",
+      "automation_runs",
+      () =>
+        countExactWithStatusSince(
+          "automation_runs",
+          tenantId,
+          "failed",
+          last24Hours.toISOString(),
+        ),
+      0,
+    ),
+    optionalOperationQuery(
+      "getAutomationRunSignals",
+      "automation_runs",
+      () => getAutomationRunSignals(tenantId, last24Hours.toISOString()),
+      { latestFailure: null, topTrigger: null },
     ),
     optionalOperationQuery(
       "countDraftAutomations",
@@ -1020,6 +1128,17 @@ export async function getOperationsConsoleData(
       upcomingSessions,
     }),
   ];
+
+  if (automationRunSignals.latestFailure) {
+    alerts.push({
+      description:
+        automationRunSignals.latestFailure.error_message ??
+        "A workflow failed in the last 24 hours.",
+      key: "latest-automation-failure",
+      severity: "warning",
+      title: "Latest automation failure",
+    });
+  }
   const permissionSignals = latestActivity.filter((item) =>
     permissionSensitiveActions.includes(item.action),
   );
@@ -1080,6 +1199,22 @@ export async function getOperationsConsoleData(
       tone: activeAutomations > 0 ? "cyan" : "orange",
       value: activeAutomations.toLocaleString(),
     },
+    {
+      helper: "Automation workflow runs recorded in the last 24 hours.",
+      key: "automationRuns24h",
+      label: "Automation runs 24h",
+      tone: automationRunsLast24Hours > 0 ? "cyan" : "slate",
+      value: automationRunsLast24Hours.toLocaleString(),
+    },
+    {
+      helper: "Most common automation trigger in the last 24 hours.",
+      key: "automationTopTrigger",
+      label: "Top trigger 24h",
+      tone: automationRunSignals.topTrigger ? "blue" : "slate",
+      value: automationRunSignals.topTrigger
+        ? `${automationRunSignals.topTrigger.trigger} (${automationRunSignals.topTrigger.count})`
+        : "None",
+    },
   ];
   const securitySignals: OperationsMetric[] = [
     {
@@ -1109,6 +1244,13 @@ export async function getOperationsConsoleData(
       label: "Automation failures",
       tone: failedAutomationRuns > 0 ? "rose" : "emerald",
       value: failedAutomationRuns.toLocaleString(),
+    },
+    {
+      helper: "Failed automation workflow runs in the last 24 hours.",
+      key: "failedAutomationRuns24h",
+      label: "Automation failures 24h",
+      tone: failedAutomationRunsLast24Hours > 0 ? "rose" : "emerald",
+      value: failedAutomationRunsLast24Hours.toLocaleString(),
     },
     {
       helper: "Recent permission-sensitive activity events.",

@@ -1,4 +1,5 @@
 import { logActivity } from "@/src/lib/auditLogger";
+import { runAutomationTrigger } from "@/src/lib/automationTriggers";
 import type { Course } from "@/src/lib/courses";
 import type { CohortWithCourse } from "@/src/lib/cohorts";
 import {
@@ -635,6 +636,18 @@ export async function createSession(input: SessionInput) {
     tenantId: session.tenant_id,
   });
   await notifySessionUpdated(session);
+  await runAutomationTrigger("session_scheduled", {
+    entityId: session.id,
+    entityType: "session",
+    metadata: {
+      cohort_id: session.cohort_id,
+      course_id: session.course_id,
+      delivery_mode: session.delivery_mode,
+      scheduled_at: session.scheduled_start_at,
+      session_title: session.title,
+    },
+    tenantId: session.tenant_id,
+  });
 
   return session;
 }

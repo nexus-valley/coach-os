@@ -1,4 +1,5 @@
 import { logActivity } from "@/src/lib/auditLogger";
+import { runAutomationTrigger } from "@/src/lib/automationTriggers";
 import { requireTenantPermission } from "@/src/lib/permissions";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 import { getCurrentTrainerScope } from "@/src/lib/trainerAssignments";
@@ -165,6 +166,17 @@ export async function createStudent(input: StudentInput) {
     tenantId: student.tenant_id,
   });
   await refreshWorkspaceUsageSnapshot(student.tenant_id);
+  await runAutomationTrigger("student_created", {
+    entityId: student.id,
+    entityType: "student",
+    metadata: {
+      email: student.email,
+      phone: student.phone,
+      source: student.source,
+      student_name: student.full_name,
+    },
+    tenantId: student.tenant_id,
+  });
 
   return student;
 }

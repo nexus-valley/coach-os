@@ -114,6 +114,8 @@ function inferSeverity(action: string): AuditLogSeverity {
       "billing_profile_updated",
       "automation_disabled",
       "automation_failed",
+      "automation_action_skipped",
+      "automation_duplicate_skipped",
       "feature_limit_warning",
       "subscription_status_changed",
       "workspace_limit_reached",

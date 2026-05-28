@@ -2,6 +2,7 @@ import type { Course } from "@/src/lib/courses";
 import type { Enrollment } from "@/src/lib/enrollments";
 import type { Student } from "@/src/lib/students";
 import { logActivity } from "@/src/lib/auditLogger";
+import { runAutomationTrigger } from "@/src/lib/automationTriggers";
 import { requireTenantPermission } from "@/src/lib/permissions";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 
@@ -187,6 +188,21 @@ export async function createPayment(input: CreatePaymentInput) {
     },
     tenantId: payment.tenant_id,
   });
+
+  if (payment.status === "completed") {
+    await runAutomationTrigger("payment_received", {
+      entityId: payment.id,
+      entityType: "payment",
+      metadata: {
+        amount: payment.amount,
+        course_id: payment.course_id,
+        currency: payment.currency,
+        status: payment.status,
+        student_id: payment.student_id,
+      },
+      tenantId: payment.tenant_id,
+    });
+  }
 
   return payment;
 }

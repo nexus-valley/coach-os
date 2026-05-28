@@ -1,4 +1,5 @@
 import { logActivity } from "@/src/lib/auditLogger";
+import { queueCommunicationLog } from "@/src/lib/communication";
 import {
   type AutomationActionType,
   type AutomationRule,
@@ -6,7 +7,11 @@ import {
   type AutomationRuleCondition,
   type AutomationRun,
 } from "@/src/lib/automations";
-import { createNotificationForTenantRoles } from "@/src/lib/notifications";
+import {
+  createNotificationForTenantRoles,
+  createNotificationsForUsers,
+  getTenantMemberUserIds,
+} from "@/src/lib/notifications";
 import { createReminder } from "@/src/lib/reminders";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 
@@ -23,6 +28,8 @@ export type AutomationExecutionResult = {
   run: AutomationRun | null;
   status: "failed" | "skipped" | "success";
 };
+
+const duplicateWindowMs = 5 * 60 * 1000;
 
 function getValueAtPath(source: Record<string, unknown>, path: string) {
   return path.split(".").reduce<unknown>((current, key) => {
@@ -102,6 +109,7 @@ export function evaluateAutomationConditions(
 async function createRun(
   rule: AutomationRule,
   context: AutomationTriggerContext,
+  status: AutomationRun["status"] = "queued",
 ) {
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
@@ -111,7 +119,7 @@ async function createRun(
       entity_type: context.entityType ?? null,
       metadata_json: context.metadata ?? {},
       rule_id: rule.id,
-      status: "queued",
+      status,
       tenant_id: context.tenantId,
       trigger_source: context.triggerSource ?? rule.trigger_type,
     })
@@ -125,6 +133,44 @@ async function createRun(
   }
 
   return data as AutomationRun;
+}
+
+async function getCurrentUserId() {
+  const supabase = getSupabaseClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  return user?.id ?? null;
+}
+
+async function hasRecentDuplicateRun(
+  rule: AutomationRule,
+  context: AutomationTriggerContext,
+) {
+  if (!context.entityId || !context.entityType) {
+    return false;
+  }
+
+  const supabase = getSupabaseClient();
+  const since = new Date(Date.now() - duplicateWindowMs).toISOString();
+  const { data, error } = await supabase
+    .from("automation_runs")
+    .select("id")
+    .eq("tenant_id", context.tenantId)
+    .eq("rule_id", rule.id)
+    .eq("trigger_source", context.triggerSource ?? rule.trigger_type)
+    .eq("entity_type", context.entityType)
+    .eq("entity_id", context.entityId)
+    .gte("started_at", since)
+    .in("status", ["queued", "success", "failed"])
+    .limit(1);
+
+  if (error) {
+    return false;
+  }
+
+  return (data ?? []).length > 0;
 }
 
 async function updateRun(
@@ -170,6 +216,66 @@ async function insertRunLog(
   });
 }
 
+async function insertAutomationCommunicationLog(params: {
+  action: AutomationRuleAction;
+  context: AutomationTriggerContext;
+  message: string;
+  status?: "queued" | "skipped";
+  subject: string;
+  channel: "email" | "whatsapp";
+}) {
+  const userId = await getCurrentUserId();
+
+  return queueCommunicationLog({
+    channel: params.channel,
+    message: params.message,
+    metadata: {
+      automationActionId: params.action.id,
+      automationRuleId: params.action.rule_id,
+      entityId: params.context.entityId ?? null,
+      entityType: params.context.entityType ?? null,
+      triggerSource: params.context.triggerSource ?? null,
+    },
+    status: params.status ?? "queued",
+    subject: params.subject,
+    target:
+      typeof params.action.config_json.target === "string"
+        ? params.action.config_json.target
+        : null,
+    tenantId: params.context.tenantId,
+    type: "automation_placeholder",
+    userId,
+  });
+}
+
+async function getConfiguredNotificationUserIds(
+  action: AutomationRuleAction,
+  tenantId: string,
+) {
+  const configuredUserId =
+    typeof action.config_json.user_id === "string"
+      ? action.config_json.user_id
+      : null;
+
+  if (!configuredUserId) {
+    return null;
+  }
+
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from("tenant_members")
+    .select("user_id")
+    .eq("tenant_id", tenantId)
+    .eq("user_id", configuredUserId)
+    .maybeSingle();
+
+  if (error || !data) {
+    return null;
+  }
+
+  return [configuredUserId];
+}
+
 async function executeAction(
   action: AutomationRuleAction,
   rule: AutomationRule,
@@ -185,23 +291,53 @@ async function executeAction(
       : "Automation placeholder executed inside CoachFort.";
 
   if (action.action_type === "create_notification") {
-    await createNotificationForTenantRoles({
-      actionUrl: "/app/automations",
-      entityId: context.entityId ?? undefined,
-      entityType: context.entityType ?? "automation",
-      message,
-      metadata: {
-        automationRuleId: rule.id,
-        triggerType: rule.trigger_type,
-      },
-      roles: ["owner", "admin"],
-      severity: "info",
-      tenantId: context.tenantId,
-      title,
-      type: "system_notice",
-    });
+    const configuredUserIds = await getConfiguredNotificationUserIds(
+      action,
+      context.tenantId,
+    );
+    const userIds =
+      configuredUserIds ?? (await getTenantMemberUserIds(context.tenantId, [
+        "owner",
+        "admin",
+      ]));
 
-    return "Notification created.";
+    const notifications = configuredUserIds
+      ? await createNotificationsForUsers({
+          actionUrl: "/app/automations",
+          entityId: context.entityId ?? undefined,
+          entityType: context.entityType ?? "automation",
+          message,
+          metadata: {
+            automationActionId: action.id,
+            automationRuleId: rule.id,
+            triggerType: rule.trigger_type,
+          },
+          severity: "info",
+          tenantId: context.tenantId,
+          title,
+          type: "system_notice",
+          userIds,
+        })
+      : await createNotificationForTenantRoles({
+          actionUrl: "/app/automations",
+          entityId: context.entityId ?? undefined,
+          entityType: context.entityType ?? "automation",
+          message,
+          metadata: {
+            automationActionId: action.id,
+            automationRuleId: rule.id,
+            triggerType: rule.trigger_type,
+          },
+          roles: ["owner", "admin"],
+          severity: "info",
+          tenantId: context.tenantId,
+          title,
+          type: "system_notice",
+        });
+
+    return notifications.length > 0
+      ? "Notification created."
+      : "Notification output skipped by RLS or missing notification support.";
   }
 
   if (action.action_type === "create_reminder") {
@@ -209,15 +345,47 @@ async function executeAction(
     const offsetDays = Number(action.config_json.due_offset_days ?? 1);
     dueAt.setDate(dueAt.getDate() + Math.max(0, offsetDays));
 
-    await createReminder({
-      description: message,
-      due_at: dueAt.toISOString(),
-      reminder_type: "general",
-      tenant_id: context.tenantId,
-      title,
-    });
+    try {
+      await createReminder({
+        description: message,
+        due_at: dueAt.toISOString(),
+        reminder_type: "general",
+        tenant_id: context.tenantId,
+        title,
+      });
+    } catch {
+      return "Reminder output skipped by RLS or missing reminder support.";
+    }
 
     return "Reminder created.";
+  }
+
+  if (action.action_type === "send_email_placeholder") {
+    const log = await insertAutomationCommunicationLog({
+      action,
+      channel: "email",
+      context,
+      message,
+      subject: title,
+    });
+
+    return log
+      ? "Email placeholder queued."
+      : "Email placeholder skipped because communication logs are unavailable.";
+  }
+
+  if (action.action_type === "send_whatsapp_placeholder") {
+    const log = await insertAutomationCommunicationLog({
+      action,
+      channel: "whatsapp",
+      context,
+      message,
+      subject: title,
+    });
+
+    return log
+      ? "WhatsApp placeholder queued."
+      : "WhatsApp placeholder skipped because communication logs are unavailable.";
   }
 
   const placeholderLabels: Record<AutomationActionType, string> = {
@@ -235,14 +403,54 @@ async function executeAction(
 export async function executeAutomationActions(
   rule: AutomationRule,
   context: AutomationTriggerContext,
+  run?: AutomationRun,
 ) {
   const logs: string[] = [];
 
   for (const action of rule.actions) {
     try {
-      logs.push(await executeAction(action, rule, context));
+      const actionLog = await executeAction(action, rule, context);
+      logs.push(actionLog);
+
+      if (run) {
+        await insertRunLog(run, "info", actionLog, {
+          actionId: action.id,
+          actionType: action.action_type,
+        });
+      }
+
+      await logActivity({
+        action:
+          action.action_type === "create_notification"
+            ? "automation_notification_created"
+            : action.action_type === "send_email_placeholder" ||
+                action.action_type === "send_whatsapp_placeholder"
+              ? "automation_placeholder_queued"
+              : "automation_action_executed",
+        description: actionLog,
+        entityId: rule.id,
+        entityName: rule.name,
+        entityType: "automation",
+        metadata: {
+          actionId: action.id,
+          actionType: action.action_type,
+          entityId: context.entityId ?? null,
+          entityType: context.entityType ?? null,
+          runId: run?.id ?? null,
+        },
+        tenantId: context.tenantId,
+      });
     } catch (caught) {
-      logs.push(caught instanceof Error ? caught.message : "Action failed.");
+      const message = caught instanceof Error ? caught.message : "Action failed.";
+      logs.push(message);
+
+      if (run) {
+        await insertRunLog(run, "error", message, {
+          actionId: action.id,
+          actionType: action.action_type,
+        });
+      }
+
       throw caught;
     }
   }
@@ -257,6 +465,43 @@ export async function runAutomationRule(
   let run: AutomationRun | null = null;
 
   try {
+    if (await hasRecentDuplicateRun(rule, context)) {
+      run = await createRun(rule, context, "skipped");
+      await insertRunLog(
+        run,
+        "warning",
+        "Duplicate automation trigger skipped within the debounce window.",
+        {
+          debounceWindowMinutes: duplicateWindowMs / 60000,
+          entityId: context.entityId ?? null,
+          entityType: context.entityType ?? null,
+          triggerSource: context.triggerSource ?? rule.trigger_type,
+        },
+      );
+      run = await updateRun(run, "skipped");
+      await logActivity({
+        action: "automation_duplicate_skipped",
+        description: `Skipped duplicate automation ${rule.name}.`,
+        entityId: rule.id,
+        entityName: rule.name,
+        entityType: "automation",
+        metadata: {
+          entityId: context.entityId ?? null,
+          entityType: context.entityType ?? null,
+          runId: run.id,
+          triggerType: rule.trigger_type,
+        },
+        severity: "warning",
+        tenantId: context.tenantId,
+      });
+
+      return {
+        logs: ["Duplicate automation trigger skipped."],
+        run,
+        status: "skipped",
+      };
+    }
+
     run = await createRun(rule, context);
     const conditionResult = evaluateAutomationConditions(
       rule.conditions,
@@ -270,6 +515,19 @@ export async function runAutomationRule(
         conditionResult.skippedReason ?? "Automation conditions did not pass.",
       );
       const skippedRun = await updateRun(run, "skipped");
+      await logActivity({
+        action: "automation_action_skipped",
+        description: conditionResult.skippedReason ?? "Automation skipped.",
+        entityId: rule.id,
+        entityName: rule.name,
+        entityType: "automation",
+        metadata: {
+          runId: run.id,
+          triggerType: rule.trigger_type,
+        },
+        severity: "warning",
+        tenantId: context.tenantId,
+      });
 
       return {
         logs: [conditionResult.skippedReason ?? "Skipped."],
@@ -278,7 +536,7 @@ export async function runAutomationRule(
       };
     }
 
-    const logs = await executeAutomationActions(rule, context);
+    const logs = await executeAutomationActions(rule, context, run);
     const successRun = await updateRun(run, "success");
     await insertRunLog(run, "info", "Automation executed successfully.", {
       actionCount: rule.actions.length,

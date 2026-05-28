@@ -37,11 +37,15 @@ add column if not exists metadata_json jsonb not null default '{}'::jsonb;
 
 update public.automation_rules
 set
-  status = coalesce(status, case when is_active then 'active' else 'inactive' end),
+  status = case
+    when is_active = false then 'inactive'
+    else coalesce(status, 'active')
+  end,
   execution_mode = coalesce(execution_mode, 'instant'),
   metadata_json = coalesce(metadata_json, '{}'::jsonb),
   config = coalesce(config, '{}'::jsonb)
 where status is null
+   or (is_active = false and status = 'active')
    or execution_mode is null
    or metadata_json is null
    or config is null;
@@ -287,4 +291,3 @@ for all
 to authenticated
 using (public.has_tenant_role(tenant_id, auth.uid(), array['owner', 'admin']))
 with check (public.has_tenant_role(tenant_id, auth.uid(), array['owner', 'admin']));
-

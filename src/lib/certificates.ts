@@ -1,4 +1,5 @@
 import { logActivity } from "@/src/lib/auditLogger";
+import { runAutomationTrigger } from "@/src/lib/automationTriggers";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 
 export type CourseCompletionStatus = {
@@ -201,6 +202,18 @@ export async function generateCertificateData(
     metadata: {
       courseTitle: certificate.course_title,
       studentName: certificate.student_name,
+    },
+    tenantId,
+  });
+  await runAutomationTrigger("certificate_issued", {
+    entityId: certificate.enrollment_id,
+    entityType: "certificate",
+    metadata: {
+      certificate_number: certificate.certificate_number,
+      course_id: enrollment.course_id,
+      course_title: certificate.course_title,
+      student_id: enrollment.student_id,
+      student_name: certificate.student_name,
     },
     tenantId,
   });

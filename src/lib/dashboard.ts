@@ -110,6 +110,7 @@ export type DashboardMetrics = {
   conversations: DashboardConversationSummary;
   courseRevenue: DashboardCourseRevenue[];
   paymentStatusSummary: Record<PaymentStatus, number>;
+  failedAutomationRuns: number;
   pendingPayments: number;
   pendingRemindersDue: number;
   recentPayments: DashboardRecentPayment[];
@@ -683,6 +684,7 @@ export async function getDashboardMetrics(
         failed: 0,
         pending: 0,
       },
+      failedAutomationRuns: 0,
       pendingPayments: 0,
       pendingRemindersDue: 0,
       recentPayments: [],
@@ -821,6 +823,7 @@ export async function getDashboardMetrics(
     conversations,
     courseRevenue: buildCourseRevenue(payments, coursesById),
     paymentStatusSummary: buildPaymentSummary(payments),
+    failedAutomationRuns: automationCounts.failedRuns,
     pendingPayments: payments.filter((payment) => payment.status === "pending")
       .length,
     pendingRemindersDue: reminderCounts.pendingDueTodayOrOverdue,

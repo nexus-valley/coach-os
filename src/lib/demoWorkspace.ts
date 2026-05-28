@@ -586,7 +586,7 @@ async function seedDemoAutomations(params: {
         rule_id: rule.id,
         sort_order: 0,
         tenant_id: params.tenantId,
-        value_json: { field: "metadata.attendancePercent", value: 75 },
+        value_json: { field: "metadata.attendance_percent", value: 75 },
       }, params);
     }
 
@@ -616,6 +616,42 @@ async function seedDemoAutomations(params: {
       run_id: run.id,
       tenant_id: params.tenantId,
     }, params);
+
+    if (index === 0) {
+      await insertTracked("notifications", {
+        action_url: "/app/automations",
+        entity_id: rule.id,
+        entity_type: "automation",
+        message: "Demo automation output: a new student workflow notification was created.",
+        metadata_json: {
+          automationRuleId: rule.id,
+          seedBatchId: params.batchId,
+        },
+        severity: "info",
+        status: "unread",
+        tenant_id: params.tenantId,
+        title: "Demo automation notification",
+        type: "system_notice",
+        user_id: params.userId,
+      }, params);
+      params.summary.notifications += 1;
+    }
+
+    if (index === 2) {
+      await insertTracked("communication_logs", {
+        channel: "email",
+        message: "Demo automation placeholder queued without external email delivery.",
+        metadata_json: {
+          automationRuleId: rule.id,
+          seedBatchId: params.batchId,
+        },
+        status: "queued",
+        subject: "Demo automation email placeholder",
+        tenant_id: params.tenantId,
+        type: "automation_placeholder",
+        user_id: params.userId,
+      }, params);
+    }
 
     params.summary.automations += 1;
   }

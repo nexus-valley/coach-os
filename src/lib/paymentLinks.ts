@@ -2,6 +2,7 @@ import type { Course } from "@/src/lib/courses";
 import type { Enrollment } from "@/src/lib/enrollments";
 import type { Student } from "@/src/lib/students";
 import { logActivity } from "@/src/lib/auditLogger";
+import { runAutomationTrigger } from "@/src/lib/automationTriggers";
 import { requireTenantPermission } from "@/src/lib/permissions";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 import {
@@ -436,18 +437,22 @@ export async function convertPaymentLinkToPayment(
   }
 
   const paidAt = new Date().toISOString();
-  const { error: paymentError } = await supabase.from("payments").insert({
-    amount: link.amount,
-    course_id: link.course_id,
-    currency: link.currency || "INR",
-    enrollment_id: link.enrollment_id,
-    notes: paymentNotes,
-    paid_at: paidAt,
-    payment_method: "UPI Link",
-    status: "completed",
-    student_id: link.student_id,
-    tenant_id: tenantId,
-  });
+  const { data: paymentData, error: paymentError } = await supabase
+    .from("payments")
+    .insert({
+      amount: link.amount,
+      course_id: link.course_id,
+      currency: link.currency || "INR",
+      enrollment_id: link.enrollment_id,
+      notes: paymentNotes,
+      paid_at: paidAt,
+      payment_method: "UPI Link",
+      status: "completed",
+      student_id: link.student_id,
+      tenant_id: tenantId,
+    })
+    .select("id,tenant_id,student_id,course_id,amount,currency,status")
+    .single();
 
   if (paymentError) {
     throw paymentError;
@@ -486,6 +491,22 @@ export async function convertPaymentLinkToPayment(
     },
     tenantId: convertedLink.tenant_id,
   });
+
+  if (paymentData?.id) {
+    await runAutomationTrigger("payment_received", {
+      entityId: String(paymentData.id),
+      entityType: "payment",
+      metadata: {
+        amount: convertedLink.amount,
+        course_id: convertedLink.course_id,
+        currency: convertedLink.currency,
+        payment_link_id: convertedLink.id,
+        status: "completed",
+        student_id: convertedLink.student_id,
+      },
+      tenantId: convertedLink.tenant_id,
+    });
+  }
 
   return convertedLink;
 }
