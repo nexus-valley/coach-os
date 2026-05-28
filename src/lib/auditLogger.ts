@@ -84,6 +84,7 @@ function inferSeverity(action: string): AuditLogSeverity {
       "settings_updated",
       "student_deleted",
       "subscription_plan_changed",
+      "workspace_plan_changed",
       "plan_updated",
       "subscription_canceled",
       "team_member_removed",
@@ -110,6 +111,9 @@ function inferSeverity(action: string): AuditLogSeverity {
       "reminder_deleted",
       "role_changed",
       "session_canceled",
+      "billing_profile_updated",
+      "feature_limit_warning",
+      "subscription_status_changed",
       "workspace_limit_reached",
     ].includes(action)
   ) {

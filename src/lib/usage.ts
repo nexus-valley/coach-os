@@ -20,6 +20,15 @@ export type TrialStatus = {
   startedAt: string | null;
 };
 
+export type TrialLifecycleState =
+  | "active_paid"
+  | "blocked_placeholder"
+  | "grace_period"
+  | "past_due"
+  | "trial_active"
+  | "trial_expired"
+  | "trial_expiring";
+
 type TenantPlanRecord = {
   id: string;
   is_trial_active?: boolean | null;
@@ -290,6 +299,31 @@ export async function getTrialStatus(tenantId: string): Promise<TrialStatus> {
     expired,
     startedAt,
   };
+}
+
+export async function getTrialLifecycleState(
+  tenantId: string,
+): Promise<TrialLifecycleState> {
+  const tenant = await getTenantPlanRecord(tenantId);
+  const trial = await getTrialStatus(tenantId);
+
+  if (tenant?.plan && normalizePlanKey(tenant.plan) !== "free") {
+    return "active_paid";
+  }
+
+  if (trial.active && trial.daysRemaining <= 3) {
+    return "trial_expiring";
+  }
+
+  if (trial.active) {
+    return "trial_active";
+  }
+
+  if (trial.expired) {
+    return "trial_expired";
+  }
+
+  return "blocked_placeholder";
 }
 
 async function getEffectiveUsageForLimit(

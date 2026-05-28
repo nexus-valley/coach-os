@@ -400,14 +400,28 @@ export function OperationsPageClient() {
                 Trial status and plan utilization based on cached usage snapshots.
               </p>
             </div>
-            <div className="rounded-2xl border border-[#D8E8F0] bg-[#F6FBFE] px-4 py-3 text-sm font-semibold text-[#425B76]">
-              {data.subscription.trial.active
-                ? `${data.subscription.trial.daysRemaining} trial days left`
-                : data.subscription.trial.expired
-                  ? "Trial expired"
-                  : "Trial status unavailable"}
+            <div className="grid gap-3 text-sm font-semibold text-[#425B76] sm:grid-cols-2">
+              <div className="rounded-2xl border border-[#D8E8F0] bg-[#F6FBFE] px-4 py-3">
+                {data.subscription.trial.active
+                  ? `${data.subscription.trial.daysRemaining} trial days left`
+                  : data.subscription.trial.expired
+                    ? "Trial expired"
+                    : "Trial status unavailable"}
+              </div>
+              <div className="rounded-2xl border border-[#D8E8F0] bg-[#F6FBFE] px-4 py-3">
+                Billing: {data.subscription.billingStatus.replace(/_/g, " ")}
+              </div>
             </div>
           </div>
+          {data.subscription.recommendation ? (
+            <div className="mt-5 rounded-2xl border border-[#FED7AA] bg-[#FFFBF7] p-4 text-sm leading-6 text-[#9A3412]">
+              {data.subscription.recommendation.reason} Recommended next plan:{" "}
+              <span className="font-semibold">
+                {data.subscription.recommendation.recommendedPlanName}
+              </span>
+              .
+            </div>
+          ) : null}
           <div className="mt-6 grid gap-4 md:grid-cols-2">
             {data.subscription.usage.map((item) => (
               <UsageBar item={item} key={item.key} />

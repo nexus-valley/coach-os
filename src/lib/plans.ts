@@ -1,4 +1,4 @@
-export type PlanKey = "free" | "starter" | "growth";
+export type PlanKey = "enterprise" | "free" | "growth" | "starter";
 export type StoredPlanKey = PlanKey | "pro" | "business";
 export type PlanResource =
   | "automations"
@@ -7,19 +7,80 @@ export type PlanResource =
   | "team_members"
   | "trainers";
 export type ResourceLimit = number | "unlimited";
+export type BillingCycle = "monthly" | "yearly";
+export type FeatureKey =
+  | "assignments"
+  | "attendance"
+  | "automations"
+  | "branded_portal"
+  | "certificates"
+  | "cohorts"
+  | "courses"
+  | "live_classes"
+  | "messages"
+  | "reports"
+  | "students"
+  | "trainers";
 
 export type PlanDefinition = {
+  billing: {
+    monthly: number | null;
+    yearly: number | null;
+  };
   description: string;
   displayName: string;
+  features: Record<FeatureKey, boolean>;
   key: PlanKey;
   limits: Record<PlanResource, ResourceLimit>;
   target: string;
 };
 
+const allFeatures: Record<FeatureKey, boolean> = {
+  assignments: true,
+  attendance: true,
+  automations: true,
+  branded_portal: true,
+  certificates: true,
+  cohorts: true,
+  courses: true,
+  live_classes: true,
+  messages: true,
+  reports: true,
+  students: true,
+  trainers: true,
+};
+
 export const planDefinitions: Record<PlanKey, PlanDefinition> = {
+  enterprise: {
+    billing: {
+      monthly: null,
+      yearly: null,
+    },
+    description: "Custom commercial plan for large institutes and advanced needs.",
+    displayName: "Enterprise",
+    features: allFeatures,
+    key: "enterprise",
+    limits: {
+      automations: "unlimited",
+      courses: "unlimited",
+      students: "unlimited",
+      team_members: "unlimited",
+      trainers: "unlimited",
+    },
+    target: "Large academy or multi-location institute",
+  },
   free: {
+    billing: {
+      monthly: 0,
+      yearly: 0,
+    },
     description: "Core workspace for validating CoachFort with a small team.",
     displayName: "Free",
+    features: {
+      ...allFeatures,
+      branded_portal: false,
+      reports: false,
+    },
     key: "free",
     limits: {
       automations: 1,
@@ -31,8 +92,13 @@ export const planDefinitions: Record<PlanKey, PlanDefinition> = {
     target: "Solo coach starting out",
   },
   growth: {
+    billing: {
+      monthly: 4999,
+      yearly: 49990,
+    },
     description: "Unlimited workspace foundation for serious coaching teams.",
     displayName: "Growth",
+    features: allFeatures,
     key: "growth",
     limits: {
       automations: "unlimited",
@@ -44,8 +110,16 @@ export const planDefinitions: Record<PlanKey, PlanDefinition> = {
     target: "Scaling academy or multi-program business",
   },
   starter: {
+    billing: {
+      monthly: 1999,
+      yearly: 19990,
+    },
     description: "More room for a growing coaching business.",
     displayName: "Starter",
+    features: {
+      ...allFeatures,
+      branded_portal: false,
+    },
     key: "starter",
     limits: {
       automations: 10,
@@ -58,7 +132,7 @@ export const planDefinitions: Record<PlanKey, PlanDefinition> = {
   },
 };
 
-export const planOrder: PlanKey[] = ["free", "starter", "growth"];
+export const planOrder: PlanKey[] = ["free", "starter", "growth", "enterprise"];
 
 export const planResourceLabels: Record<PlanResource, string> = {
   automations: "Automations",
@@ -69,6 +143,10 @@ export const planResourceLabels: Record<PlanResource, string> = {
 };
 
 export function normalizePlanKey(value: unknown): PlanKey {
+  if (value === "enterprise") {
+    return "enterprise";
+  }
+
   if (value === "starter") {
     return "starter";
   }
@@ -102,4 +180,62 @@ export function formatResourceLimit(limit: ResourceLimit) {
 
 export function isWithinLimit(used: number, limit: ResourceLimit) {
   return limit === "unlimited" || used < limit;
+}
+
+export function getAvailablePlans() {
+  return planOrder.map((plan) => planDefinitions[plan]);
+}
+
+export function getCurrentPlan(plan: StoredPlanKey | PlanKey | unknown) {
+  return getPlanDefinition(plan);
+}
+
+export function getFeatureAccess(
+  plan: StoredPlanKey | PlanKey | unknown,
+  feature: FeatureKey,
+) {
+  return getPlanDefinition(plan).features[feature] ?? false;
+}
+
+export function canUseFeature(
+  plan: StoredPlanKey | PlanKey | unknown,
+  feature: FeatureKey,
+  featureFlags: Record<string, unknown> = {},
+) {
+  const override = featureFlags[feature];
+
+  if (typeof override === "boolean") {
+    return override;
+  }
+
+  return getFeatureAccess(plan, feature);
+}
+
+export function getPlanUpgradeRecommendation(
+  usage: Partial<Record<PlanResource, number>>,
+  plan: StoredPlanKey | PlanKey | unknown,
+) {
+  const currentPlan = normalizePlanKey(plan);
+  const currentIndex = planOrder.indexOf(currentPlan);
+  const definition = getPlanDefinition(currentPlan);
+  const nearLimit = (Object.keys(definition.limits) as PlanResource[]).some(
+    (resource) => {
+      const limit = definition.limits[resource];
+      const used = usage[resource] ?? 0;
+
+      return limit !== "unlimited" && used >= limit * 0.8;
+    },
+  );
+
+  if (!nearLimit || currentPlan === "enterprise") {
+    return null;
+  }
+
+  const nextPlan = planOrder[Math.min(currentIndex + 1, planOrder.length - 1)];
+
+  return {
+    reason: "Workspace usage is nearing one or more current plan limits.",
+    recommendedPlan: nextPlan,
+    recommendedPlanName: getPlanDisplayName(nextPlan),
+  };
 }

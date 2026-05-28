@@ -122,22 +122,66 @@ const resetOrder = [
   "conversation_messages",
   "conversation_participants",
   "conversation_threads",
-  "notifications",
-  "communication_logs",
   "assignment_submissions",
   "assignments",
   "attendance_records",
   "sessions",
   "payment_links",
   "payments",
-  "cohort_members",
-  "cohorts",
   "enrollments",
+  "cohort_members",
   "lessons",
   "course_sections",
+  "cohorts",
   "courses",
   "students",
+  "notifications",
+  "communication_logs",
 ] as const;
+
+const resetEntityTypes = new Set<string>([
+  ...resetOrder,
+  "tenant_branding",
+]);
+
+type SupabaseResetError = {
+  code?: string;
+  details?: string;
+  message?: string;
+};
+
+function isOptionalResetTableMissingError(error: SupabaseResetError | null) {
+  const message = error?.message?.toLowerCase() ?? "";
+
+  return (
+    error?.code === "42P01" ||
+    error?.code === "PGRST205" ||
+    message.includes("schema cache") ||
+    message.includes("does not exist") ||
+    message.includes("relation")
+  );
+}
+
+function logDemoResetDiagnostic(params: {
+  action: "delete" | "restore" | "skip";
+  code?: string | null;
+  details?: string | null;
+  entityIds?: string[];
+  entityType: string;
+  message?: string | null;
+  orderIndex?: number;
+}) {
+  console.warn("[CoachFort demo reset]", {
+    action: params.action,
+    code: params.code ?? null,
+    details: params.details ?? null,
+    entityCount: params.entityIds?.length ?? 0,
+    entityIds: params.entityIds?.slice(0, 10) ?? [],
+    entityType: params.entityType,
+    message: params.message ?? null,
+    orderIndex: params.orderIndex ?? null,
+  });
+}
 
 const workspaceBrandingFields = [
   "address_line_1",
@@ -938,6 +982,47 @@ export async function seedDemoWorkspace(tenantId: string) {
   };
 }
 
+export async function backfillDemoMessages(tenantId: string) {
+  const userId = await ensureDemoPermission(tenantId);
+  await requireDemoTrackingTable();
+  const status = await getDemoWorkspaceStatus(tenantId);
+  const summary = { ...emptySummary };
+
+  if (!status.loaded) {
+    throw new Error("Load demo data before backfilling message threads.");
+  }
+
+  if (!status.needsConversationBackfill) {
+    return {
+      batchId: status.batchId,
+      status,
+      summary,
+    };
+  }
+
+  const batchId = status.batchId ?? createBatchId();
+  await seedDemoConversations({
+    batchId,
+    summary,
+    tenantId,
+    userId,
+  });
+  await logActivity({
+    action: "demo_workspace_seeded",
+    description: "Backfilled tracked demo message threads.",
+    entityName: "BrightPath Academy demo messages",
+    entityType: "demo_data",
+    metadata: { seedBatchId: batchId, summary },
+    tenantId,
+  });
+
+  return {
+    batchId,
+    status: await getDemoWorkspaceStatus(tenantId),
+    summary,
+  };
+}
+
 export async function deleteDemoSeedBatch(tenantId: string, batchId?: string | null) {
   const userId = await ensureDemoPermission(tenantId);
   const supabase = getSupabaseClient();
@@ -978,14 +1063,33 @@ export async function deleteDemoSeedBatch(tenantId: string, batchId?: string | n
       };
     }
 
-    throw error;
+    logDemoResetDiagnostic({
+      action: "delete",
+      code: error.code,
+      details: error.details,
+      entityType: "demo_seed_records",
+      message: error.message,
+    });
+    throw new Error("Unable to reset demo data. Demo tracking records could not be read.");
   }
 
   const records = (recordsData ?? []) as DemoSeedRecord[];
   const deletedByType: Record<string, number> = {};
+  const unknownRecords = records.filter(
+    (record) => !resetEntityTypes.has(record.entity_type),
+  );
   const brandingRecords = records.filter(
     (record) => record.entity_type === "tenant_branding",
   );
+
+  for (const record of unknownRecords) {
+    logDemoResetDiagnostic({
+      action: "skip",
+      entityIds: [record.entity_id],
+      entityType: record.entity_type,
+      message: "No demo reset table mapping exists for this tracked entity type.",
+    });
+  }
 
   for (const record of brandingRecords) {
     const previousBranding = getPreviousBranding(record);
@@ -1000,14 +1104,22 @@ export async function deleteDemoSeedBatch(tenantId: string, batchId?: string | n
       .eq("id", tenantId);
 
     if (restoreError) {
-      throw restoreError;
+      logDemoResetDiagnostic({
+        action: "restore",
+        code: restoreError.code,
+        details: restoreError.details,
+        entityIds: [tenantId],
+        entityType: "tenant_branding",
+        message: restoreError.message,
+      });
+      throw new Error("Unable to reset demo data. Workspace branding restore failed.");
     }
 
     deletedByType.tenant_branding =
       (deletedByType.tenant_branding ?? 0) + 1;
   }
 
-  for (const table of resetOrder) {
+  for (const [orderIndex, table] of resetOrder.entries()) {
     const ids = records
       .filter((record) => record.entity_type === table)
       .map((record) => record.entity_id);
@@ -1023,7 +1135,24 @@ export async function deleteDemoSeedBatch(tenantId: string, batchId?: string | n
       .in("id", ids);
 
     if (deleteError) {
-      throw deleteError;
+      logDemoResetDiagnostic({
+        action: "delete",
+        code: deleteError.code,
+        details: deleteError.details,
+        entityIds: ids,
+        entityType: table,
+        message: deleteError.message,
+        orderIndex,
+      });
+
+      if (isOptionalResetTableMissingError(deleteError)) {
+        deletedByType[`${table}_skipped_missing`] = ids.length;
+        continue;
+      }
+
+      throw new Error(
+        `Unable to reset demo data. Delete is blocked for ${table}.`,
+      );
     }
 
     deletedByType[table] = ids.length;
@@ -1041,7 +1170,15 @@ export async function deleteDemoSeedBatch(tenantId: string, batchId?: string | n
   const { error: trackingDeleteError } = await deleteRecordsQuery;
 
   if (trackingDeleteError) {
-    throw trackingDeleteError;
+    logDemoResetDiagnostic({
+      action: "delete",
+      code: trackingDeleteError.code,
+      details: trackingDeleteError.details,
+      entityIds: records.map((record) => record.entity_id),
+      entityType: "demo_seed_records",
+      message: trackingDeleteError.message,
+    });
+    throw new Error("Unable to reset demo data. Demo tracking cleanup failed.");
   }
 
   await refreshWorkspaceUsageSnapshot(tenantId);

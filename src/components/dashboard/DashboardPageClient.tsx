@@ -12,6 +12,7 @@ import {
   type DashboardMetrics,
 } from "@/src/lib/dashboard";
 import {
+  backfillDemoMessages,
   getDemoWorkspaceStatus,
   resetDemoWorkspace,
   seedDemoWorkspace,
@@ -306,7 +307,10 @@ export function DashboardPageClient() {
     setDemoMessage("");
 
     try {
-      const result = await seedDemoWorkspace(tenant.id);
+      const backfillOnly = Boolean(demoStatus?.needsConversationBackfill);
+      const result = backfillOnly
+        ? await backfillDemoMessages(tenant.id)
+        : await seedDemoWorkspace(tenant.id);
       const dashboardMetrics = await getDashboardMetrics(tenant.id);
       const workspaceUsage =
         currentRole === "owner" || currentRole === "admin"
@@ -317,12 +321,21 @@ export function DashboardPageClient() {
       setUsage(workspaceUsage);
       setDemoStatus(result.status);
       setDemoMessage(
-        result.alreadyLoaded
+        backfillOnly && result.summary.conversations > 0
+          ? `Messages backfilled. Added ${result.summary.conversations} demo threads.`
+          : "alreadyLoaded" in result && result.alreadyLoaded
           ? "Demo data is already loaded in this workspace. Use reset to remove tracked demo records."
           : `Demo data loaded. Added ${result.status.recordCount} tracked sample records.`,
       );
     } catch (caught) {
-      setDemoError(getErrorMessage(caught, "Unable to load demo data."));
+      setDemoError(
+        getErrorMessage(
+          caught,
+          demoStatus?.needsConversationBackfill
+            ? "Unable to backfill messages."
+            : "Unable to load demo data.",
+        ),
+      );
     } finally {
       setDemoLoading(false);
     }
@@ -433,6 +446,14 @@ export function DashboardPageClient() {
   const canLoadDemo = currentRole === "owner" || currentRole === "admin";
   const canViewUsage = currentRole === "owner" || currentRole === "admin";
   const limits = getPlanLimits(plan);
+  const nearLimitResources =
+    usage && canViewUsage
+      ? (Object.keys(limits) as PlanResource[]).filter((resource) => {
+          const limit = limits[resource];
+
+          return limit !== "unlimited" && usage[resource] >= limit * 0.8;
+        })
+      : [];
   const criticalNotifications = notifications.filter(
     (notification) =>
       notification.severity === "critical" &&
@@ -569,6 +590,29 @@ export function DashboardPageClient() {
           </div>
         ) : null}
       </Card>
+
+      {canViewUsage && (trialStatus?.expired || nearLimitResources.length > 0) ? (
+        <Card className="mt-8 border-[#FED7AA] bg-[#FFFBF7] p-5 text-[#0B1F33] shadow-sm">
+          <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
+            <div>
+              <Badge tone="warning">
+                {trialStatus?.expired ? "Trial expired" : "Plan attention"}
+              </Badge>
+              <h3 className="mt-3 text-lg font-semibold">
+                Review your CoachFort plan
+              </h3>
+              <p className="mt-2 text-sm leading-6 text-[#66788F]">
+                {trialStatus?.expired
+                  ? "Your workspace trial has ended. Billing controls are ready for the next paid-plan step."
+                  : `${nearLimitResources.length} usage limit${nearLimitResources.length === 1 ? "" : "s"} are nearing capacity.`}
+              </p>
+            </div>
+            <Button href="/app/subscription" type="button" variant="secondary">
+              View subscription
+            </Button>
+          </div>
+        </Card>
+      ) : null}
 
       {canViewUsage && usage ? (
         <Card className="mt-8 border-[#D8E8F0] bg-white p-6 text-[#0B1F33] shadow-2xl shadow-[#0B2A3D]/10">

@@ -7,7 +7,10 @@ import {
   type PlanResource,
   type ResourceLimit,
 } from "@/src/lib/plans";
-import { requireTenantPermission } from "@/src/lib/permissions";
+import {
+  getMemberRoleForTenant,
+  requireTenantPermission,
+} from "@/src/lib/permissions";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 
 export type SubscriptionPlan = PlanKey;
@@ -87,11 +90,26 @@ export async function updateTenantPlanForTesting(
   tenantId: string,
   plan: SubscriptionPlan,
 ) {
-  await requireTenantPermission({
+  const { user } = await requireTenantPermission({
     description: "Blocked subscription plan change without owner permission.",
     permission: "access_subscription",
     tenantId,
   });
+  const role = await getMemberRoleForTenant(tenantId, user.id);
+
+  if (role !== "owner") {
+    await logActivity({
+      action: "access_denied",
+      description: "Blocked owner-only subscription plan change.",
+      entityName: "Subscription",
+      entityType: "security",
+      metadata: { role },
+      severity: "warning",
+      tenantId,
+    });
+
+    throw new Error("Only the workspace owner can change plans.");
+  }
 
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
@@ -119,7 +137,7 @@ export async function updateTenantPlanForTesting(
     entityType: "subscription",
     metadata: { plan: subscription.plan },
     severity: "critical",
-    tenantId: subscription.id,
+    tenantId,
   });
 
   return subscription;

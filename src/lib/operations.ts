@@ -10,6 +10,7 @@ import {
   formatResourceLimit,
   getPlanDisplayName,
   getPlanLimits,
+  getPlanUpgradeRecommendation,
   normalizePlanKey,
   planResourceLabels,
   type PlanKey,
@@ -91,8 +92,14 @@ export type OperationsConsoleData = {
   role: MemberRole;
   securitySignals: OperationsMetric[];
   subscription: {
+    billingStatus: string;
     plan: PlanKey;
     planName: string;
+    recommendation: {
+      reason: string;
+      recommendedPlan: PlanKey;
+      recommendedPlanName: string;
+    } | null;
     trial: TrialStatus;
     usage: OperationsUsageItem[];
     warnings: OperationsAlert[];
@@ -134,6 +141,7 @@ type SafeTenantSettings = {
 };
 
 type SafeTenantSubscription = {
+  billingStatus: string;
   plan: PlanKey;
 };
 
@@ -251,19 +259,36 @@ async function getSafeTenantSubscription(tenantId: string) {
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
     .from("tenants")
-    .select("plan")
+    .select("plan,billing_status")
     .eq("id", tenantId)
     .maybeSingle();
 
   if (error) {
     if (isRecoverableAnalyticsError(error)) {
-      return { plan: "free" } satisfies SafeTenantSubscription;
+      const fallbackResult = await supabase
+        .from("tenants")
+        .select("plan")
+        .eq("id", tenantId)
+        .maybeSingle();
+
+      if (!fallbackResult.error) {
+        return {
+          billingStatus: "not_configured",
+          plan: normalizePlanKey(fallbackResult.data?.plan),
+        } satisfies SafeTenantSubscription;
+      }
+
+      return {
+        billingStatus: "not_configured",
+        plan: "free",
+      } satisfies SafeTenantSubscription;
     }
 
     throw error;
   }
 
   return {
+    billingStatus: data?.billing_status ?? "not_configured",
     plan: normalizePlanKey(data?.plan),
   } satisfies SafeTenantSubscription;
 }
@@ -724,7 +749,7 @@ export async function getOperationsConsoleData(
       "getSafeTenantSubscription",
       "tenants",
       () => getSafeTenantSubscription(tenantId),
-      { plan: "free" },
+      { billingStatus: "not_configured", plan: "free" },
     ),
     optionalOperationQuery(
       "getTrialStatus",
@@ -927,6 +952,7 @@ export async function getOperationsConsoleData(
   const plan = subscription?.plan ?? "free";
   const usageItems = buildUsageItems(plan, usage);
   const limitWarnings = buildLimitWarnings(usageItems);
+  const planRecommendation = getPlanUpgradeRecommendation(usage, plan);
   const health = buildHealthCards({
     activeAutomations,
     activeCourses,
@@ -1090,8 +1116,10 @@ export async function getOperationsConsoleData(
     role,
     securitySignals,
     subscription: {
+      billingStatus: subscription.billingStatus,
       plan,
       planName: getPlanDisplayName(plan),
+      recommendation: planRecommendation,
       trial,
       usage: usageItems,
       warnings: limitWarnings,
