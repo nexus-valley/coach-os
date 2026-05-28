@@ -67,6 +67,8 @@ export const activityActionOptions = [
   ["conversation_locked", "Conversation Locked"],
   ["report_viewed", "Report Viewed"],
   ["report_exported", "Report Exported"],
+  ["operations_console_viewed", "Operations Console Viewed"],
+  ["workspace_health_checked", "Workspace Health Checked"],
   ["subscription_plan_changed", "Subscription Plan Changed"],
   ["subscription_created", "Subscription Created"],
   ["subscription_canceled", "Subscription Canceled"],
@@ -82,6 +84,8 @@ export const activityActionOptions = [
   ["trainer_assigned_cohort", "Trainer Assigned Cohort"],
   ["trainer_removed_cohort", "Trainer Removed Cohort"],
   ["demo_data_loaded", "Demo Data Loaded"],
+  ["demo_workspace_seeded", "Demo Workspace Seeded"],
+  ["demo_workspace_reset", "Demo Workspace Reset"],
 ] as const;
 
 export const activityEntityOptions = [
@@ -114,6 +118,7 @@ export const activityEntityOptions = [
   ["communication_log", "Communication logs"],
   ["conversation", "Conversations"],
   ["conversation_message", "Conversation messages"],
+  ["operations", "Operations"],
   ["report", "Reports"],
   ["demo_data", "Demo data"],
 ] as const;
@@ -158,6 +163,7 @@ const entityIconLabels: Record<string, string> = {
   conversation: "CV",
   conversation_message: "MS",
   notification: "NT",
+  operations: "OP",
   report: "RP",
 };
 
@@ -191,6 +197,7 @@ const entityIconClasses: Record<string, string> = {
   conversation: "border-cyan-200 bg-cyan-50 text-cyan-700",
   conversation_message: "border-blue-200 bg-blue-50 text-blue-700",
   notification: "border-cyan-200 bg-cyan-50 text-cyan-700",
+  operations: "border-cyan-200 bg-cyan-50 text-cyan-700",
   report: "border-indigo-200 bg-indigo-50 text-indigo-700",
 };
 

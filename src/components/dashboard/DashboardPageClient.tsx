@@ -11,7 +11,12 @@ import {
   getDashboardMetrics,
   type DashboardMetrics,
 } from "@/src/lib/dashboard";
-import { loadDemoDataForTenant } from "@/src/lib/demoSeed";
+import {
+  getDemoWorkspaceStatus,
+  resetDemoWorkspace,
+  seedDemoWorkspace,
+  type DemoWorkspaceStatus,
+} from "@/src/lib/demoWorkspace";
 import {
   getUserNotifications,
   type Notification,
@@ -193,6 +198,8 @@ export function DashboardPageClient() {
   );
   const [demoLoading, setDemoLoading] = useState(false);
   const [demoMessage, setDemoMessage] = useState("");
+  const [demoResetting, setDemoResetting] = useState(false);
+  const [demoStatus, setDemoStatus] = useState<DemoWorkspaceStatus | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
@@ -246,6 +253,9 @@ export function DashboardPageClient() {
         const workspaceSubscription = canViewUsage
           ? await getTenantSubscription(currentTenant.id)
           : null;
+        const workspaceDemoStatus = canViewUsage
+          ? await getDemoWorkspaceStatus(currentTenant.id)
+          : null;
         const recentNotifications = user
           ? await getUserNotifications(currentTenant.id, {
               limit: 5,
@@ -261,6 +271,7 @@ export function DashboardPageClient() {
         setNotifications(recentNotifications);
         setCurrentRole(memberRole);
         setPlan(workspaceSubscription?.plan ?? "free");
+        setDemoStatus(workspaceDemoStatus);
         setTrialStatus(workspaceTrialStatus);
         setUsage(workspaceUsage);
         setError("");
@@ -295,11 +306,7 @@ export function DashboardPageClient() {
     setDemoMessage("");
 
     try {
-      const result = await loadDemoDataForTenant(tenant.id);
-      const addedCount = Object.values(result).reduce(
-        (total, count) => total + count,
-        0,
-      );
+      const result = await seedDemoWorkspace(tenant.id);
       const dashboardMetrics = await getDashboardMetrics(tenant.id);
       const workspaceUsage =
         currentRole === "owner" || currentRole === "admin"
@@ -308,15 +315,58 @@ export function DashboardPageClient() {
 
       setMetrics(dashboardMetrics);
       setUsage(workspaceUsage);
+      setDemoStatus(result.status);
       setDemoMessage(
-        addedCount > 0
-          ? `Demo data loaded. Added ${addedCount} sample records.`
-          : "Demo data is already available in this workspace.",
+        result.alreadyLoaded
+          ? "Demo data is already loaded in this workspace. Use reset to remove tracked demo records."
+          : `Demo data loaded. Added ${result.status.recordCount} tracked sample records.`,
       );
     } catch (caught) {
       setDemoError(getErrorMessage(caught, "Unable to load demo data."));
     } finally {
       setDemoLoading(false);
+    }
+  }
+
+  async function handleResetDemoData() {
+    if (!tenant) {
+      setDemoError("Workspace context is not available.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "Reset demo data? This deletes only records tracked as demo-generated for this workspace.",
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setDemoResetting(true);
+    setDemoError("");
+    setDemoMessage("");
+
+    try {
+      const result = await resetDemoWorkspace(tenant.id);
+      const [dashboardMetrics, workspaceUsage, workspaceDemoStatus] =
+        await Promise.all([
+          getDashboardMetrics(tenant.id),
+          currentRole === "owner" || currentRole === "admin"
+            ? refreshWorkspaceUsageSnapshot(tenant.id)
+            : Promise.resolve(null),
+          getDemoWorkspaceStatus(tenant.id),
+        ]);
+
+      setMetrics(dashboardMetrics);
+      setUsage(workspaceUsage);
+      setDemoStatus(workspaceDemoStatus);
+      setDemoMessage(
+        `Demo data reset. Removed ${result.recordCount} tracked demo records.`,
+      );
+    } catch (caught) {
+      setDemoError(getErrorMessage(caught, "Unable to reset demo data."));
+    } finally {
+      setDemoResetting(false);
     }
   }
 
@@ -432,17 +482,47 @@ export function DashboardPageClient() {
             <p className="mt-2 max-w-3xl text-sm leading-6 text-[#425B76]">
               {demoIntent
                 ? "You are viewing a CoachFort demo workspace. Sample data can be loaded to explore students, courses, payments, reports, reminders, and WhatsApp-ready workflows."
-                : "Add clearly marked demo students, courses, cohorts, payments, payment links, reminders, and automation rules to this workspace. This is tenant-scoped and does not run automatically."}
+                : "Add tracked demo students, courses, cohorts, sessions, attendance, assignments, payments, notifications, and message threads to this workspace. Reset removes only demo-generated records tracked by the seeder."}
             </p>
+            {canLoadDemo && demoStatus ? (
+              <div className="mt-4 flex flex-wrap items-center gap-2 text-xs font-semibold text-[#425B76]">
+                <Badge
+                  className={
+                    demoStatus.loaded
+                      ? "border-[#BBF7D0] bg-[#ECFDF3] text-[#166534]"
+                      : "border-[#D8E8F0] bg-[#F6FBFE] text-[#425B76]"
+                  }
+                >
+                  {demoStatus.loaded ? "Demo data loaded" : "Not loaded"}
+                </Badge>
+                <span>{demoStatus.recordCount} tracked records</span>
+                {demoStatus.lastLoadedAt ? (
+                  <span>Loaded {formatDate(demoStatus.lastLoadedAt)}</span>
+                ) : null}
+                {demoStatus.batchId ? (
+                  <span className="max-w-full truncate">
+                    Batch {demoStatus.batchId.slice(0, 8)}
+                  </span>
+                ) : null}
+              </div>
+            ) : null}
           </div>
           {canLoadDemo ? (
             <div className="flex flex-col gap-3 sm:flex-row lg:justify-end">
               <Button
-                disabled={demoLoading}
+                disabled={demoLoading || demoResetting || demoStatus?.loaded}
                 onClick={handleLoadDemoData}
                 type="button"
               >
                 {demoLoading ? "Loading..." : "Load Demo Data"}
+              </Button>
+              <Button
+                disabled={demoLoading || demoResetting || !demoStatus?.loaded}
+                onClick={handleResetDemoData}
+                type="button"
+                variant="secondary"
+              >
+                {demoResetting ? "Resetting..." : "Reset Demo Data"}
               </Button>
               <Button href="/app/students" type="button" variant="secondary">
                 View Students
