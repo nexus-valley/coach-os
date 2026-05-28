@@ -14,6 +14,7 @@ import { getCoursesForTenant, type Course } from "@/src/lib/courses";
 import {
   createConversationThread,
   safeGetConversationThreads,
+  type ConversationAvailabilityErrorType,
   type ConversationThreadListResult,
   type ConversationThreadType,
   type ConversationThreadWithMeta,
@@ -93,6 +94,8 @@ export function MessagesPageClient() {
   const [courses, setCourses] = useState<Course[]>([]);
   const [error, setError] = useState("");
   const [conversationAvailable, setConversationAvailable] = useState(true);
+  const [conversationErrorType, setConversationErrorType] =
+    useState<ConversationAvailabilityErrorType>(null);
   const [filter, setFilter] = useState<ConversationThreadType | "all">("all");
   const [form, setForm] = useState<ThreadFormState>(emptyForm);
   const [formOpen, setFormOpen] = useState(false);
@@ -172,6 +175,7 @@ export function MessagesPageClient() {
     });
 
     setConversationAvailable(threadResult.available);
+    setConversationErrorType(threadResult.errorType);
     setThreads(threadResult.threads);
     setCourses(tenantCourses);
     setCohorts(tenantCohorts);
@@ -285,6 +289,15 @@ export function MessagesPageClient() {
     }
   }
 
+  const showingUnavailableState =
+    !loading && conversationErrorType === "infrastructure";
+
+  console.info("[CoachFort messages render]", {
+    available: conversationAvailable,
+    showingUnavailableState,
+    threadCount: threads.length,
+  });
+
   return (
     <div className="mx-auto max-w-7xl">
       <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
@@ -304,7 +317,7 @@ export function MessagesPageClient() {
           <Badge tone={unreadCount > 0 ? "warning" : "light"}>
             {unreadCount} unread
           </Badge>
-          {conversationAvailable ? (
+          {!showingUnavailableState ? (
             <Button onClick={() => setFormOpen(true)}>New Conversation</Button>
           ) : null}
         </div>
@@ -353,7 +366,7 @@ export function MessagesPageClient() {
         <Card className="mt-6 h-72 animate-pulse border-[#D8E8F0] bg-white">
           <span className="sr-only">Loading messages</span>
         </Card>
-      ) : !conversationAvailable ? (
+      ) : showingUnavailableState ? (
         <EmptyState
           description="Message infrastructure is not available yet. Run the Module 36 chat SQL migration to enable conversations."
           icon="MS"
