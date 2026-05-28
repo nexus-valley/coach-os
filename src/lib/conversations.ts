@@ -607,11 +607,10 @@ export async function getConversationThreads(
 
 export async function isConversationSystemAvailable(tenantId: string) {
   try {
-    await getCurrentUserAndRole(tenantId);
     const supabase = getSupabaseClient();
     const { error } = await supabase
       .from("conversation_threads")
-      .select("id", { count: "exact", head: true })
+      .select("id")
       .eq("tenant_id", tenantId)
       .limit(1);
 

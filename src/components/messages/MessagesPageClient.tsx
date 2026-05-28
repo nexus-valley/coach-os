@@ -169,7 +169,7 @@ export function MessagesPageClient() {
         ),
       ]);
 
-    setConversationAvailable(available);
+    setConversationAvailable(available || rows.length > 0);
     setThreads(rows);
     setCourses(tenantCourses);
     setCohorts(tenantCohorts);
