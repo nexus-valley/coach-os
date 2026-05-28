@@ -9,14 +9,13 @@ import {
   formatResourceLimit,
   getPlanDisplayName,
   getPlanLimits,
+  normalizePlanKey,
   planResourceLabels,
   type PlanKey,
   type PlanResource,
   type ResourceLimit,
 } from "@/src/lib/plans";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
-import { getTenantSubscription } from "@/src/lib/subscription";
-import { getTenantSettings } from "@/src/lib/tenantSettings";
 import {
   getTrialStatus,
   getUsagePercent,
@@ -126,6 +125,33 @@ type CohortRow = {
   name: string;
 };
 
+type SafeTenantSettings = {
+  brand_color?: string | null;
+  support_email?: string | null;
+  support_phone?: string | null;
+  workspace_display_name?: string | null;
+};
+
+type SafeTenantSubscription = {
+  plan: PlanKey;
+};
+
+const emptyUsage: WorkspaceUsage = {
+  automations: 0,
+  courses: 0,
+  students: 0,
+  team_members: 0,
+  trainers: 0,
+};
+
+const emptyTrial: TrialStatus = {
+  active: false,
+  daysRemaining: 0,
+  endsAt: null,
+  expired: false,
+  startedAt: null,
+};
+
 const permissionSensitiveActions = [
   "access_denied",
   "role_changed",
@@ -161,12 +187,14 @@ const communicationActions = [
   "communication_logged",
 ];
 
-function isMissingTableError(error: { code?: string; message?: string } | null) {
+function isRecoverableAnalyticsError(error: { code?: string; message?: string } | null) {
   const message = error?.message?.toLowerCase() ?? "";
 
   return (
     error?.code === "42P01" ||
     error?.code === "PGRST205" ||
+    error?.code === "PGRST204" ||
+    message.includes("column") ||
     message.includes("schema cache") ||
     message.includes("does not exist")
   );
@@ -174,7 +202,7 @@ function isMissingTableError(error: { code?: string; message?: string } | null) 
 
 function getCount(result: CountResult) {
   if (result.error) {
-    if (isMissingTableError(result.error)) {
+    if (isRecoverableAnalyticsError(result.error)) {
       return 0;
     }
 
@@ -182,6 +210,65 @@ function getCount(result: CountResult) {
   }
 
   return result.count ?? 0;
+}
+
+async function withAnalyticsFallback<T>(
+  loader: () => Promise<T>,
+  fallback: T,
+) {
+  try {
+    return await loader();
+  } catch (caught) {
+    if (
+      caught &&
+      typeof caught === "object" &&
+      isRecoverableAnalyticsError(caught as { code?: string; message?: string })
+    ) {
+      return fallback;
+    }
+
+    throw caught;
+  }
+}
+
+async function getSafeTenantSettings(tenantId: string) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from("tenants")
+    .select("workspace_display_name,brand_color,support_email,support_phone")
+    .eq("id", tenantId)
+    .maybeSingle();
+
+  if (error) {
+    if (isRecoverableAnalyticsError(error)) {
+      return null;
+    }
+
+    throw error;
+  }
+
+  return (data as SafeTenantSettings | null) ?? null;
+}
+
+async function getSafeTenantSubscription(tenantId: string) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from("tenants")
+    .select("plan")
+    .eq("id", tenantId)
+    .maybeSingle();
+
+  if (error) {
+    if (isRecoverableAnalyticsError(error)) {
+      return { plan: "free" } satisfies SafeTenantSubscription;
+    }
+
+    throw error;
+  }
+
+  return {
+    plan: normalizePlanKey(data?.plan),
+  } satisfies SafeTenantSubscription;
 }
 
 function getStatus(score: number): OperationsStatus {
@@ -359,10 +446,21 @@ async function getCoursesAndCohorts(tenantId: string) {
   ]);
 
   if (coursesResult.error) {
+    if (isRecoverableAnalyticsError(coursesResult.error)) {
+      return { cohorts: [], courses: [] };
+    }
+
     throw coursesResult.error;
   }
 
   if (cohortsResult.error) {
+    if (isRecoverableAnalyticsError(cohortsResult.error)) {
+      return {
+        cohorts: [],
+        courses: (coursesResult.data ?? []) as CourseRow[],
+      };
+    }
+
     throw cohortsResult.error;
   }
 
@@ -382,6 +480,10 @@ async function getLatestActivity(tenantId: string) {
     .limit(30);
 
   if (error) {
+    if (isRecoverableAnalyticsError(error)) {
+      return [];
+    }
+
     throw error;
   }
 
@@ -615,10 +717,13 @@ export async function getOperationsConsoleData(
     unreadMessageThreads,
     latestActivity,
   ] = await Promise.all([
-    getTenantSettings(tenantId),
-    getTenantSubscription(tenantId),
-    getTrialStatus(tenantId),
-    refreshWorkspaceUsageSnapshot(tenantId),
+    getSafeTenantSettings(tenantId),
+    getSafeTenantSubscription(tenantId),
+    withAnalyticsFallback(() => getTrialStatus(tenantId), emptyTrial),
+    withAnalyticsFallback(
+      () => refreshWorkspaceUsageSnapshot(tenantId),
+      emptyUsage,
+    ),
     countExactWithStatus("students", tenantId, "active"),
     countExactWithStatus("courses", tenantId, "published"),
     countExact("cohorts", tenantId),
@@ -656,9 +761,12 @@ export async function getOperationsConsoleData(
       "failed",
     ], last30Days.toISOString()),
     countExactInStatus("invoices", tenantId, ["issued", "overdue"]),
-    getCoursesAndCohorts(tenantId),
-    getUnreadThreadCount(tenantId),
-    getLatestActivity(tenantId),
+    withAnalyticsFallback(() => getCoursesAndCohorts(tenantId), {
+      cohorts: [],
+      courses: [],
+    }),
+    withAnalyticsFallback(() => getUnreadThreadCount(tenantId), 0),
+    withAnalyticsFallback(() => getLatestActivity(tenantId), []),
   ]);
 
   const courseIdsWithCohorts = new Set(

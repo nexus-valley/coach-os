@@ -46,7 +46,20 @@ const quickLinks = [
 ];
 
 function getErrorMessage(caught: unknown, fallback: string) {
-  return caught instanceof Error ? caught.message : fallback;
+  if (caught instanceof Error) {
+    return caught.message;
+  }
+
+  if (
+    caught &&
+    typeof caught === "object" &&
+    "message" in caught &&
+    typeof caught.message === "string"
+  ) {
+    return caught.message;
+  }
+
+  return fallback;
 }
 
 function formatDateTime(value: string) {

@@ -190,6 +190,36 @@ function getPreviousBranding(record: DemoSeedRecord) {
   return previous as Record<string, string | null>;
 }
 
+function isDemoTrackingMissingError(error: { code?: string; message?: string } | null) {
+  const message = error?.message?.toLowerCase() ?? "";
+
+  return (
+    error?.code === "42P01" ||
+    error?.code === "PGRST205" ||
+    message.includes("demo_seed_records") ||
+    message.includes("schema cache") ||
+    message.includes("does not exist")
+  );
+}
+
+function isMissingMetadataColumnError(error: { code?: string; message?: string } | null) {
+  const message = error?.message?.toLowerCase() ?? "";
+
+  return (
+    error?.code === "PGRST204" ||
+    (message.includes("metadata_json") && message.includes("column"))
+  );
+}
+
+function getEmptyDemoStatus(): DemoWorkspaceStatus {
+  return {
+    batchId: null,
+    lastLoadedAt: null,
+    loaded: false,
+    recordCount: 0,
+  };
+}
+
 async function ensureDemoPermission(tenantId: string) {
   const { user } = await requireTenantPermission({
     description: "Blocked demo workspace management without owner/admin access.",
@@ -198,6 +228,24 @@ async function ensureDemoPermission(tenantId: string) {
   });
 
   return user.id;
+}
+
+async function requireDemoTrackingTable() {
+  const supabase = getSupabaseClient();
+  const { error } = await supabase
+    .from("demo_seed_records")
+    .select("id", { count: "exact", head: true })
+    .limit(1);
+
+  if (error) {
+    if (isDemoTrackingMissingError(error)) {
+      throw new Error(
+        "Demo tracking is not installed yet. Run supabase/module38_demo_workspace.sql before loading demo data.",
+      );
+    }
+
+    throw error;
+  }
 }
 
 export async function recordDemoSeedEntity(params: {
@@ -314,6 +362,10 @@ export async function getDemoWorkspaceStatus(
     .order("created_at", { ascending: false });
 
   if (error) {
+    if (isDemoTrackingMissingError(error)) {
+      return getEmptyDemoStatus();
+    }
+
     throw error;
   }
 
@@ -332,6 +384,7 @@ export async function getDemoWorkspaceStatus(
 
 export async function seedDemoWorkspace(tenantId: string) {
   const userId = await ensureDemoPermission(tenantId);
+  await requireDemoTrackingTable();
   const status = await getDemoWorkspaceStatus(tenantId);
 
   if (status.loaded) {
@@ -741,22 +794,47 @@ export async function seedDemoWorkspace(tenantId: string) {
 export async function deleteDemoSeedBatch(tenantId: string, batchId?: string | null) {
   const userId = await ensureDemoPermission(tenantId);
   const supabase = getSupabaseClient();
+  const baseSelect = "entity_type,entity_id,seed_batch_id,created_at";
   let recordsQuery = supabase
     .from("demo_seed_records")
-    .select("entity_type,entity_id,seed_batch_id,metadata_json,created_at")
+    .select(`${baseSelect},metadata_json`)
     .eq("tenant_id", tenantId);
 
   if (batchId) {
     recordsQuery = recordsQuery.eq("seed_batch_id", batchId);
   }
 
-  const { data, error } = await recordsQuery;
+  const recordsResult = await recordsQuery;
+  let recordsData: unknown = recordsResult.data;
+  let error = recordsResult.error;
+
+  if (error && isMissingMetadataColumnError(error)) {
+    let fallbackQuery = supabase
+      .from("demo_seed_records")
+      .select(baseSelect)
+      .eq("tenant_id", tenantId);
+
+    if (batchId) {
+      fallbackQuery = fallbackQuery.eq("seed_batch_id", batchId);
+    }
+
+    const fallbackResult = await fallbackQuery;
+    recordsData = fallbackResult.data;
+    error = fallbackResult.error;
+  }
 
   if (error) {
+    if (isDemoTrackingMissingError(error)) {
+      return {
+        deletedByType: {},
+        recordCount: 0,
+      };
+    }
+
     throw error;
   }
 
-  const records = (data ?? []) as DemoSeedRecord[];
+  const records = (recordsData ?? []) as DemoSeedRecord[];
   const deletedByType: Record<string, number> = {};
   const brandingRecords = records.filter(
     (record) => record.entity_type === "tenant_branding",
