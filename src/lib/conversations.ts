@@ -70,6 +70,14 @@ export type ConversationThreadWithMeta = ConversationThread & {
   unreadCount: number;
 };
 
+export type ConversationAvailabilityErrorType = "infrastructure" | null;
+
+export type ConversationThreadListResult = {
+  available: boolean;
+  errorType: ConversationAvailabilityErrorType;
+  threads: ConversationThreadWithMeta[];
+};
+
 export type CreateConversationThreadInput = {
   cohortId?: string | null;
   courseId?: string | null;
@@ -108,8 +116,28 @@ export function isRecoverableConversationError(error: {
   );
 }
 
+export function isConversationInfrastructureError(error: {
+  code?: string;
+  message?: string;
+} | null) {
+  const message = error?.message?.toLowerCase() ?? "";
+
+  return (
+    error?.code === "42P01" ||
+    error?.code === "42703" ||
+    error?.code === "PGRST200" ||
+    error?.code === "PGRST204" ||
+    error?.code === "PGRST205" ||
+    message.includes("relation") ||
+    message.includes("table") ||
+    message.includes("column") ||
+    message.includes("schema cache") ||
+    message.includes("does not exist")
+  );
+}
+
 function isMissingTableError(error: { code?: string; message?: string } | null) {
-  return isRecoverableConversationError(error);
+  return isConversationInfrastructureError(error);
 }
 
 async function getCurrentUserAndRole(tenantId: string) {
@@ -587,7 +615,19 @@ export async function getConversationThreads(
   const { data, error } = await query;
 
   if (error) {
-    if (isMissingTableError(error)) {
+    if (isConversationInfrastructureError(error)) {
+      logOptionalQueryFailure(
+        {
+          area: "conversations.getConversationThreads",
+          helper: "conversationThreadSelect",
+          table: "conversation_threads",
+        },
+        error,
+      );
+      throw error;
+    }
+
+    if (isRecoverableConversationError(error)) {
       logOptionalQueryFailure(
         {
           area: "conversations.getConversationThreads",
@@ -615,7 +655,7 @@ export async function isConversationSystemAvailable(tenantId: string) {
       .limit(1);
 
     if (error) {
-      if (isRecoverableConversationError(error)) {
+      if (isConversationInfrastructureError(error)) {
         logOptionalQueryFailure(
           {
             area: "conversations.isConversationSystemAvailable",
@@ -635,7 +675,7 @@ export async function isConversationSystemAvailable(tenantId: string) {
     if (
       caught &&
       typeof caught === "object" &&
-      isRecoverableConversationError(caught as { code?: string; message?: string })
+      isConversationInfrastructureError(caught as { code?: string; message?: string })
     ) {
       logOptionalQueryFailure(
         {
@@ -655,10 +695,39 @@ export async function isConversationSystemAvailable(tenantId: string) {
 export async function safeGetConversationThreads(
   tenantId: string,
   filters: { threadType?: ConversationThreadType | "all" } = {},
-) {
+): Promise<ConversationThreadListResult> {
   try {
-    return await getConversationThreads(tenantId, filters);
+    const threads = await getConversationThreads(tenantId, filters);
+
+    return {
+      available: true,
+      errorType: null,
+      threads,
+    };
   } catch (caught) {
+    if (
+      caught &&
+      typeof caught === "object" &&
+      isConversationInfrastructureError(
+        caught as { code?: string; message?: string },
+      )
+    ) {
+      logOptionalQueryFailure(
+        {
+          area: "conversations.safeGetConversationThreads",
+          helper: "getConversationThreads",
+          table: "conversation_threads",
+        },
+        caught,
+      );
+
+      return {
+        available: false,
+        errorType: "infrastructure",
+        threads: [],
+      };
+    }
+
     if (
       caught &&
       typeof caught === "object" &&
@@ -672,7 +741,12 @@ export async function safeGetConversationThreads(
         },
         caught,
       );
-      return [];
+
+      return {
+        available: true,
+        errorType: null,
+        threads: [],
+      };
     }
 
     throw caught;

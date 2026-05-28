@@ -13,8 +13,8 @@ import { getCohortsForTenant, type CohortWithCourse } from "@/src/lib/cohorts";
 import { getCoursesForTenant, type Course } from "@/src/lib/courses";
 import {
   createConversationThread,
-  isConversationSystemAvailable,
   safeGetConversationThreads,
+  type ConversationThreadListResult,
   type ConversationThreadType,
   type ConversationThreadWithMeta,
 } from "@/src/lib/conversations";
@@ -108,18 +108,9 @@ export function MessagesPageClient() {
     currentTenant: Tenant,
     nextFilter: ConversationThreadType | "all" = filter,
   ) => {
-    const [available, rows, tenantCourses, tenantCohorts, tenantMembers, unread] =
+    const [threadResult, tenantCourses, tenantCohorts, tenantMembers, unread] =
       await Promise.all([
-        safeOptionalQuery(
-          {
-            area: "messages.loadWorkspace",
-            helper: "isConversationSystemAvailable",
-            table: "conversation_threads",
-          },
-          () => isConversationSystemAvailable(currentTenant.id),
-          false,
-        ),
-        safeOptionalQuery<ConversationThreadWithMeta[]>(
+        safeOptionalQuery<ConversationThreadListResult>(
           {
             area: "messages.loadWorkspace",
             helper: "safeGetConversationThreads",
@@ -129,7 +120,11 @@ export function MessagesPageClient() {
             safeGetConversationThreads(currentTenant.id, {
               threadType: nextFilter,
             }),
-          [],
+          {
+            available: true,
+            errorType: null,
+            threads: [],
+          },
         ),
         safeOptionalQuery<Course[]>(
           {
@@ -169,8 +164,15 @@ export function MessagesPageClient() {
         ),
       ]);
 
-    setConversationAvailable(available || rows.length > 0);
-    setThreads(rows);
+    console.info("[CoachFort messages availability]", {
+      available: threadResult.available,
+      errorType: threadResult.errorType,
+      tenantIdPresent: Boolean(currentTenant.id),
+      threadCount: threadResult.threads.length,
+    });
+
+    setConversationAvailable(threadResult.available);
+    setThreads(threadResult.threads);
     setCourses(tenantCourses);
     setCohorts(tenantCohorts);
     setMembers(tenantMembers);
