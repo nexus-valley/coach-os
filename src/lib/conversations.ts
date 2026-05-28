@@ -88,15 +88,27 @@ const threadSelect =
 const participantSelect =
   "id,tenant_id,thread_id,user_id,student_id,role,last_read_at,created_at";
 
-function isMissingTableError(error: { code?: string; message?: string } | null) {
+export function isRecoverableConversationError(error: {
+  code?: string;
+  message?: string;
+} | null) {
   const message = error?.message?.toLowerCase() ?? "";
 
   return (
     error?.code === "42P01" ||
     error?.code === "PGRST205" ||
+    error?.code === "PGRST204" ||
+    error?.code === "42703" ||
+    error?.code === "42501" ||
+    message.includes("column") ||
+    message.includes("permission denied") ||
     message.includes("schema cache") ||
     message.includes("does not exist")
   );
+}
+
+function isMissingTableError(error: { code?: string; message?: string } | null) {
+  return isRecoverableConversationError(error);
 }
 
 async function getCurrentUserAndRole(tenantId: string) {
@@ -354,45 +366,58 @@ async function attachThreadMeta(
       .in("thread_id", threadIds),
   ]);
 
-  for (const result of [
-    coursesResult,
-    cohortsResult,
-    studentsResult,
-    participantsResult,
-    messagesResult,
-    ownParticipantsResult,
-  ]) {
+  for (const result of [coursesResult, cohortsResult, studentsResult]) {
     if (result.error) {
-      throw result.error;
+      if (!isRecoverableConversationError(result.error)) {
+        throw result.error;
+      }
     }
   }
 
   const courseById = new Map(
-    ((coursesResult.data ?? []) as Pick<Course, "id" | "title">[]).map(
-      (course) => [course.id, course],
-    ),
+    (coursesResult.error
+      ? []
+      : ((coursesResult.data ?? []) as Pick<Course, "id" | "title">[])
+    ).map((course) => [course.id, course]),
   );
   const cohortById = new Map(
-    ((cohortsResult.data ?? []) as Pick<CohortWithCourse, "id" | "name">[]).map(
-      (cohort) => [cohort.id, cohort],
-    ),
+    (cohortsResult.error
+      ? []
+      : ((cohortsResult.data ?? []) as Pick<CohortWithCourse, "id" | "name">[])
+    ).map((cohort) => [cohort.id, cohort]),
   );
   const studentById = new Map(
-    ((studentsResult.data ?? []) as Pick<Student, "full_name" | "id">[]).map(
-      (student) => [student.id, student],
-    ),
+    (studentsResult.error
+      ? []
+      : ((studentsResult.data ?? []) as Pick<Student, "full_name" | "id">[])
+    ).map((student) => [student.id, student]),
   );
   const participantCounts = new Map<string, number>();
 
-  for (const row of (participantsResult.data ?? []) as { thread_id: string }[]) {
+  const participantRows = participantsResult.error
+    ? []
+    : ((participantsResult.data ?? []) as { thread_id: string }[]);
+
+  if (participantsResult.error && !isRecoverableConversationError(participantsResult.error)) {
+    throw participantsResult.error;
+  }
+
+  for (const row of participantRows) {
     participantCounts.set(row.thread_id, (participantCounts.get(row.thread_id) ?? 0) + 1);
   }
 
   const recentMessageByThread = new Map<string, ConversationMessagePreview>();
+  const messageRows = messagesResult.error
+    ? []
+    : ((messagesResult.data ?? []) as (ConversationMessagePreview & {
+        thread_id: string;
+      })[]);
 
-  for (const message of (messagesResult.data ?? []) as (ConversationMessagePreview & {
-    thread_id: string;
-  })[]) {
+  if (messagesResult.error && !isRecoverableConversationError(messagesResult.error)) {
+    throw messagesResult.error;
+  }
+
+  for (const message of messageRows) {
     if (!recentMessageByThread.has(message.thread_id)) {
       recentMessageByThread.set(message.thread_id, {
         created_at: message.created_at,
@@ -404,15 +429,25 @@ async function attachThreadMeta(
     }
   }
 
-  const lastReadByThread = new Map(
-    ((ownParticipantsResult.data ?? []) as {
+  if (
+    ownParticipantsResult.error &&
+    !isRecoverableConversationError(ownParticipantsResult.error)
+  ) {
+    throw ownParticipantsResult.error;
+  }
+
+  const ownParticipantRows = ownParticipantsResult.error
+    ? []
+    : ((ownParticipantsResult.data ?? []) as {
       last_read_at: string | null;
       thread_id: string;
-    }[]).map((row) => [row.thread_id, row.last_read_at]),
+    }[]);
+  const lastReadByThread = new Map(
+    ownParticipantRows.map((row) => [row.thread_id, row.last_read_at]),
   );
   const unreadByThread = new Map<string, number>();
 
-  for (const message of (messagesResult.data ?? []) as {
+  for (const message of messageRows as {
     created_at: string;
     sender_user_id: string | null;
     thread_id: string;
@@ -512,6 +547,49 @@ export async function getConversationThreads(
   }
 
   return attachThreadMeta((data ?? []) as ConversationThread[], tenantId, user.id);
+}
+
+export async function isConversationSystemAvailable(tenantId: string) {
+  try {
+    await getCurrentUserAndRole(tenantId);
+    const supabase = getSupabaseClient();
+    const { error } = await supabase
+      .from("conversation_threads")
+      .select("id", { count: "exact", head: true })
+      .eq("tenant_id", tenantId)
+      .limit(1);
+
+    return !error || !isRecoverableConversationError(error);
+  } catch (caught) {
+    if (
+      caught &&
+      typeof caught === "object" &&
+      isRecoverableConversationError(caught as { code?: string; message?: string })
+    ) {
+      return false;
+    }
+
+    throw caught;
+  }
+}
+
+export async function safeGetConversationThreads(
+  tenantId: string,
+  filters: { threadType?: ConversationThreadType | "all" } = {},
+) {
+  try {
+    return await getConversationThreads(tenantId, filters);
+  } catch (caught) {
+    if (
+      caught &&
+      typeof caught === "object" &&
+      isRecoverableConversationError(caught as { code?: string; message?: string })
+    ) {
+      return [];
+    }
+
+    throw caught;
+  }
 }
 
 export async function getConversationThreadById(params: {

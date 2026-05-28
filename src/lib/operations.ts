@@ -1,5 +1,5 @@
 import { logActivity, type AuditLog } from "@/src/lib/auditLogger";
-import { getUnreadThreadCount } from "@/src/lib/messages";
+import { safeGetUnreadThreadCount } from "@/src/lib/messages";
 import {
   canAccessOperations,
   getMemberRoleForTenant,
@@ -194,7 +194,9 @@ function isRecoverableAnalyticsError(error: { code?: string; message?: string } 
     error?.code === "42P01" ||
     error?.code === "PGRST205" ||
     error?.code === "PGRST204" ||
+    error?.code === "42501" ||
     message.includes("column") ||
+    message.includes("permission denied") ||
     message.includes("schema cache") ||
     message.includes("does not exist")
   );
@@ -765,7 +767,7 @@ export async function getOperationsConsoleData(
       cohorts: [],
       courses: [],
     }),
-    withAnalyticsFallback(() => getUnreadThreadCount(tenantId), 0),
+    withAnalyticsFallback(() => safeGetUnreadThreadCount(tenantId), 0),
     withAnalyticsFallback(() => getLatestActivity(tenantId), []),
   ]);
 

@@ -2,6 +2,7 @@ import { logActivity } from "@/src/lib/auditLogger";
 import {
   getConversationParticipants,
   getConversationThreadById,
+  isRecoverableConversationError,
   type ConversationThreadType,
 } from "@/src/lib/conversations";
 import {
@@ -33,14 +34,7 @@ const messageSelect =
   "id,tenant_id,thread_id,sender_user_id,sender_student_id,message,message_type,status,metadata_json,created_at,edited_at,deleted_at";
 
 function isMissingTableError(error: { code?: string; message?: string } | null) {
-  const message = error?.message?.toLowerCase() ?? "";
-
-  return (
-    error?.code === "42P01" ||
-    error?.code === "PGRST205" ||
-    message.includes("schema cache") ||
-    message.includes("does not exist")
-  );
+  return isRecoverableConversationError(error);
 }
 
 async function getCurrentUser(tenantId: string) {
@@ -412,6 +406,10 @@ export async function getUnreadThreadCount(tenantId: string) {
     .neq("status", "deleted");
 
   if (messagesResult.error) {
+    if (isMissingTableError(messagesResult.error)) {
+      return 0;
+    }
+
     throw messagesResult.error;
   }
 
@@ -438,4 +436,20 @@ export async function getUnreadThreadCount(tenantId: string) {
   }
 
   return unreadThreadIds.size;
+}
+
+export async function safeGetUnreadThreadCount(tenantId: string) {
+  try {
+    return await getUnreadThreadCount(tenantId);
+  } catch (caught) {
+    if (
+      caught &&
+      typeof caught === "object" &&
+      isRecoverableConversationError(caught as { code?: string; message?: string })
+    ) {
+      return 0;
+    }
+
+    throw caught;
+  }
 }

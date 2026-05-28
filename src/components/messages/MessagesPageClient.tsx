@@ -13,11 +13,13 @@ import { getCohortsForTenant, type CohortWithCourse } from "@/src/lib/cohorts";
 import { getCoursesForTenant, type Course } from "@/src/lib/courses";
 import {
   createConversationThread,
-  getConversationThreads,
+  isConversationSystemAvailable,
+  isRecoverableConversationError,
+  safeGetConversationThreads,
   type ConversationThreadType,
   type ConversationThreadWithMeta,
 } from "@/src/lib/conversations";
-import { getUnreadThreadCount } from "@/src/lib/messages";
+import { safeGetUnreadThreadCount } from "@/src/lib/messages";
 import { getCurrentTenant, type Tenant } from "@/src/lib/tenant";
 import { getTenantMembers, type TenantMemberWithProfile } from "@/src/lib/team";
 
@@ -50,6 +52,24 @@ const threadTypeOptions: { label: string; value: ConversationThreadType | "all" 
 
 function getErrorMessage(caught: unknown, fallback: string) {
   return caught instanceof Error ? caught.message : fallback;
+}
+
+async function withPassiveFallback<T>(loader: () => Promise<T>, fallback: T) {
+  try {
+    return await loader();
+  } catch (caught) {
+    if (
+      caught &&
+      typeof caught === "object" &&
+      isRecoverableConversationError(
+        caught as { code?: string; message?: string },
+      )
+    ) {
+      return fallback;
+    }
+
+    throw caught;
+  }
 }
 
 function formatDate(value: string) {
@@ -87,6 +107,7 @@ export function MessagesPageClient() {
   const [cohorts, setCohorts] = useState<CohortWithCourse[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
   const [error, setError] = useState("");
+  const [conversationAvailable, setConversationAvailable] = useState(true);
   const [filter, setFilter] = useState<ConversationThreadType | "all">("all");
   const [form, setForm] = useState<ThreadFormState>(emptyForm);
   const [formOpen, setFormOpen] = useState(false);
@@ -102,15 +123,26 @@ export function MessagesPageClient() {
     currentTenant: Tenant,
     nextFilter: ConversationThreadType | "all" = filter,
   ) => {
-    const [rows, tenantCourses, tenantCohorts, tenantMembers, unread] =
+    const [available, rows, tenantCourses, tenantCohorts, tenantMembers, unread] =
       await Promise.all([
-        getConversationThreads(currentTenant.id, { threadType: nextFilter }),
-        getCoursesForTenant(currentTenant.id),
-        getCohortsForTenant(currentTenant.id),
-        getTenantMembers(currentTenant.id),
-        getUnreadThreadCount(currentTenant.id),
+        isConversationSystemAvailable(currentTenant.id),
+        safeGetConversationThreads(currentTenant.id, { threadType: nextFilter }),
+        withPassiveFallback<Course[]>(
+          () => getCoursesForTenant(currentTenant.id),
+          [],
+        ),
+        withPassiveFallback<CohortWithCourse[]>(
+          () => getCohortsForTenant(currentTenant.id),
+          [],
+        ),
+        withPassiveFallback<TenantMemberWithProfile[]>(
+          () => getTenantMembers(currentTenant.id),
+          [],
+        ),
+        safeGetUnreadThreadCount(currentTenant.id),
       ]);
 
+    setConversationAvailable(available);
     setThreads(rows);
     setCourses(tenantCourses);
     setCohorts(tenantCohorts);
@@ -235,7 +267,9 @@ export function MessagesPageClient() {
           <Badge tone={unreadCount > 0 ? "warning" : "light"}>
             {unreadCount} unread
           </Badge>
-          <Button onClick={() => setFormOpen(true)}>New Conversation</Button>
+          {conversationAvailable ? (
+            <Button onClick={() => setFormOpen(true)}>New Conversation</Button>
+          ) : null}
         </div>
       </div>
 
@@ -282,6 +316,12 @@ export function MessagesPageClient() {
         <Card className="mt-6 h-72 animate-pulse border-[#D8E8F0] bg-white">
           <span className="sr-only">Loading messages</span>
         </Card>
+      ) : !conversationAvailable ? (
+        <EmptyState
+          description="Message infrastructure is not available yet. Run the Module 36 chat SQL migration to enable conversations."
+          icon="MS"
+          title="Messages are not configured"
+        />
       ) : threads.length === 0 ? (
         <EmptyState
           action={{
