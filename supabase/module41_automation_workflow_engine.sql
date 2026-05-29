@@ -163,8 +163,12 @@ create table if not exists public.automation_runs (
   started_at timestamptz not null default now(),
   completed_at timestamptz,
   error_message text,
+  created_by uuid references auth.users(id) on delete set null default auth.uid(),
   metadata_json jsonb not null default '{}'::jsonb
 );
+
+alter table public.automation_runs
+add column if not exists created_by uuid references auth.users(id) on delete set null default auth.uid();
 
 create table if not exists public.automation_run_logs (
   id uuid primary key default gen_random_uuid(),
@@ -203,6 +207,8 @@ create index if not exists automation_runs_tenant_status_idx
 on public.automation_runs (tenant_id, status);
 create index if not exists automation_runs_tenant_started_at_idx
 on public.automation_runs (tenant_id, started_at desc);
+create index if not exists automation_runs_tenant_created_by_idx
+on public.automation_runs (tenant_id, created_by);
 
 create index if not exists automation_run_logs_tenant_idx
 on public.automation_run_logs (tenant_id);

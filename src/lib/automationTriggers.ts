@@ -1,13 +1,6 @@
 import { logActivity } from "@/src/lib/auditLogger";
-import {
-  getAutomationRulesForTenant,
-  type AutomationTriggerType,
-} from "@/src/lib/automations";
-import {
-  runAutomationRule,
-  type AutomationExecutionResult,
-  type AutomationTriggerContext,
-} from "@/src/lib/automationRunner";
+import { type AutomationTriggerType } from "@/src/lib/automations";
+import { type AutomationTriggerContext } from "@/src/lib/automationRunner";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 
 const assignmentSelect =
@@ -15,10 +8,24 @@ const assignmentSelect =
 const tenantTrialSelect =
   "id,name,trial_ends_at,is_trial_active";
 
+type AutomationTriggerResult = {
+  executed: number;
+  failed: number;
+  results: [];
+  skipped: number;
+};
+
+const emptyTriggerResult: AutomationTriggerResult = {
+  executed: 0,
+  failed: 0,
+  results: [],
+  skipped: 0,
+};
+
 export async function runAutomationTrigger(
   triggerType: AutomationTriggerType,
   context: Omit<AutomationTriggerContext, "triggerSource">,
-) {
+): Promise<AutomationTriggerResult> {
   try {
     await logActivity({
       action: "automation_trigger_received",
@@ -34,34 +41,29 @@ export async function runAutomationTrigger(
       tenantId: context.tenantId,
     });
 
-    const rules = await getAutomationRulesForTenant(context.tenantId);
-    const matchingRules = rules.filter(
-      (rule) => rule.status === "active" && rule.trigger_type === triggerType,
-    );
-    const results: AutomationExecutionResult[] = [];
+    const supabase = getSupabaseClient();
+    const { data, error } = await supabase.rpc("run_automation_trigger", {
+      entity_id: context.entityId ?? null,
+      entity_type: context.entityType ?? "automation",
+      metadata_json: context.metadata ?? {},
+      tenant_id: context.tenantId,
+      trigger_type: triggerType,
+    });
 
-    for (const rule of matchingRules) {
-      results.push(
-        await runAutomationRule(rule, {
-          ...context,
-          triggerSource: triggerType,
-        }),
-      );
+    if (error) {
+      return emptyTriggerResult;
     }
 
+    const summary = Array.isArray(data) ? data[0] : data;
+
     return {
-      executed: results.filter((result) => result.status === "success").length,
-      failed: results.filter((result) => result.status === "failed").length,
-      results,
-      skipped: results.filter((result) => result.status === "skipped").length,
+      executed: Number(summary?.executed_count ?? 0),
+      failed: Number(summary?.failed_count ?? 0),
+      results: [],
+      skipped: Number(summary?.skipped_count ?? 0),
     };
   } catch {
-    return {
-      executed: 0,
-      failed: 0,
-      results: [],
-      skipped: 0,
-    };
+    return emptyTriggerResult;
   }
 }
 

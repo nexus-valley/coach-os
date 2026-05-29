@@ -115,6 +115,7 @@ async function createRun(
   const { data, error } = await supabase
     .from("automation_runs")
     .insert({
+      created_by: await getCurrentUserId(),
       entity_id: context.entityId ?? null,
       entity_type: context.entityType ?? null,
       metadata_json: context.metadata ?? {},
@@ -419,14 +420,18 @@ export async function executeAutomationActions(
         });
       }
 
+      const actionWasSkipped = actionLog.toLowerCase().includes("skipped");
+      const auditAction = actionWasSkipped
+        ? "automation_action_skipped"
+        : action.action_type === "create_notification"
+          ? "automation_notification_created"
+          : action.action_type === "send_email_placeholder" ||
+              action.action_type === "send_whatsapp_placeholder"
+            ? "automation_placeholder_queued"
+            : "automation_action_executed";
+
       await logActivity({
-        action:
-          action.action_type === "create_notification"
-            ? "automation_notification_created"
-            : action.action_type === "send_email_placeholder" ||
-                action.action_type === "send_whatsapp_placeholder"
-              ? "automation_placeholder_queued"
-              : "automation_action_executed",
+        action: auditAction,
         description: actionLog,
         entityId: rule.id,
         entityName: rule.name,
