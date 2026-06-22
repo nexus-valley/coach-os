@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "regression:accounts": "node --no-warnings scripts/create-regression-accounts.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.104.1",
