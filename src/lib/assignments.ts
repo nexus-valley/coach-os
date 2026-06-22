@@ -2,6 +2,13 @@ import { logActivity } from "@/src/lib/auditLogger";
 import type { CohortWithCourse } from "@/src/lib/cohorts";
 import type { Course } from "@/src/lib/courses";
 import {
+  explainPermissionSource,
+  logDelegatedPermissionUsage,
+  type DelegatedPermission,
+  type DelegatedPermissionKey,
+  type DelegatedPermissionScopeType,
+} from "@/src/lib/delegatedPermissions";
+import {
   createNotificationForTenantRoles,
   createNotificationsForUsers,
 } from "@/src/lib/notifications";
@@ -63,6 +70,16 @@ export type UpdateAssignmentInput = AssignmentInput & {
 
 const assignmentColumns =
   "id,tenant_id,course_id,cohort_id,trainer_user_id,title,description,instructions,attachment_urls_json,max_score,due_at,status,created_by,created_at,updated_at";
+
+type DelegatedAssignmentDecision =
+  | { source: "role" }
+  | {
+      delegatedPermission: DelegatedPermission;
+      permissionKey: DelegatedPermissionKey;
+      scopeId: string | null;
+      scopeType: DelegatedPermissionScopeType;
+      source: "delegated";
+    };
 
 function normalizeAssignment(row: Assignment) {
   return {
@@ -152,17 +169,60 @@ async function getCurrentUserAndRole(tenantId: string) {
 }
 
 export async function ensureCanManageAssignment(params: {
+  assignmentId?: string | null;
   cohortId?: string | null;
   courseId?: string | null;
   tenantId: string;
 }) {
-  const { role, user } = await getCurrentUserAndRole(params.tenantId);
+  return ensureCanUseAssignmentPermission({
+    ...params,
+    action: "manage_assignment",
+    permissionKey: "manage_assignments",
+  });
+}
 
-  if (!canManageAttendance(role)) {
+export async function ensureCanReviewAssignment(params: {
+  assignmentId?: string | null;
+  cohortId?: string | null;
+  courseId?: string | null;
+  studentId?: string | null;
+  tenantId: string;
+}) {
+  return ensureCanUseAssignmentPermission({
+    ...params,
+    action: "review_assignment",
+    permissionKey: "review_assignments",
+  });
+}
+
+async function ensureCanUseAssignmentPermission(params: {
+  action: string;
+  assignmentId?: string | null;
+  cohortId?: string | null;
+  courseId?: string | null;
+  permissionKey: "manage_assignments" | "review_assignments";
+  studentId?: string | null;
+  tenantId: string;
+}) {
+  const { role, user } = await getCurrentUserAndRole(params.tenantId);
+  const baseRoleAllowed = canManageAttendance(role);
+  const delegatedDecision = baseRoleAllowed
+    ? null
+    : await getDelegatedAssignmentDecision({
+        assignmentId: params.assignmentId,
+        cohortId: params.cohortId,
+        courseId: params.courseId,
+        permissionKey: params.permissionKey,
+        studentId: params.studentId,
+        tenantId: params.tenantId,
+        userId: user.id,
+      });
+
+  if (!baseRoleAllowed && !delegatedDecision) {
     throw new Error("You do not have permission to manage assignments.");
   }
 
-  if (role === "trainer") {
+  if (role === "trainer" && baseRoleAllowed) {
     const [courseAssigned, cohortAssigned] = await Promise.all([
       params.courseId
         ? isTrainerAssignedToCourse(params.tenantId, user.id, params.courseId)
@@ -190,7 +250,90 @@ export async function ensureCanManageAssignment(params: {
     }
   }
 
-  return { role, user };
+  return {
+    decision:
+      delegatedDecision ??
+      ({ source: "role" } satisfies DelegatedAssignmentDecision),
+    role,
+    user,
+  };
+}
+
+async function getDelegatedAssignmentDecision(params: {
+  assignmentId?: string | null;
+  cohortId?: string | null;
+  courseId?: string | null;
+  permissionKey: "manage_assignments" | "review_assignments";
+  studentId?: string | null;
+  tenantId: string;
+  userId: string;
+}): Promise<DelegatedAssignmentDecision | null> {
+  const scopes: {
+    scopeId: string | null;
+    scopeType: DelegatedPermissionScopeType;
+  }[] = [{ scopeId: null, scopeType: "workspace" }];
+
+  if (params.courseId) {
+    scopes.push({ scopeId: params.courseId, scopeType: "course" });
+  }
+
+  if (params.cohortId) {
+    scopes.push({ scopeId: params.cohortId, scopeType: "cohort" });
+  }
+
+  if (params.assignmentId) {
+    scopes.push({ scopeId: params.assignmentId, scopeType: "assignment" });
+  }
+
+  if (params.studentId) {
+    scopes.push({ scopeId: params.studentId, scopeType: "student" });
+  }
+
+  for (const scope of scopes) {
+    const source = await explainPermissionSource({
+      permission: params.permissionKey,
+      scopeId: scope.scopeId,
+      scopeType: scope.scopeType,
+      tenantId: params.tenantId,
+      userId: params.userId,
+    });
+
+    if (source.source === "delegated") {
+      return {
+        delegatedPermission: source.delegatedPermission,
+        permissionKey: params.permissionKey,
+        scopeId: scope.scopeId,
+        scopeType: scope.scopeType,
+        source: "delegated",
+      };
+    }
+  }
+
+  return null;
+}
+
+export async function logAssignmentDelegatedUse(params: {
+  action: string;
+  decision: DelegatedAssignmentDecision;
+  entityId: string;
+  entityType: "assignment" | "assignment_submission";
+  tenantId: string;
+  userId: string;
+}) {
+  if (params.decision.source !== "delegated") {
+    return;
+  }
+
+  await logDelegatedPermissionUsage({
+    action: params.action,
+    delegatedPermission: params.decision.delegatedPermission,
+    entityId: params.entityId,
+    entityType: params.entityType,
+    scopeId: params.decision.scopeId,
+    scopeType: params.decision.scopeType,
+    tenantId: params.tenantId,
+    userId: params.userId,
+  });
 }
 
 function applyTrainerAssignmentScope<T extends { or: (filters: string) => T }>(
@@ -437,7 +580,7 @@ export async function getAssignmentById(params: {
 
 export async function createAssignment(input: AssignmentInput) {
   const validated = validateAssignmentInput(input);
-  const { role, user } = await ensureCanManageAssignment({
+  const { decision, role, user } = await ensureCanManageAssignment({
     cohortId: input.cohortId,
     courseId: input.courseId,
     tenantId: input.tenantId,
@@ -484,13 +627,22 @@ export async function createAssignment(input: AssignmentInput) {
     },
     tenantId: assignment.tenant_id,
   });
+  await logAssignmentDelegatedUse({
+    action: "create_assignment",
+    decision,
+    entityId: assignment.id,
+    entityType: "assignment",
+    tenantId: assignment.tenant_id,
+    userId: user.id,
+  });
 
   return assignment;
 }
 
 export async function updateAssignment(input: UpdateAssignmentInput) {
   const validated = validateAssignmentInput(input);
-  const { role, user } = await ensureCanManageAssignment({
+  const { decision, role, user } = await ensureCanManageAssignment({
+    assignmentId: input.assignmentId,
     cohortId: input.cohortId,
     courseId: input.courseId,
     tenantId: input.tenantId,
@@ -536,6 +688,14 @@ export async function updateAssignment(input: UpdateAssignmentInput) {
     },
     tenantId: assignment.tenant_id,
   });
+  await logAssignmentDelegatedUse({
+    action: "update_assignment",
+    decision,
+    entityId: assignment.id,
+    entityType: "assignment",
+    tenantId: assignment.tenant_id,
+    userId: user.id,
+  });
 
   return assignment;
 }
@@ -556,7 +716,8 @@ async function updateAssignmentStatus(params: {
     throw new Error("Assignment not found in this workspace.");
   }
 
-  await ensureCanManageAssignment({
+  const { decision, user } = await ensureCanManageAssignment({
+    assignmentId: existing.id,
     cohortId: existing.cohort_id,
     courseId: existing.course_id,
     tenantId: params.tenantId,
@@ -591,6 +752,14 @@ async function updateAssignmentStatus(params: {
     },
     severity: params.action === "assignment_closed" ? "warning" : "info",
     tenantId: assignment.tenant_id,
+  });
+  await logAssignmentDelegatedUse({
+    action: params.action,
+    decision,
+    entityId: assignment.id,
+    entityType: "assignment",
+    tenantId: assignment.tenant_id,
+    userId: user.id,
   });
 
   if (params.action === "assignment_published") {

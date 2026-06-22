@@ -88,6 +88,9 @@ export type CreateDelegatedPermissionInput = {
 };
 
 export type DelegatedPermissionCheck = {
+  action?: string;
+  entityId?: string | null;
+  entityType?: string | null;
   logUsage?: boolean;
   permissionKey: DelegatedPermissionKey;
   scopeId?: string | null;
@@ -550,23 +553,49 @@ export async function hasDelegatedPermission(input: DelegatedPermissionCheck) {
   );
 
   if (match && input.logUsage) {
-    await logActivity({
-      action: "delegated_permission_used",
-      description: "Used a delegated permission exception.",
-      entityId: match.id,
-      entityName: delegatedPermissionLabels[match.permission_key],
-      entityType: "delegated_permission",
-      metadata: {
-        permission_key: match.permission_key,
-        scope_id: input.scopeId ?? match.scope_id,
-        scope_type: input.scopeType ?? match.scope_type,
-        target_user_id: userId,
-      },
+    await logDelegatedPermissionUsage({
+      action: input.action,
+      delegatedPermission: match,
+      entityId: input.entityId,
+      entityType: input.entityType,
+      scopeId: input.scopeId,
+      scopeType: input.scopeType,
       tenantId: input.tenantId,
+      userId,
     });
   }
 
   return Boolean(match);
+}
+
+export async function logDelegatedPermissionUsage(params: {
+  action?: string | null;
+  delegatedPermission: DelegatedPermission;
+  entityId?: string | null;
+  entityType?: string | null;
+  scopeId?: string | null;
+  scopeType?: DelegatedPermissionScopeType | null;
+  tenantId: string;
+  userId: string;
+}) {
+  await logActivity({
+    action: "delegated_permission_used",
+    description: "Used a delegated permission exception.",
+    entityId: params.delegatedPermission.id,
+    entityName:
+      delegatedPermissionLabels[params.delegatedPermission.permission_key],
+    entityType: "delegated_permission",
+    metadata: {
+      action: params.action ?? null,
+      entity_id: params.entityId ?? null,
+      entity_type: params.entityType ?? null,
+      permission_key: params.delegatedPermission.permission_key,
+      scope_id: params.scopeId ?? params.delegatedPermission.scope_id,
+      scope_type: params.scopeType ?? params.delegatedPermission.scope_type,
+      user_id: params.userId,
+    },
+    tenantId: params.tenantId,
+  });
 }
 
 export async function getEffectivePermissions(

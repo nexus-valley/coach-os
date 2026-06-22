@@ -18,6 +18,7 @@ import {
 } from "@/src/lib/assignments";
 import { getCohortsForTenant, type CohortWithCourse } from "@/src/lib/cohorts";
 import { getCoursesForTenant, type Course } from "@/src/lib/courses";
+import { getUserDelegatedPermissions } from "@/src/lib/delegatedPermissions";
 import { canAccessAttendance } from "@/src/lib/permissions";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 import { getCurrentMemberRole, type MemberRole } from "@/src/lib/team";
@@ -85,6 +86,7 @@ function defaultDueDate() {
 export function AssignmentsPageClient() {
   const router = useRouter();
   const [assignments, setAssignments] = useState<AssignmentWithRelations[]>([]);
+  const [canManageEffective, setCanManageEffective] = useState(false);
   const [cohorts, setCohorts] = useState<CohortWithCourse[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
   const [currentRole, setCurrentRole] = useState<MemberRole | null>(null);
@@ -98,7 +100,7 @@ export function AssignmentsPageClient() {
   const [tenant, setTenant] = useState<Tenant | null>(null);
 
   const canAccess = canAccessAttendance(currentRole);
-  const canManage = canRoleManageAssignments(currentRole);
+  const canManage = canManageEffective;
 
   async function loadAssignmentContext(currentTenant: Tenant) {
     const [tenantAssignments, tenantCourses, tenantCohorts] = await Promise.all([
@@ -147,6 +149,18 @@ export function AssignmentsPageClient() {
 
         if (canAccessAttendance(role)) {
           await loadAssignmentContext(currentTenant);
+          const delegated = user
+            ? await getUserDelegatedPermissions(currentTenant.id, user.id).catch(
+                () => [],
+              )
+            : [];
+          setCanManageEffective(
+            canRoleManageAssignments(role) ||
+              delegated.some(
+                (permission) =>
+                  permission.permission_key === "manage_assignments",
+              ),
+          );
         }
       } catch (caught) {
         if (!active) {

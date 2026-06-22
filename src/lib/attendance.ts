@@ -1,5 +1,12 @@
 import { logActivity } from "@/src/lib/auditLogger";
 import { getCohortMembers } from "@/src/lib/cohorts";
+import {
+  explainPermissionSource,
+  logDelegatedPermissionUsage,
+  type DelegatedPermission,
+  type DelegatedPermissionKey,
+  type DelegatedPermissionScopeType,
+} from "@/src/lib/delegatedPermissions";
 import { getEnrollmentsForCourse } from "@/src/lib/enrollments";
 import { canManageAttendance } from "@/src/lib/permissions";
 import {
@@ -46,6 +53,16 @@ export type AttendanceSummary = {
 
 const attendanceColumns =
   "id,tenant_id,session_id,student_id,status,remarks,marked_by,marked_at,created_at";
+
+type DelegatedAttendanceDecision =
+  | { source: "role" }
+  | {
+      delegatedPermission: DelegatedPermission;
+      permissionKey: DelegatedPermissionKey;
+      scopeId: string | null;
+      scopeType: DelegatedPermissionScopeType;
+      source: "delegated";
+    };
 
 async function notifyAttendanceAlert(params: {
   absentCount: number;
@@ -102,14 +119,142 @@ async function getCurrentUserAndRole(tenantId: string) {
 
 async function ensureCanManageAttendanceForSession(
   session: TrainingSessionWithRelations,
+  studentIds: string[] = [],
 ) {
   const { role, user } = await getCurrentUserAndRole(session.tenant_id);
 
-  if (!canManageAttendance(role)) {
+  if (canManageAttendance(role)) {
+    return { decision: { source: "role" } satisfies DelegatedAttendanceDecision, role, user };
+  }
+
+  const decision = await getDelegatedAttendanceDecision({
+    session,
+    studentIds,
+    userId: user.id,
+  });
+
+  if (!decision) {
+    await logActivity({
+      action: "access_denied",
+      description: "Blocked attendance marking without effective permission.",
+      entityId: session.id,
+      entityName: session.title,
+      entityType: "security",
+      metadata: {
+        role,
+        sessionId: session.id,
+        studentIds,
+      },
+      severity: "warning",
+      tenantId: session.tenant_id,
+    });
     throw new Error("You do not have permission to mark attendance.");
   }
 
-  return { role, user };
+  return { decision, role, user };
+}
+
+async function getDelegatedAttendanceDecision(params: {
+  session: TrainingSessionWithRelations;
+  studentIds?: string[];
+  userId: string;
+}): Promise<DelegatedAttendanceDecision | null> {
+  const permissionKeys: DelegatedPermissionKey[] = [
+    "edit_attendance",
+    "edit_attendance_after_lock",
+  ];
+  const sessionScopes: {
+    scopeId: string | null;
+    scopeType: DelegatedPermissionScopeType;
+  }[] = [
+    { scopeId: null, scopeType: "workspace" },
+    { scopeId: params.session.id, scopeType: "session" },
+  ];
+
+  if (params.session.cohort_id) {
+    sessionScopes.push({
+      scopeId: params.session.cohort_id,
+      scopeType: "cohort",
+    });
+  }
+
+  for (const permissionKey of permissionKeys) {
+    for (const scope of sessionScopes) {
+      const source = await explainPermissionSource({
+        permission: permissionKey,
+        scopeId: scope.scopeId,
+        scopeType: scope.scopeType,
+        tenantId: params.session.tenant_id,
+        userId: params.userId,
+      });
+
+      if (source.source === "delegated") {
+        return {
+          delegatedPermission: source.delegatedPermission,
+          permissionKey,
+          scopeId: scope.scopeId,
+          scopeType: scope.scopeType,
+          source: "delegated",
+        };
+      }
+    }
+
+    if (params.studentIds?.length) {
+      const studentMatches = await Promise.all(
+        params.studentIds.map((studentId) =>
+          explainPermissionSource({
+            permission: permissionKey,
+            scopeId: studentId,
+            scopeType: "student",
+            tenantId: params.session.tenant_id,
+            userId: params.userId,
+          }),
+        ),
+      );
+
+      if (studentMatches.every((source) => source.source === "delegated")) {
+        const firstMatch = studentMatches.find(
+          (source) => source.source === "delegated",
+        );
+
+        if (firstMatch?.source === "delegated") {
+          return {
+            delegatedPermission: firstMatch.delegatedPermission,
+            permissionKey,
+            scopeId: params.studentIds.length === 1 ? params.studentIds[0] : null,
+            scopeType: "student",
+            source: "delegated",
+          };
+        }
+      }
+    }
+  }
+
+  return null;
+}
+
+async function logAttendanceDelegatedUse(params: {
+  action: string;
+  decision: DelegatedAttendanceDecision;
+  entityId: string;
+  entityType: string;
+  tenantId: string;
+  userId: string;
+}) {
+  if (params.decision.source !== "delegated") {
+    return;
+  }
+
+  await logDelegatedPermissionUsage({
+    action: params.action,
+    delegatedPermission: params.decision.delegatedPermission,
+    entityId: params.entityId,
+    entityType: params.entityType,
+    scopeId: params.decision.scopeId,
+    scopeType: params.decision.scopeType,
+    tenantId: params.tenantId,
+    userId: params.userId,
+  });
 }
 
 function calculateSummary(total: number, records: AttendanceRecord[]) {
@@ -298,7 +443,9 @@ export async function markAttendance(params: {
     throw new Error("Session not found in this workspace.");
   }
 
-  const { user } = await ensureCanManageAttendanceForSession(session);
+  const { decision, user } = await ensureCanManageAttendanceForSession(session, [
+    params.studentId,
+  ]);
   await ensureStudentsBelongToSession(session, [params.studentId]);
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
@@ -337,6 +484,14 @@ export async function markAttendance(params: {
     },
     tenantId: record.tenant_id,
   });
+  await logAttendanceDelegatedUse({
+    action: "mark_attendance",
+    decision,
+    entityId: record.id,
+    entityType: "attendance_record",
+    tenantId: record.tenant_id,
+    userId: user.id,
+  });
   await notifyAttendanceAlert({
     absentCount: record.status === "absent" ? 1 : 0,
     session,
@@ -367,7 +522,10 @@ export async function bulkMarkAttendance(params: {
     throw new Error("No attendance records selected.");
   }
 
-  const { user } = await ensureCanManageAttendanceForSession(session);
+  const { decision, user } = await ensureCanManageAttendanceForSession(
+    session,
+    params.records.map((record) => record.studentId),
+  );
   await ensureStudentsBelongToSession(
     session,
     params.records.map((record) => record.studentId),
@@ -405,6 +563,14 @@ export async function bulkMarkAttendance(params: {
       sessionId: params.sessionId,
     },
     tenantId: params.tenantId,
+  });
+  await logAttendanceDelegatedUse({
+    action: "bulk_mark_attendance",
+    decision,
+    entityId: session.id,
+    entityType: "session",
+    tenantId: params.tenantId,
+    userId: user.id,
   });
   await notifyAttendanceAlert({
     absentCount: params.records.filter((record) => record.status === "absent")
@@ -471,4 +637,26 @@ export async function getCohortAttendanceSummary(params: {
 
 export function canRoleMarkAttendance(role: MemberRole | null | undefined) {
   return canManageAttendance(role);
+}
+
+export async function canCurrentUserMarkAttendance(params: {
+  sessionId: string;
+  studentIds?: string[];
+  tenantId: string;
+}) {
+  const session = await getSessionById({
+    sessionId: params.sessionId,
+    tenantId: params.tenantId,
+  });
+
+  if (!session || session.status === "canceled") {
+    return false;
+  }
+
+  try {
+    await ensureCanManageAttendanceForSession(session, params.studentIds ?? []);
+    return true;
+  } catch {
+    return false;
+  }
 }

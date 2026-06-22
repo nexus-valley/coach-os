@@ -11,8 +11,10 @@ import { EmptyState } from "@/src/components/ui/EmptyState";
 import { FeedbackAlert } from "@/src/components/ui/FeedbackAlert";
 import { getCoursesForTenant, type Course } from "@/src/lib/courses";
 import { getCohortsForTenant, type CohortWithCourse } from "@/src/lib/cohorts";
+import { getUserDelegatedPermissions } from "@/src/lib/delegatedPermissions";
 import { canAccessAttendance, canManageAttendance } from "@/src/lib/permissions";
 import {
+  canCurrentUserManageSession,
   createSession,
   getSessionsForTenant,
   type SessionDeliveryMode,
@@ -134,6 +136,7 @@ export function SessionsPageClient() {
   const [cohorts, setCohorts] = useState<CohortWithCourse[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
   const [currentRole, setCurrentRole] = useState<MemberRole | null>(null);
+  const [canManageEffective, setCanManageEffective] = useState(false);
   const [error, setError] = useState("");
   const [form, setForm] = useState<SessionFormState>(emptyForm);
   const [formOpen, setFormOpen] = useState(false);
@@ -145,7 +148,7 @@ export function SessionsPageClient() {
   const [tenant, setTenant] = useState<Tenant | null>(null);
 
   const canAccess = canAccessAttendance(currentRole);
-  const canManage = canManageAttendance(currentRole);
+  const canManage = canManageEffective;
 
   async function loadSessionContext(currentTenant: Tenant) {
     const [tenantSessions, tenantCourses, tenantCohorts] = await Promise.all([
@@ -194,6 +197,17 @@ export function SessionsPageClient() {
 
         if (canAccessAttendance(role)) {
           await loadSessionContext(currentTenant);
+          const delegated = user
+            ? await getUserDelegatedPermissions(currentTenant.id, user.id).catch(
+                () => [],
+              )
+            : [];
+          setCanManageEffective(
+            canManageAttendance(role) ||
+              delegated.some(
+                (permission) => permission.permission_key === "manage_sessions",
+              ),
+          );
         }
       } catch (caught) {
         if (!active) {
@@ -258,6 +272,16 @@ export function SessionsPageClient() {
     setSuccess("");
 
     try {
+      const allowed = await canCurrentUserManageSession({
+        cohortId: form.cohortId || null,
+        courseId: form.courseId || null,
+        tenantId: tenant.id,
+      });
+
+      if (!allowed) {
+        throw new Error("You do not have permission to create this session.");
+      }
+
       await createSession({
         cohortId: form.cohortId || null,
         courseId: form.courseId || null,

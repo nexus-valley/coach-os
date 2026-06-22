@@ -3,7 +3,7 @@ import type { Enrollment } from "@/src/lib/enrollments";
 import type { Student } from "@/src/lib/students";
 import { logActivity } from "@/src/lib/auditLogger";
 import { runAutomationTrigger } from "@/src/lib/automationTriggers";
-import { requireTenantPermission } from "@/src/lib/permissions";
+import { requireEffectivePermission, requireTenantPermission } from "@/src/lib/permissions";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 
 export type PaymentMethod = "UPI" | "Cash" | "Bank" | "UPI Link";
@@ -103,9 +103,15 @@ async function getPaymentsByFilter(
   tenantId: string,
   filter?: { column: "student_id"; value: string },
 ) {
-  await requireTenantPermission({
-    description: "Blocked payment access without payment visibility permission.",
-    permission: "access_payments",
+  await requireEffectivePermission({
+    action: filter ? "view_student_payments" : "view_payments",
+    description:
+      "Blocked payment access without payment visibility permission.",
+    entityId: filter?.value ?? tenantId,
+    entityType: filter ? "student" : "tenant",
+    permission: "view_payments",
+    scopeId: filter?.value ?? null,
+    scopeType: filter ? "student" : "workspace",
     tenantId,
   });
 
@@ -140,9 +146,14 @@ export async function getPaymentsForTenant(tenantId: string) {
 }
 
 export async function createPayment(input: CreatePaymentInput) {
-  await requireTenantPermission({
+  await requireEffectivePermission({
+    action: "create_payment",
     description: "Blocked payment creation without payment management permission.",
+    entityId: input.student_id,
+    entityType: "student",
     permission: "manage_payments",
+    scopeId: input.student_id,
+    scopeType: "student",
     tenantId: input.tenant_id,
   });
 

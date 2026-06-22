@@ -2,7 +2,9 @@ import { logActivity } from "@/src/lib/auditLogger";
 import {
   assignmentColumns,
   ensureCanManageAssignment,
+  ensureCanReviewAssignment,
   getAssignmentById,
+  logAssignmentDelegatedUse,
   normalizeAssignment,
   type AssignmentWithRelations,
 } from "@/src/lib/assignments";
@@ -413,9 +415,11 @@ export async function reviewSubmission(params: {
     throw new Error("Assignment not found in this workspace.");
   }
 
-  await ensureCanManageAssignment({
+  const { decision, user } = await ensureCanReviewAssignment({
+    assignmentId: assignment.id,
     cohortId: assignment.cohort_id,
     courseId: assignment.course_id,
+    studentId: params.studentId,
     tenantId: params.tenantId,
   });
   await ensureStudentsBelongToAssignment(assignment, [params.studentId]);
@@ -437,7 +441,6 @@ export async function reviewSubmission(params: {
     throw new Error("Score cannot be greater than max score.");
   }
 
-  const user = await getCurrentUser();
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
     .from("assignment_submissions")
@@ -472,6 +475,14 @@ export async function reviewSubmission(params: {
       studentId: submission.student_id,
     },
     tenantId: submission.tenant_id,
+  });
+  await logAssignmentDelegatedUse({
+    action: "review_assignment_submission",
+    decision,
+    entityId: submission.id,
+    entityType: "assignment_submission",
+    tenantId: submission.tenant_id,
+    userId: user.id,
   });
   await notifySubmissionEvent({
     assignment,

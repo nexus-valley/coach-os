@@ -3,6 +3,12 @@ import { runAutomationTrigger } from "@/src/lib/automationTriggers";
 import type { Course } from "@/src/lib/courses";
 import type { CohortWithCourse } from "@/src/lib/cohorts";
 import {
+  explainPermissionSource,
+  logDelegatedPermissionUsage,
+  type DelegatedPermission,
+  type DelegatedPermissionScopeType,
+} from "@/src/lib/delegatedPermissions";
+import {
   canAccessAttendance,
   canManageAttendance,
   getMemberRoleForTenant,
@@ -85,6 +91,15 @@ export type UpdateSessionInput = SessionInput & {
 
 const sessionColumns =
   "id,tenant_id,course_id,cohort_id,trainer_user_id,title,description,delivery_mode,meeting_provider,meeting_url,meeting_id,meeting_passcode,meeting_notes,timezone,join_available_from,recording_url,scheduled_start_at,scheduled_end_at,status,created_by,created_at,updated_at";
+
+type DelegatedSessionDecision =
+  | { source: "role" }
+  | {
+      delegatedPermission: DelegatedPermission;
+      scopeId: string | null;
+      scopeType: DelegatedPermissionScopeType;
+      source: "delegated";
+    };
 
 const deliveryModeLabels: Record<SessionDeliveryMode, string> = {
   hybrid: "Hybrid",
@@ -265,15 +280,26 @@ async function getCurrentUserAndRole(tenantId: string) {
 async function ensureCanManageSession(params: {
   cohortId?: string | null;
   courseId?: string | null;
+  sessionId?: string | null;
   tenantId: string;
 }) {
   const { role, user } = await getCurrentUserAndRole(params.tenantId);
+  const baseRoleAllowed = canManageAttendance(role);
+  const delegatedDecision = baseRoleAllowed
+    ? null
+    : await getDelegatedSessionDecision({
+        cohortId: params.cohortId,
+        courseId: params.courseId,
+        sessionId: params.sessionId,
+        tenantId: params.tenantId,
+        userId: user.id,
+      });
 
-  if (!canManageAttendance(role)) {
+  if (!baseRoleAllowed && !delegatedDecision) {
     throw new Error("You do not have permission to manage sessions.");
   }
 
-  if (role === "trainer") {
+  if (role === "trainer" && baseRoleAllowed) {
     const [courseAssigned, cohortAssigned] = await Promise.all([
       params.courseId
         ? isTrainerAssignedToCourse(params.tenantId, user.id, params.courseId)
@@ -301,7 +327,82 @@ async function ensureCanManageSession(params: {
     }
   }
 
-  return { role, user };
+  return {
+    decision:
+      delegatedDecision ??
+      ({ source: "role" } satisfies DelegatedSessionDecision),
+    role,
+    user,
+  };
+}
+
+async function getDelegatedSessionDecision(params: {
+  cohortId?: string | null;
+  courseId?: string | null;
+  sessionId?: string | null;
+  tenantId: string;
+  userId: string;
+}): Promise<DelegatedSessionDecision | null> {
+  const scopes: {
+    scopeId: string | null;
+    scopeType: DelegatedPermissionScopeType;
+  }[] = [{ scopeId: null, scopeType: "workspace" }];
+
+  if (params.courseId) {
+    scopes.push({ scopeId: params.courseId, scopeType: "course" });
+  }
+
+  if (params.cohortId) {
+    scopes.push({ scopeId: params.cohortId, scopeType: "cohort" });
+  }
+
+  if (params.sessionId) {
+    scopes.push({ scopeId: params.sessionId, scopeType: "session" });
+  }
+
+  for (const scope of scopes) {
+    const source = await explainPermissionSource({
+      permission: "manage_sessions",
+      scopeId: scope.scopeId,
+      scopeType: scope.scopeType,
+      tenantId: params.tenantId,
+      userId: params.userId,
+    });
+
+    if (source.source === "delegated") {
+      return {
+        delegatedPermission: source.delegatedPermission,
+        scopeId: scope.scopeId,
+        scopeType: scope.scopeType,
+        source: "delegated",
+      };
+    }
+  }
+
+  return null;
+}
+
+async function logSessionDelegatedUse(params: {
+  action: string;
+  decision: DelegatedSessionDecision;
+  entityId: string;
+  tenantId: string;
+  userId: string;
+}) {
+  if (params.decision.source !== "delegated") {
+    return;
+  }
+
+  await logDelegatedPermissionUsage({
+    action: params.action,
+    delegatedPermission: params.decision.delegatedPermission,
+    entityId: params.entityId,
+    entityType: "session",
+    scopeId: params.decision.scopeId,
+    scopeType: params.decision.scopeType,
+    tenantId: params.tenantId,
+    userId: params.userId,
+  });
 }
 
 function normalizeDateTimeInput(value: string) {
@@ -577,7 +678,7 @@ export async function getSessionById(params: {
 
 export async function createSession(input: SessionInput) {
   const validated = validateSessionInput(input);
-  const { role, user } = await ensureCanManageSession({
+  const { decision, role, user } = await ensureCanManageSession({
     cohortId: input.cohortId,
     courseId: input.courseId,
     tenantId: input.tenantId,
@@ -635,6 +736,13 @@ export async function createSession(input: SessionInput) {
     },
     tenantId: session.tenant_id,
   });
+  await logSessionDelegatedUse({
+    action: "create_session",
+    decision,
+    entityId: session.id,
+    tenantId: session.tenant_id,
+    userId: user.id,
+  });
   await notifySessionUpdated(session);
   await runAutomationTrigger("session_scheduled", {
     entityId: session.id,
@@ -654,9 +762,10 @@ export async function createSession(input: SessionInput) {
 
 export async function updateSession(input: UpdateSessionInput) {
   const validated = validateSessionInput(input);
-  const { role, user } = await ensureCanManageSession({
+  const { decision, role, user } = await ensureCanManageSession({
     cohortId: input.cohortId,
     courseId: input.courseId,
+    sessionId: input.sessionId,
     tenantId: input.tenantId,
   });
   const trainerUserId =
@@ -713,6 +822,13 @@ export async function updateSession(input: UpdateSessionInput) {
     },
     tenantId: session.tenant_id,
   });
+  await logSessionDelegatedUse({
+    action: "update_session",
+    decision,
+    entityId: session.id,
+    tenantId: session.tenant_id,
+    userId: user.id,
+  });
   await notifySessionCreated(session);
 
   return session;
@@ -734,9 +850,10 @@ async function updateSessionStatus(params: {
     throw new Error("Session not found in this workspace.");
   }
 
-  await ensureCanManageSession({
+  const { decision, user } = await ensureCanManageSession({
     cohortId: existing.cohort_id,
     courseId: existing.course_id,
+    sessionId: existing.id,
     tenantId: params.tenantId,
   });
 
@@ -770,6 +887,13 @@ async function updateSessionStatus(params: {
     },
     severity: params.action === "session_canceled" ? "warning" : "info",
     tenantId: session.tenant_id,
+  });
+  await logSessionDelegatedUse({
+    action: params.action,
+    decision,
+    entityId: session.id,
+    tenantId: session.tenant_id,
+    userId: user.id,
   });
   await notifySessionStatusChange(session);
 
@@ -831,9 +955,10 @@ export async function updateMeetingDetails(input: {
     throw new Error("Session not found in this workspace.");
   }
 
-  await ensureCanManageSession({
+  const { decision, user } = await ensureCanManageSession({
     cohortId: existing.cohort_id,
     courseId: existing.course_id,
+    sessionId: existing.id,
     tenantId: input.tenantId,
   });
 
@@ -907,6 +1032,13 @@ export async function updateMeetingDetails(input: {
     },
     tenantId: session.tenant_id,
   });
+  await logSessionDelegatedUse({
+    action: "update_meeting_details",
+    decision,
+    entityId: session.id,
+    tenantId: session.tenant_id,
+    userId: user.id,
+  });
   await notifyMeetingDetailsUpdated(session);
 
   return session;
@@ -936,4 +1068,18 @@ export async function getTrainerUpcomingLiveClasses(tenantId: string) {
 
 export function canRoleManageSessions(role: MemberRole | null | undefined) {
   return canManageAttendance(role);
+}
+
+export async function canCurrentUserManageSession(params: {
+  cohortId?: string | null;
+  courseId?: string | null;
+  sessionId?: string | null;
+  tenantId: string;
+}) {
+  try {
+    await ensureCanManageSession(params);
+    return true;
+  } catch {
+    return false;
+  }
 }

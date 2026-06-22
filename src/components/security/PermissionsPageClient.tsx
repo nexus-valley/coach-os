@@ -117,20 +117,20 @@ function getScopeLabel(permission: DisplayPermission) {
 }
 
 function PermissionList({
+  currentUserId,
   currentRole,
   onRevoke,
   permissions,
   revokingId,
   teamMembers,
 }: {
+  currentUserId: string | null;
   currentRole: MemberRole | null;
   onRevoke: (permissionId: string) => void;
   permissions: DisplayPermission[];
   revokingId: string;
   teamMembers: TenantMemberWithProfile[];
 }) {
-  const canRevoke = currentRole === "owner" || currentRole === "admin";
-
   if (!permissions.length) {
     return (
       <EmptyState
@@ -143,7 +143,17 @@ function PermissionList({
 
   return (
     <div className="grid gap-4">
-      {permissions.map((permission) => (
+      {permissions.map((permission) => {
+        const canRevoke =
+          currentRole === "owner"
+            ? permission.status !== "revoked"
+            : currentRole === "admin" &&
+              permission.status === "pending" &&
+              permission.granted_by === currentUserId;
+        const revokeLabel =
+          currentRole === "admin" ? "Withdraw" : "Revoke";
+
+        return (
         <Card className="p-5" key={permission.id}>
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
@@ -180,7 +190,7 @@ function PermissionList({
                 </span>
               </div>
             </div>
-            {canRevoke && permission.status !== "revoked" ? (
+            {canRevoke ? (
               <Button
                 disabled={revokingId === permission.id}
                 onClick={() => onRevoke(permission.id)}
@@ -188,18 +198,20 @@ function PermissionList({
                 type="button"
                 variant="secondary"
               >
-                {revokingId === permission.id ? "Revoking..." : "Revoke"}
+                {revokingId === permission.id ? "Updating..." : revokeLabel}
               </Button>
             ) : null}
           </div>
         </Card>
-      ))}
+        );
+      })}
     </div>
   );
 }
 
 export function PermissionsPageClient() {
   const [currentRole, setCurrentRole] = useState<MemberRole | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [effectivePermissions, setEffectivePermissions] = useState<
     EffectivePermission[]
   >([]);
@@ -253,6 +265,7 @@ export function PermissionsPageClient() {
     const effective = await getEffectivePermissions(currentTenant.id, user.id);
 
     setCurrentRole(role);
+    setCurrentUserId(user.id);
     setEffectivePermissions(effective);
     setForm((current) => ({
       ...current,
@@ -582,6 +595,7 @@ export function PermissionsPageClient() {
           </div>
         </div>
         <PermissionList
+          currentUserId={currentUserId}
           currentRole={currentRole}
           onRevoke={handleRevoke}
           permissions={permissions}

@@ -18,6 +18,7 @@ import {
   type AssignmentStatus,
   type AssignmentWithRelations,
 } from "@/src/lib/assignments";
+import { getUserDelegatedPermissions } from "@/src/lib/delegatedPermissions";
 import { canAccessAttendance } from "@/src/lib/permissions";
 import {
   getAssignmentSubmissionRoster,
@@ -104,6 +105,8 @@ export function AssignmentDetailClient({
   const [assignment, setAssignment] = useState<AssignmentWithRelations | null>(
     null,
   );
+  const [canManageEffective, setCanManageEffective] = useState(false);
+  const [canReviewEffective, setCanReviewEffective] = useState(false);
   const [currentRole, setCurrentRole] = useState<MemberRole | null>(null);
   const [draft, setDraft] = useState<SubmissionDraft>({});
   const [error, setError] = useState("");
@@ -117,10 +120,10 @@ export function AssignmentDetailClient({
   const [tenant, setTenant] = useState<Tenant | null>(null);
 
   const canAccess = canAccessAttendance(currentRole);
-  const canManage = canRoleManageAssignments(currentRole);
+  const canManage = canManageEffective;
   const canCreateSubmission =
     currentRole === "owner" || currentRole === "admin";
-  const canReviewSubmission = canManage;
+  const canReviewSubmission = canReviewEffective;
 
   const loadDetail = useCallback(async (currentTenant: Tenant) => {
     const data = await getAssignmentSubmissionRoster({
@@ -177,6 +180,26 @@ export function AssignmentDetailClient({
             return;
           }
 
+          const delegated = user
+            ? await getUserDelegatedPermissions(currentTenant.id, user.id).catch(
+                () => [],
+              )
+            : [];
+          const hasManageDelegation = delegated.some((permission) =>
+            ["manage_assignments"].includes(permission.permission_key),
+          );
+          const hasReviewDelegation = delegated.some((permission) =>
+            ["manage_assignments", "review_assignments"].includes(
+              permission.permission_key,
+            ),
+          );
+
+          setCanManageEffective(
+            canRoleManageAssignments(role) || hasManageDelegation,
+          );
+          setCanReviewEffective(
+            canRoleManageAssignments(role) || hasReviewDelegation,
+          );
           await loadDetail(currentTenant);
         }
       } catch (caught) {
@@ -218,6 +241,11 @@ export function AssignmentDetailClient({
   async function updateStatus(nextStatus: "closed" | "published") {
     if (!tenant) {
       setActionError("Workspace context is not available.");
+      return;
+    }
+
+    if (!canManage) {
+      setActionError("You do not have permission to manage this assignment.");
       return;
     }
 

@@ -6,7 +6,12 @@ import {
   safePercent,
   sumBy,
 } from "@/src/lib/analytics";
-import { canAccessPayments, getMemberRoleForTenant, type MemberRole } from "@/src/lib/permissions";
+import {
+  canAccessPayments,
+  getMemberRoleForTenant,
+  hasEffectivePermission,
+  type MemberRole,
+} from "@/src/lib/permissions";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 import { getCurrentTrainerScope } from "@/src/lib/trainerAssignments";
 
@@ -936,8 +941,20 @@ function buildReportSections(data: RawData, canViewFinancials: boolean) {
 }
 
 export async function getReportsData(tenantId: string, filters: ReportFilters) {
-  const { role } = await getCurrentUserAndRole(tenantId);
-  const canViewFinancials = role !== "trainer" && canAccessPayments(role);
+  const { role, user } = await getCurrentUserAndRole(tenantId);
+  const hasWorkspacePaymentAccess = await hasEffectivePermission({
+    action: "view_payment_report",
+    entityId: tenantId,
+    entityType: "tenant",
+    logUsage: true,
+    permission: "view_payments",
+    scopeId: null,
+    scopeType: "workspace",
+    tenantId,
+    userId: user.id,
+  });
+  const canViewFinancials =
+    (role !== "trainer" && canAccessPayments(role)) || hasWorkspacePaymentAccess;
   const raw = await getRawReportData(tenantId, filters, role, canViewFinancials);
   const sections = buildReportSections(raw, canViewFinancials);
 

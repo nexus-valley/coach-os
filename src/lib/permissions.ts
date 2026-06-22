@@ -247,6 +247,9 @@ export async function requireTenantPermission(params: {
 }
 
 export async function hasEffectivePermission(params: {
+  action?: string;
+  entityId?: string | null;
+  entityType?: string | null;
   logUsage?: boolean;
   permission: EffectivePermissionKey;
   scopeId?: string | null;
@@ -290,6 +293,9 @@ export async function hasEffectivePermission(params: {
 
   return hasDelegatedPermission({
     logUsage: params.logUsage,
+    action: params.action,
+    entityId: params.entityId,
+    entityType: params.entityType,
     permissionKey: params.permission as DelegatedPermissionKey,
     scopeId: params.scopeId,
     scopeType: params.scopeType,
@@ -299,7 +305,10 @@ export async function hasEffectivePermission(params: {
 }
 
 export async function requireEffectivePermission(params: {
+  action?: string;
   description?: string;
+  entityId?: string | null;
+  entityType?: string | null;
   permission: EffectivePermissionKey;
   scopeId?: string | null;
   scopeType?: DelegatedPermissionScopeType | null;
@@ -322,6 +331,9 @@ export async function requireEffectivePermission(params: {
   const role = await getMemberRoleForTenant(params.tenantId, user.id);
   const allowed = await hasEffectivePermission({
     logUsage: true,
+    action: params.action,
+    entityId: params.entityId,
+    entityType: params.entityType,
     permission: params.permission,
     scopeId: params.scopeId,
     scopeType: params.scopeType,

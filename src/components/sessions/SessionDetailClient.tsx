@@ -12,13 +12,14 @@ import { EmptyState } from "@/src/components/ui/EmptyState";
 import { FeedbackAlert } from "@/src/components/ui/FeedbackAlert";
 import {
   bulkMarkAttendance,
-  canRoleMarkAttendance,
+  canCurrentUserMarkAttendance,
   getSessionAttendanceRoster,
   type AttendanceRosterItem,
   type AttendanceStatus,
   type AttendanceSummary,
 } from "@/src/lib/attendance";
 import {
+  canCurrentUserManageSession,
   cancelSession,
   completeSession,
   getSessionById,
@@ -137,6 +138,8 @@ function SummaryCard({
 export function SessionDetailClient({ sessionId }: SessionDetailClientProps) {
   const router = useRouter();
   const [actionError, setActionError] = useState("");
+  const [canManageEffective, setCanManageEffective] = useState(false);
+  const [canMarkEffective, setCanMarkEffective] = useState(false);
   const [currentRole, setCurrentRole] = useState<MemberRole | null>(null);
   const [draft, setDraft] = useState<AttendanceDraft>({});
   const [error, setError] = useState("");
@@ -151,17 +154,32 @@ export function SessionDetailClient({ sessionId }: SessionDetailClientProps) {
   const [tenant, setTenant] = useState<Tenant | null>(null);
 
   const canAccess = canAccessAttendance(currentRole);
-  const canMark = canRoleMarkAttendance(currentRole) && session?.status !== "canceled";
+  const canMark = canMarkEffective && session?.status !== "canceled";
 
   const loadDetail = useCallback(async (currentTenant: Tenant) => {
     const data = await getSessionAttendanceRoster({
       sessionId,
       tenantId: currentTenant.id,
     });
+    const [markAllowed, manageAllowed] = await Promise.all([
+      canCurrentUserMarkAttendance({
+        sessionId,
+        studentIds: data.roster.map((item) => item.student.id),
+        tenantId: currentTenant.id,
+      }),
+      canCurrentUserManageSession({
+        cohortId: data.session.cohort_id,
+        courseId: data.session.course_id,
+        sessionId: data.session.id,
+        tenantId: currentTenant.id,
+      }),
+    ]);
     setSession(data.session);
     setRoster(data.roster);
     setSummary(data.summary);
     setDraft(buildDraft(data.roster));
+    setCanManageEffective(manageAllowed);
+    setCanMarkEffective(markAllowed);
   }, [sessionId]);
 
   useEffect(() => {
@@ -278,6 +296,11 @@ export function SessionDetailClient({ sessionId }: SessionDetailClientProps) {
   async function updateStatus(nextStatus: "canceled" | "completed") {
     if (!tenant) {
       setActionError("Workspace context is not available.");
+      return;
+    }
+
+    if (!canManageEffective) {
+      setActionError("You do not have permission to manage this session.");
       return;
     }
 
