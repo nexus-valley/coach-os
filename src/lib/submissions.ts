@@ -245,6 +245,40 @@ async function notifySubmissionEvent(params: {
   }
 }
 
+async function reviewDelegatedSubmissionWithRpc(params: {
+  assignmentId: string;
+  feedback: string;
+  score?: string | number | null;
+  studentId: string;
+  tenantId: string;
+}) {
+  const rawScore =
+    params.score === null || typeof params.score === "undefined" || params.score === ""
+      ? null
+      : Number(params.score);
+
+  if (rawScore !== null && !Number.isFinite(rawScore)) {
+    throw new Error("Score must be a valid number.");
+  }
+
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .rpc("review_delegated_assignment_submission", {
+      p_assignment_id: params.assignmentId,
+      p_feedback: params.feedback.trim() || null,
+      p_score: rawScore,
+      p_student_id: params.studentId,
+      p_tenant_id: params.tenantId,
+    })
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  return normalizeSubmission(data as AssignmentSubmission);
+}
+
 export async function getAssignmentSubmissions(params: {
   assignmentId: string;
   tenantId: string;
@@ -412,7 +446,7 @@ export async function reviewSubmission(params: {
   });
 
   if (!assignment) {
-    throw new Error("Assignment not found in this workspace.");
+    return reviewDelegatedSubmissionWithRpc(params);
   }
 
   const { decision, user } = await ensureCanReviewAssignment({
@@ -439,6 +473,31 @@ export async function reviewSubmission(params: {
     rawScore > assignment.max_score
   ) {
     throw new Error("Score cannot be greater than max score.");
+  }
+
+  if (decision.source === "delegated") {
+    const submission = await reviewDelegatedSubmissionWithRpc(params);
+
+    await logActivity({
+      action: "assignment_reviewed",
+      description: "Reviewed assignment submission",
+      entityId: submission.id,
+      entityName: assignment.title,
+      entityType: "assignment_submission",
+      metadata: {
+        assignmentId: assignment.id,
+        score: submission.score,
+        studentId: submission.student_id,
+      },
+      tenantId: submission.tenant_id,
+    });
+    await notifySubmissionEvent({
+      assignment,
+      message: `Submission reviewed for ${assignment.title}.`,
+      title: "Assignment submission reviewed",
+    });
+
+    return submission;
   }
 
   const supabase = getSupabaseClient();

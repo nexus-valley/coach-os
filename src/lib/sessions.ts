@@ -285,15 +285,16 @@ async function ensureCanManageSession(params: {
 }) {
   const { role, user } = await getCurrentUserAndRole(params.tenantId);
   const baseRoleAllowed = canManageAttendance(role);
-  const delegatedDecision = baseRoleAllowed
-    ? null
-    : await getDelegatedSessionDecision({
+  const delegatedDecision =
+    !baseRoleAllowed || role === "trainer"
+      ? await getDelegatedSessionDecision({
         cohortId: params.cohortId,
         courseId: params.courseId,
         sessionId: params.sessionId,
         tenantId: params.tenantId,
         userId: user.id,
-      });
+      })
+      : null;
 
   if (!baseRoleAllowed && !delegatedDecision) {
     throw new Error("You do not have permission to manage sessions.");
@@ -309,7 +310,7 @@ async function ensureCanManageSession(params: {
         : Promise.resolve(false),
     ]);
 
-    if (!courseAssigned && !cohortAssigned) {
+    if (!courseAssigned && !cohortAssigned && !delegatedDecision) {
       await logActivity({
         action: "access_denied",
         description: "Blocked trainer session change outside assignment scope.",
@@ -325,6 +326,10 @@ async function ensureCanManageSession(params: {
       });
       throw new Error("Trainers can only manage sessions for assigned courses or cohorts.");
     }
+
+    if (!courseAssigned && !cohortAssigned && delegatedDecision) {
+      return { decision: delegatedDecision, role, user };
+    }
   }
 
   return {
@@ -334,6 +339,96 @@ async function ensureCanManageSession(params: {
     role,
     user,
   };
+}
+
+async function createDelegatedSessionWithRpc(
+  input: SessionInput,
+  validated: ReturnType<typeof validateSessionInput>,
+) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .rpc("create_delegated_session", {
+      p_cohort_id: input.cohortId || null,
+      p_course_id: input.courseId || null,
+      p_delivery_mode: validated.deliveryMode,
+      p_description: input.description.trim() || null,
+      p_join_available_from: validated.joinAvailableFrom,
+      p_meeting_id: validated.meetingId,
+      p_meeting_notes: validated.meetingNotes,
+      p_meeting_passcode: validated.meetingPasscode,
+      p_meeting_provider: validated.meetingProvider,
+      p_meeting_url: validated.meetingUrl,
+      p_recording_url: validated.recordingUrl,
+      p_scheduled_end_at: validated.scheduledEndAt,
+      p_scheduled_start_at: validated.scheduledStartAt,
+      p_tenant_id: input.tenantId,
+      p_timezone: validated.timezone,
+      p_title: validated.title,
+      p_trainer_user_id: input.trainerUserId?.trim() || null,
+    })
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  return data as TrainingSession;
+}
+
+async function updateDelegatedSessionWithRpc(
+  input: UpdateSessionInput,
+  validated: ReturnType<typeof validateSessionInput>,
+) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .rpc("update_delegated_session", {
+      p_cohort_id: input.cohortId || null,
+      p_course_id: input.courseId || null,
+      p_delivery_mode: validated.deliveryMode,
+      p_description: input.description.trim() || null,
+      p_join_available_from: validated.joinAvailableFrom,
+      p_meeting_id: validated.meetingId,
+      p_meeting_notes: validated.meetingNotes,
+      p_meeting_passcode: validated.meetingPasscode,
+      p_meeting_provider: validated.meetingProvider,
+      p_meeting_url: validated.meetingUrl,
+      p_recording_url: validated.recordingUrl,
+      p_scheduled_end_at: validated.scheduledEndAt,
+      p_scheduled_start_at: validated.scheduledStartAt,
+      p_session_id: input.sessionId,
+      p_tenant_id: input.tenantId,
+      p_timezone: validated.timezone,
+      p_title: validated.title,
+      p_trainer_user_id: input.trainerUserId?.trim() || null,
+    })
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  return data as TrainingSession;
+}
+
+async function updateDelegatedSessionStatusWithRpc(params: {
+  sessionId: string;
+  status: Extract<SessionStatus, "canceled" | "completed">;
+  tenantId: string;
+}) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .rpc("update_delegated_session_status", {
+      p_session_id: params.sessionId,
+      p_status: params.status,
+      p_tenant_id: params.tenantId,
+    })
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  return data as TrainingSession;
 }
 
 async function getDelegatedSessionDecision(params: {
@@ -685,6 +780,52 @@ export async function createSession(input: SessionInput) {
   });
   const trainerUserId =
     role === "trainer" ? user.id : input.trainerUserId?.trim() || null;
+
+  if (decision.source === "delegated") {
+    const session = await createDelegatedSessionWithRpc(
+      {
+        ...input,
+        trainerUserId,
+      },
+      validated,
+    );
+
+    await logActivity({
+      action:
+        session.delivery_mode === "offline"
+          ? "session_created"
+          : "live_session_scheduled",
+      description: `Created ${deliveryModeLabels[session.delivery_mode].toLowerCase()} class session`,
+      entityId: session.id,
+      entityName: session.title,
+      entityType: "session",
+      metadata: {
+        cohortId: session.cohort_id,
+        courseId: session.course_id,
+        deliveryMode: session.delivery_mode,
+        meetingProvider: session.meeting_provider,
+        scheduledStartAt: session.scheduled_start_at,
+        trainerUserId: session.trainer_user_id,
+      },
+      tenantId: session.tenant_id,
+    });
+    await notifySessionUpdated(session);
+    await runAutomationTrigger("session_scheduled", {
+      entityId: session.id,
+      entityType: "session",
+      metadata: {
+        cohort_id: session.cohort_id,
+        course_id: session.course_id,
+        delivery_mode: session.delivery_mode,
+        scheduled_at: session.scheduled_start_at,
+        session_title: session.title,
+      },
+      tenantId: session.tenant_id,
+    });
+
+    return session;
+  }
+
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
     .from("sessions")
@@ -771,6 +912,39 @@ export async function updateSession(input: UpdateSessionInput) {
   const trainerUserId =
     role === "trainer" ? user.id : input.trainerUserId?.trim() || null;
 
+  if (decision.source === "delegated") {
+    const session = await updateDelegatedSessionWithRpc(
+      {
+        ...input,
+        trainerUserId,
+      },
+      validated,
+    );
+
+    await logActivity({
+      action:
+        session.delivery_mode === "offline"
+          ? "session_updated"
+          : "live_session_updated",
+      description: `Updated ${deliveryModeLabels[session.delivery_mode].toLowerCase()} class session`,
+      entityId: session.id,
+      entityName: session.title,
+      entityType: "session",
+      metadata: {
+        cohortId: session.cohort_id,
+        courseId: session.course_id,
+        deliveryMode: session.delivery_mode,
+        meetingProvider: session.meeting_provider,
+        scheduledStartAt: session.scheduled_start_at,
+        status: session.status,
+      },
+      tenantId: session.tenant_id,
+    });
+    await notifySessionCreated(session);
+
+    return session;
+  }
+
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
     .from("sessions")
@@ -856,6 +1030,34 @@ async function updateSessionStatus(params: {
     sessionId: existing.id,
     tenantId: params.tenantId,
   });
+
+  if (decision.source === "delegated") {
+    const session = await updateDelegatedSessionStatusWithRpc({
+      sessionId: params.sessionId,
+      status: params.status,
+      tenantId: params.tenantId,
+    });
+
+    await logActivity({
+      action: params.action,
+      description: params.description,
+      entityId: session.id,
+      entityName: session.title,
+      entityType: "session",
+      metadata: {
+        cohortId: session.cohort_id,
+        courseId: session.course_id,
+        deliveryMode: session.delivery_mode,
+        meetingProvider: session.meeting_provider,
+        status: session.status,
+      },
+      severity: params.action === "session_canceled" ? "warning" : "info",
+      tenantId: session.tenant_id,
+    });
+    await notifySessionStatusChange(session);
+
+    return session;
+  }
 
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
@@ -993,6 +1195,49 @@ export async function updateMeetingDetails(input: {
     title: existing.title,
     trainerUserId: existing.trainer_user_id,
   });
+
+  if (decision.source === "delegated") {
+    const session = await updateDelegatedSessionWithRpc(
+      {
+        cohortId: existing.cohort_id,
+        courseId: existing.course_id,
+        description: existing.description ?? "",
+        deliveryMode: validated.deliveryMode,
+        joinAvailableFrom: validated.joinAvailableFrom,
+        meetingId: validated.meetingId,
+        meetingNotes: validated.meetingNotes,
+        meetingPasscode: validated.meetingPasscode,
+        meetingProvider: validated.meetingProvider,
+        meetingUrl: validated.meetingUrl,
+        recordingUrl: validated.recordingUrl,
+        scheduledEndAt: existing.scheduled_end_at ?? "",
+        scheduledStartAt: existing.scheduled_start_at,
+        sessionId: input.sessionId,
+        tenantId: input.tenantId,
+        timezone: validated.timezone,
+        title: existing.title,
+        trainerUserId: existing.trainer_user_id,
+      },
+      validated,
+    );
+
+    await logActivity({
+      action: "meeting_details_updated",
+      description: "Updated class meeting details",
+      entityId: session.id,
+      entityName: session.title,
+      entityType: "session",
+      metadata: {
+        deliveryMode: session.delivery_mode,
+        meetingProvider: session.meeting_provider,
+        scheduledStartAt: session.scheduled_start_at,
+      },
+      tenantId: session.tenant_id,
+    });
+    await notifyMeetingDetailsUpdated(session);
+
+    return session;
+  }
 
   const supabase = getSupabaseClient();
   const { data, error } = await supabase

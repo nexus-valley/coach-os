@@ -257,6 +257,31 @@ async function logAttendanceDelegatedUse(params: {
   });
 }
 
+async function markDelegatedAttendanceWithRpc(params: {
+  remarks?: string;
+  sessionId: string;
+  status: AttendanceStatus;
+  studentId: string;
+  tenantId: string;
+}) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .rpc("mark_delegated_attendance", {
+      p_remarks: params.remarks?.trim() || null,
+      p_session_id: params.sessionId,
+      p_status: params.status,
+      p_student_id: params.studentId,
+      p_tenant_id: params.tenantId,
+    })
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  return data as AttendanceRecord;
+}
+
 function calculateSummary(total: number, records: AttendanceRecord[]) {
   const summary: AttendanceSummary = {
     absent: 0,
@@ -440,13 +465,38 @@ export async function markAttendance(params: {
   });
 
   if (!session) {
-    throw new Error("Session not found in this workspace.");
+    return markDelegatedAttendanceWithRpc(params);
   }
 
   const { decision, user } = await ensureCanManageAttendanceForSession(session, [
     params.studentId,
   ]);
   await ensureStudentsBelongToSession(session, [params.studentId]);
+
+  if (decision.source === "delegated") {
+    const record = await markDelegatedAttendanceWithRpc(params);
+
+    await logActivity({
+      action: "attendance_marked",
+      description: "Marked student attendance",
+      entityId: record.id,
+      entityName: session.title,
+      entityType: "attendance_record",
+      metadata: {
+        sessionId: record.session_id,
+        status: record.status,
+        studentId: record.student_id,
+      },
+      tenantId: record.tenant_id,
+    });
+    await notifyAttendanceAlert({
+      absentCount: record.status === "absent" ? 1 : 0,
+      session,
+    });
+
+    return record;
+  }
+
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
     .from("attendance_records")
@@ -530,6 +580,41 @@ export async function bulkMarkAttendance(params: {
     session,
     params.records.map((record) => record.studentId),
   );
+
+  if (decision.source === "delegated") {
+    const records = await Promise.all(
+      params.records.map((record) =>
+        markDelegatedAttendanceWithRpc({
+          remarks: record.remarks,
+          sessionId: params.sessionId,
+          status: record.status,
+          studentId: record.studentId,
+          tenantId: params.tenantId,
+        }),
+      ),
+    );
+
+    await logActivity({
+      action: "attendance_bulk_marked",
+      description: `Bulk marked attendance for ${params.records.length} students`,
+      entityId: session.id,
+      entityName: session.title,
+      entityType: "attendance_record",
+      metadata: {
+        count: params.records.length,
+        sessionId: params.sessionId,
+      },
+      tenantId: params.tenantId,
+    });
+    await notifyAttendanceAlert({
+      absentCount: params.records.filter((record) => record.status === "absent")
+        .length,
+      session,
+    });
+
+    return records;
+  }
+
   const markedAt = new Date().toISOString();
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
