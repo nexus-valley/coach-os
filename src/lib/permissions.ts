@@ -1,5 +1,9 @@
 import { logActivity } from "@/src/lib/auditLogger";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
+import type {
+  DelegatedPermissionKey,
+  DelegatedPermissionScopeType,
+} from "@/src/lib/delegatedPermissions";
 
 export type MemberRole = "owner" | "admin" | "staff" | "trainer";
 
@@ -8,6 +12,7 @@ export type Permission =
   | "access_attendance"
   | "access_operations"
   | "access_payments"
+  | "access_permissions"
   | "access_settings"
   | "access_subscription"
   | "delete_records"
@@ -26,6 +31,7 @@ const rolePermissions: Record<MemberRole, Permission[]> = {
     "access_attendance",
     "access_operations",
     "access_payments",
+    "access_permissions",
     "access_settings",
     "access_subscription",
     "delete_records",
@@ -42,6 +48,7 @@ const rolePermissions: Record<MemberRole, Permission[]> = {
     "access_attendance",
     "access_operations",
     "access_payments",
+    "access_permissions",
     "access_settings",
     "access_subscription",
     "delete_records",
@@ -62,6 +69,7 @@ const navAccess: Record<string, (role: MemberRole | null | undefined) => boolean
   {
     Activity: canAccessActivity,
     Operations: canAccessOperations,
+    Permissions: canAccessPermissions,
     Sessions: canAccessAttendance,
     Automations: canManageAutomations,
     Payments: canAccessPayments,
@@ -74,6 +82,23 @@ function hasPermission(role: MemberRole | null | undefined, permission: Permissi
   return role ? rolePermissions[role]?.includes(permission) ?? false : false;
 }
 
+const delegatedToRolePermission: Partial<
+  Record<DelegatedPermissionKey, Permission>
+> = {
+  edit_attendance: "manage_attendance",
+  edit_attendance_after_lock: "manage_attendance",
+  manage_courses: "manage_courses",
+  manage_payments: "manage_payments",
+  manage_students: "manage_students",
+  view_payments: "access_payments",
+};
+
+export type EffectivePermissionKey = DelegatedPermissionKey | Permission;
+
+export function getRolePermissions(role: MemberRole | null | undefined) {
+  return role ? [...(rolePermissions[role] ?? [])] : [];
+}
+
 export function canAccessActivity(role: MemberRole | null | undefined) {
   return hasPermission(role, "access_activity");
 }
@@ -84,6 +109,10 @@ export function canAccessOperations(role: MemberRole | null | undefined) {
 
 export function canAccessPayments(role: MemberRole | null | undefined) {
   return hasPermission(role, "access_payments");
+}
+
+export function canAccessPermissions(role: MemberRole | null | undefined) {
+  return hasPermission(role, "access_permissions");
 }
 
 export function canAccessAttendance(role: MemberRole | null | undefined) {
@@ -207,6 +236,113 @@ export async function requireTenantPermission(params: {
       entityName: params.permission,
       entityType: "security",
       metadata: { permission: params.permission, role },
+      severity: "warning",
+      tenantId: params.tenantId,
+    });
+
+    throw new Error("You do not have permission to perform this action.");
+  }
+
+  return { role, user };
+}
+
+export async function hasEffectivePermission(params: {
+  logUsage?: boolean;
+  permission: EffectivePermissionKey;
+  scopeId?: string | null;
+  scopeType?: DelegatedPermissionScopeType | null;
+  tenantId: string;
+  userId?: string | null;
+}) {
+  const supabase = getSupabaseClient();
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError) {
+    throw userError;
+  }
+
+  const userId = params.userId ?? user?.id;
+
+  if (!userId) {
+    return false;
+  }
+
+  const role = await getMemberRoleForTenant(params.tenantId, userId);
+  const rolePermission =
+    params.permission in delegatedToRolePermission
+      ? delegatedToRolePermission[params.permission as DelegatedPermissionKey]
+      : (params.permission as Permission);
+
+  if (rolePermission && hasPermission(role, rolePermission)) {
+    return true;
+  }
+
+  const { delegatedPermissionKeys, hasDelegatedPermission } = await import(
+    "@/src/lib/delegatedPermissions"
+  );
+
+  if (!delegatedPermissionKeys.includes(params.permission as DelegatedPermissionKey)) {
+    return false;
+  }
+
+  return hasDelegatedPermission({
+    logUsage: params.logUsage,
+    permissionKey: params.permission as DelegatedPermissionKey,
+    scopeId: params.scopeId,
+    scopeType: params.scopeType,
+    tenantId: params.tenantId,
+    userId,
+  });
+}
+
+export async function requireEffectivePermission(params: {
+  description?: string;
+  permission: EffectivePermissionKey;
+  scopeId?: string | null;
+  scopeType?: DelegatedPermissionScopeType | null;
+  tenantId: string;
+}) {
+  const supabase = getSupabaseClient();
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError) {
+    throw userError;
+  }
+
+  if (!user) {
+    throw new Error("You must be logged in to perform this action.");
+  }
+
+  const role = await getMemberRoleForTenant(params.tenantId, user.id);
+  const allowed = await hasEffectivePermission({
+    logUsage: true,
+    permission: params.permission,
+    scopeId: params.scopeId,
+    scopeType: params.scopeType,
+    tenantId: params.tenantId,
+    userId: user.id,
+  });
+
+  if (!allowed) {
+    await logActivity({
+      action: "access_denied",
+      description:
+        params.description ??
+        `Blocked action requiring ${params.permission.replace(/_/g, " ")}.`,
+      entityName: params.permission,
+      entityType: "security",
+      metadata: {
+        permission: params.permission,
+        role,
+        scopeId: params.scopeId ?? null,
+        scopeType: params.scopeType ?? null,
+      },
       severity: "warning",
       tenantId: params.tenantId,
     });

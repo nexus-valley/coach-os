@@ -447,6 +447,15 @@ export function DashboardPageClient() {
       label: "Automation Failures",
       value: String(metrics.failedAutomationRuns),
     },
+    ...(metrics.delegatedPermissions > 0
+      ? [
+          {
+            detail: "Temporary or scoped permission exceptions",
+            label: "Extra Permissions",
+            value: String(metrics.delegatedPermissions),
+          },
+        ]
+      : []),
   ];
   const canLoadDemo = currentRole === "owner" || currentRole === "admin";
   const canViewUsage = currentRole === "owner" || currentRole === "admin";
@@ -654,6 +663,16 @@ export function DashboardPageClient() {
             ))}
           </div>
         </Card>
+      ) : null}
+
+      {currentRole !== "owner" &&
+      currentRole !== "admin" &&
+      metrics.delegatedPermissions > 0 ? (
+        <div className="mt-8">
+          <FeedbackAlert tone="warning">
+            You have temporary extra permissions in this workspace.
+          </FeedbackAlert>
+        </div>
       ) : null}
 
       <section className="mt-8 grid gap-4 md:grid-cols-3">

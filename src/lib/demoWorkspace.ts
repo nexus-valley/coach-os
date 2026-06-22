@@ -19,6 +19,7 @@ export type DemoSeedSummary = {
   cohorts: number;
   conversations: number;
   courses: number;
+  delegatedPermissions: number;
   enrollments: number;
   lessons: number;
   notifications: number;
@@ -109,6 +110,7 @@ const emptySummary: DemoSeedSummary = {
   cohorts: 0,
   conversations: 0,
   courses: 0,
+  delegatedPermissions: 0,
   enrollments: 0,
   lessons: 0,
   notifications: 0,
@@ -126,6 +128,7 @@ const resetOrder = [
   "automation_rule_actions",
   "automation_rule_conditions",
   "automation_rules",
+  "delegated_permissions",
   "conversation_messages",
   "conversation_participants",
   "conversation_threads",
@@ -657,6 +660,82 @@ async function seedDemoAutomations(params: {
   }
 }
 
+async function seedDemoDelegatedPermissions(params: {
+  batchId: string;
+  cohorts: CreatedRecord[];
+  summary: DemoSeedSummary;
+  tenantId: string;
+  userId: string;
+}) {
+  const supabase = getSupabaseClient();
+  const { data: members, error } = await supabase
+    .from("tenant_members")
+    .select("user_id,role")
+    .eq("tenant_id", params.tenantId);
+
+  if (error) {
+    throw error;
+  }
+
+  const currentMember = (members ?? []).find(
+    (member) => member.user_id === params.userId,
+  );
+  const status = currentMember?.role === "owner" ? "active" : "pending";
+  const staffUserId =
+    (members ?? []).find((member) => member.role === "staff")?.user_id ??
+    params.userId;
+  const trainerUserId =
+    (members ?? []).find((member) => member.role === "trainer")?.user_id ??
+    params.userId;
+  const neetCohort = params.cohorts[0];
+  const permissionInputs = [
+    {
+      expiresAt: addDays(2, 18),
+      permissionKey: "edit_attendance",
+      reason: "Demo exception - trainer can update NEET cohort attendance for 48 hours.",
+      scopeId: neetCohort?.id ?? null,
+      scopeType: neetCohort ? "cohort" : "workspace",
+      userId: trainerUserId,
+    },
+    {
+      expiresAt: addDays(30, 18),
+      permissionKey: "view_reports",
+      reason: "Demo exception - staff can view reports for this month.",
+      scopeId: null,
+      scopeType: "workspace",
+      userId: staffUserId,
+    },
+  ] as const;
+
+  try {
+    for (const input of permissionInputs) {
+      await insertTracked("delegated_permissions", {
+        approved_by: status === "active" ? params.userId : null,
+        expires_at: input.expiresAt,
+        granted_by: params.userId,
+        metadata_json: { seedBatchId: params.batchId },
+        permission_key: input.permissionKey,
+        reason: input.reason,
+        scope_id: input.scopeId,
+        scope_type: input.scopeType,
+        starts_at: addDays(-1, 9),
+        status,
+        tenant_id: params.tenantId,
+        user_id: input.userId,
+      }, params);
+      params.summary.delegatedPermissions += 1;
+    }
+  } catch (caught) {
+    const errorLike = caught as SupabaseResetError;
+
+    if (isOptionalResetTableMissingError(errorLike)) {
+      return;
+    }
+
+    throw caught;
+  }
+}
+
 async function updateWorkspaceBranding(
   tenantId: string,
   params: { batchId: string; userId: string },
@@ -1114,6 +1193,13 @@ export async function seedDemoWorkspace(tenantId: string) {
   });
   await seedDemoAutomations({
     batchId,
+    summary,
+    tenantId,
+    userId,
+  });
+  await seedDemoDelegatedPermissions({
+    batchId,
+    cohorts,
     summary,
     tenantId,
     userId,

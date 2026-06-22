@@ -4,6 +4,7 @@ import {
   type ConversationThreadType,
 } from "@/src/lib/conversations";
 import type { CourseStatus } from "@/src/lib/courses";
+import { getDelegatedPermissionCounts } from "@/src/lib/delegatedPermissions";
 import { getUnreadThreadCount } from "@/src/lib/messages";
 import type { PaymentMethod, PaymentStatus } from "@/src/lib/payments";
 import type {
@@ -109,6 +110,7 @@ export type DashboardMetrics = {
   attendance: DashboardAttendanceSummary;
   conversations: DashboardConversationSummary;
   courseRevenue: DashboardCourseRevenue[];
+  delegatedPermissions: number;
   paymentStatusSummary: Record<PaymentStatus, number>;
   failedAutomationRuns: number;
   pendingPayments: number;
@@ -679,6 +681,7 @@ export async function getDashboardMetrics(
       attendance,
       conversations,
       courseRevenue: [],
+      delegatedPermissions: 0,
       paymentStatusSummary: {
         completed: 0,
         failed: 0,
@@ -707,6 +710,7 @@ export async function getDashboardMetrics(
     attendance,
     assignments,
     conversations,
+    delegatedPermissionCounts,
   ] = await Promise.all([
     supabase
       .from("students")
@@ -742,6 +746,7 @@ export async function getDashboardMetrics(
     getAttendanceDashboardSummary(tenantId, null),
     getAssignmentDashboardSummary(tenantId, null),
     getConversationDashboardSummary(tenantId),
+    getDelegatedPermissionCounts(tenantId),
   ]);
 
   if (studentsCountResult.error) {
@@ -822,6 +827,7 @@ export async function getDashboardMetrics(
     attendance,
     conversations,
     courseRevenue: buildCourseRevenue(payments, coursesById),
+    delegatedPermissions: delegatedPermissionCounts.active,
     paymentStatusSummary: buildPaymentSummary(payments),
     failedAutomationRuns: automationCounts.failedRuns,
     pendingPayments: payments.filter((payment) => payment.status === "pending")

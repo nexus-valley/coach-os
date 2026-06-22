@@ -1,4 +1,5 @@
 import { logActivity, type AuditLog } from "@/src/lib/auditLogger";
+import { getDelegatedPermissionCounts } from "@/src/lib/delegatedPermissions";
 import { safeGetUnreadThreadCount } from "@/src/lib/messages";
 import { safeOptionalQuery } from "@/src/lib/optionalQuery";
 import {
@@ -170,6 +171,11 @@ const emptyTrial: TrialStatus = {
 const permissionSensitiveActions = [
   "access_denied",
   "role_changed",
+  "delegated_permission_created",
+  "delegated_permission_activated",
+  "delegated_permission_revoked",
+  "delegated_permission_expired",
+  "delegated_permission_used",
   "team_member_removed",
   "settings_updated",
   "workspace_branding_updated",
@@ -179,6 +185,10 @@ const permissionSensitiveActions = [
 
 const adminActions = [
   "role_changed",
+  "delegated_permission_created",
+  "delegated_permission_activated",
+  "delegated_permission_revoked",
+  "delegated_permission_expired",
   "settings_updated",
   "workspace_branding_updated",
   "subscription_created",
@@ -837,6 +847,7 @@ export async function getOperationsConsoleData(
     recentAnnouncements,
     failedInvites,
     failedPaymentLinks,
+    delegatedPermissionCounts,
     unpaidInvoices,
     coursesAndCohorts,
     unreadMessageThreads,
@@ -1039,6 +1050,12 @@ export async function getOperationsConsoleData(
       0,
     ),
     optionalOperationQuery(
+      "getDelegatedPermissionCounts",
+      "delegated_permissions",
+      () => getDelegatedPermissionCounts(tenantId),
+      { active: 0, broadWorkspace: 0, expiringSoon: 0 },
+    ),
+    optionalOperationQuery(
       "countUnpaidInvoices",
       "invoices",
       () => countExactInStatus("invoices", tenantId, ["issued", "overdue"]),
@@ -1139,6 +1156,25 @@ export async function getOperationsConsoleData(
       title: "Latest automation failure",
     });
   }
+
+  if (delegatedPermissionCounts.broadWorkspace > 0) {
+    alerts.push({
+      description: `${delegatedPermissionCounts.broadWorkspace} delegated permission${delegatedPermissionCounts.broadWorkspace === 1 ? "" : "s"} grant workspace-wide access.`,
+      key: "broad-delegated-permissions",
+      severity: "attention",
+      title: "Broad delegated permissions",
+    });
+  }
+
+  if (delegatedPermissionCounts.expiringSoon > 0) {
+    alerts.push({
+      description: `${delegatedPermissionCounts.expiringSoon} delegated permission${delegatedPermissionCounts.expiringSoon === 1 ? "" : "s"} expire in the next 7 days.`,
+      key: "expiring-delegated-permissions",
+      severity: "attention",
+      title: "Delegated permissions expiring",
+    });
+  }
+
   const permissionSignals = latestActivity.filter((item) =>
     permissionSensitiveActions.includes(item.action),
   );
@@ -1251,6 +1287,20 @@ export async function getOperationsConsoleData(
       label: "Automation failures 24h",
       tone: failedAutomationRunsLast24Hours > 0 ? "rose" : "emerald",
       value: failedAutomationRunsLast24Hours.toLocaleString(),
+    },
+    {
+      helper: "Active permission exceptions granted outside base roles.",
+      key: "delegatedPermissions",
+      label: "Delegated permissions",
+      tone: delegatedPermissionCounts.active > 0 ? "orange" : "emerald",
+      value: delegatedPermissionCounts.active.toLocaleString(),
+    },
+    {
+      helper: "Delegated permission exceptions expiring within 7 days.",
+      key: "delegatedPermissionsExpiring",
+      label: "Expiring exceptions",
+      tone: delegatedPermissionCounts.expiringSoon > 0 ? "orange" : "emerald",
+      value: delegatedPermissionCounts.expiringSoon.toLocaleString(),
     },
     {
       helper: "Recent permission-sensitive activity events.",

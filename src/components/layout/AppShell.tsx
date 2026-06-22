@@ -26,6 +26,7 @@ const navItems = [
   { href: "/app/messages", label: "Messages" },
   { href: "/app/notifications", label: "Notifications" },
   { href: "/app/operations", label: "Operations" },
+  { href: "/app/permissions", label: "Permissions" },
   { href: "/app/courses", label: "Courses" },
   { href: "/app/cohorts", label: "Cohorts" },
   { href: "/app/sessions", label: "Sessions" },
@@ -141,6 +142,12 @@ function NavIcon({ label }: { label: string }) {
       <>
         <path d="M10 13a5 5 0 0 0 7.1 0l2-2a5 5 0 0 0-7.1-7.1l-1.1 1.1" />
         <path d="M14 11a5 5 0 0 0-7.1 0l-2 2A5 5 0 0 0 12 20.1l1.1-1.1" />
+      </>
+    ),
+    Permissions: (
+      <>
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" />
+        <path d="m9 12 2 2 4-5" />
       </>
     ),
     Portal: (
