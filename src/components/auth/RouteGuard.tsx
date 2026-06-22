@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 
 import { CoachFortBrandAsset } from "@/src/components/branding/CoachFortBrandAsset";
 import { requireClientSession } from "@/src/lib/auth";
+import { getCurrentStudentPortalContext } from "@/src/lib/studentPortalAuth";
 import { createWorkspace, getCurrentTenant } from "@/src/lib/tenant";
 
 type RouteGuardProps = {
@@ -43,6 +44,15 @@ export function RouteGuard({ children, mode }: RouteGuardProps) {
         }
 
         if (mode === "app" && !tenant) {
+          const studentPortalContext = await getCurrentStudentPortalContext().catch(
+            () => null,
+          );
+
+          if (studentPortalContext) {
+            router.replace("/portal");
+            return;
+          }
+
           if (demoIntent) {
             setMessage("Preparing your demo workspace...");
 

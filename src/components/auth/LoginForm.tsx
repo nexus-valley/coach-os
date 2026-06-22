@@ -34,6 +34,26 @@ function getSafeNextPath(value: string | null) {
   return value;
 }
 
+function getCompatibleNextPath(params: {
+  hasStudentPortal: boolean;
+  hasTenant: boolean;
+  nextPath: string | null;
+}) {
+  if (!params.nextPath) {
+    return null;
+  }
+
+  if (params.nextPath.startsWith("/app")) {
+    return params.hasTenant ? params.nextPath : null;
+  }
+
+  if (params.nextPath.startsWith("/portal")) {
+    return params.hasStudentPortal ? params.nextPath : null;
+  }
+
+  return params.nextPath;
+}
+
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -49,9 +69,21 @@ export function LoginForm() {
     setLoading(true);
 
     try {
-      const tenant = await signInWithPassword(email.trim(), password);
+      const result = await signInWithPassword(email.trim(), password);
+      const compatibleNextPath = getCompatibleNextPath({
+        hasStudentPortal: Boolean(result.studentPortalAccount),
+        hasTenant: Boolean(result.tenant),
+        nextPath,
+      });
 
-      router.replace(nextPath ?? (tenant ? "/app" : "/onboarding"));
+      router.replace(
+        compatibleNextPath ??
+          (result.tenant
+            ? "/app"
+            : result.studentPortalAccount
+              ? "/portal"
+              : "/onboarding"),
+      );
     } catch (caught: unknown) {
       setError(getErrorMessage(caught));
     } finally {

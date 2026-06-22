@@ -17,6 +17,7 @@ type SetupResult = {
   authStatus: "created" | "reused";
   profileStatus: "upserted" | "skipped";
   membershipStatus: "created" | "updated" | "reused" | "skipped";
+  portalLinkStatus: "created" | "updated" | "reused" | "skipped";
   studentStatus: "created" | "updated" | "reused" | "skipped";
 };
 
@@ -337,7 +338,7 @@ async function upsertStudentRecord(
   createdBy: string,
 ) {
   if (!account.createStudentRecord) {
-    return "skipped" as const;
+    return { id: null, status: "skipped" as const };
   }
 
   const existingStudent = await supabase
@@ -349,7 +350,7 @@ async function upsertStudentRecord(
 
   if (existingStudent.error) {
     if (isOptionalSchemaError(existingStudent.error)) {
-      return "skipped" as const;
+      return { id: null, status: "skipped" as const };
     }
     throw existingStudent.error;
   }
@@ -373,15 +374,83 @@ async function upsertStudentRecord(
 
     if (error) {
       if (isOptionalSchemaError(error)) {
+        return { id: null, status: "skipped" as const };
+      }
+      throw error;
+    }
+
+    return { id: existingStudent.data.id, status: "updated" as const };
+  }
+
+  const { data, error } = await supabase
+    .from("students")
+    .insert(studentPayload)
+    .select("id")
+    .single<{ id: string }>();
+
+  if (error) {
+    if (isOptionalSchemaError(error)) {
+      return { id: null, status: "skipped" as const };
+    }
+    throw error;
+  }
+
+  return { id: data.id, status: "created" as const };
+}
+
+async function upsertStudentPortalAccount(params: {
+  account: RegressionAccount;
+  linkedBy: string;
+  studentId: string | null;
+  supabase: SupabaseClient;
+  tenantId: string;
+  userId: string;
+}) {
+  if (!params.studentId || !params.account.createStudentRecord) {
+    return "skipped" as const;
+  }
+
+  const existingLink = await params.supabase
+    .from("student_portal_accounts")
+    .select("id,status")
+    .eq("tenant_id", params.tenantId)
+    .eq("student_id", params.studentId)
+    .maybeSingle<{ id: string; status: string }>();
+
+  if (existingLink.error) {
+    if (isOptionalSchemaError(existingLink.error)) {
+      return "skipped" as const;
+    }
+    throw existingLink.error;
+  }
+
+  const payload = {
+    email: params.account.email,
+    linked_by: params.linkedBy,
+    metadata_json: { regression_test: true },
+    status: "active",
+    student_id: params.studentId,
+    tenant_id: params.tenantId,
+    user_id: params.userId,
+  };
+
+  if (existingLink.data) {
+    const { error } = await params.supabase
+      .from("student_portal_accounts")
+      .update(payload)
+      .eq("id", existingLink.data.id);
+
+    if (error) {
+      if (isOptionalSchemaError(error)) {
         return "skipped" as const;
       }
       throw error;
     }
 
-    return "updated" as const;
+    return existingLink.data.status === "active" ? "reused" as const : "updated" as const;
   }
 
-  const { error } = await supabase.from("students").insert(studentPayload);
+  const { error } = await params.supabase.from("student_portal_accounts").insert(payload);
 
   if (error) {
     if (isOptionalSchemaError(error)) {
@@ -404,7 +473,7 @@ function printSummary(tenant: TenantRecord, results: SetupResult[]) {
 
   for (const result of results) {
     console.log(
-      `- ${result.email} | role=${result.role} | auth=${result.authStatus} | profile=${result.profileStatus} | membership=${result.membershipStatus} | student=${result.studentStatus}`,
+      `- ${result.email} | role=${result.role} | auth=${result.authStatus} | profile=${result.profileStatus} | membership=${result.membershipStatus} | student=${result.studentStatus} | portal_link=${result.portalLinkStatus}`,
     );
   }
 
@@ -444,7 +513,15 @@ async function main() {
 
     const profileStatus = await upsertProfile(supabase, account, auth.user.id);
     const membershipStatus = await upsertTenantMember(supabase, tenant.id, auth.user.id, account.role);
-    const studentStatus = await upsertStudentRecord(supabase, account, tenant.id, ownerAuth.user.id);
+    const studentResult = await upsertStudentRecord(supabase, account, tenant.id, ownerAuth.user.id);
+    const portalLinkStatus = await upsertStudentPortalAccount({
+      account,
+      linkedBy: ownerAuth.user.id,
+      studentId: studentResult.id,
+      supabase,
+      tenantId: tenant.id,
+      userId: auth.user.id,
+    });
 
     results.push({
       email: account.email,
@@ -452,7 +529,8 @@ async function main() {
       authStatus: auth.status,
       profileStatus,
       membershipStatus,
-      studentStatus,
+      portalLinkStatus,
+      studentStatus: studentResult.status,
     });
   }
 

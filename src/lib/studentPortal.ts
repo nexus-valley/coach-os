@@ -211,6 +211,14 @@ export type StudentPortalOverview = {
   };
 };
 
+type StudentPortalAccessMode = "student" | "team";
+
+type StudentPortalRequest = {
+  accessMode?: StudentPortalAccessMode;
+  studentId: string;
+  tenantId: string;
+};
+
 const studentSelect =
   "id,tenant_id,full_name,email,phone,status,source,notes,created_by,created_at,updated_at";
 
@@ -271,6 +279,17 @@ async function getCurrentUserAndRole(tenantId: string) {
   }
 
   return { role, user };
+}
+
+async function ensureTeamPortalPreviewAccess(params: {
+  accessMode?: StudentPortalAccessMode;
+  tenantId: string;
+}) {
+  if (params.accessMode === "student") {
+    return null;
+  }
+
+  return getCurrentUserAndRole(params.tenantId);
 }
 
 async function getLessonCountsForCourses(tenantId: string, courseIds: string[]) {
@@ -417,11 +436,8 @@ export async function getPortalStudentsForTenant(tenantId: string) {
   }) as PortalStudentSummary[];
 }
 
-export async function getStudentPortalCourses(params: {
-  studentId: string;
-  tenantId: string;
-}) {
-  await getCurrentUserAndRole(params.tenantId);
+export async function getStudentPortalCourses(params: StudentPortalRequest) {
+  await ensureTeamPortalPreviewAccess(params);
   const supabase = getSupabaseClient();
   const student = await getStudentById(params);
 
@@ -546,7 +562,7 @@ function createScopedOrFilter(params: {
   return filters.join(",");
 }
 
-async function getPortalScope(params: { studentId: string; tenantId: string }) {
+async function getPortalScope(params: StudentPortalRequest) {
   const [courseOverview, activeCohorts] = await Promise.all([
     getStudentPortalCourses(params),
     getCohortsForStudent(params),
@@ -567,11 +583,8 @@ async function getPortalScope(params: { studentId: string; tenantId: string }) {
   };
 }
 
-export async function getStudentPortalAttendance(params: {
-  studentId: string;
-  tenantId: string;
-}) {
-  await getCurrentUserAndRole(params.tenantId);
+export async function getStudentPortalAttendance(params: StudentPortalRequest) {
+  await ensureTeamPortalPreviewAccess(params);
   const student = await getStudentById(params);
 
   if (!student) {
@@ -647,10 +660,7 @@ export async function getStudentPortalAttendance(params: {
   } satisfies StudentPortalAttendance;
 }
 
-export async function getStudentPortalSessions(params: {
-  studentId: string;
-  tenantId: string;
-}) {
+export async function getStudentPortalSessions(params: StudentPortalRequest) {
   const scope = await getPortalScope(params);
 
   if (!scope) {
@@ -743,19 +753,13 @@ export async function getStudentPortalSessions(params: {
   };
 }
 
-export async function getStudentUpcomingLiveClasses(params: {
-  studentId: string;
-  tenantId: string;
-}) {
+export async function getStudentUpcomingLiveClasses(params: StudentPortalRequest) {
   const sessions = await getStudentPortalSessions(params);
 
   return sessions.upcoming;
 }
 
-export async function getStudentPortalAssignments(params: {
-  studentId: string;
-  tenantId: string;
-}) {
+export async function getStudentPortalAssignments(params: StudentPortalRequest) {
   const scope = await getPortalScope(params);
 
   if (!scope) {
@@ -851,10 +855,7 @@ export async function getStudentPortalAssignments(params: {
   })) satisfies StudentPortalAssignment[];
 }
 
-export async function getStudentPortalCertificates(params: {
-  studentId: string;
-  tenantId: string;
-}) {
+export async function getStudentPortalCertificates(params: StudentPortalRequest) {
   const courseOverview = await getStudentPortalCourses(params);
 
   if (!courseOverview) {
@@ -877,19 +878,18 @@ export async function getStudentPortalCertificates(params: {
     })) satisfies StudentPortalCertificate[];
 }
 
-export async function getStudentPortalPayments(params: {
-  studentId: string;
-  tenantId: string;
-}) {
-  const { role } = await getCurrentUserAndRole(params.tenantId);
+export async function getStudentPortalPayments(params: StudentPortalRequest) {
+  if (params.accessMode !== "student") {
+    const { role } = await getCurrentUserAndRole(params.tenantId);
 
-  if (!canAccessPayments(role)) {
-    return {
-      paidCount: 0,
-      paymentLinks: [],
-      payments: [],
-      pendingCount: 0,
-    } satisfies StudentPortalPayments;
+    if (!canAccessPayments(role)) {
+      return {
+        paidCount: 0,
+        paymentLinks: [],
+        payments: [],
+        pendingCount: 0,
+      } satisfies StudentPortalPayments;
+    }
   }
 
   const student = await getStudentById(params);
@@ -1002,19 +1002,45 @@ export async function getStudentPortalPayments(params: {
   } satisfies StudentPortalPayments;
 }
 
-export async function getStudentPortalNotifications(params: {
-  studentId: string;
-  tenantId: string;
-}) {
-  void params;
+export async function getStudentPortalNotifications(params: StudentPortalRequest) {
+  if (params.accessMode !== "student") {
+    return [] satisfies StudentPortalNotification[];
+  }
 
-  return [] satisfies StudentPortalNotification[];
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from("notifications")
+    .select("id,type,title,message,severity,created_at")
+    .eq("tenant_id", params.tenantId)
+    .order("created_at", { ascending: false })
+    .limit(10);
+
+  if (error) {
+    const message = error.message?.toLowerCase() ?? "";
+
+    if (
+      error.code === "42P01" ||
+      error.code === "PGRST205" ||
+      message.includes("schema cache") ||
+      message.includes("does not exist")
+    ) {
+      return [];
+    }
+
+    throw error;
+  }
+
+  return ((data ?? []) as StudentPortalNotification[]).map((notification) => ({
+    created_at: notification.created_at,
+    id: notification.id,
+    message: notification.message,
+    severity: notification.severity,
+    title: notification.title,
+    type: notification.type,
+  }));
 }
 
-export async function getStudentPortalConversations(params: {
-  studentId: string;
-  tenantId: string;
-}) {
+export async function getStudentPortalConversations(params: StudentPortalRequest) {
   const scope = await getPortalScope(params);
 
   if (!scope) {
@@ -1066,11 +1092,8 @@ export async function getStudentPortalConversations(params: {
   }));
 }
 
-export async function getStudentPortalOverview(params: {
-  studentId: string;
-  tenantId: string;
-}) {
-  await getCurrentUserAndRole(params.tenantId);
+export async function getStudentPortalOverview(params: StudentPortalRequest) {
+  await ensureTeamPortalPreviewAccess(params);
   const scope = await getPortalScope(params);
 
   if (!scope) {
@@ -1102,18 +1125,20 @@ export async function getStudentPortalOverview(params: {
       assignment.submission.status === "late",
   ).length;
 
-  await logActivity({
-    action: "student_portal_previewed",
-    description: "Previewed student portal",
-    entityId: scope.student.id,
-    entityName: scope.student.full_name,
-    entityType: "student",
-    metadata: {
-      student_id: scope.student.id,
-      student_name: scope.student.full_name,
-    },
-    tenantId: params.tenantId,
-  });
+  if (params.accessMode !== "student") {
+    await logActivity({
+      action: "student_portal_previewed",
+      description: "Previewed student portal",
+      entityId: scope.student.id,
+      entityName: scope.student.full_name,
+      entityType: "student",
+      metadata: {
+        student_id: scope.student.id,
+        student_name: scope.student.full_name,
+      },
+      tenantId: params.tenantId,
+    });
+  }
 
   return {
     activeCohorts: scope.activeCohorts,

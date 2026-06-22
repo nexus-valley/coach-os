@@ -7,6 +7,10 @@ import { Badge } from "@/src/components/ui/Badge";
 import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
 import { FeedbackAlert } from "@/src/components/ui/FeedbackAlert";
+import { AdminDashboard } from "@/src/components/dashboard/AdminDashboard";
+import { OwnerDashboard } from "@/src/components/dashboard/OwnerDashboard";
+import { StaffDashboard } from "@/src/components/dashboard/StaffDashboard";
+import { TrainerDashboard } from "@/src/components/dashboard/TrainerDashboard";
 import {
   getDashboardMetrics,
   type DashboardMetrics,
@@ -493,6 +497,16 @@ export function DashboardPageClient() {
           Workspace: {tenant?.name ?? "Current workspace"}
         </div>
       </div>
+
+      {currentRole === "owner" ? (
+        <OwnerDashboard metrics={metrics} tenant={tenant} />
+      ) : currentRole === "admin" ? (
+        <AdminDashboard metrics={metrics} />
+      ) : currentRole === "staff" ? (
+        <StaffDashboard metrics={metrics} />
+      ) : currentRole === "trainer" ? (
+        <TrainerDashboard metrics={metrics} />
+      ) : null}
 
       <Card className="mt-8 border-[#D8E8F0] bg-white p-6 text-[#0B1F33] shadow-2xl shadow-[#0B2A3D]/10">
         <div className="grid gap-5 lg:grid-cols-[1fr_auto] lg:items-center">

@@ -6,7 +6,8 @@ These accounts are for repeatable CoachFort regression and demo testing only. Do
 
 - Name: CoachFort Regression Academy
 - Slug: coachfort-regression
-- Login URL: https://coachfort.com/login
+- Team login URL: https://coachfort.com/login
+- Student portal login URL: https://coachfort.com/portal/login
 
 ## Setup
 
@@ -36,7 +37,7 @@ If `REGRESSION_TEST_PASSWORD` is omitted, the script uses the default regression
 | Admin | admin.regression@coachfort.demo | Admin management flows and pending delegated permission requests |
 | Staff | staff.regression@coachfort.demo | Staff restrictions, read-only/limited operational flows |
 | Trainer | trainer.regression@coachfort.demo | Trainer scoping, assignments, attendance, sessions, delegated exceptions |
-| Student | student.regression@coachfort.demo | Student Auth identity plus linked `students` table record where supported |
+| Student | student.regression@coachfort.demo | Student Auth identity linked to `students` and `student_portal_accounts` where Module 44 SQL is applied |
 
 ## Optional Accounts
 
@@ -51,6 +52,9 @@ Set `REGRESSION_INCLUDE_OPTIONAL_ACCOUNTS=true` to create these additional staff
 ## Notes
 
 - The script is idempotent and never deletes users, tenants, memberships, or student records.
-- `tenant_members.role` currently supports `owner`, `admin`, `staff`, and `trainer`. The student account is created in Supabase Auth and linked to a `students` row, but is not inserted as a `tenant_members` role unless the production role model later supports it.
-- Re-running the script updates Auth metadata, profiles, tenant ownership, tenant member roles, and the linked regression student record.
+- Team users use `https://coachfort.com/login` and should land on `/app`.
+- The student user uses `https://coachfort.com/portal/login` and should land on `/portal`.
+- `tenant_members.role` currently supports `owner`, `admin`, `staff`, and `trainer`. The student account is created in Supabase Auth and linked through `student_portal_accounts`; it is not inserted into `tenant_members`.
+- Re-running the script updates Auth metadata, profiles, tenant ownership, tenant member roles, the linked regression student record, and the student portal account link.
+- If Module 44 SQL has not been run yet, the script safely skips the `student_portal_accounts` link and reports `portal_link=skipped`.
 - Keep `SUPABASE_SERVICE_ROLE_KEY` out of source control and frontend code.

@@ -1,5 +1,6 @@
 import { getCurrentTenant } from "@/src/lib/tenant";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
+import { getCurrentStudentPortalContext } from "@/src/lib/studentPortalAuth";
 
 export async function signInWithPassword(email: string, password: string) {
   const supabase = getSupabaseClient();
@@ -12,7 +13,15 @@ export async function signInWithPassword(email: string, password: string) {
     throw error;
   }
 
-  return getCurrentTenant();
+  const [tenant, studentPortalContext] = await Promise.all([
+    getCurrentTenant().catch(() => null),
+    getCurrentStudentPortalContext().catch(() => null),
+  ]);
+
+  return {
+    studentPortalAccount: studentPortalContext?.account ?? null,
+    tenant,
+  };
 }
 
 export async function signUpWithPassword(params: {
