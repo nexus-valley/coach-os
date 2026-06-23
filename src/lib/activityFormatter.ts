@@ -57,6 +57,7 @@ export const activityActionOptions = [
   ["team_member_removed", "Team Member Removed"],
   ["settings_updated", "Settings Updated"],
   ["branding_updated", "Branding Updated"],
+  ["public_site_updated", "Public Site Updated"],
   ["workspace_branding_updated", "Workspace Branding Updated"],
   ["session_created", "Session Created"],
   ["session_updated", "Session Updated"],

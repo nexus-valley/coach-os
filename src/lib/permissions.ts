@@ -82,6 +82,7 @@ const navAccess: Record<string, (role: MemberRole | null | undefined) => boolean
     Automations: canManageAutomations,
     Payments: canAccessPayments,
     "Payment Links": canManagePayments,
+    "Public Site": canAccessSettings,
     Settings: canAccessSettings,
     Subscription: canAccessSubscription,
   };

@@ -42,6 +42,7 @@ const navItems = [
   { href: "/app/activity", label: "Activity" },
   { href: "/app/compliance", label: "Compliance" },
   { href: "/app/backup", label: "Backup & Recovery" },
+  { href: "/app/settings/public-site", label: "Public Site" },
   { href: "/app/subscription", label: "Subscription" },
   { href: "/app/settings", label: "Settings" },
 ];
@@ -174,6 +175,15 @@ function NavIcon({ label }: { label: string }) {
         <path d="m10 9 4 3-4 3V9Z" />
         <path d="M8 20h8" />
         <path d="M12 16v4" />
+      </>
+    ),
+    "Public Site": (
+      <>
+        <path d="M4 5h16" />
+        <path d="M5 5v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V5" />
+        <path d="M8 10h8" />
+        <path d="M8 14h5" />
+        <path d="M15 18h1" />
       </>
     ),
     Reminders: (

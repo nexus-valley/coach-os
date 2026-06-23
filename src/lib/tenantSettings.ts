@@ -24,8 +24,24 @@ export type TenantSettings = {
   portal_login_message: string | null;
   portal_welcome_subtitle: string | null;
   portal_welcome_title: string | null;
+  public_about_body: string | null;
+  public_about_title: string | null;
+  public_footer_note: string | null;
+  public_hero_cta_label: string | null;
+  public_hero_subtitle: string | null;
+  public_hero_title: string | null;
+  public_highlight_1_body: string | null;
+  public_highlight_1_title: string | null;
+  public_highlight_2_body: string | null;
+  public_highlight_2_title: string | null;
+  public_highlight_3_body: string | null;
+  public_highlight_3_title: string | null;
   public_page_description: string | null;
   public_page_title: string | null;
+  public_show_contact_form: boolean | null;
+  public_show_courses: boolean | null;
+  public_show_support_contact: boolean | null;
+  public_site_enabled: boolean | null;
   receipt_footer_text: string | null;
   show_powered_by: boolean | null;
   slug: string;
@@ -95,7 +111,7 @@ export type WorkspaceBranding = {
 };
 
 const tenantSettingsSelect =
-  "id,name,slug,category,owner_user_id,workspace_display_name,brand_name,brand_tagline,logo_url,icon_url,brand_color,accent_color,student_portal_theme_color,support_email,support_phone,whatsapp_number,website_url,address_line_1,address_line_2,city,state,country,postal_code,certificate_issuer_name,receipt_footer_text,portal_welcome_title,portal_welcome_subtitle,portal_login_message,show_powered_by,public_page_title,public_page_description,contact_cta_text,branding_json";
+  "id,name,slug,category,owner_user_id,workspace_display_name,brand_name,brand_tagline,logo_url,icon_url,brand_color,accent_color,student_portal_theme_color,support_email,support_phone,whatsapp_number,website_url,address_line_1,address_line_2,city,state,country,postal_code,certificate_issuer_name,receipt_footer_text,portal_welcome_title,portal_welcome_subtitle,portal_login_message,show_powered_by,public_site_enabled,public_page_title,public_page_description,contact_cta_text,public_hero_title,public_hero_subtitle,public_hero_cta_label,public_about_title,public_about_body,public_highlight_1_title,public_highlight_1_body,public_highlight_2_title,public_highlight_2_body,public_highlight_3_title,public_highlight_3_body,public_show_courses,public_show_contact_form,public_show_support_contact,public_footer_note,branding_json";
 
 export const defaultTenantBrandColor = "#145da0";
 
