@@ -1041,55 +1041,10 @@ export async function getStudentPortalNotifications(params: StudentPortalRequest
 }
 
 export async function getStudentPortalConversations(params: StudentPortalRequest) {
-  const scope = await getPortalScope(params);
+  void params;
 
-  if (!scope) {
-    return [];
-  }
-
-  const supabase = getSupabaseClient();
-  let query = supabase
-    .from("conversation_threads")
-    .select("id,title,thread_type,created_at,updated_at,course_id,cohort_id,student_id")
-    .eq("tenant_id", params.tenantId)
-    .neq("status", "archived")
-    .order("updated_at", { ascending: false })
-    .limit(8);
-  const filters = [
-    "thread_type.eq.announcement",
-    `student_id.eq.${params.studentId}`,
-    ...scope.courseIds.map((courseId) => `course_id.eq.${courseId}`),
-    ...scope.cohortIds.map((cohortId) => `cohort_id.eq.${cohortId}`),
-  ];
-
-  if (filters.length > 0) {
-    query = query.or(filters.join(","));
-  }
-
-  const { data, error } = await query;
-
-  if (error) {
-    const message = error.message?.toLowerCase() ?? "";
-
-    if (
-      error.code === "42P01" ||
-      error.code === "PGRST205" ||
-      message.includes("schema cache") ||
-      message.includes("does not exist")
-    ) {
-      return [];
-    }
-
-    throw error;
-  }
-
-  return ((data ?? []) as StudentPortalConversation[]).map((thread) => ({
-    created_at: thread.created_at,
-    id: thread.id,
-    thread_type: thread.thread_type,
-    title: thread.title,
-    updated_at: thread.updated_at,
-  }));
+  // Student conversation access deferred until safe message RLS/RPC is implemented.
+  return [] satisfies StudentPortalConversation[];
 }
 
 export async function getStudentPortalOverview(params: StudentPortalRequest) {
