@@ -40,6 +40,7 @@ const navItems = [
   { href: "/app/automations", label: "Automations" },
   { href: "/app/reports", label: "Reports" },
   { href: "/app/activity", label: "Activity" },
+  { href: "/app/compliance", label: "Compliance" },
   { href: "/app/subscription", label: "Subscription" },
   { href: "/app/settings", label: "Settings" },
 ];
@@ -82,6 +83,14 @@ function NavIcon({ label }: { label: string }) {
         <path d="M5 9h14" />
         <path d="M5 15h14" />
         <path d="M7 3h10a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z" />
+      </>
+    ),
+    Compliance: (
+      <>
+        <path d="M12 3 5 6v5c0 4.5 3 8.5 7 10 4-1.5 7-5.5 7-10V6l-7-3Z" />
+        <path d="M9 12h6" />
+        <path d="M9 16h4" />
+        <path d="M9 8h6" />
       </>
     ),
     Courses: (
