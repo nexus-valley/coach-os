@@ -49,6 +49,7 @@ export const activityActionOptions = [
   ["invitation_accepted", "Invitation Accepted"],
   ["role_changed", "Role Changed"],
   ["access_denied", "Access Denied"],
+  ["ai_assistant_used", "AI Assistant Used"],
   ["delegated_permission_created", "Delegated Permission Created"],
   ["delegated_permission_activated", "Delegated Permission Activated"],
   ["delegated_permission_revoked", "Delegated Permission Revoked"],
@@ -118,6 +119,7 @@ export const activityActionOptions = [
 
 export const activityEntityOptions = [
   ["all", "All entities"],
+  ["assistant", "Assistant"],
   ["student", "Students"],
   ["course", "Courses"],
   ["cohort", "Cohorts"],
@@ -168,6 +170,7 @@ const actionLabels = Object.fromEntries(activityActionOptions);
 const entityLabels = Object.fromEntries(activityEntityOptions);
 
 const entityIconLabels: Record<string, string> = {
+  assistant: "AI",
   certificate: "CE",
   cohort: "CH",
   course: "CO",
@@ -208,6 +211,7 @@ const entityIconLabels: Record<string, string> = {
 };
 
 const entityIconClasses: Record<string, string> = {
+  assistant: "border-sky-200 bg-sky-50 text-sky-700",
   certificate: "border-amber-200 bg-amber-50 text-amber-700",
   cohort: "border-cyan-200 bg-cyan-50 text-cyan-700",
   course: "border-blue-200 bg-blue-50 text-blue-700",

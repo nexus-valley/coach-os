@@ -23,6 +23,7 @@ type AppShellProps = {
 
 const navItems = [
   { href: "/app", label: "Dashboard" },
+  { href: "/app/assistant", label: "Assistant" },
   { href: "/app/messages", label: "Messages" },
   { href: "/app/notifications", label: "Notifications" },
   { href: "/app/operations", label: "Operations" },
@@ -78,6 +79,14 @@ function NavIcon({ label }: { label: string }) {
         <path d="M8 14h5" />
         <rect height="18" rx="2" width="14" x="5" y="3" />
         <path d="M9 19h6" />
+      </>
+    ),
+    Assistant: (
+      <>
+        <path d="M12 3a7 7 0 0 0-7 7v3a4 4 0 0 0 4 4h1l2 4 2-4h1a4 4 0 0 0 4-4v-3a7 7 0 0 0-7-7Z" />
+        <path d="M9 10h.01" />
+        <path d="M15 10h.01" />
+        <path d="M9.5 14c1.5 1 3.5 1 5 0" />
       </>
     ),
     "Backup & Recovery": (

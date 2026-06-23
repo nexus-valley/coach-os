@@ -74,6 +74,7 @@ const rolePermissions: Record<MemberRole, Permission[]> = {
 const navAccess: Record<string, (role: MemberRole | null | undefined) => boolean> =
   {
     Activity: canAccessActivity,
+    Assistant: canAccessAssistant,
     "Backup & Recovery": canAccessBackup,
     Compliance: canAccessCompliance,
     "Mobile Readiness": canAccessMobileReadiness,
@@ -111,6 +112,10 @@ export function getRolePermissions(role: MemberRole | null | undefined) {
 
 export function canAccessActivity(role: MemberRole | null | undefined) {
   return hasPermission(role, "access_activity");
+}
+
+export function canAccessAssistant(role: MemberRole | null | undefined) {
+  return role === "owner" || role === "admin" || role === "staff" || role === "trainer";
 }
 
 export function canAccessBackup(role: MemberRole | null | undefined) {
