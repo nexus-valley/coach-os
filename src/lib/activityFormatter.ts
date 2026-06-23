@@ -84,6 +84,10 @@ export const activityActionOptions = [
   ["conversation_locked", "Conversation Locked"],
   ["report_viewed", "Report Viewed"],
   ["report_exported", "Report Exported"],
+  ["backup_center_viewed", "Backup Center Viewed"],
+  ["export_started", "Export Started"],
+  ["export_completed", "Export Completed"],
+  ["export_failed", "Export Failed"],
   ["operations_console_viewed", "Operations Console Viewed"],
   ["workspace_health_checked", "Workspace Health Checked"],
   ["subscription_plan_changed", "Subscription Plan Changed"],
@@ -146,6 +150,7 @@ export const activityEntityOptions = [
   ["conversation_message", "Conversation messages"],
   ["operations", "Operations"],
   ["report", "Reports"],
+  ["backup_export", "Backup exports"],
   ["demo_data", "Demo data"],
 ] as const;
 
@@ -195,6 +200,7 @@ const entityIconLabels: Record<string, string> = {
   notification: "NT",
   operations: "OP",
   report: "RP",
+  backup_export: "BK",
 };
 
 const entityIconClasses: Record<string, string> = {
@@ -233,6 +239,7 @@ const entityIconClasses: Record<string, string> = {
   notification: "border-cyan-200 bg-cyan-50 text-cyan-700",
   operations: "border-cyan-200 bg-cyan-50 text-cyan-700",
   report: "border-indigo-200 bg-indigo-50 text-indigo-700",
+  backup_export: "border-cyan-200 bg-cyan-50 text-cyan-700",
 };
 
 export function formatActivityAction(action: string) {

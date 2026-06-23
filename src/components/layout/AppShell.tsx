@@ -41,6 +41,7 @@ const navItems = [
   { href: "/app/reports", label: "Reports" },
   { href: "/app/activity", label: "Activity" },
   { href: "/app/compliance", label: "Compliance" },
+  { href: "/app/backup", label: "Backup & Recovery" },
   { href: "/app/subscription", label: "Subscription" },
   { href: "/app/settings", label: "Settings" },
 ];
@@ -75,6 +76,14 @@ function NavIcon({ label }: { label: string }) {
         <path d="M8 14h5" />
         <rect height="18" rx="2" width="14" x="5" y="3" />
         <path d="M9 19h6" />
+      </>
+    ),
+    "Backup & Recovery": (
+      <>
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+        <path d="M7 10 12 5l5 5" />
+        <path d="M12 5v12" />
+        <path d="M5 3h14" />
       </>
     ),
     Cohorts: (
