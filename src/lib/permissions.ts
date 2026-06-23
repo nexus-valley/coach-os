@@ -76,6 +76,7 @@ const navAccess: Record<string, (role: MemberRole | null | undefined) => boolean
     Activity: canAccessActivity,
     "Backup & Recovery": canAccessBackup,
     Compliance: canAccessCompliance,
+    "Mobile Readiness": canAccessMobileReadiness,
     Operations: canAccessOperations,
     Permissions: canAccessPermissions,
     Sessions: canAccessAttendance,
@@ -118,6 +119,10 @@ export function canAccessBackup(role: MemberRole | null | undefined) {
 
 export function canAccessCompliance(role: MemberRole | null | undefined) {
   return hasPermission(role, "access_compliance");
+}
+
+export function canAccessMobileReadiness(role: MemberRole | null | undefined) {
+  return role === "owner" || role === "admin" || role === "staff" || role === "trainer";
 }
 
 export function canAccessOperations(role: MemberRole | null | undefined) {

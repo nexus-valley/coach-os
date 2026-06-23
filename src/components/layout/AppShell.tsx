@@ -26,6 +26,7 @@ const navItems = [
   { href: "/app/messages", label: "Messages" },
   { href: "/app/notifications", label: "Notifications" },
   { href: "/app/operations", label: "Operations" },
+  { href: "/app/mobile-readiness", label: "Mobile Readiness" },
   { href: "/app/permissions", label: "Permissions" },
   { href: "/app/courses", label: "Courses" },
   { href: "/app/cohorts", label: "Cohorts" },
@@ -133,6 +134,13 @@ function NavIcon({ label }: { label: string }) {
         <path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4v8Z" />
         <path d="M8 9h8" />
         <path d="M8 13h5" />
+      </>
+    ),
+    "Mobile Readiness": (
+      <>
+        <rect height="18" rx="3" width="12" x="6" y="3" />
+        <path d="M10 7h4" />
+        <path d="M11 18h2" />
       </>
     ),
     Notifications: (
