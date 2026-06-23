@@ -227,6 +227,7 @@ function NavIcon({ label }: { label: string }) {
 export function AppShell({ activeItem = "Dashboard", children }: AppShellProps) {
   const [brandColor, setBrandColor] = useState(defaultTenantBrandColor);
   const [currentRole, setCurrentRole] = useState<MemberRole | null>(null);
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [workspaceName, setWorkspaceName] = useState("CoachFort");
 
   useEffect(() => {
@@ -256,6 +257,7 @@ export function AppShell({ activeItem = "Dashboard", children }: AppShellProps) 
 
           setBrandColor(getSafeTenantBrandColor(settings?.brand_color));
           setCurrentRole(role);
+          setLogoUrl(branding.logoUrl || branding.iconUrl);
           setWorkspaceName(branding.displayName);
         }
       } catch {
@@ -290,7 +292,16 @@ export function AppShell({ activeItem = "Dashboard", children }: AppShellProps) 
       <div className="relative flex h-screen overflow-hidden">
         <aside className="coachos-sidebar hidden h-screen w-72 shrink-0 overflow-y-auto border-r border-[#2ECBEA]/20 bg-[linear-gradient(180deg,#0B2A3D_0%,#145DA0_100%)] px-4 py-5 text-white shadow-2xl shadow-[#0B2A3D]/20 lg:block">
           <Link className="flex items-center gap-3 px-2" href="/app">
-            <CoachFortBrandAsset className="h-14 w-14" variant="appIcon" />
+            {logoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                alt={`${workspaceName} logo`}
+                className="h-14 w-14 rounded-2xl object-cover"
+                src={logoUrl}
+              />
+            ) : (
+              <CoachFortBrandAsset className="h-14 w-14" variant="appIcon" />
+            )}
             <div>
               <p className="text-base font-semibold">CoachFort</p>
               <p className="text-xs text-cyan-100/80">by Nexus Valley</p>
@@ -343,10 +354,19 @@ export function AppShell({ activeItem = "Dashboard", children }: AppShellProps) 
           <header className="sticky top-0 z-20 border-b border-[#D8E8F0] bg-white/80 text-[#0B2A3D] shadow-sm shadow-[#0B2A3D]/5 backdrop-blur-xl">
             <div className="flex h-20 items-center justify-between px-5 sm:px-6 lg:px-8">
               <div className="flex items-center gap-3">
-                <CoachFortBrandAsset
-                  className="h-10 w-10 lg:hidden"
-                  variant="appIcon"
-                />
+                {logoUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    alt={`${workspaceName} logo`}
+                    className="h-10 w-10 rounded-2xl object-cover lg:hidden"
+                    src={logoUrl}
+                  />
+                ) : (
+                  <CoachFortBrandAsset
+                    className="h-10 w-10 lg:hidden"
+                    variant="appIcon"
+                  />
+                )}
                 <div>
                   <p className="text-xs font-semibold text-[#5D7185]">
                     powered by CoachFort

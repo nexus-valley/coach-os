@@ -832,9 +832,16 @@ export function TeamSettingsClient() {
                 across customer-facing workspace surfaces.
               </p>
             </div>
-            <p className="rounded-full border border-white/10 bg-white/10 px-4 py-2 text-sm text-slate-300">
-              {canManageBranding ? "Owner/admin editable" : "Read only"}
-            </p>
+            <div className="flex flex-wrap gap-3">
+              <p className="rounded-full border border-white/10 bg-white/10 px-4 py-2 text-sm text-slate-300">
+                {canManageBranding ? "Owner/admin editable" : "Read only"}
+              </p>
+              {canManageBranding ? (
+                <Button href="/app/settings/branding" size="sm" variant="secondary">
+                  Advanced Branding
+                </Button>
+              ) : null}
+            </div>
           </div>
 
           <form className="mt-7 grid gap-5" onSubmit={handleBrandingSubmit}>

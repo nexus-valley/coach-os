@@ -100,6 +100,7 @@ const sensitiveActions = new Set([
   "workspace_plan_changed",
   "billing_profile_updated",
   "settings_updated",
+  "branding_updated",
   "workspace_branding_updated",
   "student_deleted",
 ]);

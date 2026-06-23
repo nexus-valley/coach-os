@@ -1,8 +1,15 @@
 "use client";
 
+import { useEffect, useState } from "react";
+
 import { Badge } from "@/src/components/ui/Badge";
 import { Card } from "@/src/components/ui/Card";
 import type { StudentPortalContext } from "@/src/lib/studentPortalAuth";
+import {
+  getTenantSettings,
+  getWorkspaceBranding,
+  type TenantSettings,
+} from "@/src/lib/tenantSettings";
 import {
   formatPortalDateTime,
   PortalEmptyState,
@@ -28,6 +35,27 @@ function SummaryCard({
 
 export function StudentPortalDashboard({ context }: { context: StudentPortalContext }) {
   const { error, loading, overview } = usePortalSection(context);
+  const [settings, setSettings] = useState<TenantSettings | null>(null);
+
+  useEffect(() => {
+    let active = true;
+
+    getTenantSettings(context.tenant.id)
+      .then((tenantSettings) => {
+        if (active) {
+          setSettings(tenantSettings);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setSettings(null);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [context.tenant.id]);
 
   if (loading) {
     return <PortalLoadingCard label="Loading student dashboard" />;
@@ -37,17 +65,21 @@ export function StudentPortalDashboard({ context }: { context: StudentPortalCont
     return <PortalError message={error || "Unable to load student dashboard."} />;
   }
 
+  const branding = getWorkspaceBranding(settings, context.tenant);
+
   return (
     <div>
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
           <Badge tone="admin">Student Dashboard</Badge>
           <h1 className="mt-4 text-3xl font-semibold tracking-normal text-[#0B1F33]">
-            Welcome, {overview.student.full_name}
+            {branding.portalWelcomeTitle}
           </h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-[#425B76]">
-            Track your classes, attendance, assignments, certificates, payments,
-            and institute updates in one place.
+            {branding.portalWelcomeSubtitle}
+          </p>
+          <p className="mt-2 text-sm font-semibold text-[#66788F]">
+            Signed in as {overview.student.full_name}
           </p>
         </div>
       </div>

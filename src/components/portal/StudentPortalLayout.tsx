@@ -66,7 +66,9 @@ export function StudentPortalLayout({
   }
 
   const branding = getWorkspaceBranding(settings, context.tenant);
-  const brandColor = getSafeTenantBrandColor(settings?.brand_color);
+  const brandColor = getSafeTenantBrandColor(
+    settings?.student_portal_theme_color || settings?.brand_color,
+  );
 
   return (
     <div
@@ -91,9 +93,15 @@ export function StudentPortalLayout({
                 <p className="truncate text-lg font-semibold">
                   {branding.displayName}
                 </p>
-                <p className="text-xs font-medium text-[#5D7185]">
-                  powered by CoachFort
-                </p>
+                {branding.showPoweredBy ? (
+                  <p className="text-xs font-medium text-[#5D7185]">
+                    powered by CoachFort
+                  </p>
+                ) : (
+                  <p className="text-xs font-medium text-[#5D7185]">
+                    {branding.brandTagline || "Student Portal"}
+                  </p>
+                )}
               </div>
             </Link>
             <div className="flex items-center gap-3">
@@ -119,11 +127,19 @@ export function StudentPortalLayout({
                   className={[
                     "whitespace-nowrap rounded-full border px-4 py-2 text-sm font-semibold transition",
                     active
-                      ? "border-transparent bg-[#145DA0] text-white shadow-md shadow-[#145DA0]/15"
+                      ? "border-transparent text-white shadow-md shadow-[#145DA0]/15"
                       : "border-[#D8E8F0] bg-white text-[#425B76] hover:border-[#2ECBEA]/60 hover:text-[#0B2A3D]",
                   ].join(" ")}
                   href={item.href}
                   key={item.href}
+                  style={
+                    active
+                      ? {
+                          backgroundColor: brandColor,
+                          boxShadow: `0 10px 18px ${brandColor}26`,
+                        }
+                      : undefined
+                  }
                 >
                   {item.label}
                 </Link>
