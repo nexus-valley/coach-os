@@ -80,6 +80,12 @@ export type PlatformTenantDetail = {
     trial_started_at: string | null;
     current_period_start: string | null;
   };
+  support_note_counts?: {
+    archived: number;
+    in_progress: number;
+    open: number;
+    resolved: number;
+  };
   support_notes: PlatformSupportNote[];
   tenant: {
     category: string | null;
@@ -402,5 +408,29 @@ export function toCurrency(value: number | null | undefined, currency = "INR") {
 }
 
 export function normalizePlatformError(error: unknown) {
-  return getErrorMessage(error, "Unable to complete the platform request.");
+  const message = getErrorMessage(error, "Unable to complete the platform request.");
+  const lower = message.toLowerCase();
+
+  if (
+    lower.includes("permission denied") ||
+    lower.includes("platform admin access") ||
+    lower.includes("row-level security") ||
+    lower.includes("42501")
+  ) {
+    return "You do not have permission to perform that platform action.";
+  }
+
+  if (lower.includes("duplicate key")) {
+    return "A record with those values already exists.";
+  }
+
+  if (lower.includes("cannot contain html-like")) {
+    return "Remove HTML-like characters before saving.";
+  }
+
+  if (lower.includes("too long") || lower.includes("too large")) {
+    return "One of the fields is over the allowed length.";
+  }
+
+  return message;
 }

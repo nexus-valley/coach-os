@@ -78,6 +78,54 @@ All writes go through `SECURITY DEFINER` RPCs. Direct authenticated insert/updat
 - Platform dashboard data is high-level by default and avoids student/payment/CRM/message/AI prompt PII.
 - Support note text is stored only in `platform_support_notes`; platform activity and tenant audit metadata store `note_present` instead of full note text.
 
+## Console UX
+
+The `/platform` page is a single-page owner console with these sections:
+
+- Platform overview cards for tenant, subscription, student, course, and team counts.
+- Tenant directory with search, subscription-status filter, payment-status filter, and sorting.
+- Selected tenant profile with high-level health counts.
+- Subscription and billing status controls for platform owner/admin/finance roles.
+- Usage snapshot panel and capture action for owner/admin roles.
+- Support notes workflow for owner/admin/support roles.
+- Platform activity timeline with safe metadata only.
+- Platform plan management for owner/admin roles.
+
+Tenant rows show tenant name, slug, plan, subscription status, payment status, student count, course count, team count, and last activity. They do not show student names, emails, phones, payment references, AI prompts/responses, private CRM notes, or internal message bodies.
+
+## Role-Aware UI
+
+- `owner`: all controls, including plan management, subscription status, support notes, usage snapshots, and future platform admin management.
+- `admin`: plan management, subscription status, support notes, and usage snapshots.
+- `finance`: subscription and payment status management. Full support note bodies are hidden.
+- `support`: support note workflow and high-level tenant health. Billing controls and platform admin controls are hidden.
+- non-platform users: blocked before platform data is rendered.
+
+## Subscription Management
+
+Subscription controls update CoachFort platform subscription status only:
+
+- plan
+- subscription status
+- billing cycle
+- amount
+- payment status
+- trial end
+- current period end
+- internal billing note
+
+The console does not call a payment gateway, does not charge money, and does not mutate tenant finance records.
+
+## Support Workflow
+
+Support users can create notes with:
+
+- note type
+- status
+- note body
+
+Owner/admin/support users can update support note status. Finance users receive support note counts only and do not receive full note bodies through the tenant detail view.
+
 ## Usage Snapshots
 
 Usage snapshots capture high-level counts:
@@ -98,6 +146,9 @@ Usage snapshots capture high-level counts:
 - No advanced storage calculation.
 - No platform-level email or WhatsApp notifications.
 - No multi-page platform console yet; Module 56 keeps core sections in `/platform`.
+- No exports from the platform console yet.
+- No platform admin management UI yet, though the secure RPC exists.
+- Tenant health scoring is count-based only; no risk model yet.
 
 ## Future Roadmap
 
@@ -108,3 +159,6 @@ Usage snapshots capture high-level counts:
 - Platform usage trend charts.
 - Platform notifications and renewal reminders.
 - Safe tenant health scoring.
+- Platform CSV exports.
+- Admin user management UI.
+- Advanced analytics and cohort-level platform trends.

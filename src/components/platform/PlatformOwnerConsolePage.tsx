@@ -18,8 +18,10 @@ import {
   recordPlatformSupportNote,
   toCurrency,
   toDisplayDate,
+  updatePlatformSupportNote,
   updateTenantSubscription,
   upsertPlatformSubscriptionPlan,
+  type PlatformActivity,
   type PlatformAdminContext,
   type PlatformDashboard,
   type PlatformSubscriptionPlan,
@@ -61,6 +63,24 @@ type SupportFormState = {
   status: "archived" | "in_progress" | "open" | "resolved";
 };
 
+type SubscriptionStatusFilter =
+  | "active"
+  | "all"
+  | "cancelled"
+  | "not_set"
+  | "past_due"
+  | "suspended"
+  | "trial";
+type PaymentStatusFilter =
+  | "all"
+  | "not_required"
+  | "not_set"
+  | "overdue"
+  | "paid"
+  | "unpaid"
+  | "waived";
+type TenantSort = "activity" | "name" | "newest" | "students";
+
 const emptyPlanForm: PlanFormState = {
   aiMonthlyLimit: "",
   code: "",
@@ -82,11 +102,37 @@ const emptySupportForm: SupportFormState = {
   status: "open",
 };
 
-function formatLabel(value: string | null | undefined) {
-  if (!value) {
-    return "Not set";
-  }
+const subscriptionStatuses: SubscriptionFormState["status"][] = [
+  "trial",
+  "active",
+  "past_due",
+  "suspended",
+  "cancelled",
+];
+const paymentStatuses: SubscriptionFormState["paymentStatus"][] = [
+  "not_required",
+  "unpaid",
+  "paid",
+  "overdue",
+  "waived",
+];
+const supportTypes: SupportFormState["noteType"][] = [
+  "general",
+  "billing",
+  "technical",
+  "onboarding",
+  "risk",
+  "follow_up",
+];
+const supportStatuses: SupportFormState["status"][] = [
+  "open",
+  "in_progress",
+  "resolved",
+  "archived",
+];
 
+function formatLabel(value: string | null | undefined) {
+  if (!value) return "Not set";
   return value.replace(/_/g, " ");
 }
 
@@ -95,7 +141,13 @@ function statusTone(value: string | null | undefined) {
     return "success" as const;
   }
 
-  if (value === "past_due" || value === "overdue" || value === "suspended") {
+  if (
+    value === "past_due" ||
+    value === "overdue" ||
+    value === "suspended" ||
+    value === "unpaid" ||
+    value === "in_progress"
+  ) {
     return "warning" as const;
   }
 
@@ -131,11 +183,12 @@ function toDateInput(value: string | null | undefined) {
 function buildSubscriptionForm(detail: PlatformTenantDetail | null): SubscriptionFormState {
   return {
     amount: String(detail?.subscription.amount ?? 0),
-    billingCycle: detail?.subscription.billing_cycle === "yearly"
-      ? "yearly"
-      : detail?.subscription.billing_cycle === "custom"
-        ? "custom"
-        : "monthly",
+    billingCycle:
+      detail?.subscription.billing_cycle === "yearly"
+        ? "yearly"
+        : detail?.subscription.billing_cycle === "custom"
+          ? "custom"
+          : "monthly",
     currentPeriodEnd: toDateInput(detail?.subscription.current_period_end),
     currentPeriodStart: toDateInput(detail?.subscription.current_period_start),
     notes: "",
@@ -159,24 +212,90 @@ function canManagePlans(role: PlatformAdminContext["role"] | null | undefined) {
   return role === "owner" || role === "admin";
 }
 
+function safeMetadataSummary(metadata: Record<string, unknown>) {
+  const text = JSON.stringify(metadata ?? {});
+  return text === "{}" ? "No metadata" : text.slice(0, 180);
+}
+
+function planFormFromPlan(plan: PlatformSubscriptionPlan): PlanFormState {
+  return {
+    aiMonthlyLimit: plan.ai_monthly_limit?.toString() ?? "",
+    code: plan.code,
+    description: plan.description ?? "",
+    marketingMonthlyLimit: plan.marketing_monthly_limit?.toString() ?? "",
+    maxCourses: plan.max_courses?.toString() ?? "",
+    maxStorageMb: plan.max_storage_mb?.toString() ?? "",
+    maxStudents: plan.max_students?.toString() ?? "",
+    maxTeamMembers: plan.max_team_members?.toString() ?? "",
+    monthlyPrice: plan.monthly_price.toString(),
+    name: plan.name,
+    status: plan.status,
+    yearlyPrice: plan.yearly_price.toString(),
+  };
+}
+
 export function PlatformOwnerConsolePage() {
   const [adminContext, setAdminContext] = useState<PlatformAdminContext | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [dashboard, setDashboard] = useState<PlatformDashboard | null>(null);
   const [loading, setLoading] = useState(true);
+  const [paymentFilter, setPaymentFilter] = useState<PaymentStatusFilter>("all");
   const [plans, setPlans] = useState<PlatformSubscriptionPlan[]>([]);
   const [planForm, setPlanForm] = useState<PlanFormState>(emptyPlanForm);
+  const [query, setQuery] = useState("");
   const [saving, setSaving] = useState(false);
   const [selectedTenantDetail, setSelectedTenantDetail] =
     useState<PlatformTenantDetail | null>(null);
   const [selectedTenantId, setSelectedTenantId] = useState<string | null>(null);
+  const [sort, setSort] = useState<TenantSort>("newest");
+  const [statusFilter, setStatusFilter] = useState<SubscriptionStatusFilter>("all");
   const [subscriptionForm, setSubscriptionForm] =
     useState<SubscriptionFormState>(buildSubscriptionForm(null));
   const [success, setSuccess] = useState<string | null>(null);
-  const [supportForm, setSupportForm] =
-    useState<SupportFormState>(emptySupportForm);
+  const [supportForm, setSupportForm] = useState<SupportFormState>(emptySupportForm);
   const [tenants, setTenants] = useState<PlatformTenantSummary[]>([]);
   const initialLoadStarted = useRef(false);
+
+  const totalTeamMembers = useMemo(
+    () =>
+      tenants.reduce((sum, tenant) => sum + (tenant.team_members_count ?? 0), 0),
+    [tenants],
+  );
+
+  const filteredTenants = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+
+    return [...tenants]
+      .filter((tenant) => {
+        const subscriptionStatus = tenant.subscription.status ?? "not_set";
+        const paymentStatus = tenant.subscription.payment_status ?? "not_set";
+        const matchesQuery =
+          !normalizedQuery ||
+          tenant.name.toLowerCase().includes(normalizedQuery) ||
+          tenant.slug.toLowerCase().includes(normalizedQuery);
+        const matchesStatus =
+          statusFilter === "all" || subscriptionStatus === statusFilter;
+        const matchesPayment =
+          paymentFilter === "all" || paymentStatus === paymentFilter;
+
+        return matchesQuery && matchesStatus && matchesPayment;
+      })
+      .sort((left, right) => {
+        if (sort === "name") return left.name.localeCompare(right.name);
+        if (sort === "students") return right.students_count - left.students_count;
+        if (sort === "activity") {
+          return (
+            new Date(right.last_activity_at ?? 0).getTime() -
+            new Date(left.last_activity_at ?? 0).getTime()
+          );
+        }
+
+        return (
+          new Date(right.created_at ?? 0).getTime() -
+          new Date(left.created_at ?? 0).getTime()
+        );
+      });
+  }, [paymentFilter, query, sort, statusFilter, tenants]);
 
   const selectedTenant = useMemo(
     () => tenants.find((tenant) => tenant.id === selectedTenantId) ?? null,
@@ -214,7 +333,10 @@ export function PlatformOwnerConsolePage() {
       setTenants(tenantData);
       setPlans(planData);
 
-      const nextTenantId = selectedTenantId ?? tenantData[0]?.id ?? null;
+      const nextTenantId =
+        selectedTenantId && tenantData.some((tenant) => tenant.id === selectedTenantId)
+          ? selectedTenantId
+          : tenantData[0]?.id ?? null;
       setSelectedTenantId(nextTenantId);
 
       if (nextTenantId) {
@@ -300,7 +422,7 @@ export function PlatformOwnerConsolePage() {
         trialStartedAt: dateOrNull(subscriptionForm.trialStartedAt),
       });
       setSuccess("Tenant subscription updated.");
-      await loadPlatform();
+      await Promise.all([loadTenantDetail(selectedTenantId), loadPlatform()]);
     } catch (error) {
       setActionError(normalizePlatformError(error));
     } finally {
@@ -334,6 +456,26 @@ export function PlatformOwnerConsolePage() {
     }
   };
 
+  const handleSupportStatusChange = async (noteId: string, status: string) => {
+    if (!adminContext || !selectedTenantId || !canManageSupport(adminContext.role)) {
+      return;
+    }
+
+    setSaving(true);
+    setActionError(null);
+    setSuccess(null);
+
+    try {
+      await updatePlatformSupportNote(noteId, { status });
+      setSuccess("Support note status updated.");
+      await loadTenantDetail(selectedTenantId);
+    } catch (error) {
+      setActionError(normalizePlatformError(error));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleCaptureUsage = async () => {
     if (!adminContext || !selectedTenantId || !canManagePlans(adminContext.role)) {
       return;
@@ -355,17 +497,7 @@ export function PlatformOwnerConsolePage() {
   };
 
   if (loading) {
-    return (
-      <main className="min-h-screen bg-[#F6FAFC] p-6">
-        <div className="mx-auto max-w-7xl">
-          <Card className="p-6">
-            <p className="text-sm font-semibold text-[#5D7185]">
-              Loading platform console...
-            </p>
-          </Card>
-        </div>
-      </main>
-    );
+    return <PlatformLoadingState />;
   }
 
   if (!adminContext) {
@@ -380,86 +512,46 @@ export function PlatformOwnerConsolePage() {
 
   return (
     <main className="min-h-screen bg-[#F6FAFC] text-[#0B1F33]">
-      <div className="mx-auto flex max-w-7xl flex-col gap-6 p-6">
-        <header className="flex flex-col gap-4 border-b border-[#D8E8F0] pb-5 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[#5D7185]">
-              Nexus Valley operations
-            </p>
-            <h1 className="text-3xl font-semibold text-[#0B1F33]">
-              CoachFort Platform Owner Console
-            </h1>
-            <p className="mt-2 max-w-3xl text-sm text-[#5D7185]">
-              Platform-level subscriptions, usage, tenant health, and support.
-              This console is separate from institute finance records.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <Badge tone="dark">Platform {adminContext.role}</Badge>
-            <Button onClick={loadPlatform} size="sm" type="button" variant="secondary">
-              Refresh
-            </Button>
-          </div>
-        </header>
+      <div className="mx-auto flex max-w-7xl flex-col gap-6 p-4 sm:p-6">
+        <PlatformHeader adminContext={adminContext} onRefresh={loadPlatform} />
 
         {actionError ? <FeedbackAlert>{actionError}</FeedbackAlert> : null}
         {success ? <FeedbackAlert tone="success">{success}</FeedbackAlert> : null}
 
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
           <MetricCard label="Tenants" value={dashboard?.tenant_count ?? 0} />
-          <MetricCard label="Active subscriptions" value={dashboard?.active_subscriptions ?? 0} />
-          <MetricCard label="Overdue subscriptions" value={dashboard?.overdue_subscriptions ?? 0} tone="warning" />
-          <MetricCard label="Students across platform" value={dashboard?.total_students ?? 0} />
+          <MetricCard label="Active" value={dashboard?.active_tenants ?? 0} tone="success" />
+          <MetricCard label="Trial" value={dashboard?.trial_tenants ?? 0} />
+          <MetricCard
+            label="Past due"
+            value={dashboard?.overdue_subscriptions ?? 0}
+            tone="warning"
+          />
+          <MetricCard
+            label="Suspended"
+            value={dashboard?.suspended_tenants ?? 0}
+            tone="warning"
+          />
+          <MetricCard label="Students" value={dashboard?.total_students ?? 0} />
+          <MetricCard label="Courses" value={dashboard?.total_courses ?? 0} />
+          <MetricCard label="Team" value={totalTeamMembers} />
         </section>
 
-        <div className="grid gap-6 xl:grid-cols-[0.95fr_1.45fr]">
-          <Card className="p-5">
-            <div className="mb-4 flex items-center justify-between gap-3">
-              <div>
-                <h2 className="text-lg font-semibold">Tenants</h2>
-                <p className="text-sm text-[#5D7185]">
-                  High-level usage and subscription status only.
-                </p>
-              </div>
-              <Badge tone="light">{tenants.length} total</Badge>
-            </div>
-            <div className="max-h-[640px] space-y-3 overflow-y-auto pr-1">
-              {tenants.length === 0 ? (
-                <p className="rounded-2xl border border-dashed border-[#D8E8F0] p-4 text-sm text-[#5D7185]">
-                  No tenants available.
-                </p>
-              ) : (
-                tenants.map((tenant) => (
-                  <button
-                    className={[
-                      "w-full rounded-2xl border p-4 text-left transition",
-                      selectedTenantId === tenant.id
-                        ? "border-[#145DA0] bg-[#EAF8FC]"
-                        : "border-[#D8E8F0] bg-white hover:border-[#9ADDEA]",
-                    ].join(" ")}
-                    key={tenant.id}
-                    onClick={() => void handleSelectTenant(tenant.id)}
-                    type="button"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="font-semibold">{tenant.name}</p>
-                        <p className="text-sm text-[#5D7185]">/{tenant.slug}</p>
-                      </div>
-                      <Badge tone={statusTone(tenant.subscription.status)}>
-                        {formatLabel(tenant.subscription.status)}
-                      </Badge>
-                    </div>
-                    <div className="mt-3 grid grid-cols-3 gap-2 text-xs text-[#5D7185]">
-                      <span>{tenant.students_count} students</span>
-                      <span>{tenant.courses_count} courses</span>
-                      <span>{tenant.team_members_count} team</span>
-                    </div>
-                  </button>
-                ))
-              )}
-            </div>
-          </Card>
+        <div className="grid gap-6 xl:grid-cols-[minmax(360px,0.95fr)_minmax(0,1.55fr)]">
+          <TenantDirectory
+            filteredTenants={filteredTenants}
+            paymentFilter={paymentFilter}
+            query={query}
+            selectedTenantId={selectedTenantId}
+            setPaymentFilter={setPaymentFilter}
+            setQuery={setQuery}
+            setSort={setSort}
+            setStatusFilter={setStatusFilter}
+            sort={sort}
+            statusFilter={statusFilter}
+            tenants={tenants}
+            onSelectTenant={(tenantId) => void handleSelectTenant(tenantId)}
+          />
 
           <section className="space-y-6">
             <TenantDetailPanel
@@ -467,258 +559,97 @@ export function PlatformOwnerConsolePage() {
               selectedTenantName={selectedTenant?.name}
             />
 
-            <Card className="p-5">
-              <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <h2 className="text-lg font-semibold">Subscription Control</h2>
-                  <p className="text-sm text-[#5D7185]">
-                    Manual platform billing status only. No gateway or money movement.
-                  </p>
-                </div>
-                <Badge tone={statusTone(subscriptionForm.paymentStatus)}>
-                  {formatLabel(subscriptionForm.paymentStatus)}
-                </Badge>
-              </div>
-
-              <div className="grid gap-3 md:grid-cols-2">
-                <SelectField
-                  label="Plan"
-                  onChange={(value) =>
-                    setSubscriptionForm((current) => ({ ...current, planId: value }))
-                  }
-                  value={subscriptionForm.planId}
-                >
-                  <option value="">No plan</option>
-                  {plans.map((plan) => (
-                    <option key={plan.id} value={plan.id}>
-                      {plan.name} ({plan.code})
-                    </option>
-                  ))}
-                </SelectField>
-                <SelectField
-                  label="Status"
-                  onChange={(value) =>
-                    setSubscriptionForm((current) => ({
-                      ...current,
-                      status: value as SubscriptionFormState["status"],
-                    }))
-                  }
-                  value={subscriptionForm.status}
-                >
-                  {["trial", "active", "past_due", "suspended", "cancelled"].map(
-                    (status) => (
-                      <option key={status} value={status}>
-                        {formatLabel(status)}
-                      </option>
-                    ),
-                  )}
-                </SelectField>
-                <SelectField
-                  label="Payment status"
-                  onChange={(value) =>
-                    setSubscriptionForm((current) => ({
-                      ...current,
-                      paymentStatus: value as SubscriptionFormState["paymentStatus"],
-                    }))
-                  }
-                  value={subscriptionForm.paymentStatus}
-                >
-                  {["not_required", "unpaid", "paid", "overdue", "waived"].map(
-                    (status) => (
-                      <option key={status} value={status}>
-                        {formatLabel(status)}
-                      </option>
-                    ),
-                  )}
-                </SelectField>
-                <SelectField
-                  label="Billing cycle"
-                  onChange={(value) =>
-                    setSubscriptionForm((current) => ({
-                      ...current,
-                      billingCycle: value as SubscriptionFormState["billingCycle"],
-                    }))
-                  }
-                  value={subscriptionForm.billingCycle}
-                >
-                  {["monthly", "yearly", "custom"].map((cycle) => (
-                    <option key={cycle} value={cycle}>
-                      {formatLabel(cycle)}
-                    </option>
-                  ))}
-                </SelectField>
-                <InputField
-                  label="Amount"
-                  onChange={(value) =>
-                    setSubscriptionForm((current) => ({ ...current, amount: value }))
-                  }
-                  type="number"
-                  value={subscriptionForm.amount}
-                />
-                <InputField
-                  label="Trial ends"
-                  onChange={(value) =>
-                    setSubscriptionForm((current) => ({ ...current, trialEndsAt: value }))
-                  }
-                  type="datetime-local"
-                  value={subscriptionForm.trialEndsAt}
-                />
-              </div>
-              <TextAreaField
-                label="Internal notes"
-                onChange={(value) =>
-                  setSubscriptionForm((current) => ({ ...current, notes: value }))
-                }
-                value={subscriptionForm.notes}
-              />
-              <div className="mt-4 flex flex-wrap gap-3">
-                <Button
-                  disabled={!selectedTenantId || saving || !canManageBilling(adminContext.role)}
-                  onClick={handleSaveSubscription}
-                  type="button"
-                >
-                  Save subscription
-                </Button>
-                <Button
-                  disabled={!selectedTenantId || saving || !canManagePlans(adminContext.role)}
-                  onClick={handleCaptureUsage}
-                  type="button"
-                  variant="secondary"
-                >
-                  Capture usage snapshot
-                </Button>
-              </div>
-            </Card>
+            <SubscriptionPanel
+              adminRole={adminContext.role}
+              form={subscriptionForm}
+              plans={plans}
+              saving={saving}
+              selectedTenantId={selectedTenantId}
+              setForm={setSubscriptionForm}
+              onCaptureUsage={handleCaptureUsage}
+              onSave={handleSaveSubscription}
+            />
 
             <div className="grid gap-6 lg:grid-cols-2">
-              <Card className="p-5">
-                <h2 className="text-lg font-semibold">Support Notes</h2>
-                <p className="mt-1 text-sm text-[#5D7185]">
-                  Full notes remain in platform support tables, not copied into audit metadata.
-                </p>
-                <div className="mt-4 space-y-3">
-                  <SelectField
-                    label="Type"
-                    onChange={(value) =>
-                      setSupportForm((current) => ({
-                        ...current,
-                        noteType: value as SupportFormState["noteType"],
-                      }))
-                    }
-                    value={supportForm.noteType}
-                  >
-                    {["general", "billing", "technical", "onboarding", "risk", "follow_up"].map(
-                      (type) => (
-                        <option key={type} value={type}>
-                          {formatLabel(type)}
-                        </option>
-                      ),
-                    )}
-                  </SelectField>
-                  <TextAreaField
-                    label="Note"
-                    onChange={(value) =>
-                      setSupportForm((current) => ({ ...current, note: value }))
-                    }
-                    value={supportForm.note}
-                  />
-                  <Button
-                    disabled={!selectedTenantId || saving || !canManageSupport(adminContext.role)}
-                    onClick={handleRecordSupportNote}
-                    type="button"
-                  >
-                    Add support note
-                  </Button>
-                </div>
-                <div className="mt-5 space-y-3">
-                  {(selectedTenantDetail?.support_notes ?? []).map((note) => (
-                    <div className="rounded-2xl border border-[#D8E8F0] bg-white p-3" key={note.id}>
-                      <div className="flex items-center justify-between gap-3">
-                        <Badge tone={statusTone(note.status)}>{formatLabel(note.status)}</Badge>
-                        <span className="text-xs text-[#5D7185]">
-                          {toDisplayDate(note.created_at)}
-                        </span>
-                      </div>
-                      <p className="mt-2 text-sm text-[#0B1F33]">{note.note}</p>
-                      <p className="mt-1 text-xs text-[#5D7185]">
-                        {formatLabel(note.note_type)}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </Card>
+              <SupportNotesPanel
+                adminRole={adminContext.role}
+                detail={selectedTenantDetail}
+                form={supportForm}
+                saving={saving}
+                selectedTenantId={selectedTenantId}
+                setForm={setSupportForm}
+                onRecord={handleRecordSupportNote}
+                onStatusChange={handleSupportStatusChange}
+              />
 
-              <Card className="p-5">
-                <h2 className="text-lg font-semibold">Platform Plans</h2>
-                <p className="mt-1 text-sm text-[#5D7185]">
-                  Plan catalog for platform subscriptions. Gateway billing is not connected.
-                </p>
-                <div className="mt-4 grid gap-3">
-                  <InputField
-                    label="Code"
-                    onChange={(value) =>
-                      setPlanForm((current) => ({ ...current, code: value }))
-                    }
-                    value={planForm.code}
-                  />
-                  <InputField
-                    label="Name"
-                    onChange={(value) =>
-                      setPlanForm((current) => ({ ...current, name: value }))
-                    }
-                    value={planForm.name}
-                  />
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <InputField
-                      label="Monthly price"
-                      onChange={(value) =>
-                        setPlanForm((current) => ({ ...current, monthlyPrice: value }))
-                      }
-                      type="number"
-                      value={planForm.monthlyPrice}
-                    />
-                    <InputField
-                      label="Yearly price"
-                      onChange={(value) =>
-                        setPlanForm((current) => ({ ...current, yearlyPrice: value }))
-                      }
-                      type="number"
-                      value={planForm.yearlyPrice}
-                    />
-                  </div>
-                  <TextAreaField
-                    label="Description"
-                    onChange={(value) =>
-                      setPlanForm((current) => ({ ...current, description: value }))
-                    }
-                    value={planForm.description}
-                  />
-                  <Button
-                    disabled={saving || !canManagePlans(adminContext.role)}
-                    onClick={handleSavePlan}
-                    type="button"
-                  >
-                    Save plan
-                  </Button>
-                </div>
-                <div className="mt-5 space-y-3">
-                  {plans.slice(0, 6).map((plan) => (
-                    <div className="rounded-2xl border border-[#D8E8F0] bg-white p-3" key={plan.id}>
-                      <div className="flex items-center justify-between gap-3">
-                        <p className="font-semibold">{plan.name}</p>
-                        <Badge tone={statusTone(plan.status)}>{formatLabel(plan.status)}</Badge>
-                      </div>
-                      <p className="text-sm text-[#5D7185]">{plan.code}</p>
-                      <p className="mt-2 text-sm">
-                        {toCurrency(plan.monthly_price)} monthly /{" "}
-                        {toCurrency(plan.yearly_price)} yearly
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </Card>
+              <PlanManagementPanel
+                adminRole={adminContext.role}
+                form={planForm}
+                plans={plans}
+                saving={saving}
+                setForm={setPlanForm}
+                onLoadPlan={(plan) => setPlanForm(planFormFromPlan(plan))}
+                onReset={() => setPlanForm(emptyPlanForm)}
+                onSave={handleSavePlan}
+              />
             </div>
+
+            <PlatformActivityPanel
+              activity={selectedTenantDetail?.activity ?? dashboard?.recent_activity ?? []}
+            />
           </section>
+        </div>
+      </div>
+    </main>
+  );
+}
+
+function PlatformHeader({
+  adminContext,
+  onRefresh,
+}: {
+  adminContext: PlatformAdminContext;
+  onRefresh: () => void;
+}) {
+  return (
+    <header className="flex flex-col gap-4 border-b border-[#D8E8F0] pb-5 lg:flex-row lg:items-center lg:justify-between">
+      <div>
+        <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[#5D7185]">
+          Nexus Valley operations
+        </p>
+        <h1 className="text-3xl font-semibold text-[#0B1F33]">
+          CoachFort Platform Owner Console
+        </h1>
+        <p className="mt-2 max-w-3xl text-sm text-[#5D7185]">
+          Platform-level subscriptions, usage, tenant health, and support. This
+          console manages platform status, not institute finance records.
+        </p>
+      </div>
+      <div className="flex flex-wrap items-center gap-3">
+        <Badge tone="dark">Platform {adminContext.role}</Badge>
+        <Button onClick={onRefresh} size="sm" type="button" variant="secondary">
+          Refresh
+        </Button>
+      </div>
+    </header>
+  );
+}
+
+function PlatformLoadingState() {
+  return (
+    <main className="min-h-screen bg-[#F6FAFC] p-6">
+      <div className="mx-auto grid max-w-7xl gap-4">
+        <Card className="p-6">
+          <div className="h-5 w-56 rounded-full bg-[#E5EEF4]" />
+          <div className="mt-4 h-9 w-96 max-w-full rounded-full bg-[#E5EEF4]" />
+        </Card>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {[0, 1, 2, 3].map((item) => (
+            <Card className="p-5" key={item}>
+              <div className="h-4 w-24 rounded-full bg-[#E5EEF4]" />
+              <div className="mt-4 h-8 w-16 rounded-full bg-[#E5EEF4]" />
+            </Card>
+          ))}
         </div>
       </div>
     </main>
@@ -731,17 +662,148 @@ function MetricCard({
   value,
 }: {
   label: string;
-  tone?: "light" | "warning";
+  tone?: "light" | "success" | "warning";
   value: number;
 }) {
   return (
+    <Card className="p-4">
+      <p className="text-xs font-semibold uppercase tracking-[0.06em] text-[#5D7185]">
+        {label}
+      </p>
+      <div className="mt-2 flex items-end justify-between gap-2">
+        <p className="text-2xl font-semibold">{value.toLocaleString("en-IN")}</p>
+        <Badge tone={tone}>{tone === "light" ? "Count" : formatLabel(tone)}</Badge>
+      </div>
+    </Card>
+  );
+}
+
+function TenantDirectory({
+  filteredTenants,
+  paymentFilter,
+  query,
+  selectedTenantId,
+  setPaymentFilter,
+  setQuery,
+  setSort,
+  setStatusFilter,
+  sort,
+  statusFilter,
+  tenants,
+  onSelectTenant,
+}: {
+  filteredTenants: PlatformTenantSummary[];
+  paymentFilter: PaymentStatusFilter;
+  query: string;
+  selectedTenantId: string | null;
+  setPaymentFilter: (value: PaymentStatusFilter) => void;
+  setQuery: (value: string) => void;
+  setSort: (value: TenantSort) => void;
+  setStatusFilter: (value: SubscriptionStatusFilter) => void;
+  sort: TenantSort;
+  statusFilter: SubscriptionStatusFilter;
+  tenants: PlatformTenantSummary[];
+  onSelectTenant: (tenantId: string) => void;
+}) {
+  return (
     <Card className="p-5">
-      <div className="flex items-start justify-between gap-3">
+      <div className="mb-4 flex items-start justify-between gap-3">
         <div>
-          <p className="text-sm text-[#5D7185]">{label}</p>
-          <p className="mt-2 text-3xl font-semibold">{value.toLocaleString("en-IN")}</p>
+          <h2 className="text-lg font-semibold">Tenant Directory</h2>
+          <p className="text-sm text-[#5D7185]">
+            {filteredTenants.length} visible of {tenants.length} tenants.
+          </p>
         </div>
-        <Badge tone={tone === "warning" ? "warning" : "light"}>Platform</Badge>
+        <Badge tone="light">No PII</Badge>
+      </div>
+
+      <div className="grid gap-3">
+        <InputField
+          label="Search"
+          onChange={setQuery}
+          placeholder="Tenant name or slug"
+          value={query}
+        />
+        <div className="grid gap-3 sm:grid-cols-3">
+          <SelectField
+            label="Subscription"
+            onChange={(value) => setStatusFilter(value as SubscriptionStatusFilter)}
+            value={statusFilter}
+          >
+            {["all", "not_set", ...subscriptionStatuses].map((status) => (
+              <option key={status} value={status}>
+                {formatLabel(status)}
+              </option>
+            ))}
+          </SelectField>
+          <SelectField
+            label="Payment"
+            onChange={(value) => setPaymentFilter(value as PaymentStatusFilter)}
+            value={paymentFilter}
+          >
+            {["all", "not_set", ...paymentStatuses].map((status) => (
+              <option key={status} value={status}>
+                {formatLabel(status)}
+              </option>
+            ))}
+          </SelectField>
+          <SelectField
+            label="Sort"
+            onChange={(value) => setSort(value as TenantSort)}
+            value={sort}
+          >
+            <option value="newest">Newest</option>
+            <option value="name">Name A-Z</option>
+            <option value="students">Students high-low</option>
+            <option value="activity">Activity recent</option>
+          </SelectField>
+        </div>
+      </div>
+
+      <div className="mt-4 max-h-[720px] space-y-3 overflow-y-auto pr-1">
+        {filteredTenants.length === 0 ? (
+          <p className="rounded-2xl border border-dashed border-[#D8E8F0] p-4 text-sm text-[#5D7185]">
+            No tenants match the current filters.
+          </p>
+        ) : (
+          filteredTenants.map((tenant) => (
+            <button
+              className={[
+                "w-full rounded-2xl border p-4 text-left transition",
+                selectedTenantId === tenant.id
+                  ? "border-[#145DA0] bg-[#EAF8FC] shadow-sm"
+                  : "border-[#D8E8F0] bg-white hover:border-[#9ADDEA]",
+              ].join(" ")}
+              key={tenant.id}
+              onClick={() => onSelectTenant(tenant.id)}
+              type="button"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="truncate font-semibold">{tenant.name}</p>
+                  <p className="truncate text-sm text-[#5D7185]">/{tenant.slug}</p>
+                </div>
+                <div className="flex shrink-0 flex-col items-end gap-2">
+                  <Badge tone={statusTone(tenant.subscription.status)}>
+                    {formatLabel(tenant.subscription.status)}
+                  </Badge>
+                  <Badge tone={statusTone(tenant.subscription.payment_status)}>
+                    {formatLabel(tenant.subscription.payment_status)}
+                  </Badge>
+                </div>
+              </div>
+              <div className="mt-3 grid grid-cols-3 gap-2 text-xs text-[#5D7185]">
+                <span>{tenant.students_count} students</span>
+                <span>{tenant.courses_count} courses</span>
+                <span>{tenant.team_members_count} team</span>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2 text-xs text-[#5D7185]">
+                <span>Plan: {tenant.subscription.plan_name ?? "Not set"}</span>
+                <span>Last activity: {toDisplayDate(tenant.last_activity_at)}</span>
+              </div>
+            </button>
+          ))
+        )}
       </div>
     </Card>
   );
@@ -766,12 +828,15 @@ function TenantDetailPanel({
 
   return (
     <Card className="p-5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <h2 className="text-xl font-semibold">
+          <p className="text-sm font-semibold uppercase tracking-[0.06em] text-[#5D7185]">
+            Tenant profile
+          </p>
+          <h2 className="mt-1 text-2xl font-semibold">
             {detail.tenant.name || selectedTenantName}
           </h2>
-          <p className="text-sm text-[#5D7185]">
+          <p className="mt-1 text-sm text-[#5D7185]">
             /{detail.tenant.slug} | Created {toDisplayDate(detail.tenant.created_at)}
           </p>
         </div>
@@ -785,67 +850,578 @@ function TenantDetailPanel({
         </div>
       </div>
 
-      <div className="mt-5 grid gap-3 md:grid-cols-4">
+      <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <SmallMetric label="Students" value={detail.counts.students_count} />
         <SmallMetric label="Courses" value={detail.counts.courses_count} />
-        <SmallMetric label="Team" value={detail.counts.team_members_count} />
-        <SmallMetric label="Owner/Admin" value={detail.counts.owner_admin_count} />
+        <SmallMetric label="Team members" value={detail.counts.team_members_count} />
+        <SmallMetric label="Owners/Admins" value={detail.counts.owner_admin_count} />
       </div>
 
-      <div className="mt-5 grid gap-4 md:grid-cols-2">
-        <div className="rounded-2xl border border-[#D8E8F0] bg-[#F8FBFD] p-4">
-          <p className="text-sm font-semibold">Subscription</p>
-          <dl className="mt-3 space-y-2 text-sm text-[#5D7185]">
-            <div className="flex justify-between gap-3">
-              <dt>Plan</dt>
-              <dd className="text-right text-[#0B1F33]">
-                {detail.subscription.plan_name ?? "No plan"}
-              </dd>
-            </div>
-            <div className="flex justify-between gap-3">
-              <dt>Amount</dt>
-              <dd className="text-right text-[#0B1F33]">
-                {toCurrency(detail.subscription.amount, detail.subscription.currency ?? "INR")}
-              </dd>
-            </div>
-            <div className="flex justify-between gap-3">
-              <dt>Period end</dt>
-              <dd className="text-right text-[#0B1F33]">
-                {toDisplayDate(detail.subscription.current_period_end)}
-              </dd>
-            </div>
-          </dl>
-        </div>
+      <div className="mt-5 grid gap-4 lg:grid-cols-2">
+        <InfoPanel title="Subscription">
+          <InfoRow label="Plan" value={detail.subscription.plan_name ?? "Not set"} />
+          <InfoRow label="Billing cycle" value={formatLabel(detail.subscription.billing_cycle)} />
+          <InfoRow
+            label="Amount"
+            value={toCurrency(
+              detail.subscription.amount,
+              detail.subscription.currency ?? "INR",
+            )}
+          />
+          <InfoRow label="Trial ends" value={toDisplayDate(detail.subscription.trial_ends_at)} />
+          <InfoRow
+            label="Current period ends"
+            value={toDisplayDate(detail.subscription.current_period_end)}
+          />
+          <InfoRow
+            label="Billing notes"
+            value={detail.subscription.notes_present ? "Present" : "Not set"}
+          />
+        </InfoPanel>
 
-        <div className="rounded-2xl border border-[#D8E8F0] bg-[#F8FBFD] p-4">
-          <p className="text-sm font-semibold">Latest Usage Snapshot</p>
+        <InfoPanel title="Latest Usage Snapshot">
           {detail.latest_usage_snapshot ? (
-            <dl className="mt-3 space-y-2 text-sm text-[#5D7185]">
-              <div className="flex justify-between gap-3">
-                <dt>Date</dt>
-                <dd className="text-right text-[#0B1F33]">
-                  {toDisplayDate(detail.latest_usage_snapshot.snapshot_date)}
-                </dd>
-              </div>
-              <div className="flex justify-between gap-3">
-                <dt>AI requests</dt>
-                <dd className="text-right text-[#0B1F33]">
-                  {detail.latest_usage_snapshot.ai_requests_count}
-                </dd>
-              </div>
-              <div className="flex justify-between gap-3">
-                <dt>Campaigns</dt>
-                <dd className="text-right text-[#0B1F33]">
-                  {detail.latest_usage_snapshot.marketing_campaigns_count}
-                </dd>
-              </div>
-            </dl>
+            <>
+              <InfoRow
+                label="Snapshot date"
+                value={toDisplayDate(detail.latest_usage_snapshot.snapshot_date)}
+              />
+              <InfoRow
+                label="AI requests this month"
+                value={detail.latest_usage_snapshot.ai_requests_count.toString()}
+              />
+              <InfoRow
+                label="Marketing campaigns"
+                value={detail.latest_usage_snapshot.marketing_campaigns_count.toString()}
+              />
+              <InfoRow
+                label="Storage MB"
+                value={detail.latest_usage_snapshot.storage_mb.toString()}
+              />
+            </>
           ) : (
-            <p className="mt-3 text-sm text-[#5D7185]">No snapshot captured yet.</p>
+            <p className="text-sm text-[#5D7185]">No usage snapshot captured yet.</p>
           )}
-        </div>
+        </InfoPanel>
       </div>
     </Card>
+  );
+}
+
+function SubscriptionPanel({
+  adminRole,
+  form,
+  plans,
+  saving,
+  selectedTenantId,
+  setForm,
+  onCaptureUsage,
+  onSave,
+}: {
+  adminRole: PlatformAdminContext["role"];
+  form: SubscriptionFormState;
+  plans: PlatformSubscriptionPlan[];
+  saving: boolean;
+  selectedTenantId: string | null;
+  setForm: React.Dispatch<React.SetStateAction<SubscriptionFormState>>;
+  onCaptureUsage: () => void;
+  onSave: () => void;
+}) {
+  const canEditBilling = canManageBilling(adminRole);
+  const canCapture = canManagePlans(adminRole);
+
+  return (
+    <Card className="p-5">
+      <div className="mb-4 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <h2 className="text-lg font-semibold">Subscription & Billing Status</h2>
+          <p className="text-sm text-[#5D7185]">
+            This only updates platform subscription status. It does not charge money.
+          </p>
+        </div>
+        <Badge tone={statusTone(form.paymentStatus)}>{formatLabel(form.paymentStatus)}</Badge>
+      </div>
+
+      {!canEditBilling ? (
+        <p className="rounded-2xl border border-[#D8E8F0] bg-[#F8FBFD] p-4 text-sm text-[#5D7185]">
+          Your platform role can view tenant health but cannot update billing status.
+        </p>
+      ) : (
+        <>
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            <SelectField
+              label="Plan"
+              onChange={(value) => setForm((current) => ({ ...current, planId: value }))}
+              value={form.planId}
+            >
+              <option value="">No plan</option>
+              {plans.map((plan) => (
+                <option key={plan.id} value={plan.id}>
+                  {plan.name} ({plan.code})
+                </option>
+              ))}
+            </SelectField>
+            <SelectField
+              label="Subscription status"
+              onChange={(value) =>
+                setForm((current) => ({
+                  ...current,
+                  status: value as SubscriptionFormState["status"],
+                }))
+              }
+              value={form.status}
+            >
+              {subscriptionStatuses.map((status) => (
+                <option key={status} value={status}>
+                  {formatLabel(status)}
+                </option>
+              ))}
+            </SelectField>
+            <SelectField
+              label="Payment status"
+              onChange={(value) =>
+                setForm((current) => ({
+                  ...current,
+                  paymentStatus: value as SubscriptionFormState["paymentStatus"],
+                }))
+              }
+              value={form.paymentStatus}
+            >
+              {paymentStatuses.map((status) => (
+                <option key={status} value={status}>
+                  {formatLabel(status)}
+                </option>
+              ))}
+            </SelectField>
+            <SelectField
+              label="Billing cycle"
+              onChange={(value) =>
+                setForm((current) => ({
+                  ...current,
+                  billingCycle: value as SubscriptionFormState["billingCycle"],
+                }))
+              }
+              value={form.billingCycle}
+            >
+              {["monthly", "yearly", "custom"].map((cycle) => (
+                <option key={cycle} value={cycle}>
+                  {formatLabel(cycle)}
+                </option>
+              ))}
+            </SelectField>
+            <InputField
+              label="Amount"
+              onChange={(value) => setForm((current) => ({ ...current, amount: value }))}
+              type="number"
+              value={form.amount}
+            />
+            <InputField
+              label="Trial ends"
+              onChange={(value) =>
+                setForm((current) => ({ ...current, trialEndsAt: value }))
+              }
+              type="datetime-local"
+              value={form.trialEndsAt}
+            />
+            <InputField
+              label="Current period ends"
+              onChange={(value) =>
+                setForm((current) => ({ ...current, currentPeriodEnd: value }))
+              }
+              type="datetime-local"
+              value={form.currentPeriodEnd}
+            />
+          </div>
+          <TextAreaField
+            label="Internal billing note"
+            onChange={(value) => setForm((current) => ({ ...current, notes: value }))}
+            value={form.notes}
+          />
+        </>
+      )}
+
+      <div className="mt-4 flex flex-wrap gap-3">
+        <Button
+          disabled={!selectedTenantId || saving || !canEditBilling}
+          onClick={onSave}
+          type="button"
+        >
+          Save subscription
+        </Button>
+        <Button
+          disabled={!selectedTenantId || saving || !canCapture}
+          onClick={onCaptureUsage}
+          type="button"
+          variant="secondary"
+        >
+          Capture usage snapshot
+        </Button>
+      </div>
+    </Card>
+  );
+}
+
+function SupportNotesPanel({
+  adminRole,
+  detail,
+  form,
+  saving,
+  selectedTenantId,
+  setForm,
+  onRecord,
+  onStatusChange,
+}: {
+  adminRole: PlatformAdminContext["role"];
+  detail: PlatformTenantDetail | null;
+  form: SupportFormState;
+  saving: boolean;
+  selectedTenantId: string | null;
+  setForm: React.Dispatch<React.SetStateAction<SupportFormState>>;
+  onRecord: () => void;
+  onStatusChange: (noteId: string, status: string) => void;
+}) {
+  const canEditSupport = canManageSupport(adminRole);
+  const counts = detail?.support_note_counts;
+
+  return (
+    <Card className="p-5">
+      <h2 className="text-lg font-semibold">Support Notes</h2>
+      <p className="mt-1 text-sm text-[#5D7185]">
+        Full notes stay in support tables and are not copied into activity metadata.
+      </p>
+
+      {!canEditSupport ? (
+        <div className="mt-4 grid grid-cols-2 gap-3">
+          <SmallMetric label="Open" value={counts?.open ?? 0} />
+          <SmallMetric label="In progress" value={counts?.in_progress ?? 0} />
+          <SmallMetric label="Resolved" value={counts?.resolved ?? 0} />
+          <SmallMetric label="Archived" value={counts?.archived ?? 0} />
+        </div>
+      ) : (
+        <>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <SelectField
+              label="Type"
+              onChange={(value) =>
+                setForm((current) => ({
+                  ...current,
+                  noteType: value as SupportFormState["noteType"],
+                }))
+              }
+              value={form.noteType}
+            >
+              {supportTypes.map((type) => (
+                <option key={type} value={type}>
+                  {formatLabel(type)}
+                </option>
+              ))}
+            </SelectField>
+            <SelectField
+              label="Status"
+              onChange={(value) =>
+                setForm((current) => ({
+                  ...current,
+                  status: value as SupportFormState["status"],
+                }))
+              }
+              value={form.status}
+            >
+              {supportStatuses.map((status) => (
+                <option key={status} value={status}>
+                  {formatLabel(status)}
+                </option>
+              ))}
+            </SelectField>
+          </div>
+          <TextAreaField
+            label="Note"
+            onChange={(value) => setForm((current) => ({ ...current, note: value }))}
+            value={form.note}
+          />
+          <div className="mt-3">
+            <Button
+              disabled={!selectedTenantId || saving}
+              onClick={onRecord}
+              type="button"
+            >
+              Add support note
+            </Button>
+          </div>
+
+          <div className="mt-5 space-y-3">
+            {(detail?.support_notes ?? []).length === 0 ? (
+              <p className="rounded-2xl border border-dashed border-[#D8E8F0] p-4 text-sm text-[#5D7185]">
+                No support notes for this tenant.
+              </p>
+            ) : (
+              (detail?.support_notes ?? []).map((note) => (
+                <div
+                  className="rounded-2xl border border-[#D8E8F0] bg-white p-3"
+                  key={note.id}
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex flex-wrap gap-2">
+                      <Badge tone={statusTone(note.status)}>
+                        {formatLabel(note.status)}
+                      </Badge>
+                      <Badge tone="light">{formatLabel(note.note_type)}</Badge>
+                    </div>
+                    <span className="text-xs text-[#5D7185]">
+                      {toDisplayDate(note.created_at)}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-sm text-[#0B1F33]">{note.note}</p>
+                  <SelectField
+                    label="Update status"
+                    onChange={(value) => onStatusChange(note.id, value)}
+                    value={note.status}
+                  >
+                    {supportStatuses.map((status) => (
+                      <option key={status} value={status}>
+                        {formatLabel(status)}
+                      </option>
+                    ))}
+                  </SelectField>
+                </div>
+              ))
+            )}
+          </div>
+        </>
+      )}
+    </Card>
+  );
+}
+
+function PlanManagementPanel({
+  adminRole,
+  form,
+  plans,
+  saving,
+  setForm,
+  onLoadPlan,
+  onReset,
+  onSave,
+}: {
+  adminRole: PlatformAdminContext["role"];
+  form: PlanFormState;
+  plans: PlatformSubscriptionPlan[];
+  saving: boolean;
+  setForm: React.Dispatch<React.SetStateAction<PlanFormState>>;
+  onLoadPlan: (plan: PlatformSubscriptionPlan) => void;
+  onReset: () => void;
+  onSave: () => void;
+}) {
+  const canEditPlans = canManagePlans(adminRole);
+
+  return (
+    <Card className="p-5">
+      <h2 className="text-lg font-semibold">Plan Management</h2>
+      <p className="mt-1 text-sm text-[#5D7185]">
+        Create, update, or archive plan records. Plans are never deleted here.
+      </p>
+
+      {!canEditPlans ? (
+        <p className="mt-4 rounded-2xl border border-[#D8E8F0] bg-[#F8FBFD] p-4 text-sm text-[#5D7185]">
+          Your platform role can view plans but cannot manage the plan catalog.
+        </p>
+      ) : (
+        <div className="mt-4 grid gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <InputField
+              label="Code"
+              onChange={(value) => setForm((current) => ({ ...current, code: value }))}
+              value={form.code}
+            />
+            <InputField
+              label="Name"
+              onChange={(value) => setForm((current) => ({ ...current, name: value }))}
+              value={form.name}
+            />
+            <InputField
+              label="Monthly price"
+              onChange={(value) =>
+                setForm((current) => ({ ...current, monthlyPrice: value }))
+              }
+              type="number"
+              value={form.monthlyPrice}
+            />
+            <InputField
+              label="Yearly price"
+              onChange={(value) =>
+                setForm((current) => ({ ...current, yearlyPrice: value }))
+              }
+              type="number"
+              value={form.yearlyPrice}
+            />
+            <InputField
+              label="Max students"
+              onChange={(value) =>
+                setForm((current) => ({ ...current, maxStudents: value }))
+              }
+              type="number"
+              value={form.maxStudents}
+            />
+            <InputField
+              label="Max courses"
+              onChange={(value) =>
+                setForm((current) => ({ ...current, maxCourses: value }))
+              }
+              type="number"
+              value={form.maxCourses}
+            />
+            <InputField
+              label="Max team members"
+              onChange={(value) =>
+                setForm((current) => ({ ...current, maxTeamMembers: value }))
+              }
+              type="number"
+              value={form.maxTeamMembers}
+            />
+            <InputField
+              label="AI monthly limit"
+              onChange={(value) =>
+                setForm((current) => ({ ...current, aiMonthlyLimit: value }))
+              }
+              type="number"
+              value={form.aiMonthlyLimit}
+            />
+            <InputField
+              label="Marketing monthly limit"
+              onChange={(value) =>
+                setForm((current) => ({ ...current, marketingMonthlyLimit: value }))
+              }
+              type="number"
+              value={form.marketingMonthlyLimit}
+            />
+            <SelectField
+              label="Status"
+              onChange={(value) =>
+                setForm((current) => ({
+                  ...current,
+                  status: value as PlanFormState["status"],
+                }))
+              }
+              value={form.status}
+            >
+              {["active", "inactive", "archived"].map((status) => (
+                <option key={status} value={status}>
+                  {formatLabel(status)}
+                </option>
+              ))}
+            </SelectField>
+          </div>
+          <TextAreaField
+            label="Description"
+            onChange={(value) =>
+              setForm((current) => ({ ...current, description: value }))
+            }
+            value={form.description}
+          />
+          <div className="flex flex-wrap gap-3">
+            <Button disabled={saving} onClick={onSave} type="button">
+              Save plan
+            </Button>
+            <Button disabled={saving} onClick={onReset} type="button" variant="secondary">
+              Clear form
+            </Button>
+          </div>
+        </div>
+      )}
+
+      <div className="mt-5 space-y-3">
+        {plans.length === 0 ? (
+          <p className="rounded-2xl border border-dashed border-[#D8E8F0] p-4 text-sm text-[#5D7185]">
+            No platform plans configured yet.
+          </p>
+        ) : (
+          plans.slice(0, 8).map((plan) => (
+            <div className="rounded-2xl border border-[#D8E8F0] bg-white p-3" key={plan.id}>
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="font-semibold">{plan.name}</p>
+                  <p className="text-sm text-[#5D7185]">{plan.code}</p>
+                </div>
+                <Badge tone={statusTone(plan.status)}>{formatLabel(plan.status)}</Badge>
+              </div>
+              <p className="mt-2 text-sm">
+                {toCurrency(plan.monthly_price)} monthly /{" "}
+                {toCurrency(plan.yearly_price)} yearly
+              </p>
+              {canEditPlans ? (
+                <Button
+                  className="mt-3"
+                  onClick={() => onLoadPlan(plan)}
+                  size="sm"
+                  type="button"
+                  variant="secondary"
+                >
+                  Load for edit
+                </Button>
+              ) : null}
+            </div>
+          ))
+        )}
+      </div>
+    </Card>
+  );
+}
+
+function PlatformActivityPanel({ activity }: { activity: PlatformActivity[] }) {
+  return (
+    <Card className="p-5">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold">Platform Activity</h2>
+          <p className="text-sm text-[#5D7185]">
+            Safe platform metadata only. Notes, prompts, and private PII are excluded.
+          </p>
+        </div>
+        <Badge tone="light">{activity.length} events</Badge>
+      </div>
+
+      <div className="mt-4 space-y-3">
+        {activity.length === 0 ? (
+          <p className="rounded-2xl border border-dashed border-[#D8E8F0] p-4 text-sm text-[#5D7185]">
+            No platform activity available for this view.
+          </p>
+        ) : (
+          activity.slice(0, 12).map((event) => (
+            <div className="rounded-2xl border border-[#D8E8F0] bg-white p-3" key={event.id}>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <Badge tone="light">{formatLabel(event.action)}</Badge>
+                <span className="text-xs text-[#5D7185]">
+                  {toDisplayDate(event.created_at)}
+                </span>
+              </div>
+              <p className="mt-2 text-sm text-[#5D7185]">
+                {event.entity_type ? formatLabel(event.entity_type) : "Platform event"}
+              </p>
+              <p className="mt-1 break-words text-xs text-[#5D7185]">
+                {safeMetadataSummary(event.metadata_json)}
+              </p>
+            </div>
+          ))
+        )}
+      </div>
+    </Card>
+  );
+}
+
+function InfoPanel({ children, title }: { children: React.ReactNode; title: string }) {
+  return (
+    <div className="rounded-2xl border border-[#D8E8F0] bg-[#F8FBFD] p-4">
+      <p className="text-sm font-semibold">{title}</p>
+      <dl className="mt-3 space-y-2 text-sm text-[#5D7185]">{children}</dl>
+    </div>
+  );
+}
+
+function InfoRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex justify-between gap-3">
+      <dt>{label}</dt>
+      <dd className="text-right text-[#0B1F33]">{value}</dd>
+    </div>
   );
 }
 
@@ -861,11 +1437,13 @@ function SmallMetric({ label, value }: { label: string; value: number }) {
 function InputField({
   label,
   onChange,
+  placeholder,
   type = "text",
   value,
 }: {
   label: string;
   onChange: (value: string) => void;
+  placeholder?: string;
   type?: string;
   value: string;
 }) {
@@ -875,6 +1453,7 @@ function InputField({
       <input
         className="mt-2 h-11 w-full rounded-2xl border border-[#D8E8F0] bg-white px-3 text-sm font-normal outline-none focus:border-[#145DA0]"
         onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
         type={type}
         value={value}
       />
