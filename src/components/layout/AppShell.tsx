@@ -42,6 +42,7 @@ const navItems = [
   { href: "/app/automations", label: "Automations" },
   { href: "/app/workflows", label: "Workflows" },
   { href: "/app/approvals", label: "Approvals" },
+  { href: "/app/crm", label: "CRM" },
   { href: "/app/reports", label: "Reports" },
   { href: "/app/activity", label: "Activity" },
   { href: "/app/compliance", label: "Compliance" },
@@ -125,6 +126,16 @@ function NavIcon({ label }: { label: string }) {
       <>
         <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
         <path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15Z" />
+      </>
+    ),
+    CRM: (
+      <>
+        <path d="M4 5h16" />
+        <path d="M4 12h16" />
+        <path d="M4 19h16" />
+        <circle cx="8" cy="5" r="1.5" />
+        <circle cx="8" cy="12" r="1.5" />
+        <circle cx="8" cy="19" r="1.5" />
       </>
     ),
     Dashboard: (

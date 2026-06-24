@@ -62,6 +62,16 @@ export const activityActionOptions = [
   ["approval_request_cancelled", "Approval Request Cancelled"],
   ["workflow_gate_approved", "Workflow Gate Approved"],
   ["workflow_gate_rejected", "Workflow Gate Rejected"],
+  ["crm_lead_created", "CRM Lead Created"],
+  ["crm_lead_imported_from_public_site", "CRM Lead Imported"],
+  ["crm_lead_updated", "CRM Lead Updated"],
+  ["crm_lead_status_changed", "CRM Lead Status Changed"],
+  ["crm_lead_assigned", "CRM Lead Assigned"],
+  ["crm_lead_note_added", "CRM Lead Note Added"],
+  ["crm_follow_up_created", "CRM Follow-up Created"],
+  ["crm_follow_up_updated", "CRM Follow-up Updated"],
+  ["crm_lead_marked_converted", "CRM Lead Marked Converted"],
+  ["crm_lead_marked_lost", "CRM Lead Marked Lost"],
   ["delegated_permission_created", "Delegated Permission Created"],
   ["delegated_permission_activated", "Delegated Permission Activated"],
   ["delegated_permission_revoked", "Delegated Permission Revoked"],
@@ -174,6 +184,11 @@ export const activityEntityOptions = [
   ["workflow", "Workflows"],
   ["approval_request", "Approval requests"],
   ["approval_activity_log", "Approval activity"],
+  ["crm_lead", "CRM leads"],
+  ["crm_lead_note", "CRM lead notes"],
+  ["crm_follow_up_task", "CRM follow-up tasks"],
+  ["crm_activity_log", "CRM activity"],
+  ["public_site_lead", "Public site leads"],
   ["demo_data", "Demo data"],
 ] as const;
 
@@ -232,6 +247,11 @@ const entityIconLabels: Record<string, string> = {
   workflow_template: "WT",
   approval_activity_log: "AA",
   approval_request: "AP",
+  crm_activity_log: "CA",
+  crm_follow_up_task: "CF",
+  crm_lead: "CL",
+  crm_lead_note: "CN",
+  public_site_lead: "PS",
 };
 
 const entityIconClasses: Record<string, string> = {
@@ -279,6 +299,11 @@ const entityIconClasses: Record<string, string> = {
   workflow_template: "border-teal-200 bg-teal-50 text-teal-700",
   approval_activity_log: "border-slate-300 bg-slate-50 text-slate-700",
   approval_request: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  crm_activity_log: "border-slate-300 bg-slate-50 text-slate-700",
+  crm_follow_up_task: "border-orange-200 bg-orange-50 text-orange-700",
+  crm_lead: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  crm_lead_note: "border-cyan-200 bg-cyan-50 text-cyan-700",
+  public_site_lead: "border-blue-200 bg-blue-50 text-blue-700",
 };
 
 export function formatActivityAction(action: string) {
