@@ -9,6 +9,7 @@ export type MemberRole = "owner" | "admin" | "staff" | "trainer";
 
 export type Permission =
   | "access_activity"
+  | "access_approvals"
   | "access_backup"
   | "access_compliance"
   | "access_attendance"
@@ -32,6 +33,7 @@ export type Permission =
 const rolePermissions: Record<MemberRole, Permission[]> = {
   admin: [
     "access_activity",
+    "access_approvals",
     "access_backup",
     "access_compliance",
     "access_attendance",
@@ -53,6 +55,7 @@ const rolePermissions: Record<MemberRole, Permission[]> = {
   ],
   owner: [
     "access_activity",
+    "access_approvals",
     "access_backup",
     "access_compliance",
     "access_attendance",
@@ -73,8 +76,15 @@ const rolePermissions: Record<MemberRole, Permission[]> = {
     "manage_workflows",
     "manage_workspace",
   ],
-  staff: ["access_attendance", "access_payments", "access_workflows", "manage_students"],
+  staff: [
+    "access_approvals",
+    "access_attendance",
+    "access_payments",
+    "access_workflows",
+    "manage_students",
+  ],
   trainer: [
+    "access_approvals",
     "access_attendance",
     "access_workflows",
     "manage_attendance",
@@ -85,6 +95,7 @@ const rolePermissions: Record<MemberRole, Permission[]> = {
 const navAccess: Record<string, (role: MemberRole | null | undefined) => boolean> =
   {
     Activity: canAccessActivity,
+    Approvals: canAccessApprovals,
     Assistant: canAccessAssistant,
     "Backup & Recovery": canAccessBackup,
     Compliance: canAccessCompliance,
@@ -124,6 +135,10 @@ export function getRolePermissions(role: MemberRole | null | undefined) {
 
 export function canAccessActivity(role: MemberRole | null | undefined) {
   return hasPermission(role, "access_activity");
+}
+
+export function canAccessApprovals(role: MemberRole | null | undefined) {
+  return hasPermission(role, "access_approvals");
 }
 
 export function canAccessAssistant(role: MemberRole | null | undefined) {

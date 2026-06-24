@@ -56,6 +56,12 @@ export const activityActionOptions = [
   ["workflow_run_started", "Workflow Run Started"],
   ["workflow_run_completed", "Workflow Run Completed"],
   ["workflow_step_updated", "Workflow Step Updated"],
+  ["approval_request_created", "Approval Request Created"],
+  ["approval_request_approved", "Approval Request Approved"],
+  ["approval_request_rejected", "Approval Request Rejected"],
+  ["approval_request_cancelled", "Approval Request Cancelled"],
+  ["workflow_gate_approved", "Workflow Gate Approved"],
+  ["workflow_gate_rejected", "Workflow Gate Rejected"],
   ["delegated_permission_created", "Delegated Permission Created"],
   ["delegated_permission_activated", "Delegated Permission Activated"],
   ["delegated_permission_revoked", "Delegated Permission Revoked"],
@@ -166,6 +172,8 @@ export const activityEntityOptions = [
   ["workflow_run", "Workflow runs"],
   ["workflow_run_step", "Workflow run steps"],
   ["workflow", "Workflows"],
+  ["approval_request", "Approval requests"],
+  ["approval_activity_log", "Approval activity"],
   ["demo_data", "Demo data"],
 ] as const;
 
@@ -222,6 +230,8 @@ const entityIconLabels: Record<string, string> = {
   workflow_run: "WR",
   workflow_run_step: "WS",
   workflow_template: "WT",
+  approval_activity_log: "AA",
+  approval_request: "AP",
 };
 
 const entityIconClasses: Record<string, string> = {
@@ -267,6 +277,8 @@ const entityIconClasses: Record<string, string> = {
   workflow_run: "border-blue-200 bg-blue-50 text-blue-700",
   workflow_run_step: "border-indigo-200 bg-indigo-50 text-indigo-700",
   workflow_template: "border-teal-200 bg-teal-50 text-teal-700",
+  approval_activity_log: "border-slate-300 bg-slate-50 text-slate-700",
+  approval_request: "border-emerald-200 bg-emerald-50 text-emerald-700",
 };
 
 export function formatActivityAction(action: string) {

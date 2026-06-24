@@ -41,6 +41,7 @@ const navItems = [
   { href: "/app/reminders", label: "Reminders" },
   { href: "/app/automations", label: "Automations" },
   { href: "/app/workflows", label: "Workflows" },
+  { href: "/app/approvals", label: "Approvals" },
   { href: "/app/reports", label: "Reports" },
   { href: "/app/activity", label: "Activity" },
   { href: "/app/compliance", label: "Compliance" },
@@ -88,6 +89,12 @@ function NavIcon({ label }: { label: string }) {
         <path d="M9 10h.01" />
         <path d="M15 10h.01" />
         <path d="M9.5 14c1.5 1 3.5 1 5 0" />
+      </>
+    ),
+    Approvals: (
+      <>
+        <path d="M12 3 5 6v5c0 4.5 3 8.5 7 10 4-1.5 7-5.5 7-10V6l-7-3Z" />
+        <path d="m8.5 12 2.5 2.5L16 9" />
       </>
     ),
     "Backup & Recovery": (
