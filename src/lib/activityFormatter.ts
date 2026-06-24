@@ -72,6 +72,16 @@ export const activityActionOptions = [
   ["crm_follow_up_updated", "CRM Follow-up Updated"],
   ["crm_lead_marked_converted", "CRM Lead Marked Converted"],
   ["crm_lead_marked_lost", "CRM Lead Marked Lost"],
+  ["marketing_campaign_created", "Marketing Campaign Created"],
+  ["marketing_campaign_updated", "Marketing Campaign Updated"],
+  ["marketing_campaign_status_changed", "Marketing Campaign Status Changed"],
+  ["marketing_campaign_archived", "Marketing Campaign Archived"],
+  ["marketing_template_created", "Marketing Template Created"],
+  ["marketing_template_updated", "Marketing Template Updated"],
+  ["marketing_template_archived", "Marketing Template Archived"],
+  ["marketing_campaign_leads_added", "Marketing Campaign Leads Added"],
+  ["marketing_campaign_lead_updated", "Marketing Campaign Lead Updated"],
+  ["marketing_touch_logged", "Marketing Touch Logged"],
   ["delegated_permission_created", "Delegated Permission Created"],
   ["delegated_permission_activated", "Delegated Permission Activated"],
   ["delegated_permission_revoked", "Delegated Permission Revoked"],
@@ -189,6 +199,10 @@ export const activityEntityOptions = [
   ["crm_follow_up_task", "CRM follow-up tasks"],
   ["crm_activity_log", "CRM activity"],
   ["public_site_lead", "Public site leads"],
+  ["marketing_campaign", "Marketing campaigns"],
+  ["marketing_template", "Marketing templates"],
+  ["marketing_campaign_lead", "Marketing campaign leads"],
+  ["marketing_campaign_activity", "Marketing activity"],
   ["demo_data", "Demo data"],
 ] as const;
 
@@ -251,6 +265,10 @@ const entityIconLabels: Record<string, string> = {
   crm_follow_up_task: "CF",
   crm_lead: "CL",
   crm_lead_note: "CN",
+  marketing_campaign: "MC",
+  marketing_campaign_activity: "MA",
+  marketing_campaign_lead: "ML",
+  marketing_template: "MT",
   public_site_lead: "PS",
 };
 
@@ -303,6 +321,10 @@ const entityIconClasses: Record<string, string> = {
   crm_follow_up_task: "border-orange-200 bg-orange-50 text-orange-700",
   crm_lead: "border-emerald-200 bg-emerald-50 text-emerald-700",
   crm_lead_note: "border-cyan-200 bg-cyan-50 text-cyan-700",
+  marketing_campaign: "border-purple-200 bg-purple-50 text-purple-700",
+  marketing_campaign_activity: "border-slate-300 bg-slate-50 text-slate-700",
+  marketing_campaign_lead: "border-pink-200 bg-pink-50 text-pink-700",
+  marketing_template: "border-indigo-200 bg-indigo-50 text-indigo-700",
   public_site_lead: "border-blue-200 bg-blue-50 text-blue-700",
 };
 

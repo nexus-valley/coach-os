@@ -43,6 +43,7 @@ const navItems = [
   { href: "/app/workflows", label: "Workflows" },
   { href: "/app/approvals", label: "Approvals" },
   { href: "/app/crm", label: "CRM" },
+  { href: "/app/marketing", label: "Marketing" },
   { href: "/app/reports", label: "Reports" },
   { href: "/app/activity", label: "Activity" },
   { href: "/app/compliance", label: "Compliance" },
@@ -162,6 +163,13 @@ function NavIcon({ label }: { label: string }) {
         <path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4v8Z" />
         <path d="M8 9h8" />
         <path d="M8 13h5" />
+      </>
+    ),
+    Marketing: (
+      <>
+        <path d="M4 11v2a3 3 0 0 0 3 3h1l5 3V5L8 8H7a3 3 0 0 0-3 3Z" />
+        <path d="M16 9a4 4 0 0 1 0 6" />
+        <path d="M19 6a8 8 0 0 1 0 12" />
       </>
     ),
     "Mobile Readiness": (
