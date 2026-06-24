@@ -38,6 +38,7 @@ const navItems = [
   { href: "/app/enrollments", label: "Enrollments" },
   { href: "/app/payments", label: "Payments" },
   { href: "/app/payment-links", label: "Payment Links" },
+  { href: "/app/finance", label: "Finance" },
   { href: "/app/reminders", label: "Reminders" },
   { href: "/app/automations", label: "Automations" },
   { href: "/app/workflows", label: "Workflows" },
@@ -156,6 +157,17 @@ function NavIcon({ label }: { label: string }) {
         <path d="M5 12h.01" />
         <path d="M5 19h.01" />
         <rect height="20" rx="2" width="16" x="4" y="2" />
+      </>
+    ),
+    Finance: (
+      <>
+        <path d="M4 6h16" />
+        <path d="M4 12h16" />
+        <path d="M4 18h16" />
+        <path d="M8 6v12" />
+        <path d="M16 6v12" />
+        <path d="M10 9h4" />
+        <path d="M10 15h4" />
       </>
     ),
     Messages: (

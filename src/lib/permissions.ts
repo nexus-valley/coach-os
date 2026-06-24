@@ -13,6 +13,7 @@ export type Permission =
   | "access_backup"
   | "access_compliance"
   | "access_crm"
+  | "access_finance"
   | "access_marketing"
   | "access_attendance"
   | "access_operations"
@@ -39,6 +40,7 @@ const rolePermissions: Record<MemberRole, Permission[]> = {
     "access_backup",
     "access_compliance",
     "access_crm",
+    "access_finance",
     "access_marketing",
     "access_attendance",
     "access_operations",
@@ -63,6 +65,7 @@ const rolePermissions: Record<MemberRole, Permission[]> = {
     "access_backup",
     "access_compliance",
     "access_crm",
+    "access_finance",
     "access_marketing",
     "access_attendance",
     "access_operations",
@@ -110,6 +113,7 @@ const navAccess: Record<string, (role: MemberRole | null | undefined) => boolean
     "Backup & Recovery": canAccessBackup,
     Compliance: canAccessCompliance,
     CRM: canAccessCrm,
+    Finance: canAccessFinance,
     Marketing: canAccessMarketing,
     "Mobile Readiness": canAccessMobileReadiness,
     Operations: canAccessOperations,
@@ -167,6 +171,10 @@ export function canAccessCompliance(role: MemberRole | null | undefined) {
 
 export function canAccessCrm(role: MemberRole | null | undefined) {
   return hasPermission(role, "access_crm");
+}
+
+export function canAccessFinance(role: MemberRole | null | undefined) {
+  return hasPermission(role, "access_finance");
 }
 
 export function canAccessMarketing(role: MemberRole | null | undefined) {
