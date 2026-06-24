@@ -40,6 +40,7 @@ const navItems = [
   { href: "/app/payment-links", label: "Payment Links" },
   { href: "/app/reminders", label: "Reminders" },
   { href: "/app/automations", label: "Automations" },
+  { href: "/app/workflows", label: "Workflows" },
   { href: "/app/reports", label: "Reports" },
   { href: "/app/activity", label: "Activity" },
   { href: "/app/compliance", label: "Compliance" },
@@ -244,6 +245,19 @@ function NavIcon({ label }: { label: string }) {
       <>
         <path d="m3 8 4 10h10l4-10-5 3-4-7-4 7-5-3Z" />
         <path d="M7 21h10" />
+      </>
+    ),
+    Workflows: (
+      <>
+        <path d="M4 6h5" />
+        <path d="M4 12h5" />
+        <path d="M4 18h5" />
+        <path d="M13 6h7" />
+        <path d="M13 12h7" />
+        <path d="M13 18h7" />
+        <path d="m10 6 1 1 2-3" />
+        <path d="m10 12 1 1 2-3" />
+        <path d="m10 18 1 1 2-3" />
       </>
     ),
   };

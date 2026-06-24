@@ -17,6 +17,7 @@ export type Permission =
   | "access_permissions"
   | "access_settings"
   | "access_subscription"
+  | "access_workflows"
   | "delete_records"
   | "invite_team"
   | "manage_attendance"
@@ -25,6 +26,7 @@ export type Permission =
   | "manage_payments"
   | "manage_students"
   | "manage_team"
+  | "manage_workflows"
   | "manage_workspace";
 
 const rolePermissions: Record<MemberRole, Permission[]> = {
@@ -38,6 +40,7 @@ const rolePermissions: Record<MemberRole, Permission[]> = {
     "access_permissions",
     "access_settings",
     "access_subscription",
+    "access_workflows",
     "delete_records",
     "invite_team",
     "manage_attendance",
@@ -45,6 +48,7 @@ const rolePermissions: Record<MemberRole, Permission[]> = {
     "manage_courses",
     "manage_payments",
     "manage_students",
+    "manage_workflows",
     "manage_workspace",
   ],
   owner: [
@@ -57,6 +61,7 @@ const rolePermissions: Record<MemberRole, Permission[]> = {
     "access_permissions",
     "access_settings",
     "access_subscription",
+    "access_workflows",
     "delete_records",
     "invite_team",
     "manage_attendance",
@@ -65,10 +70,16 @@ const rolePermissions: Record<MemberRole, Permission[]> = {
     "manage_payments",
     "manage_students",
     "manage_team",
+    "manage_workflows",
     "manage_workspace",
   ],
-  staff: ["access_attendance", "access_payments", "manage_students"],
-  trainer: ["access_attendance", "manage_attendance", "manage_students"],
+  staff: ["access_attendance", "access_payments", "access_workflows", "manage_students"],
+  trainer: [
+    "access_attendance",
+    "access_workflows",
+    "manage_attendance",
+    "manage_students",
+  ],
 };
 
 const navAccess: Record<string, (role: MemberRole | null | undefined) => boolean> =
@@ -87,6 +98,7 @@ const navAccess: Record<string, (role: MemberRole | null | undefined) => boolean
     "Public Site": canAccessSettings,
     Settings: canAccessSettings,
     Subscription: canAccessSubscription,
+    Workflows: canAccessWorkflows,
   };
 
 function hasPermission(role: MemberRole | null | undefined, permission: Permission) {
@@ -154,6 +166,10 @@ export function canAccessSubscription(role: MemberRole | null | undefined) {
   return hasPermission(role, "access_subscription");
 }
 
+export function canAccessWorkflows(role: MemberRole | null | undefined) {
+  return hasPermission(role, "access_workflows");
+}
+
 export function canDeleteRecords(role: MemberRole | null | undefined) {
   return hasPermission(role, "delete_records");
 }
@@ -184,6 +200,10 @@ export function canManageStudents(role: MemberRole | null | undefined) {
 
 export function canManageTeam(role: MemberRole | null | undefined) {
   return hasPermission(role, "manage_team");
+}
+
+export function canManageWorkflows(role: MemberRole | null | undefined) {
+  return hasPermission(role, "manage_workflows");
 }
 
 export function canManageWorkspace(role: MemberRole | null | undefined) {

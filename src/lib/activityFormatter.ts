@@ -50,6 +50,12 @@ export const activityActionOptions = [
   ["role_changed", "Role Changed"],
   ["access_denied", "Access Denied"],
   ["ai_assistant_used", "AI Assistant Used"],
+  ["workflow_template_created", "Workflow Template Created"],
+  ["workflow_template_updated", "Workflow Template Updated"],
+  ["workflow_template_archived", "Workflow Template Archived"],
+  ["workflow_run_started", "Workflow Run Started"],
+  ["workflow_run_completed", "Workflow Run Completed"],
+  ["workflow_step_updated", "Workflow Step Updated"],
   ["delegated_permission_created", "Delegated Permission Created"],
   ["delegated_permission_activated", "Delegated Permission Activated"],
   ["delegated_permission_revoked", "Delegated Permission Revoked"],
@@ -156,6 +162,10 @@ export const activityEntityOptions = [
   ["operations", "Operations"],
   ["report", "Reports"],
   ["backup_export", "Backup exports"],
+  ["workflow_template", "Workflow templates"],
+  ["workflow_run", "Workflow runs"],
+  ["workflow_run_step", "Workflow run steps"],
+  ["workflow", "Workflows"],
   ["demo_data", "Demo data"],
 ] as const;
 
@@ -208,6 +218,10 @@ const entityIconLabels: Record<string, string> = {
   operations: "OP",
   report: "RP",
   backup_export: "BK",
+  workflow: "WF",
+  workflow_run: "WR",
+  workflow_run_step: "WS",
+  workflow_template: "WT",
 };
 
 const entityIconClasses: Record<string, string> = {
@@ -249,6 +263,10 @@ const entityIconClasses: Record<string, string> = {
   operations: "border-cyan-200 bg-cyan-50 text-cyan-700",
   report: "border-indigo-200 bg-indigo-50 text-indigo-700",
   backup_export: "border-cyan-200 bg-cyan-50 text-cyan-700",
+  workflow: "border-cyan-200 bg-cyan-50 text-cyan-700",
+  workflow_run: "border-blue-200 bg-blue-50 text-blue-700",
+  workflow_run_step: "border-indigo-200 bg-indigo-50 text-indigo-700",
+  workflow_template: "border-teal-200 bg-teal-50 text-teal-700",
 };
 
 export function formatActivityAction(action: string) {
