@@ -181,21 +181,31 @@ create or replace function public.workflow_step_is_assigned(
   check_assigned_role text
 )
 returns boolean
-language sql
+language plpgsql
 stable
 security definer
 set search_path = public
 as $$
-  select auth.uid() is not null
-    and public.workflow_current_role(check_tenant_id) is not null
+declare
+  current_member_role text := public.workflow_current_role(check_tenant_id);
+begin
+  return coalesce(
+    auth.uid() is not null
+    and current_member_role is not null
     and (
-      check_assigned_to = auth.uid()
+      (
+        check_assigned_to is not null
+        and check_assigned_to = auth.uid()
+      )
       or (
         check_assigned_to is null
         and check_assigned_role is not null
-        and check_assigned_role = public.workflow_current_role(check_tenant_id)
+        and check_assigned_role = current_member_role
       )
-    );
+    ),
+    false
+  );
+end;
 $$;
 
 create or replace function public.workflow_run_is_visible(check_run_id uuid)
@@ -875,7 +885,7 @@ begin
 
   if not (
     public.has_tenant_role(step_row.tenant_id, actor_id, array['owner', 'admin'])
-    or public.workflow_step_is_assigned(step_row.tenant_id, step_row.assigned_to, step_row.assigned_role)
+    or coalesce(public.workflow_step_is_assigned(step_row.tenant_id, step_row.assigned_to, step_row.assigned_role), false)
   ) then
     raise exception 'Workflow step is not assigned to this user.' using errcode = '42501';
   end if;
