@@ -2,417 +2,319 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 
+import {
+  createStudentDirectChat,
+  formatChatDate,
+  formatChatType,
+  getTeamChatThreads,
+  type AcademyChatThread,
+  type AcademyChatThreadType,
+} from "@/src/lib/academyChat";
+import { getStudentsForTenant, type Student } from "@/src/lib/students";
+import { getSupabaseClient } from "@/src/lib/supabaseClient";
+import { getCurrentMemberRole, type MemberRole } from "@/src/lib/team";
+import { getCurrentTenant, type Tenant } from "@/src/lib/tenant";
 import { Badge } from "@/src/components/ui/Badge";
 import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
 import { EmptyState } from "@/src/components/ui/EmptyState";
 import { FeedbackAlert } from "@/src/components/ui/FeedbackAlert";
-import { getCohortsForTenant, type CohortWithCourse } from "@/src/lib/cohorts";
-import { getCoursesForTenant, type Course } from "@/src/lib/courses";
-import {
-  createConversationThread,
-  safeGetConversationThreads,
-  type ConversationThreadListResult,
-  type ConversationThreadType,
-  type ConversationThreadWithMeta,
-} from "@/src/lib/conversations";
-import { safeGetUnreadThreadCount } from "@/src/lib/messages";
-import {
-  logOptionalQueryFailure,
-  safeOptionalQuery,
-} from "@/src/lib/optionalQuery";
-import { getCurrentTenant, type Tenant } from "@/src/lib/tenant";
-import { getTenantMembers, type TenantMemberWithProfile } from "@/src/lib/team";
 
-type ThreadFormState = {
-  cohortId: string;
-  courseId: string;
-  description: string;
-  participantUserId: string;
-  threadType: ConversationThreadType;
+type ChatFormState = {
+  initialMessage: string;
+  studentId: string;
   title: string;
 };
 
-const emptyForm: ThreadFormState = {
-  cohortId: "",
-  courseId: "",
-  description: "",
-  participantUserId: "",
-  threadType: "announcement",
+const emptyForm: ChatFormState = {
+  initialMessage: "",
+  studentId: "",
   title: "",
 };
 
-const threadTypeOptions: { label: string; value: ConversationThreadType | "all" }[] = [
-  { label: "All threads", value: "all" },
-  { label: "Announcements", value: "announcement" },
-  { label: "Course discussions", value: "course_discussion" },
-  { label: "Cohort discussions", value: "cohort_discussion" },
-  { label: "Direct messages", value: "direct_message" },
-  { label: "Staff notes", value: "staff_note" },
+const threadFilters: Array<{ label: string; value: AcademyChatThreadType | "all" }> = [
+  { label: "All student chats", value: "all" },
+  { label: "Direct chats", value: "student_direct" },
+  { label: "Support requests", value: "student_support" },
+  { label: "Course announcements", value: "course_announcement" },
+  { label: "Cohort announcements", value: "cohort_announcement" },
 ];
 
-function getErrorMessage(caught: unknown, fallback: string) {
-  return caught instanceof Error ? caught.message : fallback;
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
 }
 
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat("en", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
+function threadTone(type: AcademyChatThreadType) {
+  if (type === "student_support") return "warning" as const;
+  if (type === "student_direct") return "trainer" as const;
+  return "admin" as const;
 }
 
-function formatType(value: string) {
-  return value
-    .split("_")
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
+function statusTone(status: AcademyChatThread["status"]) {
+  if (status === "active") return "success" as const;
+  if (status === "locked") return "warning" as const;
+  return "staff" as const;
 }
 
-function typeTone(type: ConversationThreadType) {
-  if (type === "announcement") {
-    return "admin";
-  }
-
-  if (type === "staff_note") {
-    return "warning";
-  }
-
-  if (type === "direct_message") {
-    return "trainer";
-  }
-
-  return "light";
+function getThreadSubtitle(thread: AcademyChatThread) {
+  return (
+    thread.student_name ||
+    thread.course_title ||
+    thread.cohort_name ||
+    "Student-facing thread"
+  );
 }
 
 export function MessagesPageClient() {
   const router = useRouter();
-  const [cohorts, setCohorts] = useState<CohortWithCourse[]>([]);
-  const [courses, setCourses] = useState<Course[]>([]);
-  const [error, setError] = useState("");
-  const [conversationAvailable, setConversationAvailable] = useState(true);
-  const [filter, setFilter] = useState<ConversationThreadType | "all">("all");
-  const [form, setForm] = useState<ThreadFormState>(emptyForm);
+  const initialLoadStarted = useRef(false);
+  const [actionError, setActionError] = useState("");
+  const [filter, setFilter] = useState<AcademyChatThreadType | "all">("all");
+  const [form, setForm] = useState<ChatFormState>(emptyForm);
   const [formOpen, setFormOpen] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [members, setMembers] = useState<TenantMemberWithProfile[]>([]);
+  const [role, setRole] = useState<MemberRole | null>(null);
   const [saving, setSaving] = useState(false);
+  const [search, setSearch] = useState("");
+  const [students, setStudents] = useState<Student[]>([]);
   const [success, setSuccess] = useState("");
   const [tenant, setTenant] = useState<Tenant | null>(null);
-  const [threads, setThreads] = useState<ConversationThreadWithMeta[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
+  const [threads, setThreads] = useState<AcademyChatThread[]>([]);
 
-  const loadWorkspace = useCallback(async (
-    currentTenant: Tenant,
-    nextFilter: ConversationThreadType | "all" = filter,
-  ) => {
-    const [threadResult, tenantCourses, tenantCohorts, tenantMembers, unread] =
-      await Promise.all([
-        safeOptionalQuery<ConversationThreadListResult>(
-          {
-            area: "messages.loadWorkspace",
-            helper: "safeGetConversationThreads",
-            table: "conversation_threads",
-          },
-          () =>
-            safeGetConversationThreads(currentTenant.id, {
-              threadType: nextFilter,
-            }),
-          {
-            available: true,
-            errorType: null,
-            threads: [],
-          },
-        ),
-        safeOptionalQuery<Course[]>(
-          {
-            area: "messages.loadWorkspace",
-            helper: "getCoursesForTenant",
-            table: "courses",
-          },
-          () => getCoursesForTenant(currentTenant.id),
-          [],
-        ),
-        safeOptionalQuery<CohortWithCourse[]>(
-          {
-            area: "messages.loadWorkspace",
-            helper: "getCohortsForTenant",
-            table: "cohorts",
-          },
-          () => getCohortsForTenant(currentTenant.id),
-          [],
-        ),
-        safeOptionalQuery<TenantMemberWithProfile[]>(
-          {
-            area: "messages.loadWorkspace",
-            helper: "getTenantMembers",
-            table: "tenant_members",
-          },
-          () => getTenantMembers(currentTenant.id),
-          [],
-        ),
-        safeOptionalQuery(
-          {
-            area: "messages.loadWorkspace",
-            helper: "safeGetUnreadThreadCount",
-            table: "conversation_messages",
-          },
-          () => safeGetUnreadThreadCount(currentTenant.id),
-          0,
-        ),
-      ]);
+  const isOwnerAdmin = role === "owner" || role === "admin";
+  const canStartChat = role === "owner" || role === "admin" || role === "trainer";
 
-    console.info("[CoachFort messages availability]", {
-      available: threadResult.available,
-      errorType: threadResult.errorType,
-      tenantIdPresent: Boolean(currentTenant.id),
-      threadCount: threadResult.threads.length,
+  const filteredThreads = useMemo(() => {
+    const normalizedSearch = search.trim().toLowerCase();
+
+    return threads.filter((thread) => {
+      const matchesType = filter === "all" || thread.thread_type === filter;
+      const text = [
+        thread.title,
+        thread.student_name,
+        thread.course_title,
+        thread.cohort_name,
+        thread.recent_message,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      return matchesType && (!normalizedSearch || text.includes(normalizedSearch));
     });
+  }, [filter, search, threads]);
 
-    setConversationAvailable(threadResult.available);
-    setThreads(threadResult.threads);
-    setCourses(tenantCourses);
-    setCohorts(tenantCohorts);
-    setMembers(tenantMembers);
-    setUnreadCount(unread);
-  }, [filter]);
-
-  useEffect(() => {
-    let active = true;
-
-    async function load() {
-      try {
-        const currentTenant = await getCurrentTenant();
-
-        if (!active) {
-          return;
-        }
-
-        if (!currentTenant) {
-          router.replace("/onboarding");
-          return;
-        }
-
-        setTenant(currentTenant);
-        await loadWorkspace(currentTenant);
-      } catch (caught) {
-        if (active) {
-          logOptionalQueryFailure(
-            {
-              area: "messages.pageLoad",
-              helper: "load",
-              table: "workspace/messages",
-            },
-            caught,
-          );
-          setError(getErrorMessage(caught, "Unable to load messages."));
-        }
-      } finally {
-        if (active) {
-          setLoading(false);
-        }
-      }
-    }
-
-    load();
-
-    return () => {
-      active = false;
-    };
-  }, [loadWorkspace, router]);
-
-  const filteredMembers = useMemo(
-    () =>
-      members.map((member) => ({
-        label:
-          member.profile?.full_name ||
-          member.profile?.email ||
-          `${formatType(member.role)} user`,
-        value: member.user_id,
-      })),
-    [members],
+  const stats = useMemo(
+    () => ({
+      active: threads.filter((thread) => thread.status === "active").length,
+      announcements: threads.filter((thread) =>
+        ["course_announcement", "cohort_announcement"].includes(thread.thread_type),
+      ).length,
+      direct: threads.filter((thread) => thread.thread_type === "student_direct").length,
+      support: threads.filter((thread) => thread.thread_type === "student_support").length,
+      total: threads.length,
+    }),
+    [threads],
   );
 
-  async function refresh(nextFilter = filter) {
-    if (!tenant) {
-      return;
+  const loadMessages = useCallback(async () => {
+    setActionError("");
+    setLoading(true);
+
+    try {
+      const currentTenant = await getCurrentTenant();
+
+      if (!currentTenant) {
+        router.replace("/onboarding");
+        return;
+      }
+
+      const supabase = getSupabaseClient();
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+
+      if (userError) throw userError;
+      if (!user) throw new Error("You must be logged in to use messages.");
+
+      const memberRole = await getCurrentMemberRole(currentTenant.id, user.id);
+      const canLoadStudentPicker =
+        memberRole === "owner" || memberRole === "admin" || memberRole === "trainer";
+      const [chatThreads, tenantStudents] = await Promise.all([
+        getTeamChatThreads(currentTenant.id),
+        canLoadStudentPicker
+          ? getStudentsForTenant(currentTenant.id)
+          : Promise.resolve([] as Student[]),
+      ]);
+
+      setTenant(currentTenant);
+      setRole(memberRole);
+      setThreads(chatThreads);
+      setStudents(tenantStudents.filter((student) => student.status === "active"));
+    } catch (error) {
+      setActionError(getErrorMessage(error, "Unable to load messages."));
+    } finally {
+      setLoading(false);
     }
+  }, [router]);
 
-    await loadWorkspace(tenant, nextFilter);
-  }
+  useEffect(() => {
+    if (initialLoadStarted.current) return;
+    initialLoadStarted.current = true;
+    void loadMessages();
+  }, [loadMessages]);
 
-  async function handleFilterChange(nextFilter: ConversationThreadType | "all") {
-    setFilter(nextFilter);
-    await refresh(nextFilter);
-  }
-
-  async function handleCreateThread(event: React.FormEvent<HTMLFormElement>) {
+  async function handleCreateDirectChat(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     if (!tenant) {
-      setError("Workspace context is not available.");
+      setActionError("Workspace context is not available.");
       return;
     }
 
-    setSaving(true);
-    setError("");
+    setActionError("");
     setSuccess("");
+    setSaving(true);
 
     try {
-      const thread = await createConversationThread({
-        cohortId: form.cohortId || null,
-        courseId: form.courseId || null,
-        description: form.description,
-        participantUserIds: form.participantUserId
-          ? [form.participantUserId]
-          : [],
+      const threadId = await createStudentDirectChat({
+        initialMessage: form.initialMessage,
+        studentId: form.studentId,
         tenantId: tenant.id,
-        threadType: form.threadType,
         title: form.title,
       });
 
       setForm(emptyForm);
       setFormOpen(false);
-      await refresh();
-      setSuccess("Conversation created.");
-      router.push(`/app/messages/${thread.id}`);
-    } catch (caught) {
-      setError(getErrorMessage(caught, "Unable to create conversation."));
+      setSuccess("Student chat created.");
+      await loadMessages();
+      router.push(`/app/messages/${threadId}`);
+    } catch (error) {
+      setActionError(getErrorMessage(error, "Unable to create student chat."));
     } finally {
       setSaving(false);
     }
   }
 
-  const showingUnavailableState = false;
-
-  console.info("[CoachFort messages render]", {
-    available: conversationAvailable,
-    showingUnavailableState,
-    threadCount: threads.length,
-  });
-
   return (
-    <div className="mx-auto max-w-7xl">
+    <div className="mx-auto max-w-7xl space-y-6">
       <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
         <div>
           <Badge className="border-[#14B8C6]/30 bg-[#14B8C6]/10 text-[#0E7490]">
-            Communication center
+            Academy-student chat
           </Badge>
-          <h2 className="mt-5 text-3xl font-semibold tracking-normal text-[#0B1F33] sm:text-4xl">
+          <h1 className="mt-5 text-3xl font-semibold tracking-normal text-[#0B1F33] sm:text-4xl">
             Messages
-          </h2>
-          <p className="mt-3 max-w-2xl text-base leading-7 text-[#425B76]">
-            Tenant-scoped announcements, discussions, direct messages, and
-            internal notes without real-time dependencies.
+          </h1>
+          <p className="mt-3 max-w-3xl text-base leading-7 text-[#425B76]">
+            Manage student support requests and direct academy-student
+            conversations inside CoachFort. No WhatsApp, email, SMS, or push
+            provider is connected in this module.
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <Badge tone={unreadCount > 0 ? "warning" : "light"}>
-            {unreadCount} unread
-          </Badge>
-          <Button onClick={() => setFormOpen(true)}>New Conversation</Button>
+        <div className="flex flex-wrap gap-3">
+          <Button onClick={loadMessages} type="button" variant="secondary">
+            Refresh
+          </Button>
+          {canStartChat ? (
+            <Button onClick={() => setFormOpen(true)} type="button">
+              New Student Chat
+            </Button>
+          ) : null}
         </div>
       </div>
 
-      <Card className="mt-8 border-[#D8E8F0] bg-white p-5 shadow-2xl shadow-[#0B2A3D]/10">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-sm font-medium text-[#425B76]">Workspace</p>
-            <p className="mt-1 text-xl font-semibold text-[#0B1F33]">
-              {tenant?.name ?? "Current workspace"}
+      {actionError ? <FeedbackAlert>{actionError}</FeedbackAlert> : null}
+      {success ? <FeedbackAlert tone="success">{success}</FeedbackAlert> : null}
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+        {[
+          ["Total", stats.total],
+          ["Active", stats.active],
+          ["Direct", stats.direct],
+          ["Support", stats.support],
+          ["Announcements", stats.announcements],
+        ].map(([label, value]) => (
+          <Card className="p-5" key={label}>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#66788F]">
+              {label}
             </p>
-          </div>
-          <label className="block sm:w-72">
-            <span className="text-sm font-medium text-[#425B76]">Type</span>
-            <select
-              className="mt-2 h-11 w-full rounded-2xl border border-[#D8E8F0] bg-white px-4 text-sm text-[#0B1F33] outline-none transition focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
-              onChange={(event) =>
-                handleFilterChange(event.target.value as ConversationThreadType | "all")
-              }
-              value={filter}
-            >
-              {threadTypeOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
+            <p className="mt-3 text-3xl font-semibold text-[#0B1F33]">{value}</p>
+          </Card>
+        ))}
+      </div>
+
+      <Card className="p-5">
+        <div className="grid gap-3 lg:grid-cols-[1fr_260px]">
+          <input
+            className="h-11 rounded-2xl border border-[#D8E8F0] px-4 text-sm outline-none transition focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search by student, title, course, or latest message"
+            value={search}
+          />
+          <select
+            className="h-11 rounded-2xl border border-[#D8E8F0] bg-white px-4 text-sm outline-none transition focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
+            onChange={(event) =>
+              setFilter(event.target.value as AcademyChatThreadType | "all")
+            }
+            value={filter}
+          >
+            {threadFilters.map((item) => (
+              <option key={item.value} value={item.value}>
+                {item.label}
+              </option>
+            ))}
+          </select>
         </div>
       </Card>
 
-      {error ? (
-        <div className="mt-6">
-          <FeedbackAlert onRetry={() => refresh()}>{error}</FeedbackAlert>
-        </div>
-      ) : null}
-
-      {success ? (
-        <div className="mt-6">
-          <FeedbackAlert tone="success">{success}</FeedbackAlert>
-        </div>
-      ) : null}
-
       {loading ? (
-        <Card className="mt-6 h-72 animate-pulse border-[#D8E8F0] bg-white">
+        <Card className="h-72 animate-pulse border-[#D8E8F0] bg-white">
           <span className="sr-only">Loading messages</span>
         </Card>
-      ) : threads.length === 0 ? (
+      ) : filteredThreads.length === 0 ? (
         <EmptyState
-          action={{
-            label: "New Conversation",
-            onClick: () => setFormOpen(true),
-          }}
-          description="Create an announcement, course discussion, cohort discussion, direct message, or internal staff note."
+          action={
+            canStartChat
+              ? {
+                  label: "New Student Chat",
+                  onClick: () => setFormOpen(true),
+                }
+              : undefined
+          }
+          description="No visible student-facing chat threads match this view."
           icon="MS"
-          title="No conversations yet"
+          title="No student chats yet"
         />
       ) : (
-        <section className="mt-6 grid gap-4 lg:grid-cols-2">
-          {threads.map((thread) => (
+        <section className="grid gap-4 lg:grid-cols-2">
+          {filteredThreads.map((thread) => (
             <Link href={`/app/messages/${thread.id}`} key={thread.id}>
               <Card className="h-full border-[#D8E8F0] bg-white p-6 shadow-lg shadow-[#0B2A3D]/5 transition hover:-translate-y-0.5 hover:shadow-xl">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="flex flex-wrap gap-2">
-                    <Badge tone={typeTone(thread.thread_type)}>
-                      {formatType(thread.thread_type)}
-                    </Badge>
-                    <Badge
-                      tone={
-                        thread.status === "active"
-                          ? "success"
-                          : thread.status === "locked"
-                            ? "warning"
-                            : "staff"
-                      }
-                    >
-                      {thread.status}
-                    </Badge>
-                  </div>
-                  {thread.unreadCount > 0 ? (
-                    <Badge tone="warning">{thread.unreadCount} unread</Badge>
+                <div className="flex flex-wrap items-start gap-2">
+                  <Badge tone={threadTone(thread.thread_type)}>
+                    {formatChatType(thread.thread_type)}
+                  </Badge>
+                  <Badge tone={statusTone(thread.status)}>{thread.status}</Badge>
+                  {!thread.replies_enabled ? (
+                    <Badge tone="light">Read only</Badge>
                   ) : null}
                 </div>
-                <h3 className="mt-5 text-2xl font-semibold text-[#0B1F33]">
-                  {thread.title ?? "Untitled conversation"}
-                </h3>
+                <h2 className="mt-5 text-2xl font-semibold text-[#0B1F33]">
+                  {thread.title ?? "Student chat"}
+                </h2>
                 <p className="mt-2 text-sm font-semibold text-[#0E7490]">
-                  {thread.course?.title ||
-                    thread.cohort?.name ||
-                    thread.student?.full_name ||
-                    "Workspace thread"}
+                  {getThreadSubtitle(thread)}
                 </p>
                 <p className="mt-4 line-clamp-2 text-sm leading-6 text-[#425B76]">
-                  {thread.recentMessage?.message ||
-                    thread.description ||
-                    "No messages yet."}
+                  {thread.recent_message || "No messages yet."}
                 </p>
-                <div className="mt-5 flex flex-wrap items-center gap-3 border-t border-[#D8E8F0] pt-4 text-xs font-medium text-[#66788F]">
-                  <span>{thread.participantCount} participants</span>
-                  <span>Updated {formatDate(thread.updated_at)}</span>
-                </div>
+                <p className="mt-5 border-t border-[#D8E8F0] pt-4 text-xs font-medium text-[#66788F]">
+                  Updated {formatChatDate(thread.updated_at)}
+                </p>
               </Card>
             </Link>
           ))}
@@ -425,11 +327,11 @@ export function MessagesPageClient() {
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-sm font-semibold text-[#66788F]">
-                  Communication
+                  Direct student chat
                 </p>
-                <h3 className="mt-2 text-2xl font-semibold text-[#0B1F33]">
-                  New Conversation
-                </h3>
+                <h2 className="mt-2 text-2xl font-semibold text-[#0B1F33]">
+                  Start a Student Conversation
+                </h2>
               </div>
               <button
                 className="flex h-10 w-10 items-center justify-center rounded-full border border-[#D8E8F0] text-sm font-semibold text-[#66788F] transition hover:bg-[#F3FAFD] hover:text-[#0B1F33]"
@@ -440,127 +342,66 @@ export function MessagesPageClient() {
               </button>
             </div>
 
-            <form className="mt-7 space-y-5" onSubmit={handleCreateThread}>
+            {!isOwnerAdmin && role === "trainer" ? (
+              <FeedbackAlert tone="warning">
+                Trainers can only start chats for students in their assigned
+                course or cohort scope. The server enforces this rule.
+              </FeedbackAlert>
+            ) : null}
+
+            <form className="mt-6 space-y-4" onSubmit={handleCreateDirectChat}>
+              <label className="block">
+                <span className="text-sm font-medium text-[#425B76]">Student</span>
+                <select
+                  className="mt-2 h-12 w-full rounded-2xl border border-[#D8E8F0] bg-white px-4 text-sm text-[#0B1F33] outline-none transition focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      studentId: event.target.value,
+                    }))
+                  }
+                  required
+                  value={form.studentId}
+                >
+                  <option value="">Select student</option>
+                  {students.map((student) => (
+                    <option key={student.id} value={student.id}>
+                      {student.full_name}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <label className="block">
                 <span className="text-sm font-medium text-[#425B76]">Title</span>
                 <input
-                  className="mt-2 h-12 w-full rounded-2xl border border-[#D8E8F0] bg-white px-4 text-sm text-[#0B1F33] outline-none transition placeholder:text-[#66788F] focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
+                  className="mt-2 h-12 w-full rounded-2xl border border-[#D8E8F0] bg-white px-4 text-sm text-[#0B1F33] outline-none transition focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
+                  maxLength={180}
                   onChange={(event) =>
                     setForm((current) => ({ ...current, title: event.target.value }))
                   }
-                  placeholder="Weekly cohort announcement"
+                  placeholder="Course follow-up"
                   required
                   value={form.title}
                 />
               </label>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <label className="block">
-                  <span className="text-sm font-medium text-[#425B76]">Type</span>
-                  <select
-                    className="mt-2 h-12 w-full rounded-2xl border border-[#D8E8F0] bg-white px-4 text-sm text-[#0B1F33] outline-none transition focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        threadType: event.target.value as ConversationThreadType,
-                      }))
-                    }
-                    value={form.threadType}
-                  >
-                    {threadTypeOptions
-                      .filter((option) => option.value !== "all")
-                      .map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                  </select>
-                </label>
-                <label className="block">
-                  <span className="text-sm font-medium text-[#425B76]">
-                    Direct participant
-                  </span>
-                  <select
-                    className="mt-2 h-12 w-full rounded-2xl border border-[#D8E8F0] bg-white px-4 text-sm text-[#0B1F33] outline-none transition focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        participantUserId: event.target.value,
-                      }))
-                    }
-                    value={form.participantUserId}
-                  >
-                    <option value="">No direct participant</option>
-                    {filteredMembers.map((member) => (
-                      <option key={member.value} value={member.value}>
-                        {member.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <label className="block">
-                  <span className="text-sm font-medium text-[#425B76]">Course</span>
-                  <select
-                    className="mt-2 h-12 w-full rounded-2xl border border-[#D8E8F0] bg-white px-4 text-sm text-[#0B1F33] outline-none transition focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
-                    onChange={(event) =>
-                      setForm((current) => ({ ...current, courseId: event.target.value }))
-                    }
-                    value={form.courseId}
-                  >
-                    <option value="">No course</option>
-                    {courses.map((course) => (
-                      <option key={course.id} value={course.id}>
-                        {course.title}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="block">
-                  <span className="text-sm font-medium text-[#425B76]">Cohort</span>
-                  <select
-                    className="mt-2 h-12 w-full rounded-2xl border border-[#D8E8F0] bg-white px-4 text-sm text-[#0B1F33] outline-none transition focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
-                    onChange={(event) => {
-                      const cohort = cohorts.find(
-                        (item) => item.id === event.target.value,
-                      );
-                      setForm((current) => ({
-                        ...current,
-                        cohortId: event.target.value,
-                        courseId: cohort?.course_id ?? current.courseId,
-                      }));
-                    }}
-                    value={form.cohortId}
-                  >
-                    <option value="">No cohort</option>
-                    {cohorts.map((cohort) => (
-                      <option key={cohort.id} value={cohort.id}>
-                        {cohort.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-
               <label className="block">
                 <span className="text-sm font-medium text-[#425B76]">
-                  Description
+                  Initial message
                 </span>
                 <textarea
-                  className="mt-2 min-h-24 w-full resize-none rounded-2xl border border-[#D8E8F0] bg-white px-4 py-3 text-sm leading-6 text-[#0B1F33] outline-none transition placeholder:text-[#66788F] focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
+                  className="mt-2 min-h-32 w-full resize-none rounded-2xl border border-[#D8E8F0] bg-white px-4 py-3 text-sm leading-6 text-[#0B1F33] outline-none transition focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
+                  maxLength={4000}
                   onChange={(event) =>
                     setForm((current) => ({
                       ...current,
-                      description: event.target.value,
+                      initialMessage: event.target.value,
                     }))
                   }
-                  placeholder="Context for this thread."
-                  value={form.description}
+                  placeholder="Write the first message."
+                  required
+                  value={form.initialMessage}
                 />
               </label>
-
               <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end">
                 <Button
                   onClick={() => setFormOpen(false)}
@@ -570,7 +411,7 @@ export function MessagesPageClient() {
                   Cancel
                 </Button>
                 <Button disabled={saving} type="submit">
-                  {saving ? "Creating..." : "Create Conversation"}
+                  {saving ? "Creating..." : "Create Chat"}
                 </Button>
               </div>
             </form>

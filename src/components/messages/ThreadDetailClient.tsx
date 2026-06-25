@@ -1,8 +1,6 @@
 "use client";
 
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 
 import { Badge } from "@/src/components/ui/Badge";
 import { Button } from "@/src/components/ui/Button";
@@ -10,23 +8,15 @@ import { Card } from "@/src/components/ui/Card";
 import { EmptyState } from "@/src/components/ui/EmptyState";
 import { FeedbackAlert } from "@/src/components/ui/FeedbackAlert";
 import {
-  archiveConversationThread,
-  getConversationParticipants,
-  getConversationThreadById,
-  lockConversationThread,
-  type ConversationParticipant,
-  type ConversationThreadWithMeta,
-} from "@/src/lib/conversations";
-import {
-  editMessage,
-  getThreadMessages,
-  markThreadRead,
-  sendMessage,
-  softDeleteMessage,
-  type ConversationMessage,
-} from "@/src/lib/messages";
-import { getSupabaseClient } from "@/src/lib/supabaseClient";
-import { getCurrentTenant, type Tenant } from "@/src/lib/tenant";
+  closeChatThread,
+  formatChatDate,
+  formatChatType,
+  getTeamChatThread,
+  markChatThreadRead,
+  sendTeamChatMessage,
+  type AcademyChatMessage,
+  type AcademyChatThread,
+} from "@/src/lib/academyChat";
 
 type ThreadDetailClientProps = {
   threadId: string;
@@ -36,110 +26,91 @@ function getErrorMessage(caught: unknown, fallback: string) {
   return caught instanceof Error ? caught.message : fallback;
 }
 
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat("en", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
+function threadTone(type: AcademyChatThread["thread_type"]) {
+  if (type === "student_support") return "warning" as const;
+  if (type === "student_direct") return "trainer" as const;
+  return "admin" as const;
 }
 
-function formatType(value: string) {
-  return value
-    .split("_")
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
+function statusTone(status: AcademyChatThread["status"]) {
+  if (status === "active") return "success" as const;
+  if (status === "locked") return "warning" as const;
+  return "staff" as const;
 }
 
-function canEditMessage(message: ConversationMessage, userId: string | null) {
-  if (!userId || message.sender_user_id !== userId || message.status === "deleted") {
-    return false;
+function senderLabel(message: AcademyChatMessage) {
+  if (message.sender_type === "student") return "Student";
+  if (message.sender_type === "system") return "System";
+  return "Academy";
+}
+
+function messageBubbleClass(message: AcademyChatMessage) {
+  if (message.sender_type === "student") {
+    return "border-[#D8E8F0] bg-white";
   }
 
-  return Date.now() - new Date(message.created_at).getTime() < 15 * 60_000;
+  if (message.sender_type === "system") {
+    return "border-[#FED7AA] bg-[#FFF7ED]";
+  }
+
+  return "border-[#BFDDF5] bg-[#EEF6FF]";
 }
 
 export function ThreadDetailClient({ threadId }: ThreadDetailClientProps) {
-  const router = useRouter();
   const [actionError, setActionError] = useState("");
   const [composer, setComposer] = useState("");
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editingText, setEditingText] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
-  const [messages, setMessages] = useState<ConversationMessage[]>([]);
+  const [messages, setMessages] = useState<AcademyChatMessage[]>([]);
   const [mutating, setMutating] = useState("");
-  const [participants, setParticipants] = useState<ConversationParticipant[]>([]);
   const [success, setSuccess] = useState("");
-  const [tenant, setTenant] = useState<Tenant | null>(null);
-  const [thread, setThread] = useState<ConversationThreadWithMeta | null>(null);
+  const [thread, setThread] = useState<AcademyChatThread | null>(null);
 
   const readOnly = thread?.status !== "active";
-  const participantLabel = useMemo(
-    () =>
-      `${participants.length} participant${participants.length === 1 ? "" : "s"}`,
-    [participants.length],
-  );
+  const subtitle = useMemo(() => {
+    if (!thread) return "";
 
-  const loadThread = useCallback(async (currentTenant: Tenant) => {
-    const [threadRow, messageRows, participantRows] = await Promise.all([
-      getConversationThreadById({
-        tenantId: currentTenant.id,
-        threadId,
-      }),
-      getThreadMessages({
-        tenantId: currentTenant.id,
-        threadId,
-      }),
-      getConversationParticipants({
-        tenantId: currentTenant.id,
-        threadId,
-      }),
-    ]);
+    return (
+      thread.student_name ||
+      thread.course_title ||
+      thread.cohort_name ||
+      "Student-facing thread"
+    );
+  }, [thread]);
 
-    if (!threadRow) {
-      setError("Conversation not found in this workspace.");
-      return;
+  async function loadThread() {
+    setError("");
+    setLoading(true);
+
+    try {
+      const detail = await getTeamChatThread(threadId);
+      setThread(detail.thread);
+      setMessages(detail.messages);
+      await markChatThreadRead(threadId).catch(() => undefined);
+    } catch (caught) {
+      setError(getErrorMessage(caught, "Unable to load chat thread."));
+    } finally {
+      setLoading(false);
     }
-
-    setThread(threadRow);
-    setMessages(messageRows);
-    setParticipants(participantRows);
-    await markThreadRead(currentTenant.id, threadId);
-  }, [threadId]);
+  }
 
   useEffect(() => {
     let active = true;
 
-    async function load() {
+    async function loadInitialThread() {
       try {
-        const currentTenant = await getCurrentTenant();
+        const detail = await getTeamChatThread(threadId);
 
         if (!active) {
           return;
         }
 
-        if (!currentTenant) {
-          router.replace("/onboarding");
-          return;
-        }
-
-        const supabase = getSupabaseClient();
-        const {
-          data: { user },
-          error: userError,
-        } = await supabase.auth.getUser();
-
-        if (userError) {
-          throw userError;
-        }
-
-        setCurrentUserId(user?.id ?? null);
-        setTenant(currentTenant);
-        await loadThread(currentTenant);
+        setThread(detail.thread);
+        setMessages(detail.messages);
+        await markChatThreadRead(threadId).catch(() => undefined);
       } catch (caught) {
         if (active) {
-          setError(getErrorMessage(caught, "Unable to load conversation."));
+          setError(getErrorMessage(caught, "Unable to load chat thread."));
         }
       } finally {
         if (active) {
@@ -148,42 +119,32 @@ export function ThreadDetailClient({ threadId }: ThreadDetailClientProps) {
       }
     }
 
-    load();
+    void loadInitialThread();
 
     return () => {
       active = false;
     };
-  }, [loadThread, router]);
+  }, [threadId]);
 
-  async function refresh() {
-    if (!tenant) {
-      return;
-    }
-
-    await loadThread(tenant);
-  }
-
-  async function handleSendMessage(event: React.FormEvent<HTMLFormElement>) {
+  async function handleSendMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!tenant || readOnly) {
-      setActionError("This conversation is read-only.");
+    if (readOnly) {
+      setActionError("This chat is closed or archived.");
       return;
     }
 
-    setMutating("send");
     setActionError("");
     setSuccess("");
+    setMutating("send");
 
     try {
-      await sendMessage({
-        message: composer,
-        messageType: thread?.thread_type === "announcement" ? "announcement" : "text",
-        tenantId: tenant.id,
+      await sendTeamChatMessage({
+        body: composer,
         threadId,
       });
       setComposer("");
-      await refresh();
+      await loadThread();
       setSuccess("Message sent.");
     } catch (caught) {
       setActionError(getErrorMessage(caught, "Unable to send message."));
@@ -192,73 +153,17 @@ export function ThreadDetailClient({ threadId }: ThreadDetailClientProps) {
     }
   }
 
-  async function handleEditMessage(messageId: string) {
-    if (!tenant) {
-      return;
-    }
-
-    setMutating(messageId);
-    setActionError("");
-
-    try {
-      await editMessage({
-        message: editingText,
-        messageId,
-        tenantId: tenant.id,
-        threadId,
-      });
-      setEditingId(null);
-      setEditingText("");
-      await refresh();
-    } catch (caught) {
-      setActionError(getErrorMessage(caught, "Unable to edit message."));
-    } finally {
-      setMutating("");
-    }
-  }
-
-  async function handleDeleteMessage(messageId: string) {
-    if (!tenant) {
-      return;
-    }
-
-    setMutating(messageId);
-    setActionError("");
-
-    try {
-      await softDeleteMessage({
-        messageId,
-        tenantId: tenant.id,
-        threadId,
-      });
-      await refresh();
-    } catch (caught) {
-      setActionError(getErrorMessage(caught, "Unable to delete message."));
-    } finally {
-      setMutating("");
-    }
-  }
-
-  async function handleThreadStatus(nextStatus: "archived" | "locked") {
-    if (!tenant) {
-      return;
-    }
-
-    setMutating(nextStatus);
+  async function handleCloseThread() {
     setActionError("");
     setSuccess("");
+    setMutating("close");
 
     try {
-      if (nextStatus === "archived") {
-        await archiveConversationThread(tenant.id, threadId);
-      } else {
-        await lockConversationThread(tenant.id, threadId);
-      }
-
-      await refresh();
-      setSuccess(`Conversation ${nextStatus}.`);
+      await closeChatThread(threadId);
+      await loadThread();
+      setSuccess("Chat closed.");
     } catch (caught) {
-      setActionError(getErrorMessage(caught, "Unable to update conversation."));
+      setActionError(getErrorMessage(caught, "Unable to close chat."));
     } finally {
       setMutating("");
     }
@@ -266,9 +171,11 @@ export function ThreadDetailClient({ threadId }: ThreadDetailClientProps) {
 
   if (loading) {
     return (
-      <div className="mx-auto max-w-7xl">
-        <Card className="h-72 animate-pulse border-[#D8E8F0] bg-white">
-          <span className="sr-only">Loading conversation</span>
+      <div className="mx-auto max-w-6xl space-y-6">
+        <Card className="p-8">
+          <p className="text-sm font-semibold text-[#425B76]">
+            Loading chat thread...
+          </p>
         </Card>
       </div>
     );
@@ -276,11 +183,9 @@ export function ThreadDetailClient({ threadId }: ThreadDetailClientProps) {
 
   if (error || !thread) {
     return (
-      <div className="mx-auto max-w-7xl">
-        <FeedbackAlert onRetry={() => window.location.reload()}>
-          {error || "Conversation unavailable."}
-        </FeedbackAlert>
-        <Button className="mt-5" href="/app/messages" variant="secondary">
+      <div className="mx-auto max-w-6xl space-y-6">
+        <FeedbackAlert>{error || "Chat thread was not found."}</FeedbackAlert>
+        <Button href="/app/messages" variant="secondary">
           Back to messages
         </Button>
       </div>
@@ -288,231 +193,149 @@ export function ThreadDetailClient({ threadId }: ThreadDetailClientProps) {
   }
 
   return (
-    <div className="mx-auto max-w-7xl">
-      <Link
-        className="text-sm font-semibold text-[#425B76] transition hover:text-[#0B1F33]"
-        href="/app/messages"
-      >
-        Back to messages
-      </Link>
-
-      <section className="mt-6 grid gap-6 xl:grid-cols-[1fr_0.34fr]">
-        <Card className="border-[#D8E8F0] bg-white p-6 shadow-2xl shadow-[#0B2A3D]/10 sm:p-8">
-          <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
-            <div>
-              <div className="flex flex-wrap gap-2">
-                <Badge tone="light">{formatType(thread.thread_type)}</Badge>
-                <Badge
-                  tone={
-                    thread.status === "active"
-                      ? "success"
-                      : thread.status === "locked"
-                        ? "warning"
-                        : "staff"
-                  }
-                >
-                  {thread.status}
-                </Badge>
-              </div>
-              <h2 className="mt-5 text-4xl font-semibold tracking-normal text-[#0B1F33]">
-                {thread.title ?? "Conversation"}
-              </h2>
-              <p className="mt-3 text-sm font-semibold text-[#0E7490]">
-                {thread.course?.title ||
-                  thread.cohort?.name ||
-                  thread.student?.full_name ||
-                  "Workspace communication"}
-              </p>
-              {thread.description ? (
-                <p className="mt-5 max-w-3xl text-sm leading-6 text-[#425B76]">
-                  {thread.description}
-                </p>
-              ) : null}
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button onClick={refresh} size="sm" type="button" variant="secondary">
-                Refresh
-              </Button>
-              {thread.status === "active" ? (
-                <>
-                  <Button
-                    disabled={mutating === "locked"}
-                    onClick={() => handleThreadStatus("locked")}
-                    size="sm"
-                    type="button"
-                    variant="secondary"
-                  >
-                    Lock
-                  </Button>
-                  <Button
-                    disabled={mutating === "archived"}
-                    onClick={() => handleThreadStatus("archived")}
-                    size="sm"
-                    type="button"
-                    variant="ghost"
-                  >
-                    Archive
-                  </Button>
-                </>
-              ) : null}
-            </div>
+    <div className="mx-auto max-w-6xl space-y-6">
+      <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-start">
+        <div>
+          <Button href="/app/messages" size="sm" variant="secondary">
+            Back to messages
+          </Button>
+          <h1 className="mt-5 text-3xl font-semibold tracking-normal text-[#0B1F33] sm:text-4xl">
+            {thread.title || "Student chat"}
+          </h1>
+          <p className="mt-3 text-base leading-7 text-[#425B76]">{subtitle}</p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Badge tone={threadTone(thread.thread_type)}>
+              {formatChatType(thread.thread_type)}
+            </Badge>
+            <Badge tone={statusTone(thread.status)}>{thread.status}</Badge>
+            {thread.replies_enabled ? (
+              <Badge tone="success">Replies enabled</Badge>
+            ) : (
+              <Badge tone="warning">Read only</Badge>
+            )}
           </div>
-        </Card>
-
-        <Card className="border-[#D8E8F0] bg-white p-6 shadow-2xl shadow-[#0B2A3D]/10">
-          <p className="text-sm font-semibold text-[#66788F]">Thread state</p>
-          <h3 className="mt-3 text-2xl font-semibold text-[#0B1F33]">
-            {participantLabel}
-          </h3>
-          <p className="mt-3 text-sm leading-6 text-[#425B76]">
-            Created {formatDate(thread.created_at)}. Messages refresh on demand
-            in this foundation release.
-          </p>
-        </Card>
-      </section>
-
-      {actionError ? (
-        <div className="mt-6">
-          <FeedbackAlert>{actionError}</FeedbackAlert>
         </div>
-      ) : null}
-
-      {success ? (
-        <div className="mt-6">
-          <FeedbackAlert tone="success">{success}</FeedbackAlert>
+        <div className="flex flex-wrap gap-3">
+          <Button onClick={loadThread} type="button" variant="secondary">
+            Refresh
+          </Button>
+          {thread.status === "active" ? (
+            <Button
+              disabled={mutating === "close"}
+              onClick={handleCloseThread}
+              type="button"
+              variant="secondary"
+            >
+              {mutating === "close" ? "Closing..." : "Close Chat"}
+            </Button>
+          ) : null}
         </div>
-      ) : null}
+      </div>
 
-      <Card className="mt-6 border-[#D8E8F0] bg-white p-6 shadow-2xl shadow-[#0B2A3D]/10 sm:p-8">
+      {actionError ? <FeedbackAlert>{actionError}</FeedbackAlert> : null}
+      {success ? <FeedbackAlert tone="success">{success}</FeedbackAlert> : null}
+
+      <Card className="p-5">
+        <div className="grid gap-4 md:grid-cols-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#66788F]">
+              Student
+            </p>
+            <p className="mt-2 text-sm font-semibold text-[#0B1F33]">
+              {thread.student_name || "Not student-specific"}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#66788F]">
+              Context
+            </p>
+            <p className="mt-2 text-sm font-semibold text-[#0B1F33]">
+              {thread.course_title || thread.cohort_name || "General support"}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#66788F]">
+              Updated
+            </p>
+            <p className="mt-2 text-sm font-semibold text-[#0B1F33]">
+              {formatChatDate(thread.updated_at)}
+            </p>
+          </div>
+        </div>
+      </Card>
+
+      <Card className="p-5">
         {messages.length === 0 ? (
           <EmptyState
-            description="Start the conversation with a clear update, note, or discussion prompt."
-            icon="MS"
-            title="No messages yet"
+            description="No messages have been sent in this chat yet."
+            icon="M"
+            title="No messages"
           />
         ) : (
           <div className="space-y-4">
-            {messages.map((message) => {
-              const ownMessage = message.sender_user_id === currentUserId;
-              const editable = canEditMessage(message, currentUserId);
-
-              return (
-                <div
-                  className={[
-                    "rounded-3xl border p-4",
-                    ownMessage
-                      ? "border-[#9ADDEA] bg-[#EAF8FC]"
-                      : "border-[#D8E8F0] bg-[#F6FBFE]",
-                  ].join(" ")}
-                  key={message.id}
-                >
-                  <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Badge tone={ownMessage ? "admin" : "light"}>
-                          {ownMessage ? "You" : "Participant"}
-                        </Badge>
-                        <span className="text-xs font-medium text-[#66788F]">
-                          {formatDate(message.created_at)}
-                        </span>
-                        {message.status !== "sent" ? (
-                          <Badge tone={message.status === "deleted" ? "staff" : "warning"}>
-                            {message.status}
-                          </Badge>
-                        ) : null}
-                      </div>
-                      {editingId === message.id ? (
-                        <textarea
-                          className="mt-3 min-h-24 w-full resize-none rounded-2xl border border-[#D8E8F0] bg-white px-4 py-3 text-sm leading-6 text-[#0B1F33] outline-none transition focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
-                          onChange={(event) => setEditingText(event.target.value)}
-                          value={editingText}
-                        />
-                      ) : (
-                        <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-[#0B1F33]">
-                          {message.message}
-                        </p>
-                      )}
-                    </div>
-                    {editable ? (
-                      <div className="flex flex-wrap gap-2">
-                        {editingId === message.id ? (
-                          <>
-                            <Button
-                              disabled={mutating === message.id}
-                              onClick={() => handleEditMessage(message.id)}
-                              size="sm"
-                              type="button"
-                            >
-                              Save
-                            </Button>
-                            <Button
-                              onClick={() => {
-                                setEditingId(null);
-                                setEditingText("");
-                              }}
-                              size="sm"
-                              type="button"
-                              variant="secondary"
-                            >
-                              Cancel
-                            </Button>
-                          </>
-                        ) : (
-                          <>
-                            <Button
-                              onClick={() => {
-                                setEditingId(message.id);
-                                setEditingText(message.message);
-                              }}
-                              size="sm"
-                              type="button"
-                              variant="secondary"
-                            >
-                              Edit
-                            </Button>
-                            <Button
-                              disabled={mutating === message.id}
-                              onClick={() => handleDeleteMessage(message.id)}
-                              size="sm"
-                              type="button"
-                              variant="ghost"
-                            >
-                              Delete
-                            </Button>
-                          </>
-                        )}
-                      </div>
+            {messages.map((message) => (
+              <div
+                className={[
+                  "rounded-2xl border p-4",
+                  messageBubbleClass(message),
+                ].join(" ")}
+                key={message.id}
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <Badge
+                      tone={
+                        message.sender_type === "student"
+                          ? "trainer"
+                          : message.sender_type === "system"
+                            ? "warning"
+                            : "admin"
+                      }
+                    >
+                      {senderLabel(message)}
+                    </Badge>
+                    {message.status === "deleted" ? (
+                      <Badge tone="staff">Deleted</Badge>
                     ) : null}
                   </div>
+                  <p className="text-xs font-medium text-[#66788F]">
+                    {formatChatDate(message.created_at)}
+                  </p>
                 </div>
-              );
-            })}
+                <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-[#0B1F33]">
+                  {message.status === "deleted"
+                    ? "This message was deleted."
+                    : message.message}
+                </p>
+              </div>
+            ))}
           </div>
         )}
       </Card>
 
-      <Card className="mt-6 border-[#D8E8F0] bg-white p-6 shadow-2xl shadow-[#0B2A3D]/10">
+      <Card className="p-5">
         {readOnly ? (
-          <div className="rounded-2xl border border-dashed border-[#C7DDEA] bg-[#F6FBFE] p-5 text-sm text-[#425B76]">
-            This conversation is {thread.status} and cannot receive new
-            messages.
-          </div>
+          <FeedbackAlert tone="warning">
+            This chat is closed or archived. New replies are blocked.
+          </FeedbackAlert>
         ) : (
           <form className="space-y-4" onSubmit={handleSendMessage}>
             <label className="block">
               <span className="text-sm font-medium text-[#425B76]">
-                Message
+                Reply as academy
               </span>
               <textarea
-                className="mt-2 min-h-28 w-full resize-none rounded-2xl border border-[#D8E8F0] bg-white px-4 py-3 text-sm leading-6 text-[#0B1F33] outline-none transition placeholder:text-[#66788F] focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
+                className="mt-2 min-h-32 w-full resize-none rounded-2xl border border-[#D8E8F0] bg-white px-4 py-3 text-sm leading-6 text-[#0B1F33] outline-none transition focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
+                maxLength={4000}
                 onChange={(event) => setComposer(event.target.value)}
-                placeholder="Write an update, discussion prompt, or internal note."
+                placeholder="Write a plain-text reply."
+                required
                 value={composer}
               />
             </label>
             <div className="flex justify-end">
               <Button disabled={mutating === "send"} type="submit">
-                {mutating === "send" ? "Sending..." : "Send Message"}
+                {mutating === "send" ? "Sending..." : "Send Reply"}
               </Button>
             </div>
           </form>
