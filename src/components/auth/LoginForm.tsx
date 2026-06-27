@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSearchParams } from "next/navigation";
 import { useState } from "react";
@@ -126,6 +127,12 @@ export function LoginForm() {
         type="password"
         value={password}
       />
+
+      <div className="text-right text-sm">
+        <Link className="font-semibold text-[#145DA0]" href="/forgot-password">
+          Forgot password?
+        </Link>
+      </div>
 
       {error ? (
         <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">

@@ -2,11 +2,12 @@
 
 import { useRouter } from "next/navigation";
 import { useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { AuthInput } from "@/src/components/auth/AuthInput";
 import { GoogleOAuthButton } from "@/src/components/auth/GoogleOAuthButton";
 import { Button } from "@/src/components/ui/Button";
+import { requestAuthOtp, verifyAuthOtp } from "@/src/lib/authOtp";
 import { signUpWithPassword } from "@/src/lib/auth";
 
 function getSafeNextPath(value: string | null) {
@@ -21,20 +22,53 @@ export function SignupForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const nextPath = getSafeNextPath(searchParams.get("next"));
+  const [cooldown, setCooldown] = useState(0);
   const [email, setEmail] = useState("");
   const [error, setError] = useState("");
   const [fullName, setFullName] = useState("");
   const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState("");
+  const [otp, setOtp] = useState("");
   const [password, setPassword] = useState("");
+  const [step, setStep] = useState<"details" | "otp">("details");
+
+  useEffect(() => {
+    if (cooldown <= 0) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => setCooldown((value) => value - 1), 1000);
+    return () => window.clearTimeout(timer);
+  }, [cooldown]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
+    setMessage("");
     setLoading(true);
 
     try {
+      const normalizedEmail = email.trim();
+
+      if (step === "details") {
+        await requestAuthOtp({
+          email: normalizedEmail,
+          purpose: "signup_email_verification",
+        });
+        setMessage("We sent a verification code to your email.");
+        setCooldown(60);
+        setStep("otp");
+        return;
+      }
+
+      await verifyAuthOtp({
+        email: normalizedEmail,
+        otp: otp.trim(),
+        purpose: "signup_email_verification",
+      });
+
       await signUpWithPassword({
-        email: email.trim(),
+        email: normalizedEmail,
         fullName: fullName.trim(),
         password,
       });
@@ -45,6 +79,30 @@ export function SignupForm() {
           ? caught.message
           : "Unable to create your account. Please try again.",
       );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleResend() {
+    setError("");
+    setMessage("");
+    setLoading(true);
+
+    try {
+      await requestAuthOtp({
+        email: email.trim(),
+        purpose: "signup_email_verification",
+      });
+      setMessage("We sent a new verification code to your email.");
+      setCooldown(60);
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "Unable to request a new code. Please try again.",
+      );
+    } finally {
       setLoading(false);
     }
   }
@@ -94,6 +152,51 @@ export function SignupForm() {
         value={password}
       />
 
+      {step === "otp" ? (
+        <div className="space-y-4 rounded-2xl border border-blue-100 bg-blue-50 p-4">
+          <AuthInput
+            autoComplete="one-time-code"
+            inputMode="numeric"
+            label="Verification code"
+            maxLength={6}
+            onChange={(event) => setOtp(event.target.value)}
+            placeholder="6-digit code"
+            required
+            type="text"
+            value={otp}
+          />
+          <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
+            <button
+              className="font-semibold text-[#145DA0] disabled:text-zinc-400"
+              disabled={loading || cooldown > 0}
+              onClick={handleResend}
+              type="button"
+            >
+              {cooldown > 0 ? `Resend in ${cooldown}s` : "Resend code"}
+            </button>
+            <button
+              className="font-semibold text-zinc-600"
+              disabled={loading}
+              onClick={() => {
+                setStep("details");
+                setOtp("");
+                setMessage("");
+                setError("");
+              }}
+              type="button"
+            >
+              Edit details
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {message ? (
+        <div className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+          {message}
+        </div>
+      ) : null}
+
       {error ? (
         <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {error}
@@ -101,7 +204,13 @@ export function SignupForm() {
       ) : null}
 
       <Button className="w-full" disabled={loading} size="lg" type="submit">
-        {loading ? "Creating account..." : "Create account"}
+        {loading
+          ? step === "details"
+            ? "Sending code..."
+            : "Verifying..."
+          : step === "details"
+            ? "Send verification code"
+            : "Verify and create account"}
       </Button>
     </form>
   );
