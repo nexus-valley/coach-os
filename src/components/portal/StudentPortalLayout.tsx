@@ -28,6 +28,7 @@ const portalNavItems = [
   { href: "/portal/certificates", label: "Certificates" },
   { href: "/portal/payments", label: "Payments" },
   { href: "/portal/messages", label: "Messages" },
+  { href: "/portal/documents", label: "Documents" },
   { href: "/portal/notifications", label: "Notifications" },
   { href: "/portal/assistant", label: "Assistant" },
   { href: "/portal/profile", label: "Profile" },
