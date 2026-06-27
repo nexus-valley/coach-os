@@ -217,7 +217,7 @@ export function ReportsPageClient() {
     setError("");
 
     try {
-      await exportReportSectionCsv(tenant.id, section);
+      await exportReportSectionCsv(tenant.id, section, filters);
     } catch (caught) {
       setError(getErrorMessage(caught, "Unable to export report."));
     } finally {
