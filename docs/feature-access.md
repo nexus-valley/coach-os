@@ -81,7 +81,9 @@ App navigation now checks feature access after role permissions:
 - `/app/workflows` uses `workflows`
 - `/app/approvals` uses `approvals`
 - `/app/settings/public-site` uses `website_builder`
-- payment links use `payment_gateway`
+- `/app/payments` and `/app/receipts` redirect to `/app/finance`
+- `/app/payment-links` shows a gateway-on-hold notice and does not create new
+  payment links
 
 Student portal navigation checks portal-safe feature access:
 
@@ -104,6 +106,8 @@ Student portal navigation checks portal-safe feature access:
 - Students can only read portal-safe feature availability for their tenant.
 - No service-role keys are used in client/browser code.
 - No payment gateway integration is added.
+- Finance Center remains the canonical tenant fee, invoice, payment, and receipt
+  workflow.
 - Feature changes are logged in `tenant_feature_activity_logs` and `audit_logs`.
 
 ## RPCs
@@ -120,6 +124,8 @@ Helper functions are internal and not granted to `authenticated`.
 
 - Platform subscription plan enforcement is not automated yet.
 - No payment gateway module is enabled.
+- Legacy payment-link creation is intentionally disabled until a real provider
+  integration is approved.
 - No live class provider integration exists.
 - Document upload controls are governed separately by `document_uploads`.
 - Disabled routes are guarded in the main optional modules, but future routes must be explicitly mapped to feature keys.

@@ -673,7 +673,7 @@ function buildHealthCards(params: {
       value: `${params.activeThreads} threads`,
     },
     {
-      description: "Payments, payment links, or billing records exist for finance visibility.",
+      description: "Finance records or preserved legacy payment-link records exist for visibility.",
       key: "payments",
       score: paymentScore,
       status: getStatus(paymentScore),
@@ -1261,9 +1261,9 @@ export async function getOperationsConsoleData(
       value: failedInvites.toLocaleString(),
     },
     {
-      helper: "Failed, expired, or cancelled payment links.",
+      helper: "Failed, expired, or cancelled legacy payment links.",
       key: "failedPaymentLinks",
-      label: "Payment link issues",
+      label: "Legacy payment-link issues",
       tone: failedPaymentLinks > 0 ? "orange" : "emerald",
       value: failedPaymentLinks.toLocaleString(),
     },

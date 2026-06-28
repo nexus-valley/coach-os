@@ -697,8 +697,8 @@ export function DashboardPageClient() {
           Create Course
         </Button>
         {canAccessPayments(currentRole) ? (
-          <Button href="/app/payments" size="lg" variant="secondary">
-            Record Payment
+          <Button href="/app/finance" size="lg" variant="secondary">
+            Open Finance
           </Button>
         ) : null}
       </section>

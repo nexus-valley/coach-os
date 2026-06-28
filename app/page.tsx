@@ -41,16 +41,16 @@ const features = [
     title: "Student CRM",
   },
   {
-    bullets: ["Receipts", "UPI links", "Status tracking"],
+    bullets: ["Invoices", "Receipts", "Status tracking"],
     description:
-      "Record payments, generate receipts, track payment status, and manage UPI-ready payment links.",
+      "Manage fee plans, invoices, manual payment records, receipts, and due status in Finance Center.",
     icon: "PY",
     title: "Payments",
   },
   {
     bullets: ["Templates", "Reminders", "Rule setup"],
     description:
-      "Share payment links, receipts, reminders, and certificates through WhatsApp-ready templates, with automation rules for follow-ups.",
+      "Share reminders, receipts, and certificates through WhatsApp-ready templates, with automation rules for follow-ups.",
     icon: "WA",
     title: "WhatsApp & Email Automation",
   },
@@ -80,7 +80,7 @@ const features = [
 const comparisonRows = [
   ["Student records", "Spreadsheets and scattered notes", "Unified CRM with profile, payments, courses, and follow-ups"],
   ["Course delivery", "Content spread across drives and chat apps", "Structured courses, sections, lessons, and portal previews"],
-  ["Payments", "Manual tracking and hard-to-find receipts", "Payment history, UPI-ready links, receipts, and reports"],
+  ["Payments", "Manual tracking and hard-to-find receipts", "Finance Center invoices, manual payments, receipts, and reports"],
   ["Operations", "Multiple tools with no shared context", "One workspace for team, branding, reminders, analytics, and workflows"],
 ];
 
@@ -312,7 +312,7 @@ export default function Home() {
           {[
             ["Everything in one platform", "CRM, courses, payments, certificates, reports, reminders, and admin workflows stay connected."],
             ["Built for coaching businesses", "Cohorts, student profiles, course access, and receipts match real coaching operations."],
-            ["WhatsApp-first workflows", "Share reminders, receipts, payment links, and certificates through ready-to-use WhatsApp templates."],
+            ["WhatsApp-first workflows", "Share reminders, receipts, and certificates through ready-to-use WhatsApp templates."],
             ["Premium operations dashboard", "Track revenue, enrollments, student growth, payment status, and workspace progress clearly."],
           ].map(([title, text]) => (
             <Card className="group p-6 transition hover:-translate-y-1" key={title}>

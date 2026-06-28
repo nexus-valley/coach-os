@@ -4,6 +4,10 @@ Module 55 adds tenant-level institute finance for CoachFort customers. It is
 separate from CoachFort platform-owner billing and does not collect money or
 integrate a payment gateway.
 
+Finance Center is the canonical tenant finance experience. Legacy app routes
+such as `/app/payments`, `/app/payment-links`, and `/app/receipts` are not active
+payment workspaces after Module 64.
+
 ## Purpose
 
 The Finance Center lets each tenant manage its own:
@@ -45,6 +49,10 @@ Module 55 creates namespaced finance tables:
 Existing legacy `payments`, `payment_links`, and platform `invoices` tables are
 not reused or weakened.
 
+Legacy payment records are preserved for historical read-only compatibility.
+They are not the source of truth for new fee plans, invoices, payments, or
+receipts.
+
 ## RPC Write Model
 
 All finance writes go through SECURITY DEFINER RPCs:
@@ -83,6 +91,11 @@ Payments are manual records only. A recorded payment:
 
 No payment gateway, UPI, Razorpay, Stripe, WhatsApp, email, or SMS provider is
 called.
+
+`/app/payments` and `/app/receipts` redirect users to `/app/finance`. The
+`/app/payment-links` route shows a gateway-on-hold notice and does not create
+new payment links. Existing `/app/receipts/[paymentId]` deep links remain
+available as read-only legacy receipts.
 
 ## Adjustments
 

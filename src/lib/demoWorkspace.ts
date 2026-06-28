@@ -1157,7 +1157,7 @@ export async function seedDemoWorkspace(tenantId: string) {
     await insertTracked("notifications", {
       action_url:
         type === "payment_reminder"
-          ? "/app/payment-links"
+          ? "/app/finance"
           : type === "live_session_notice"
             ? "/app/sessions"
             : "/app",

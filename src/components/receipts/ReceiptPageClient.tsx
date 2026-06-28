@@ -132,9 +132,9 @@ export function ReceiptPageClient({ paymentId }: ReceiptPageClientProps) {
           </h2>
           <Link
             className="mt-6 inline-flex h-11 items-center justify-center rounded-full bg-[var(--coachos-brand)] px-5 text-sm font-semibold text-white shadow-lg shadow-[#145DA0]/20"
-            href="/app/payments"
+            href="/app/finance"
           >
-            Back to payments
+            Open Finance Center
           </Link>
         </Card>
       </div>
@@ -169,16 +169,16 @@ export function ReceiptPageClient({ paymentId }: ReceiptPageClientProps) {
         <div>
           <Link
             className="text-sm font-semibold text-[#5D7185] transition hover:text-[#145DA0]"
-            href="/app/payments"
+            href="/app/finance"
           >
-            Back to payments
+            Open Finance Center
           </Link>
           <h2 className="mt-4 text-3xl font-semibold tracking-normal text-[#0B2A3D] sm:text-4xl">
-            Receipt
+            Legacy receipt
           </h2>
         </div>
         <Button onClick={() => window.print()} type="button">
-          Download / Print Receipt
+          Download / Print Legacy Receipt
         </Button>
         <Button
           onClick={handleShareReceipt}
@@ -189,6 +189,8 @@ export function ReceiptPageClient({ paymentId }: ReceiptPageClientProps) {
         </Button>
       </div>
       <p className="mb-6 text-sm text-[#5D7185] print:hidden">
+        This is a read-only legacy receipt generated before the Finance Center
+        became the canonical fee, invoice, payment, and receipt workflow.
         WhatsApp opens with a pre-filled message. Sending is done manually.
       </p>
 
@@ -217,7 +219,7 @@ export function ReceiptPageClient({ paymentId }: ReceiptPageClientProps) {
                   {workspaceName}
                 </p>
                 <h1 className="mt-4 text-4xl font-semibold tracking-normal print:text-black">
-                  Receipt
+                  Legacy Receipt
                 </h1>
                 <p className="mt-3 text-sm text-[#5D7185] print:text-slate-600">
                   CoachFort by Nexus Valley

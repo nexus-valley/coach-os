@@ -228,8 +228,6 @@ export const navFeatureByLabel: Record<string, FeatureKey | undefined> = {
   "Mobile Readiness": "mobile_pwa",
   Notifications: "notifications",
   Operations: "attendance",
-  "Payment Links": "payment_gateway",
-  Payments: "finance",
   "Public Site": "website_builder",
   Reminders: "notifications",
   Reports: "reports",

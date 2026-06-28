@@ -33,19 +33,11 @@ import {
   type EnrollmentWithRelations,
 } from "@/src/lib/enrollments";
 import {
-  createPayment,
   getPaymentsByStudent,
-  type PaymentMethod,
-  type PaymentStatus,
   type PaymentWithRelations,
 } from "@/src/lib/payments";
 import {
-  buildManualUpiPaymentUrl,
-  convertPaymentLinkToPayment,
-  createPaymentLink,
   getPaymentLinksByStudent,
-  updatePaymentLinkStatus,
-  type PaymentLinkStatus,
   type PaymentLinkWithRelations,
 } from "@/src/lib/paymentLinks";
 import {
@@ -76,62 +68,8 @@ type StudentDetailClientProps = {
   studentId: string;
 };
 
-type PaymentFormState = {
-  amount: string;
-  notes: string;
-  paymentMethod: PaymentMethod;
-  status: PaymentStatus;
-};
-
-type PaymentLinkFormState = {
-  amount: string;
-  courseId: string;
-  description: string;
-  enrollmentId: string;
-  expiresAt: string;
-  paymentUrl: string;
-};
-
-const emptyPaymentForm: PaymentFormState = {
-  amount: "",
-  notes: "",
-  paymentMethod: "UPI",
-  status: "completed",
-};
-
-const paymentMethods: PaymentMethod[] = ["UPI", "Cash", "Bank"];
-const paymentStatuses: PaymentStatus[] = ["completed", "pending", "failed"];
-const emptyPaymentLinkForm: PaymentLinkFormState = {
-  amount: "",
-  courseId: "",
-  description: "",
-  enrollmentId: "",
-  expiresAt: "",
-  paymentUrl: "",
-};
-const paymentLinkStatusActions: { label: string; status: PaymentLinkStatus }[] =
-  [
-    { label: "Mark sent", status: "sent" },
-    { label: "Mark paid", status: "paid" },
-    { label: "Expire", status: "expired" },
-    { label: "Cancel", status: "cancelled" },
-  ];
 const defaultWhatsAppFollowUp =
   "Hope you are doing well. Please let us know if you need any support.";
-
-function getAvailablePaymentLinkStatusActions(link: PaymentLinkWithRelations) {
-  if (link.status === "created") {
-    return paymentLinkStatusActions;
-  }
-
-  if (link.status === "sent") {
-    return paymentLinkStatusActions.filter(
-      (action) => action.status !== "sent",
-    );
-  }
-
-  return [];
-}
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("en", {
@@ -192,24 +130,12 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
   const [form, setForm] = useState<StudentFormState>(emptyStudentForm);
   const [loading, setLoading] = useState(true);
   const [mutating, setMutating] = useState(false);
-  const [paymentForm, setPaymentForm] =
-    useState<PaymentFormState>(emptyPaymentForm);
-  const [paymentLinkForm, setPaymentLinkForm] =
-    useState<PaymentLinkFormState>(emptyPaymentLinkForm);
-  const [paymentLinkMutatingId, setPaymentLinkMutatingId] = useState("");
-  const [paymentLinkOpen, setPaymentLinkOpen] = useState(false);
   const [paymentLinks, setPaymentLinks] = useState<
     PaymentLinkWithRelations[]
   >([]);
-  const [paymentOpen, setPaymentOpen] = useState(false);
   const [payments, setPayments] = useState<PaymentWithRelations[]>([]);
-  const [recordPaymentLinkNotes, setRecordPaymentLinkNotes] =
-    useState("Paid via payment link");
-  const [recordPaymentLinkTarget, setRecordPaymentLinkTarget] =
-    useState<PaymentLinkWithRelations | null>(null);
   const [selectedCohortId, setSelectedCohortId] = useState("");
   const [selectedCourseId, setSelectedCourseId] = useState("");
-  const [selectedEnrollmentId, setSelectedEnrollmentId] = useState("");
   const [student, setStudent] = useState<Student | null>(null);
   const [studentCohorts, setStudentCohorts] = useState<
     StudentCohortMembership[]
@@ -244,29 +170,7 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
     [cohorts, studentCohorts],
   );
 
-  const selectedEnrollment = enrollments.find(
-    (enrollment) => enrollment.id === selectedEnrollmentId,
-  );
   const canDelete = canDeleteRecords(currentRole);
-  const selectedPaymentLinkEnrollment = enrollments.find(
-    (enrollment) => enrollment.id === paymentLinkForm.enrollmentId,
-  );
-  const paymentLinkPreviewUrl =
-    (() => {
-      const workspaceBranding = getWorkspaceBranding(tenantSettings, tenant);
-
-      return (
-        paymentLinkForm.paymentUrl.trim() ||
-        (Number(paymentLinkForm.amount) > 0
-          ? buildManualUpiPaymentUrl(
-              Number(paymentLinkForm.amount),
-              tenantSettings,
-            )
-          : `upi://pay?pa=YOUR_UPI_ID&pn=${encodeURIComponent(
-              workspaceBranding.displayName,
-            )}&am=AMOUNT&cu=INR`)
-      );
-    })();
   function getPaymentLinkWhatsAppUrl(link: PaymentLinkWithRelations) {
     const workspaceBranding = getWorkspaceBranding(tenantSettings, tenant);
     const message = buildPaymentReminderMessage({
@@ -381,7 +285,6 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
 
         if (currentStudent) {
           setForm(createFormFromStudent(currentStudent));
-          setSelectedEnrollmentId(studentEnrollments[0]?.id ?? "");
           setSelectedCourseId(
             tenantCourses.find(
               (course) =>
@@ -469,79 +372,12 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
     );
   }
 
-  async function refreshPayments() {
-    if (!tenant) {
-      return;
-    }
-
-    setPayments(await getPaymentsByStudent(studentId, tenant.id));
-  }
-
-  async function refreshPaymentLinks() {
-    if (!tenant) {
-      return;
-    }
-
-    setPaymentLinks(await getPaymentLinksByStudent(studentId, tenant.id));
-  }
-
   async function openPaymentLinkPanel() {
-    setActionError("");
-    setPaymentLinkForm({
-      ...emptyPaymentLinkForm,
-      enrollmentId: enrollments[0]?.id ?? "",
-      courseId: enrollments[0]?.course_id ?? "",
-    });
-    setPaymentLinkOpen(true);
-
-    if (!tenant) {
-      return;
-    }
-
-    try {
-      const [studentEnrollments, studentPaymentLinks] = await Promise.all([
-        getEnrollmentsForStudent({
-          studentId,
-          tenantId: tenant.id,
-        }),
-        getPaymentLinksByStudent(studentId, tenant.id),
-      ]);
-      setEnrollments(studentEnrollments);
-      setPaymentLinks(studentPaymentLinks);
-      setPaymentLinkForm((current) => ({
-        ...current,
-        courseId: studentEnrollments[0]?.course_id ?? current.courseId,
-        enrollmentId: studentEnrollments[0]?.id ?? current.enrollmentId,
-      }));
-    } catch (caught) {
-      setActionError(
-        getErrorMessage(caught, "Unable to load payment link context."),
-      );
-    }
+    router.push("/app/finance");
   }
 
   async function openPaymentPanel() {
-    setActionError("");
-    setPaymentOpen(true);
-
-    if (!tenant) {
-      return;
-    }
-
-    try {
-      const [studentEnrollments, studentPayments] = await Promise.all([
-        getEnrollmentsForStudent({
-          studentId,
-          tenantId: tenant.id,
-        }),
-        getPaymentsByStudent(studentId, tenant.id),
-      ]);
-      setEnrollments(studentEnrollments);
-      setPayments(studentPayments);
-      setSelectedEnrollmentId(studentEnrollments[0]?.id ?? "");
-    } catch (caught) {
-      setActionError(getErrorMessage(caught, "Unable to load payment context."));
-    }
+    router.push("/app/finance");
   }
 
   async function openCohortPanel() {
@@ -694,93 +530,6 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
     }
   }
 
-  async function handleCreatePayment(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    if (!tenant || !selectedEnrollment) {
-      setActionError("Select an enrollment before adding a payment.");
-      return;
-    }
-
-    const amount = Number(paymentForm.amount);
-
-    setMutating(true);
-    setActionError("");
-    setActionMessage("");
-
-    try {
-      if (!Number.isFinite(amount) || amount <= 0) {
-        throw new Error("Amount must be greater than zero.");
-      }
-
-      await createPayment({
-        amount,
-        course_id: selectedEnrollment.course_id,
-        enrollment_id: selectedEnrollment.id,
-        notes: paymentForm.notes,
-        payment_method: paymentForm.paymentMethod,
-        status: paymentForm.status,
-        student_id: studentId,
-        tenant_id: tenant.id,
-      });
-      setPaymentForm(emptyPaymentForm);
-      setPaymentOpen(false);
-      await refreshPayments();
-      setActionMessage("Payment added.");
-    } catch (caught) {
-      setActionError(getErrorMessage(caught, "Unable to add payment."));
-    } finally {
-      setMutating(false);
-    }
-  }
-
-  async function handleCreatePaymentLink(
-    event: React.FormEvent<HTMLFormElement>,
-  ) {
-    event.preventDefault();
-
-    if (!tenant) {
-      setActionError("Workspace context is not available.");
-      return;
-    }
-
-    const amount = Number(paymentLinkForm.amount);
-
-    setPaymentLinkMutatingId("create");
-    setActionError("");
-    setActionMessage("");
-
-    try {
-      if (!Number.isFinite(amount) || amount <= 0) {
-        throw new Error("Amount must be greater than zero.");
-      }
-
-      await createPaymentLink({
-        amount,
-        course_id:
-          selectedPaymentLinkEnrollment?.course_id ||
-          paymentLinkForm.courseId ||
-          null,
-        description: paymentLinkForm.description,
-        enrollment_id: paymentLinkForm.enrollmentId || null,
-        expires_at: paymentLinkForm.expiresAt
-          ? new Date(paymentLinkForm.expiresAt).toISOString()
-          : null,
-        payment_url: paymentLinkForm.paymentUrl,
-        student_id: studentId,
-        tenant_id: tenant.id,
-      });
-      setPaymentLinkForm(emptyPaymentLinkForm);
-      setPaymentLinkOpen(false);
-      await refreshPaymentLinks();
-      setActionMessage("Payment link created.");
-    } catch (caught) {
-      setActionError(getErrorMessage(caught, "Unable to create payment link."));
-    } finally {
-      setPaymentLinkMutatingId("");
-    }
-  }
-
   async function handleCopyPaymentLink(value: string | null) {
     if (!value) {
       setActionError("This payment link does not have a URL yet.");
@@ -793,73 +542,6 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
       setActionMessage("Payment link copied.");
     } catch {
       setActionError("Unable to copy link. Select and copy it manually.");
-    }
-  }
-
-  async function handlePaymentLinkStatus(
-    link: PaymentLinkWithRelations,
-    status: PaymentLinkStatus,
-  ) {
-    if (!tenant) {
-      return;
-    }
-
-    if (status === "paid") {
-      openRecordPaymentLinkModal(link);
-      return;
-    }
-
-    setPaymentLinkMutatingId(link.id);
-    setActionError("");
-    setActionMessage("");
-
-    try {
-      await updatePaymentLinkStatus(link.id, tenant.id, status);
-      await refreshPaymentLinks();
-      setActionMessage(`Payment link marked ${formatPaymentLinkStatus(status)}.`);
-    } catch (caught) {
-      setActionError(getErrorMessage(caught, "Unable to update payment link."));
-    } finally {
-      setPaymentLinkMutatingId("");
-    }
-  }
-
-  function openRecordPaymentLinkModal(link: PaymentLinkWithRelations) {
-    setActionError("");
-    setActionMessage("");
-
-    if (link.status === "paid" && link.paid_at) {
-      setActionError("Payment has already been recorded for this link.");
-      return;
-    }
-
-    setRecordPaymentLinkNotes(link.description || "Paid via payment link");
-    setRecordPaymentLinkTarget(link);
-  }
-
-  async function handleConvertPaymentLink(link: PaymentLinkWithRelations) {
-    if (!tenant) {
-      return;
-    }
-
-    setPaymentLinkMutatingId(`convert-${link.id}`);
-    setActionError("");
-    setActionMessage("");
-
-    try {
-      await convertPaymentLinkToPayment(
-        link.id,
-        tenant.id,
-        recordPaymentLinkNotes,
-      );
-      await Promise.all([refreshPaymentLinks(), refreshPayments()]);
-      setRecordPaymentLinkTarget(null);
-      setRecordPaymentLinkNotes("Paid via payment link");
-      setActionMessage("Payment recorded from link.");
-    } catch (caught) {
-      setActionError(getErrorMessage(caught, "Unable to record payment."));
-    } finally {
-      setPaymentLinkMutatingId("");
     }
   }
 
@@ -1030,7 +712,7 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
               type="button"
               variant="secondary"
             >
-              Add Payment
+              Open Finance Center
             </Button>
             <Button
               onClick={openWhatsAppFollowUp}
@@ -1230,18 +912,19 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
           <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-start">
             <div>
               <Badge className="border-white/15 bg-white/10 text-white">
-                Payment Links
+                Legacy Payment Links
               </Badge>
               <h3 className="mt-4 text-2xl font-semibold">
-                Manual UPI links
+                Legacy payment-link history
               </h3>
               <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-400">
-                Create copyable payment links for this student, mark them
-                manually, and record completed UPI link payments.
+                New fee plans, invoices, manual payments, and receipts are
+                managed in Finance Center. Existing payment-link records remain
+                visible here for historical reference only.
               </p>
             </div>
             <Button onClick={openPaymentLinkPanel} type="button">
-              Create Payment Link
+              Open Finance Center
             </Button>
           </div>
 
@@ -1251,11 +934,12 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
                 PL
               </div>
               <h4 className="mt-5 text-xl font-semibold">
-                No payment links yet
+                No legacy payment links
               </h4>
               <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-slate-400">
-                Create a manual UPI placeholder link for this student and copy
-                it into your preferred messaging channel.
+                Use Finance Center for new invoices, payments, and receipts.
+                Payment gateway links remain on hold until provider integration
+                is approved.
               </p>
             </div>
           ) : (
@@ -1311,34 +995,6 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
                     >
                       Share on WhatsApp
                     </a>
-                    {getAvailablePaymentLinkStatusActions(link).map((action) => (
-                      <Button
-                        disabled={paymentLinkMutatingId === link.id}
-                        key={action.status}
-                        onClick={() =>
-                          handlePaymentLinkStatus(link, action.status)
-                        }
-                        size="sm"
-                        type="button"
-                        variant="secondary"
-                      >
-                        {action.label}
-                      </Button>
-                    ))}
-                    {link.status === "paid" && !link.paid_at ? (
-                      <Button
-                        disabled={
-                          paymentLinkMutatingId === `convert-${link.id}`
-                        }
-                        onClick={() => openRecordPaymentLinkModal(link)}
-                        size="sm"
-                        type="button"
-                      >
-                        {paymentLinkMutatingId === `convert-${link.id}`
-                          ? "Recording..."
-                          : "Record Payment"}
-                      </Button>
-                    ) : null}
                   </div>
                 </div>
               ))}
@@ -1356,12 +1012,12 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
               </Badge>
               <h3 className="mt-4 text-2xl font-semibold">Student payments</h3>
               <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-400">
-                Track payments connected to this student&apos;s course
-                enrollments.
+                Historical legacy payment records are shown here. New invoices,
+                payments, and receipts are managed in Finance Center.
               </p>
             </div>
             <Button onClick={openPaymentPanel} type="button">
-              Add Payment
+              Open Finance Center
             </Button>
           </div>
 
@@ -1588,419 +1244,6 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
                   Cancel
                 </Button>
                 <Button type="submit">Share on WhatsApp</Button>
-              </div>
-            </form>
-          </Card>
-        </div>
-      ) : null}
-
-      {paymentLinkOpen ? (
-        <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-black/70 px-4 py-4 backdrop-blur-sm sm:items-center">
-          <Card className="w-full max-w-2xl border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/40 sm:p-8">
-            <h3 className="text-2xl font-semibold">Create Payment Link</h3>
-            <form
-              className="mt-7 space-y-5"
-              onSubmit={handleCreatePaymentLink}
-            >
-              <div className="grid gap-4 sm:grid-cols-2">
-                <label className="block">
-                  <span className="text-sm font-medium text-slate-300">
-                    Enrollment
-                  </span>
-                  <select
-                    className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition focus:border-teal-400/40 focus:bg-white/15 focus:ring-4 focus:ring-teal-400/10"
-                    onChange={(event) => {
-                      const enrollment = enrollments.find(
-                        (item) => item.id === event.target.value,
-                      );
-
-                      setPaymentLinkForm((current) => ({
-                        ...current,
-                        courseId: enrollment?.course_id ?? current.courseId,
-                        enrollmentId: event.target.value,
-                      }));
-                    }}
-                    value={paymentLinkForm.enrollmentId}
-                  >
-                    <option className="text-slate-950" value="">
-                      No enrollment
-                    </option>
-                    {enrollments.map((enrollment) => (
-                      <option
-                        className="text-slate-950"
-                        key={enrollment.id}
-                        value={enrollment.id}
-                      >
-                        {enrollment.course?.title ?? "Course unavailable"}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="block">
-                  <span className="text-sm font-medium text-slate-300">
-                    Course
-                  </span>
-                  <select
-                    className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition focus:border-teal-400/40 focus:bg-white/15 focus:ring-4 focus:ring-teal-400/10"
-                    onChange={(event) =>
-                      setPaymentLinkForm((current) => ({
-                        ...current,
-                        courseId: event.target.value,
-                      }))
-                    }
-                    value={paymentLinkForm.courseId}
-                  >
-                    <option className="text-slate-950" value="">
-                      No course
-                    </option>
-                    {courses.map((course) => (
-                      <option
-                        className="text-slate-950"
-                        key={course.id}
-                        value={course.id}
-                      >
-                        {course.title}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <label className="block">
-                  <span className="text-sm font-medium text-slate-300">
-                    Amount
-                  </span>
-                  <input
-                    className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition placeholder:text-slate-400 focus:border-teal-400/40 focus:bg-white/15 focus:ring-4 focus:ring-teal-400/10"
-                    min="0.01"
-                    onChange={(event) =>
-                      setPaymentLinkForm((current) => ({
-                        ...current,
-                        amount: event.target.value,
-                      }))
-                    }
-                    placeholder="4999"
-                    required
-                    step="0.01"
-                    type="number"
-                    value={paymentLinkForm.amount}
-                  />
-                </label>
-                <label className="block">
-                  <span className="text-sm font-medium text-slate-300">
-                    Expiry date
-                  </span>
-                  <input
-                    className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition focus:border-teal-400/40 focus:bg-white/15 focus:ring-4 focus:ring-teal-400/10"
-                    onChange={(event) =>
-                      setPaymentLinkForm((current) => ({
-                        ...current,
-                        expiresAt: event.target.value,
-                      }))
-                    }
-                    type="datetime-local"
-                    value={paymentLinkForm.expiresAt}
-                  />
-                </label>
-              </div>
-
-              <label className="block">
-                <span className="text-sm font-medium text-slate-300">
-                  Payment URL
-                </span>
-                <input
-                  className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition placeholder:text-slate-400 focus:border-teal-400/40 focus:bg-white/15 focus:ring-4 focus:ring-teal-400/10"
-                  onChange={(event) =>
-                    setPaymentLinkForm((current) => ({
-                      ...current,
-                      paymentUrl: event.target.value,
-                    }))
-                  }
-                  placeholder="Leave empty to generate manual UPI placeholder"
-                  value={paymentLinkForm.paymentUrl}
-                />
-              </label>
-
-              <label className="block">
-                <span className="text-sm font-medium text-slate-300">
-                  Description
-                </span>
-                <textarea
-                  className="mt-2 min-h-24 w-full resize-none rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm leading-6 text-white outline-none transition placeholder:text-slate-400 focus:border-teal-400/40 focus:bg-white/15 focus:ring-4 focus:ring-teal-400/10"
-                  onChange={(event) =>
-                    setPaymentLinkForm((current) => ({
-                      ...current,
-                      description: event.target.value,
-                    }))
-                  }
-                  placeholder="Installment context, fee note, or due details."
-                  value={paymentLinkForm.description}
-                />
-              </label>
-
-              <div className="rounded-2xl border border-amber-400/30 bg-amber-400/10 p-4 text-sm leading-6 text-amber-100">
-                Placeholder preview uses <strong>YOUR_UPI_ID</strong>:
-                <p className="mt-2 wrap-break-word text-amber-50">
-                  {paymentLinkPreviewUrl}
-                </p>
-              </div>
-
-              <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-                <Button
-                  className="border-slate-700! bg-white/10! text-white! hover:bg-white/15!"
-                  onClick={() => setPaymentLinkOpen(false)}
-                  type="button"
-                  variant="secondary"
-                >
-                  Cancel
-                </Button>
-                <Button
-                  disabled={paymentLinkMutatingId === "create"}
-                  type="submit"
-                >
-                  {paymentLinkMutatingId === "create"
-                    ? "Creating..."
-                    : "Create Payment Link"}
-                </Button>
-              </div>
-            </form>
-          </Card>
-        </div>
-      ) : null}
-
-      {recordPaymentLinkTarget ? (
-        <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-black/70 px-4 py-4 backdrop-blur-sm sm:items-center">
-          <Card className="w-full max-w-xl border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/40 sm:p-8">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-sm font-semibold text-slate-500">
-                  Confirm payment
-                </p>
-                <h3 className="mt-2 text-2xl font-semibold">
-                  Record UPI Link payment
-                </h3>
-              </div>
-              <button
-                className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 text-sm font-semibold text-slate-500 transition hover:bg-white/10 hover:text-white"
-                onClick={() => setRecordPaymentLinkTarget(null)}
-                type="button"
-              >
-                X
-              </button>
-            </div>
-
-            <div className="mt-6 space-y-3 rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-300">
-              <p>
-                Student:{" "}
-                <span className="font-semibold text-white">
-                  {student.full_name}
-                </span>
-              </p>
-              <p>
-                Course:{" "}
-                <span className="font-semibold text-white">
-                  {recordPaymentLinkTarget.course?.title ?? "No course linked"}
-                </span>
-              </p>
-              <p>
-                Amount:{" "}
-                <span className="font-semibold text-white">
-                  {formatCurrencyForPaymentLink(
-                    recordPaymentLinkTarget.amount,
-                    recordPaymentLinkTarget.currency || "INR",
-                  )}
-                </span>
-              </p>
-              <p>
-                Payment method:{" "}
-                <span className="font-semibold text-white">UPI Link</span>
-              </p>
-            </div>
-
-            <p className="mt-4 rounded-2xl border border-amber-400/30 bg-amber-400/10 p-4 text-sm font-semibold leading-6 text-amber-100">
-              This will create a completed payment record.
-            </p>
-
-            <label className="mt-5 block">
-              <span className="text-sm font-medium text-slate-300">
-                Payment notes
-              </span>
-              <textarea
-                className="mt-2 min-h-24 w-full resize-none rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm leading-6 text-white outline-none transition placeholder:text-slate-400 focus:border-teal-400/40 focus:bg-white/15 focus:ring-4 focus:ring-teal-400/10"
-                onChange={(event) =>
-                  setRecordPaymentLinkNotes(event.target.value)
-                }
-                placeholder="Paid via payment link"
-                value={recordPaymentLinkNotes}
-              />
-            </label>
-
-            <div className="mt-7 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-              <Button
-                className="border-slate-700! bg-white/10! text-white! hover:bg-white/15!"
-                onClick={() => setRecordPaymentLinkTarget(null)}
-                type="button"
-                variant="secondary"
-              >
-                Cancel
-              </Button>
-              <Button
-                disabled={
-                  paymentLinkMutatingId ===
-                  `convert-${recordPaymentLinkTarget.id}`
-                }
-                onClick={() => handleConvertPaymentLink(recordPaymentLinkTarget)}
-                type="button"
-              >
-                {paymentLinkMutatingId ===
-                `convert-${recordPaymentLinkTarget.id}`
-                  ? "Recording..."
-                  : "Confirm and Record Payment"}
-              </Button>
-            </div>
-          </Card>
-        </div>
-      ) : null}
-
-      {paymentOpen ? (
-        <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-black/70 px-4 py-4 backdrop-blur-sm sm:items-center">
-          <Card className="w-full max-w-2xl border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/40 sm:p-8">
-            <h3 className="text-2xl font-semibold">Add Payment</h3>
-            <form className="mt-7 space-y-5" onSubmit={handleCreatePayment}>
-              <label className="block">
-                <span className="text-sm font-medium text-slate-300">
-                  Enrollment
-                </span>
-                <select
-                  className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition focus:border-teal-400/40 focus:bg-white/15 focus:ring-4 focus:ring-teal-400/10"
-                  onChange={(event) =>
-                    setSelectedEnrollmentId(event.target.value)
-                  }
-                  required
-                  value={selectedEnrollmentId}
-                >
-                  <option className="text-slate-950" value="">
-                    Select an enrollment
-                  </option>
-                  {enrollments.map((enrollment) => (
-                    <option
-                      className="text-slate-950"
-                      key={enrollment.id}
-                      value={enrollment.id}
-                    >
-                      {enrollment.course?.title ?? "Course unavailable"}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <div className="grid gap-4 sm:grid-cols-3">
-                <label className="block">
-                  <span className="text-sm font-medium text-slate-300">
-                    Amount
-                  </span>
-                  <input
-                    className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition placeholder:text-slate-400 focus:border-teal-400/40 focus:bg-white/15 focus:ring-4 focus:ring-teal-400/10"
-                    min="0"
-                    onChange={(event) =>
-                      setPaymentForm((current) => ({
-                        ...current,
-                        amount: event.target.value,
-                      }))
-                    }
-                    placeholder="499"
-                    required
-                    step="0.01"
-                    type="number"
-                    value={paymentForm.amount}
-                  />
-                </label>
-                <label className="block">
-                  <span className="text-sm font-medium text-slate-300">
-                    Method
-                  </span>
-                  <select
-                    className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition focus:border-teal-400/40 focus:bg-white/15 focus:ring-4 focus:ring-teal-400/10"
-                    onChange={(event) =>
-                      setPaymentForm((current) => ({
-                        ...current,
-                        paymentMethod: event.target.value as PaymentMethod,
-                      }))
-                    }
-                    value={paymentForm.paymentMethod}
-                  >
-                    {paymentMethods.map((method) => (
-                      <option className="text-slate-950" key={method} value={method}>
-                        {method}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="block">
-                  <span className="text-sm font-medium text-slate-300">
-                    Status
-                  </span>
-                  <select
-                    className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition focus:border-teal-400/40 focus:bg-white/15 focus:ring-4 focus:ring-teal-400/10"
-                    onChange={(event) =>
-                      setPaymentForm((current) => ({
-                        ...current,
-                        status: event.target.value as PaymentStatus,
-                      }))
-                    }
-                    value={paymentForm.status}
-                  >
-                    {paymentStatuses.map((status) => (
-                      <option className="text-slate-950" key={status} value={status}>
-                        {status}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-
-              <label className="block">
-                <span className="text-sm font-medium text-slate-300">Notes</span>
-                <textarea
-                  className="mt-2 min-h-24 w-full resize-none rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm leading-6 text-white outline-none transition placeholder:text-slate-400 focus:border-teal-400/40 focus:bg-white/15 focus:ring-4 focus:ring-teal-400/10"
-                  onChange={(event) =>
-                    setPaymentForm((current) => ({
-                      ...current,
-                      notes: event.target.value,
-                    }))
-                  }
-                  placeholder="Receipt reference, installment notes, or context."
-                  value={paymentForm.notes}
-                />
-              </label>
-
-              {enrollments.length === 0 ? (
-                <p className="rounded-2xl border border-amber-400/30 bg-amber-400/10 p-4 text-sm leading-6 text-amber-300">
-                  Enroll this student in a course before adding a payment.
-                </p>
-              ) : (
-                <p className="rounded-2xl border border-white/10 bg-white/10 p-4 text-sm leading-6 text-slate-400">
-                  Course and enrollment are attached automatically from the
-                  selected enrollment.
-                </p>
-              )}
-
-              <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-                <Button
-                  className="border-slate-700! bg-white/10! text-white! hover:bg-white/15!"
-                  onClick={() => setPaymentOpen(false)}
-                  type="button"
-                  variant="secondary"
-                >
-                  Cancel
-                </Button>
-                <Button
-                  disabled={mutating || !selectedEnrollmentId}
-                  type="submit"
-                >
-                  {mutating ? "Adding..." : "Add Payment"}
-                </Button>
               </div>
             </form>
           </Card>

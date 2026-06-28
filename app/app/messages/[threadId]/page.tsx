@@ -1,4 +1,5 @@
 import { RouteGuard } from "@/src/components/auth/RouteGuard";
+import { FeatureGate } from "@/src/components/features/FeatureGate";
 import { AppShell } from "@/src/components/layout/AppShell";
 import { ThreadDetailClient } from "@/src/components/messages/ThreadDetailClient";
 
@@ -16,7 +17,9 @@ export default async function MessageThreadPage({
   return (
     <RouteGuard mode="app">
       <AppShell activeItem="Messages">
-        <ThreadDetailClient threadId={threadId} />
+        <FeatureGate featureKey="messages">
+          <ThreadDetailClient threadId={threadId} />
+        </FeatureGate>
       </AppShell>
     </RouteGuard>
   );

@@ -19,8 +19,8 @@ export function StaffDashboard({ metrics }: { metrics: DashboardMetrics }) {
           <Button href="/app/students" size="sm" variant="secondary">
             Students
           </Button>
-          <Button href="/app/payments" size="sm" variant="secondary">
-            Payments
+          <Button href="/app/finance" size="sm" variant="secondary">
+            Finance
           </Button>
           <Button href="/app/reminders" size="sm" variant="secondary">
             Reminders

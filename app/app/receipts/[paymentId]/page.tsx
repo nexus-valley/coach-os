@@ -13,7 +13,7 @@ export default async function ReceiptPage({ params }: ReceiptPageProps) {
 
   return (
     <RouteGuard mode="app">
-      <AppShell activeItem="Payments">
+      <AppShell activeItem="Finance">
         <ReceiptPageClient paymentId={paymentId} />
       </AppShell>
     </RouteGuard>

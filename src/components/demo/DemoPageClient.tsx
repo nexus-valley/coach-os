@@ -25,7 +25,7 @@ const demoHighlights = [
   },
   {
     description:
-      "Review sample payments, UPI-ready payment links, receipts, and payment status reporting.",
+      "Review sample Finance Center workflows, manual payment records, receipts, and payment status reporting.",
     title: "Payments and receipts",
   },
   {

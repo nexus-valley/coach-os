@@ -45,8 +45,6 @@ const navItems = [
   { href: "/app/students", label: "Students" },
   { href: "/app/student-portal", label: "Portal" },
   { href: "/app/enrollments", label: "Enrollments" },
-  { href: "/app/payments", label: "Payments" },
-  { href: "/app/payment-links", label: "Payment Links" },
   { href: "/app/finance", label: "Finance" },
   { href: "/app/reminders", label: "Reminders" },
   { href: "/app/automations", label: "Automations" },

@@ -42,7 +42,7 @@ const quickLinks = [
   { href: "/app/notifications", label: "Notifications" },
   { href: "/app/messages", label: "Messages" },
   { href: "/app/automations", label: "Automations" },
-  { href: "/app/payments", label: "Payments" },
+  { href: "/app/finance", label: "Finance" },
   { href: "/app/settings", label: "Settings" },
 ];
 
