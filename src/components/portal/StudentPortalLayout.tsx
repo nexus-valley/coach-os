@@ -8,6 +8,7 @@ import { CoachFortBrandAsset } from "@/src/components/branding/CoachFortBrandAss
 import { Button } from "@/src/components/ui/Button";
 import {
   featureListToMap,
+  getFeatureStatusLabel,
   getPortalFeatureAccess,
   isFeatureEnabled,
   portalNavFeatureByLabel,
@@ -50,6 +51,7 @@ export function StudentPortalLayout({
   const [featureAccess, setFeatureAccess] = useState<FeatureAccessMap | null>(
     null,
   );
+  const [featureAccessLoaded, setFeatureAccessLoaded] = useState(false);
   const [settings, setSettings] = useState<TenantSettings | null>(null);
 
   useEffect(() => {
@@ -65,11 +67,13 @@ export function StudentPortalLayout({
           setFeatureAccess(
             featureResponse ? featureListToMap(featureResponse.features) : null,
           );
+          setFeatureAccessLoaded(true);
         }
       })
       .catch(() => {
         if (active) {
           setSettings(null);
+          setFeatureAccessLoaded(true);
         }
       });
 
@@ -90,6 +94,42 @@ export function StudentPortalLayout({
   );
   const visiblePortalNavItems = portalNavItems.filter((item) =>
     isFeatureEnabled(featureAccess, portalNavFeatureByLabel[item.label]),
+  );
+  const activePortalItem = portalNavItems.find(
+    (item) =>
+      pathname === item.href ||
+      (item.href !== "/portal" && pathname?.startsWith(item.href)),
+  );
+  const activeFeatureKey = activePortalItem
+    ? portalNavFeatureByLabel[activePortalItem.label]
+    : undefined;
+  const activeFeatureStatus = activeFeatureKey
+    ? featureAccess?.[activeFeatureKey]?.status
+    : undefined;
+  const routeFeatureEnabled =
+    !featureAccessLoaded || isFeatureEnabled(featureAccess, activeFeatureKey);
+
+  const guardedContent = !featureAccessLoaded ? (
+    <section className="rounded-2xl border border-[#D8E8F0] bg-white p-6 text-sm font-medium text-[#5D7185] shadow-sm">
+      Checking module access...
+    </section>
+  ) : !routeFeatureEnabled ? (
+    <section className="rounded-2xl border border-[#D8E8F0] bg-white p-8 shadow-sm shadow-[#0B2A3D]/5">
+      <div className="max-w-2xl">
+        <span className="inline-flex rounded-full border border-[#D8E8F0] bg-[#F3FAFD] px-3 py-1 text-xs font-semibold text-[#425B76]">
+          {getFeatureStatusLabel(activeFeatureStatus)}
+        </span>
+        <h2 className="mt-4 text-2xl font-semibold text-[#0B2A3D]">
+          This module is not enabled for your student portal.
+        </h2>
+        <p className="mt-3 text-sm leading-6 text-[#5D7185]">
+          Your institute has not enabled this portal area. Other available
+          portal sections remain accessible from the navigation.
+        </p>
+      </div>
+    </section>
+  ) : (
+    children
   );
 
   return (
@@ -171,7 +211,7 @@ export function StudentPortalLayout({
         </div>
       </header>
       <main className="mx-auto max-w-7xl px-5 py-6 sm:px-6 lg:px-8">
-        {children}
+        {guardedContent}
       </main>
     </div>
   );

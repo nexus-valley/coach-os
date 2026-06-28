@@ -1,5 +1,7 @@
 import { RouteGuard } from "@/src/components/auth/RouteGuard";
 import { CertificatePageClient } from "@/src/components/certificates/CertificatePageClient";
+import { FeatureGate } from "@/src/components/features/FeatureGate";
+import { AppShell } from "@/src/components/layout/AppShell";
 
 type CertificatePageProps = {
   params: Promise<{
@@ -14,7 +16,11 @@ export default async function CertificatePage({
 
   return (
     <RouteGuard mode="app">
-      <CertificatePageClient enrollmentId={enrollmentId} />
+      <AppShell activeItem="Certificates">
+        <FeatureGate featureKey="certificates">
+          <CertificatePageClient enrollmentId={enrollmentId} />
+        </FeatureGate>
+      </AppShell>
     </RouteGuard>
   );
 }

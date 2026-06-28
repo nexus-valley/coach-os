@@ -7,6 +7,7 @@ import { CoachFortBrandAsset } from "@/src/components/branding/CoachFortBrandAss
 import { NotificationBell } from "@/src/components/notifications/NotificationBell";
 import {
   featureListToMap,
+  getFeatureStatusLabel,
   getTenantFeatureAccess,
   isFeatureEnabled,
   navFeatureByLabel,
@@ -341,6 +342,7 @@ export function AppShell({ activeItem = "Dashboard", children }: AppShellProps) 
   const [featureAccess, setFeatureAccess] = useState<FeatureAccessMap | null>(
     null,
   );
+  const [routeAccessLoaded, setRouteAccessLoaded] = useState(false);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [workspaceName, setWorkspaceName] = useState("CoachFort");
 
@@ -352,6 +354,9 @@ export function AppShell({ activeItem = "Dashboard", children }: AppShellProps) 
         const currentTenant = await getCurrentTenant();
 
         if (!currentTenant) {
+          if (active) {
+            setRouteAccessLoaded(true);
+          }
           return;
         }
 
@@ -377,10 +382,12 @@ export function AppShell({ activeItem = "Dashboard", children }: AppShellProps) 
           );
           setLogoUrl(branding.logoUrl || branding.iconUrl);
           setWorkspaceName(branding.displayName);
+          setRouteAccessLoaded(true);
         }
       } catch {
         if (active) {
           setBrandColor(defaultTenantBrandColor);
+          setRouteAccessLoaded(true);
         }
       }
     }
@@ -404,6 +411,61 @@ export function AppShell({ activeItem = "Dashboard", children }: AppShellProps) 
       isFeatureEnabled(featureAccess, featureKey)
     );
   });
+  const activeFeatureKey = navFeatureByLabel[activeItem];
+  const activeFeatureStatus = activeFeatureKey
+    ? featureAccess?.[activeFeatureKey]?.status
+    : undefined;
+  const routeRoleAllowed =
+    !routeAccessLoaded || canAccessNavigationItem(currentRole, activeItem);
+  const routeFeatureEnabled =
+    !routeAccessLoaded || isFeatureEnabled(featureAccess, activeFeatureKey);
+
+  const guardedContent = !routeAccessLoaded ? (
+    <section className="rounded-2xl border border-[#D8E8F0] bg-white p-6 text-sm font-medium text-[#5D7185] shadow-sm">
+      Checking module access...
+    </section>
+  ) : !routeRoleAllowed ? (
+    <section className="rounded-2xl border border-[#FCA5A5] bg-white p-8 shadow-sm shadow-[#0B2A3D]/5">
+      <div className="max-w-2xl">
+        <span className="inline-flex rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-semibold text-red-700">
+          Access denied
+        </span>
+        <h2 className="mt-4 text-2xl font-semibold text-[#0B2A3D]">
+          You do not have access to this workspace area.
+        </h2>
+        <p className="mt-3 text-sm leading-6 text-[#5D7185]">
+          This route is restricted by your workspace role. Ask an owner or admin
+          if your access needs to change.
+        </p>
+      </div>
+    </section>
+  ) : !routeFeatureEnabled ? (
+    <section className="rounded-2xl border border-[#D8E8F0] bg-white p-8 shadow-sm shadow-[#0B2A3D]/5">
+      <div className="max-w-2xl">
+        <span className="inline-flex rounded-full border border-[#D8E8F0] bg-[#F3FAFD] px-3 py-1 text-xs font-semibold text-[#425B76]">
+          {getFeatureStatusLabel(activeFeatureStatus)}
+        </span>
+        <h2 className="mt-4 text-2xl font-semibold text-[#0B2A3D]">
+          This module is not enabled for your workspace.
+        </h2>
+        <p className="mt-3 text-sm leading-6 text-[#5D7185]">
+          This route is protected by feature access settings. Existing data
+          remains protected, and owner/admin users can review the setting in
+          Feature Settings.
+        </p>
+        {currentRole === "owner" || currentRole === "admin" ? (
+          <Link
+            className="mt-6 inline-flex rounded-xl bg-[#145DA0] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#0B2A3D]"
+            href="/app/settings/features"
+          >
+            Open Feature Settings
+          </Link>
+        ) : null}
+      </div>
+    </section>
+  ) : (
+    children
+  );
 
   return (
     <div
@@ -512,7 +574,7 @@ export function AppShell({ activeItem = "Dashboard", children }: AppShellProps) 
           </header>
 
           <main className="coachos-content flex-1 px-5 py-6 sm:px-6 lg:px-8 lg:py-8">
-            {children}
+            {guardedContent}
           </main>
         </div>
 
