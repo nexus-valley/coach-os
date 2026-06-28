@@ -5,6 +5,13 @@ import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 
 import { CoachFortBrandAsset } from "@/src/components/branding/CoachFortBrandAsset";
 import { NotificationBell } from "@/src/components/notifications/NotificationBell";
+import {
+  featureListToMap,
+  getTenantFeatureAccess,
+  isFeatureEnabled,
+  navFeatureByLabel,
+  type FeatureAccessMap,
+} from "@/src/lib/featureAccess";
 import { canAccessNavigationItem } from "@/src/lib/permissions";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 import { getCurrentMemberRole, type MemberRole } from "@/src/lib/team";
@@ -53,6 +60,7 @@ const navItems = [
   { href: "/app/backup", label: "Backup & Recovery" },
   { href: "/app/settings/public-site", label: "Public Site" },
   { href: "/app/subscription", label: "Subscription" },
+  { href: "/app/settings/features", label: "Features" },
   { href: "/app/settings", label: "Settings" },
 ];
 
@@ -178,6 +186,14 @@ function NavIcon({ label }: { label: string }) {
         <path d="M16 6v12" />
         <path d="M10 9h4" />
         <path d="M10 15h4" />
+      </>
+    ),
+    Features: (
+      <>
+        <path d="M4 7h10" />
+        <path d="M4 17h10" />
+        <circle cx="18" cy="7" r="2" />
+        <circle cx="18" cy="17" r="2" />
       </>
     ),
     Messages: (
@@ -324,6 +340,9 @@ function NavIcon({ label }: { label: string }) {
 export function AppShell({ activeItem = "Dashboard", children }: AppShellProps) {
   const [brandColor, setBrandColor] = useState(defaultTenantBrandColor);
   const [currentRole, setCurrentRole] = useState<MemberRole | null>(null);
+  const [featureAccess, setFeatureAccess] = useState<FeatureAccessMap | null>(
+    null,
+  );
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [workspaceName, setWorkspaceName] = useState("CoachFort");
 
@@ -342,11 +361,12 @@ export function AppShell({ activeItem = "Dashboard", children }: AppShellProps) 
         const {
           data: { user },
         } = await supabase.auth.getUser();
-        const [settings, role] = await Promise.all([
+        const [settings, role, featureResponse] = await Promise.all([
           getTenantSettings(currentTenant.id),
           user
             ? getCurrentMemberRole(currentTenant.id, user.id)
             : Promise.resolve(null),
+          getTenantFeatureAccess(currentTenant.id).catch(() => null),
         ]);
 
         if (active) {
@@ -354,6 +374,9 @@ export function AppShell({ activeItem = "Dashboard", children }: AppShellProps) 
 
           setBrandColor(getSafeTenantBrandColor(settings?.brand_color));
           setCurrentRole(role);
+          setFeatureAccess(
+            featureResponse ? featureListToMap(featureResponse.features) : null,
+          );
           setLogoUrl(branding.logoUrl || branding.iconUrl);
           setWorkspaceName(branding.displayName);
         }
@@ -375,9 +398,14 @@ export function AppShell({ activeItem = "Dashboard", children }: AppShellProps) 
     "--coachos-brand": brandColor,
   } as CSSProperties;
 
-  const visibleNavItems = navItems.filter(
-    (item) => canAccessNavigationItem(currentRole, item.label),
-  );
+  const visibleNavItems = navItems.filter((item) => {
+    const featureKey = navFeatureByLabel[item.label];
+
+    return (
+      canAccessNavigationItem(currentRole, item.label) &&
+      isFeatureEnabled(featureAccess, featureKey)
+    );
+  });
 
   return (
     <div

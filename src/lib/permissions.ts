@@ -118,6 +118,7 @@ const navAccess: Record<string, (role: MemberRole | null | undefined) => boolean
     CRM: canAccessCrm,
     Documents: canAccessDocuments,
     Finance: canAccessFinance,
+    Features: canAccessSettings,
     Marketing: canAccessMarketing,
     "Mobile Readiness": canAccessMobileReadiness,
     Operations: canAccessOperations,

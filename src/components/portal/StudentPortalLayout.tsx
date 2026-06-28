@@ -6,6 +6,13 @@ import { useEffect, useState } from "react";
 
 import { CoachFortBrandAsset } from "@/src/components/branding/CoachFortBrandAsset";
 import { Button } from "@/src/components/ui/Button";
+import {
+  featureListToMap,
+  getPortalFeatureAccess,
+  isFeatureEnabled,
+  portalNavFeatureByLabel,
+  type FeatureAccessMap,
+} from "@/src/lib/featureAccess";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 import {
   getSafeTenantBrandColor,
@@ -40,15 +47,24 @@ export function StudentPortalLayout({
 }: StudentPortalLayoutProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const [featureAccess, setFeatureAccess] = useState<FeatureAccessMap | null>(
+    null,
+  );
   const [settings, setSettings] = useState<TenantSettings | null>(null);
 
   useEffect(() => {
     let active = true;
 
-    getTenantSettings(context.tenant.id)
-      .then((tenantSettings) => {
+    Promise.all([
+      getTenantSettings(context.tenant.id),
+      getPortalFeatureAccess(context.tenant.id).catch(() => null),
+    ])
+      .then(([tenantSettings, featureResponse]) => {
         if (active) {
           setSettings(tenantSettings);
+          setFeatureAccess(
+            featureResponse ? featureListToMap(featureResponse.features) : null,
+          );
         }
       })
       .catch(() => {
@@ -71,6 +87,9 @@ export function StudentPortalLayout({
   const branding = getWorkspaceBranding(settings, context.tenant);
   const brandColor = getSafeTenantBrandColor(
     settings?.student_portal_theme_color || settings?.brand_color,
+  );
+  const visiblePortalNavItems = portalNavItems.filter((item) =>
+    isFeatureEnabled(featureAccess, portalNavFeatureByLabel[item.label]),
   );
 
   return (
@@ -120,7 +139,7 @@ export function StudentPortalLayout({
             </div>
           </div>
           <nav className="flex gap-2 overflow-x-auto pb-1">
-            {portalNavItems.map((item) => {
+            {visiblePortalNavItems.map((item) => {
               const active =
                 pathname === item.href ||
                 (item.href !== "/portal" && pathname?.startsWith(item.href));
