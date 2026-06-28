@@ -19,6 +19,7 @@ import {
   recordDocumentView,
   type DocumentRecord,
 } from "@/src/lib/documentCenter";
+import { getDocumentDownloadUrl } from "@/src/lib/documentStorage";
 import type { StudentPortalContext } from "@/src/lib/studentPortalAuth";
 
 function getErrorMessage(error: unknown, fallback: string) {
@@ -84,6 +85,17 @@ export function StudentPortalDocuments({
       await recordDocumentView(documentId);
     } catch (caught) {
       setError(getErrorMessage(caught, "Unable to open document."));
+    }
+  }
+
+  async function handleOpenFile(documentId: string) {
+    setError("");
+
+    try {
+      const result = await getDocumentDownloadUrl(documentId);
+      window.open(result.signedUrl, "_blank", "noopener,noreferrer");
+    } catch (caught) {
+      setError(getErrorMessage(caught, "Unable to open document file."));
     }
   }
 
@@ -190,8 +202,27 @@ export function StudentPortalDocuments({
                     </Button>
                   </div>
                 ) : (
+                  null
+                )}
+
+                {selectedDocument.upload_status === "uploaded" ? (
+                  <div className="mt-5 rounded-2xl border border-[#D8E8F0] p-4">
+                    <p className="text-sm text-[#425B76]">
+                      This file opens through a short-lived secure link.
+                    </p>
+                    <Button
+                      className="mt-4"
+                      onClick={() => void handleOpenFile(selectedDocument.id)}
+                      size="sm"
+                      type="button"
+                      variant="secondary"
+                    >
+                      Open file
+                    </Button>
+                  </div>
+                ) : (
                   <p className="mt-5 rounded-2xl border border-[#D8E8F0] p-4 text-sm text-[#425B76]">
-                    No external reference link is attached yet.
+                    No downloadable file is attached yet.
                   </p>
                 )}
               </>

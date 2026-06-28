@@ -121,7 +121,7 @@ Helper functions are internal and not granted to `authenticated`.
 - Platform subscription plan enforcement is not automated yet.
 - No payment gateway module is enabled.
 - No live class provider integration exists.
-- No document upload/storage module is enabled.
+- Document upload controls are governed separately by `document_uploads`.
 - Disabled routes are guarded in the main optional modules, but future routes must be explicitly mapped to feature keys.
 - Route guards are UI-level safeguards; sensitive data access remains controlled by existing RLS/RPC rules in each module.
 

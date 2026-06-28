@@ -1,0 +1,60 @@
+import {
+  assertValidStorageReference,
+  documentSignedUrlExpiresInSeconds,
+  getAuthorizedDocumentStorageReference,
+  getBearerToken,
+  getUserScopedSupabase,
+  requireAuthenticatedUser,
+} from "@/src/lib/server/documentStorage";
+import { getSupabaseAdminClient } from "@/src/lib/server/supabaseAdmin";
+
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+function jsonError(message: string, status = 400) {
+  return Response.json({ error: message }, { status });
+}
+
+export async function POST(request: Request) {
+  try {
+    const accessToken = getBearerToken(request);
+    await requireAuthenticatedUser(accessToken);
+    const supabase = getUserScopedSupabase(accessToken);
+    const body = (await request.json()) as { documentId?: unknown };
+    const documentId = typeof body.documentId === "string" ? body.documentId : "";
+
+    if (!documentId) {
+      return jsonError("Document id is required.");
+    }
+
+    const row = await getAuthorizedDocumentStorageReference(supabase, documentId);
+    assertValidStorageReference(row);
+
+    const admin = getSupabaseAdminClient();
+    const signed = await admin.storage
+      .from(row.storage_bucket!)
+      .createSignedUrl(row.storage_path!, documentSignedUrlExpiresInSeconds, {
+        download: row.file_name ?? true,
+      });
+
+    if (signed.error || !signed.data?.signedUrl) {
+      return jsonError(signed.error?.message ?? "Unable to create signed URL.", 500);
+    }
+
+    await supabase.rpc("record_document_download_url_requested", {
+      p_document_id: documentId,
+    });
+
+    return Response.json({
+      expiresInSeconds: documentSignedUrlExpiresInSeconds,
+      fileMimeType: row.file_mime_type,
+      fileName: row.file_name,
+      signedUrl: signed.data.signedUrl,
+    });
+  } catch (error) {
+    return jsonError(
+      error instanceof Error ? error.message : "Unable to create download URL.",
+      403,
+    );
+  }
+}

@@ -31,6 +31,17 @@ import {
   type DocumentUploadStatus,
   type DocumentVisibilityScope,
 } from "@/src/lib/documentCenter";
+import {
+  getDocumentDownloadUrl,
+  removeDocumentFile,
+  uploadDocumentFile,
+} from "@/src/lib/documentStorage";
+import {
+  featureListToMap,
+  getTenantFeatureAccess,
+  isFeatureEnabled,
+  type FeatureAccessMap,
+} from "@/src/lib/featureAccess";
 import { canAccessDocuments } from "@/src/lib/permissions";
 import type { TrainingSessionWithRelations } from "@/src/lib/sessions";
 import { getSessionsForTenant } from "@/src/lib/sessions";
@@ -206,8 +217,10 @@ export function DocumentCenterPage() {
   const [dashboard, setDashboard] = useState<DocumentCenterDashboard | null>(null);
   const [detail, setDetail] = useState<DocumentDetail | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [featureAccess, setFeatureAccess] = useState<FeatureAccessMap | null>(null);
   const [form, setForm] = useState<FormState>(defaultForm);
   const [loading, setLoading] = useState(true);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [references, setReferences] = useState<ReferenceData>({
     cohorts: [],
     courses: [],
@@ -222,8 +235,13 @@ export function DocumentCenterPage() {
   const [success, setSuccess] = useState("");
   const [tenantId, setTenantId] = useState<string | null>(null);
   const [typeFilter, setTypeFilter] = useState<"all" | DocumentType>("all");
+  const [uploading, setUploading] = useState(false);
 
   const canManage = canAccessDocuments(role);
+  const documentUploadsEnabled = isFeatureEnabled(
+    featureAccess,
+    "document_uploads",
+  );
 
   async function loadData(nextSelectedId?: string | null) {
     setLoading(true);
@@ -259,6 +277,7 @@ export function DocumentCenterPage() {
         tenantCohorts,
         tenantSessions,
         tenantMembers,
+        tenantFeatures,
       ] = await Promise.all([
         getDocumentCenterDashboard(tenant.id),
         getStudentsForTenant(tenant.id),
@@ -266,9 +285,13 @@ export function DocumentCenterPage() {
         getCohortsForTenant(tenant.id),
         getSessionsForTenant(tenant.id),
         getTenantMembers(tenant.id),
+        getTenantFeatureAccess(tenant.id).catch(() => null),
       ]);
 
       setDashboard(documentData);
+      setFeatureAccess(
+        tenantFeatures ? featureListToMap(tenantFeatures.features) : null,
+      );
       setReferences({
         cohorts: tenantCohorts,
         courses: tenantCourses,
@@ -397,6 +420,7 @@ export function DocumentCenterPage() {
         : await createDocumentRecord({ ...input, tenantId });
 
       setSuccess(editingId ? "Document metadata updated." : "Document record created.");
+      setSelectedFile(null);
       resetForm(form.documentType);
       await loadData(nextId);
     } catch (caught) {
@@ -414,6 +438,55 @@ export function DocumentCenterPage() {
       await loadData(documentId);
     } catch (caught) {
       setActionError(getErrorMessage(caught, "Unable to archive document."));
+    }
+  }
+
+  async function handleUploadFile() {
+    if (!detail?.document || !selectedFile) {
+      setActionError("Choose a file to upload.");
+      return;
+    }
+
+    setActionError("");
+    setSuccess("");
+    setUploading(true);
+
+    try {
+      await uploadDocumentFile(detail.document.id, selectedFile);
+      setSelectedFile(null);
+      setSuccess("Document file uploaded.");
+      await loadData(detail.document.id);
+    } catch (caught) {
+      setActionError(getErrorMessage(caught, "Unable to upload document file."));
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function handleOpenFile(documentId: string) {
+    setActionError("");
+
+    try {
+      const result = await getDocumentDownloadUrl(documentId);
+      window.open(result.signedUrl, "_blank", "noopener,noreferrer");
+    } catch (caught) {
+      setActionError(getErrorMessage(caught, "Unable to open document file."));
+    }
+  }
+
+  async function handleRemoveFile(documentId: string) {
+    setActionError("");
+    setSuccess("");
+    setUploading(true);
+
+    try {
+      await removeDocumentFile(documentId);
+      setSuccess("Document file removed.");
+      await loadData(documentId);
+    } catch (caught) {
+      setActionError(getErrorMessage(caught, "Unable to remove document file."));
+    } finally {
+      setUploading(false);
     }
   }
 
@@ -457,9 +530,9 @@ export function DocumentCenterPage() {
             Document Center
           </h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-[#5D7185]">
-            Manage document references, linked entities, and role-based
-            visibility. Actual private uploads and signed download URLs are not
-            enabled in this module.
+            Manage document metadata, private files, linked entities, and
+            role-based visibility. Uploaded files are stored in private storage
+            and opened through short-lived signed URLs after authorization.
           </p>
         </div>
         <Button onClick={() => resetForm()} type="button">
@@ -1013,6 +1086,90 @@ export function DocumentCenterPage() {
                   </Button>
                 </div>
               ) : null}
+
+              <div className="mt-4 rounded-2xl border border-[#D8E8F0] p-4">
+                <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
+                  <div>
+                    <p className="text-xs font-semibold uppercase text-[#66788F]">
+                      Private file
+                    </p>
+                    <p className="mt-2 text-sm text-[#425B76]">
+                      Files are stored privately and opened only through
+                      short-lived signed URLs. Raw storage paths are not shown.
+                    </p>
+                  </div>
+                  {detail.document.upload_status === "uploaded" ? (
+                    <Badge tone="success">Uploaded</Badge>
+                  ) : (
+                    <Badge tone="light">No file</Badge>
+                  )}
+                </div>
+
+                {detail.document.upload_status === "uploaded" ? (
+                  <div className="mt-4 flex flex-wrap gap-3">
+                    <Button
+                      disabled={uploading}
+                      onClick={() => void handleOpenFile(detail.document.id)}
+                      size="sm"
+                      type="button"
+                      variant="secondary"
+                    >
+                      Open file
+                    </Button>
+                  </div>
+                ) : null}
+
+                {documentUploadsEnabled ? (
+                  <div className="mt-4 space-y-4">
+                    <label className="block text-sm font-semibold">
+                      Upload or replace file
+                      <input
+                        accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,.xls,.xlsx,application/pdf,image/png,image/jpeg,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                        className="mt-2 block w-full rounded-2xl border border-[#D8E8F0] bg-white px-4 py-3 text-sm"
+                        disabled={uploading || detail.document.status !== "active"}
+                        onChange={(event) =>
+                          setSelectedFile(event.target.files?.[0] ?? null)
+                        }
+                        type="file"
+                      />
+                    </label>
+                    <div className="flex flex-wrap gap-3">
+                      <Button
+                        disabled={
+                          !selectedFile ||
+                          uploading ||
+                          detail.document.status !== "active"
+                        }
+                        onClick={() => void handleUploadFile()}
+                        size="sm"
+                        type="button"
+                      >
+                        {uploading ? "Uploading..." : "Upload file"}
+                      </Button>
+                      {detail.document.upload_status === "uploaded" ? (
+                        <Button
+                          disabled={uploading}
+                          onClick={() => void handleRemoveFile(detail.document.id)}
+                          size="sm"
+                          type="button"
+                          variant="secondary"
+                        >
+                          Remove file
+                        </Button>
+                      ) : null}
+                    </div>
+                    <p className="text-xs text-[#66788F]">
+                      Allowed: PDF, PNG, JPG, DOC, DOCX, XLS, XLSX. Max 10 MB.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="mt-4 rounded-2xl bg-[#F3FAFD] p-4 text-sm text-[#425B76]">
+                    Document uploads are not enabled for this workspace. Owners
+                    and admins can enable the Document Uploads feature in Feature
+                    Settings when the plan allows it.
+                  </div>
+                )}
+              </div>
 
               <div className="mt-5">
                 <h3 className="text-sm font-semibold uppercase text-[#66788F]">

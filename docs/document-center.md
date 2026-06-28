@@ -12,10 +12,9 @@ download behavior yet.
 
 ## Storage Approach
 
-This module is metadata-only. The repository did not have a complete private
-Supabase Storage upload and signed-download pattern suitable for sensitive
-academy documents, so Module 59 does not create buckets, storage policies,
-public URLs, or upload controls.
+Module 59 was metadata-only. Module 63 adds private Supabase Storage upload and
+signed-download support through server-only API routes. The Document Center still
+supports metadata-only records and external references.
 
 The data model supports future storage references:
 
@@ -27,9 +26,8 @@ The data model supports future storage references:
 - `external_url`
 - `upload_status`
 
-Private uploads and signed URLs should be added later through a server-side
-path or secure RPC/API flow. Do not create public buckets for private academy
-documents.
+Private uploads use the `coachfort-documents` private bucket. Downloads are
+served through short-lived signed URLs only after authorization.
 
 ## Document Types
 
@@ -192,8 +190,8 @@ Do not expose:
 
 ## Known Limitations
 
-- No actual file upload.
-- No signed URL download flow.
+- No virus scanning yet.
+- No document file versioning.
 - No document versioning.
 - No OCR or full-text search inside files.
 - No e-signature.

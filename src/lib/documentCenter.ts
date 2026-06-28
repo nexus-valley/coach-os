@@ -10,9 +10,9 @@ export type DocumentType =
   | "student";
 
 export type DocumentUploadStatus =
-  | "archived"
   | "metadata_only"
   | "pending_upload"
+  | "removed"
   | "uploaded";
 
 export type DocumentVisibilityScope =
@@ -127,7 +127,6 @@ export const documentUploadStatuses: DocumentUploadStatus[] = [
   "metadata_only",
   "pending_upload",
   "uploaded",
-  "archived",
 ];
 
 export const documentVisibilityScopes: DocumentVisibilityScope[] = [
