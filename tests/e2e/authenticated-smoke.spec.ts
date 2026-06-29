@@ -1,51 +1,195 @@
-import { expect, type Page, test } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 
-const ownerEmail = process.env.COACHFORT_OWNER_EMAIL;
-const adminEmail = process.env.COACHFORT_ADMIN_EMAIL;
-const studentEmail = process.env.COACHFORT_STUDENT_EMAIL;
-const password = process.env.COACHFORT_TEST_PASSWORD;
+import {
+  expectNoHardFailure,
+  expectProtectedPageLoaded,
+  expectUnavailableOrDenied,
+  loginToPortal,
+  loginToWorkspace,
+  regressionEnv,
+  requireRegressionEnv,
+} from "./helpers/auth";
 
-async function loginToWorkspace(page: Page, email: string) {
-  await page.goto("/login?next=/app/documents", { waitUntil: "domcontentloaded" });
-  await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password").fill(password ?? "");
-  await page.getByRole("button", { name: /^Login$/ }).click();
-  await page.waitForLoadState("networkidle");
-}
+const ownerAdminRoutes = [
+  { path: "/app", text: /Dashboard|Workspace/i },
+  { path: "/app/students", text: /Students/i },
+  { path: "/app/courses", text: /Courses/i },
+  { path: "/app/finance", text: /Finance|Invoice|Payment/i },
+  { path: "/app/reports", text: /Reports|Overview/i },
+  { path: "/app/documents", text: /Documents/i },
+  { path: "/app/messages", text: /Messages|Chat|Thread/i },
+  { path: "/app/settings/features", text: /Feature|Module/i },
+];
 
-async function loginToPortal(page: Page, email: string) {
-  await page.goto("/portal/login", { waitUntil: "domcontentloaded" });
-  await page.getByLabel("Student email").fill(email);
-  await page.getByLabel("Password").fill(password ?? "");
-  await page.getByRole("button", { name: /Open Student Portal/i }).click();
-  await page.waitForLoadState("networkidle");
-  await page.goto("/portal/documents", { waitUntil: "networkidle" });
-}
+const restrictedForStaffTrainer = [
+  "/app/finance",
+  "/app/settings/features",
+  "/app/team-operations",
+];
 
-test.describe("authenticated production smoke", () => {
-  test("owner can login and reach app documents", async ({ page }) => {
-    test.skip(!ownerEmail || !password, "Set COACHFORT_OWNER_EMAIL and COACHFORT_TEST_PASSWORD to run.");
+const studentPortalRoutes = [
+  { path: "/portal", text: /Overview|Portal|Courses/i },
+  { path: "/portal/payments", text: /Payment|Finance|Invoice|Receipt/i },
+  { path: "/portal/documents", text: /Documents/i },
+  { path: "/portal/messages", text: /Messages|Chat|Support/i },
+  { path: "/portal/assignments", text: /Assignments/i },
+];
 
-    await loginToWorkspace(page, ownerEmail ?? "");
-    await page.goto("/app/documents", { waitUntil: "networkidle" });
-    await expect(page.getByRole("heading", { name: /Documents/i })).toBeVisible();
-    await expect(page.locator("body")).not.toContainText(/404: NOT_FOUND|This page could not be found/i);
+test.describe("authenticated role and module smoke", () => {
+  test("owner can reach key app routes", async ({ page }) => {
+    requireRegressionEnv(["owner"]);
+
+    await loginToWorkspace(page, regressionEnv.owner ?? "");
+
+    for (const route of ownerAdminRoutes) {
+      await expectProtectedPageLoaded(page, route.path, route.text);
+    }
   });
 
-  test("admin can login and reach app documents", async ({ page }) => {
-    test.skip(!adminEmail || !password, "Set COACHFORT_ADMIN_EMAIL and COACHFORT_TEST_PASSWORD to run.");
+  test("admin can reach key app routes", async ({ page }) => {
+    requireRegressionEnv(["admin"]);
 
-    await loginToWorkspace(page, adminEmail ?? "");
-    await page.goto("/app/documents", { waitUntil: "networkidle" });
-    await expect(page.getByRole("heading", { name: /Documents/i })).toBeVisible();
-    await expect(page.locator("body")).not.toContainText(/404: NOT_FOUND|This page could not be found/i);
+    await loginToWorkspace(page, regressionEnv.admin ?? "");
+
+    for (const route of ownerAdminRoutes) {
+      await expectProtectedPageLoaded(page, route.path, route.text);
+    }
   });
 
-  test("student can login and reach portal documents", async ({ page }) => {
-    test.skip(!studentEmail || !password, "Set COACHFORT_STUDENT_EMAIL and COACHFORT_TEST_PASSWORD to run.");
+  test("staff is blocked from restricted admin routes", async ({ page }) => {
+    requireRegressionEnv(["staff"]);
 
-    await loginToPortal(page, studentEmail ?? "");
-    await expect(page.getByRole("heading", { name: /Documents/i })).toBeVisible();
-    await expect(page.locator("body")).not.toContainText(/404: NOT_FOUND|This page could not be found/i);
+    await loginToWorkspace(page, regressionEnv.staff ?? "");
+
+    for (const path of restrictedForStaffTrainer) {
+      await page.goto(path, { waitUntil: "networkidle" });
+      await expectNoHardFailure(page);
+      await expectUnavailableOrDenied(page);
+    }
+  });
+
+  test("trainer is blocked from restricted admin routes", async ({ page }) => {
+    requireRegressionEnv(["trainer"]);
+
+    await loginToWorkspace(page, regressionEnv.trainer ?? "");
+
+    for (const path of restrictedForStaffTrainer) {
+      await page.goto(path, { waitUntil: "networkidle" });
+      await expectNoHardFailure(page);
+      await expectUnavailableOrDenied(page);
+    }
+  });
+
+  test("student can reach safe portal routes and cannot access app routes", async ({
+    page,
+  }) => {
+    requireRegressionEnv(["student"]);
+
+    await loginToPortal(page, regressionEnv.student ?? "");
+
+    for (const route of studentPortalRoutes) {
+      await expectProtectedPageLoaded(page, route.path, route.text);
+      await expect(page.locator("body")).not.toContainText(
+        /Team Operations|Feature Settings|Platform Owner Console/i,
+      );
+    }
+
+    await page.goto("/app/finance", { waitUntil: "networkidle" });
+    await expectNoHardFailure(page);
+    await expect(page).toHaveURL(/\/login|\/portal/);
+  });
+
+  test("platform owner can access platform while tenant users are blocked", async ({
+    browser,
+  }) => {
+    requireRegressionEnv(["platformOwner", "owner", "admin", "staff", "trainer"]);
+
+    const platformContext = await browser.newContext();
+    const platformPage = await platformContext.newPage();
+    await loginToWorkspace(platformPage, regressionEnv.platformOwner ?? "", "/platform");
+    await platformPage.goto("/platform", { waitUntil: "networkidle" });
+    await expectNoHardFailure(platformPage);
+    await expect(platformPage.locator("body")).toContainText(
+      /Platform Owner Console|Tenant directory|Platform overview/i,
+    );
+    await platformContext.close();
+
+    for (const [label, email] of [
+      ["owner", regressionEnv.owner],
+      ["admin", regressionEnv.admin],
+      ["staff", regressionEnv.staff],
+      ["trainer", regressionEnv.trainer],
+    ] as const) {
+      const context = await browser.newContext();
+      const page = await context.newPage();
+      await loginToWorkspace(page, email ?? "", "/platform");
+      await page.goto("/platform", { waitUntil: "networkidle" });
+      await expectNoHardFailure(page);
+      await expect(page.locator("body"), `${label} should not access platform`).not.toContainText(
+        /Platform overview|Tenant directory/i,
+      );
+      await expect(page.locator("body")).toContainText(
+        /Access denied|Platform access|required|restricted/i,
+      );
+      await context.close();
+    }
+  });
+});
+
+test.describe("authenticated module regressions", () => {
+  test("legacy payment routes stay canonicalized to Finance Center", async ({
+    page,
+  }) => {
+    requireRegressionEnv(["owner"]);
+
+    await loginToWorkspace(page, regressionEnv.owner ?? "");
+
+    await page.goto("/app/payments", { waitUntil: "networkidle" });
+    await expect(page).toHaveURL(/\/app\/finance/);
+
+    await page.goto("/app/receipts", { waitUntil: "networkidle" });
+    await expect(page).toHaveURL(/\/app\/finance/);
+
+    await page.goto("/app/payment-links", { waitUntil: "networkidle" });
+    await expectNoHardFailure(page);
+    await expect(page.locator("body")).toContainText(
+      /Payment gateway on hold|not the active finance workflow/i,
+    );
+    await expect(page.locator("body")).not.toContainText(/Create Payment Link/i);
+  });
+
+  test("finance, documents, reports, and chat routes do not show fatal errors", async ({
+    page,
+  }) => {
+    requireRegressionEnv(["owner"]);
+
+    await loginToWorkspace(page, regressionEnv.owner ?? "");
+
+    for (const route of [
+      { path: "/app/finance", blocked: /Application error|Unable to load finance/i },
+      { path: "/app/documents", blocked: /Application error|Unable to load documents/i },
+      { path: "/app/reports", blocked: /Application error|Unable to load reports/i },
+      { path: "/app/messages", blocked: /Application error|Unable to load messages/i },
+    ]) {
+      await page.goto(route.path, { waitUntil: "networkidle" });
+      await expectNoHardFailure(page);
+      await expect(page.locator("body")).not.toContainText(route.blocked);
+    }
+  });
+
+  test("student portal finance, documents, and chat routes do not show admin navigation", async ({
+    page,
+  }) => {
+    requireRegressionEnv(["student"]);
+
+    await loginToPortal(page, regressionEnv.student ?? "");
+
+    for (const path of ["/portal/payments", "/portal/documents", "/portal/messages"]) {
+      await page.goto(path, { waitUntil: "networkidle" });
+      await expectNoHardFailure(page);
+      await expect(page.locator("body")).not.toContainText(
+        /Feature Settings|Team Operations|Platform Owner Console|Finance Center/i,
+      );
+    }
   });
 });

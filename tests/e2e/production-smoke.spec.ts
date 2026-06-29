@@ -1,14 +1,23 @@
 import { expect, test } from "@playwright/test";
 
+import { expectNoHardFailure } from "./helpers/auth";
+
 const publicRoutes = [
   { path: "/", text: /CoachFort|coaching|academy/i },
   { path: "/login", text: /Login to CoachFort/i },
+  { path: "/signup", text: /Create|Sign up|academy/i },
+  { path: "/forgot-password", text: /Forgot|verification code|email/i },
+  { path: "/reset-password", text: /Reset|password|verification code/i },
   { path: "/portal/login", text: /Login as a student|Student Portal/i },
 ];
 
 const privateRoutes = [
   { path: "/app/documents", fallbackText: /Login to CoachFort|Secure access|Document Center|Documents/i },
+  { path: "/app/finance", fallbackText: /Login to CoachFort|Secure access|Finance/i },
+  { path: "/app/reports", fallbackText: /Login to CoachFort|Secure access|Reports/i },
   { path: "/portal/documents", fallbackText: /Login as a student|Student Portal|Documents/i },
+  { path: "/portal/payments", fallbackText: /Login as a student|Student Portal|Payments|Finance/i },
+  { path: "/platform", fallbackText: /Login to CoachFort|Secure access|Platform|Access denied/i },
 ];
 
 test.describe("production route smoke", () => {
@@ -19,7 +28,7 @@ test.describe("production route smoke", () => {
       expect(response, `${route.path} should return a page response`).not.toBeNull();
       expect(response?.status(), `${route.path} should not be an HTTP error`).toBeLessThan(400);
       await expect(page.locator("body")).toContainText(route.text);
-      await expect(page.locator("body")).not.toContainText(/404: NOT_FOUND|This page could not be found/i);
+      await expectNoHardFailure(page);
     });
   }
 
@@ -30,8 +39,20 @@ test.describe("production route smoke", () => {
       expect(response, `${route.path} should return a page response`).not.toBeNull();
       expect(response?.status(), `${route.path} should not be an HTTP error`).toBeLessThan(400);
       await page.waitForLoadState("networkidle").catch(() => undefined);
-      await expect(page.locator("body")).not.toContainText(/404: NOT_FOUND|This page could not be found/i);
+      await expectNoHardFailure(page);
       await expect(page.locator("body")).toContainText(route.fallbackText);
     });
   }
+
+  test("public tenant site route does not crash", async ({ page }) => {
+    const response = await page.goto("/site/coachfort-regression", {
+      waitUntil: "domcontentloaded",
+    });
+
+    expect(response, "public tenant site should return a response").not.toBeNull();
+    expect(response?.status(), "public tenant site should not 500").toBeLessThan(500);
+    await expect(page.locator("body")).not.toContainText(
+      /Application error|Unhandled Runtime Error/i,
+    );
+  });
 });

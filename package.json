@@ -8,7 +8,10 @@
     "start": "next start",
     "lint": "eslint",
     "regression:accounts": "node --no-warnings scripts/create-regression-accounts.ts",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:e2e:auth": "playwright test tests/e2e/authenticated-smoke.spec.ts",
+    "test:e2e:prod": "playwright test",
+    "test:e2e:public": "playwright test tests/e2e/production-smoke.spec.ts tests/e2e/route-guard-static.spec.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.104.1",
