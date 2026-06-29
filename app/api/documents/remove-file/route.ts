@@ -4,6 +4,7 @@ import {
   getUserScopedSupabase,
   requireAuthenticatedUser,
 } from "@/src/lib/server/documentStorage";
+import { captureServerException } from "@/src/lib/server/monitoring";
 import { getSupabaseAdminClient } from "@/src/lib/server/supabaseAdmin";
 
 export const dynamic = "force-dynamic";
@@ -53,6 +54,11 @@ export async function POST(request: Request) {
       .remove([removal.storage_path]);
 
     if (removed.error) {
+      captureServerException(removed.error, {
+        documentId,
+        operation: "document_remove_storage_delete",
+        route: "/api/documents/remove-file",
+      });
       return jsonError(removed.error.message, 500);
     }
 
@@ -61,6 +67,11 @@ export async function POST(request: Request) {
     });
 
     if (marked.error) {
+      captureServerException(marked.error, {
+        documentId,
+        operation: "document_remove_mark_removed",
+        route: "/api/documents/remove-file",
+      });
       return jsonError(marked.error.message, 500);
     }
 
@@ -69,6 +80,16 @@ export async function POST(request: Request) {
       uploadStatus: "metadata_only",
     });
   } catch (error) {
+    if (
+      error instanceof Error &&
+      !/auth|access|permission|required|not enabled/i.test(error.message)
+    ) {
+      captureServerException(error, {
+        operation: "document_remove_unexpected",
+        route: "/api/documents/remove-file",
+      });
+    }
+
     return jsonError(
       error instanceof Error ? error.message : "Unable to remove document file.",
       500,

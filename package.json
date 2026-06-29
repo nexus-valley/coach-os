@@ -14,6 +14,7 @@
     "test:e2e:public": "playwright test tests/e2e/production-smoke.spec.ts tests/e2e/route-guard-static.spec.ts"
   },
   "dependencies": {
+    "@sentry/nextjs": "^10.62.0",
     "@supabase/supabase-js": "^2.104.1",
     "next": "16.2.4",
     "react": "19.2.4",

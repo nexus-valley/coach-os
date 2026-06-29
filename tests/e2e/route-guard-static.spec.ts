@@ -71,4 +71,55 @@ test.describe("static route guard coverage", () => {
       expect(source).not.toContain("getSupabaseAdminClient");
     }
   });
+
+  test("monitoring setup scrubs sensitive fields and keeps server tokens out of client files", () => {
+    const scrubber = read("src/lib/monitoring.ts");
+
+    for (const expected of [
+      "password",
+      "authorization",
+      "cookie",
+      "otp",
+      "service.?role",
+      "signed.?url",
+      "storage_path",
+      "storage_bucket",
+      "reset.?token",
+    ]) {
+      expect(scrubber).toContain(expected);
+    }
+
+    for (const path of [
+      "instrumentation-client.ts",
+      "src/lib/monitoringClient.ts",
+      "app/error.tsx",
+      "app/app/error.tsx",
+      "app/global-error.tsx",
+    ]) {
+      const source = read(path);
+      expect(source).not.toContain("SENTRY_AUTH_TOKEN");
+      expect(source).not.toContain("SUPABASE_SERVICE_ROLE_KEY");
+      expect(source).not.toContain("COACHFORT_OTP_SECRET");
+      expect(source).not.toContain("RESEND_API_KEY");
+    }
+  });
+
+  test("environment example contains monitoring placeholders only", () => {
+    const source = read(".env.example");
+
+    for (const expected of [
+      "NEXT_PUBLIC_SENTRY_DSN=",
+      "SENTRY_DSN=",
+      "SENTRY_AUTH_TOKEN=",
+      "SENTRY_ORG=",
+      "SENTRY_PROJECT=",
+      "SENTRY_ENVIRONMENT=",
+      "NEXT_PUBLIC_APP_ENV=",
+    ]) {
+      expect(source).toContain(expected);
+    }
+
+    expect(source).not.toMatch(/https:\/\/[a-z0-9]+@/i);
+    expect(source).not.toMatch(/sntrys_|[A-Za-z0-9_-]{60,}/);
+  });
 });

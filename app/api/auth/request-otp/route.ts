@@ -5,6 +5,7 @@ import {
   normalizePurpose,
   requestOtp,
 } from "@/src/lib/server/authOtp";
+import { captureServerException } from "@/src/lib/server/monitoring";
 
 export const runtime = "nodejs";
 
@@ -38,14 +39,22 @@ export async function POST(request: Request) {
 
     return NextResponse.json(result);
   } catch (caught) {
+    const status = getStatusForError(caught);
     const message =
       caught instanceof Error
         ? caught.message
         : "Unable to request verification code.";
 
+    if (status >= 500) {
+      captureServerException(caught, {
+        operation: "auth_request_otp",
+        route: "/api/auth/request-otp",
+      });
+    }
+
     return NextResponse.json(
       { message },
-      { status: getStatusForError(caught) },
+      { status },
     );
   }
 }

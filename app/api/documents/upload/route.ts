@@ -6,6 +6,7 @@ import {
   validateDocumentFile,
   type PreparedUpload,
 } from "@/src/lib/server/documentStorage";
+import { captureServerException } from "@/src/lib/server/monitoring";
 import { getSupabaseAdminClient } from "@/src/lib/server/supabaseAdmin";
 
 export const dynamic = "force-dynamic";
@@ -63,6 +64,11 @@ export async function POST(request: Request) {
       });
 
     if (upload.error) {
+      captureServerException(upload.error, {
+        documentId,
+        operation: "document_upload_storage_write",
+        route: "/api/documents/upload",
+      });
       return jsonError(upload.error.message, 500);
     }
 
@@ -79,6 +85,11 @@ export async function POST(request: Request) {
       await admin.storage
         .from(uploadPlan.storage_bucket)
         .remove([uploadPlan.storage_path]);
+      captureServerException(markUploaded.error, {
+        documentId,
+        operation: "document_upload_mark_uploaded",
+        route: "/api/documents/upload",
+      });
       return jsonError(markUploaded.error.message, 500);
     }
 
@@ -100,6 +111,16 @@ export async function POST(request: Request) {
       uploadStatus: "uploaded",
     });
   } catch (error) {
+    if (
+      error instanceof Error &&
+      !/auth|access|permission|required|not enabled|file/i.test(error.message)
+    ) {
+      captureServerException(error, {
+        operation: "document_upload_unexpected",
+        route: "/api/documents/upload",
+      });
+    }
+
     return jsonError(
       error instanceof Error ? error.message : "Unable to upload document.",
       500,

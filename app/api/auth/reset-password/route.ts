@@ -4,6 +4,7 @@ import {
   normalizeEmail,
   resetPasswordWithToken,
 } from "@/src/lib/server/authOtp";
+import { captureServerException } from "@/src/lib/server/monitoring";
 
 export const runtime = "nodejs";
 
@@ -36,6 +37,16 @@ export async function POST(request: Request) {
       caught instanceof Error
         ? caught.message
         : "Unable to reset password.";
+
+    if (
+      caught instanceof Error &&
+      !/password|verification|email|token|expired|invalid/i.test(caught.message)
+    ) {
+      captureServerException(caught, {
+        operation: "auth_reset_password",
+        route: "/api/auth/reset-password",
+      });
+    }
 
     return NextResponse.json({ message }, { status: 400 });
   }

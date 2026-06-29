@@ -6,6 +6,7 @@ import {
   getUserScopedSupabase,
   requireAuthenticatedUser,
 } from "@/src/lib/server/documentStorage";
+import { captureServerException } from "@/src/lib/server/monitoring";
 import { getSupabaseAdminClient } from "@/src/lib/server/supabaseAdmin";
 
 export const dynamic = "force-dynamic";
@@ -38,6 +39,11 @@ export async function POST(request: Request) {
       });
 
     if (signed.error || !signed.data?.signedUrl) {
+      captureServerException(signed.error ?? new Error("Missing signed URL"), {
+        documentId,
+        operation: "document_download_signed_url",
+        route: "/api/documents/download-url",
+      });
       return jsonError(signed.error?.message ?? "Unable to create signed URL.", 500);
     }
 
@@ -52,6 +58,16 @@ export async function POST(request: Request) {
       signedUrl: signed.data.signedUrl,
     });
   } catch (error) {
+    if (
+      error instanceof Error &&
+      !/auth|access|permission|required|not enabled/i.test(error.message)
+    ) {
+      captureServerException(error, {
+        operation: "document_download_unexpected",
+        route: "/api/documents/download-url",
+      });
+    }
+
     return jsonError(
       error instanceof Error ? error.message : "Unable to create download URL.",
       403,

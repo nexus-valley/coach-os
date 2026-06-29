@@ -1,15 +1,24 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
 
 import { CoachFortBrandAsset } from "@/src/components/branding/CoachFortBrandAsset";
+import { captureClientException } from "@/src/lib/monitoringClient";
 
 type GlobalErrorProps = {
   error: Error & { digest?: string };
   reset: () => void;
 };
 
-export default function GlobalError({ reset }: GlobalErrorProps) {
+export default function GlobalError({ error, reset }: GlobalErrorProps) {
+  useEffect(() => {
+    captureClientException(error, {
+      digest: error.digest,
+      source: "app/error",
+    });
+  }, [error]);
+
   return (
     <main className="flex min-h-screen items-center justify-center bg-[#F3FAFD] px-5 text-[#0B2A3D]">
       <div className="w-full max-w-2xl rounded-[2rem] border border-[#D8E8F0] bg-white p-8 text-center shadow-2xl shadow-[#0B2A3D]/10">

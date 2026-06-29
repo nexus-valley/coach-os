@@ -21,6 +21,31 @@ const privateRoutes = [
 ];
 
 test.describe("production route smoke", () => {
+  test("health endpoint returns a safe payload", async ({ request }) => {
+    const response = await request.get("/api/health");
+
+    test.skip(
+      response.status() === 404,
+      "Health endpoint is not deployed on the configured base URL yet.",
+    );
+    expect(response.status(), "health endpoint should be available").toBe(200);
+    const body = (await response.json()) as Record<string, unknown>;
+
+    expect(body.status).toBe("ok");
+    expect(body.timestamp).toEqual(expect.any(String));
+    expect(body.environment).toEqual(expect.any(String));
+    expect(Object.keys(body).sort()).toEqual([
+      "environment",
+      "monitoringEnabled",
+      "release",
+      "status",
+      "timestamp",
+    ]);
+    expect(JSON.stringify(body)).not.toMatch(
+      /SUPABASE|SERVICE_ROLE|SENTRY_AUTH_TOKEN|RESEND|OTP|password|secret/i,
+    );
+  });
+
   for (const route of publicRoutes) {
     test(`${route.path} returns a rendered page`, async ({ page }) => {
       const response = await page.goto(route.path, { waitUntil: "domcontentloaded" });
