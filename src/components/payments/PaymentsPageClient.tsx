@@ -78,14 +78,6 @@ function getErrorField(error: unknown, field: "code" | "details" | "hint" | "mes
   return String(value);
 }
 
-function stringifyError(error: unknown) {
-  try {
-    return JSON.stringify(error, null, 2);
-  } catch {
-    return "[Unable to JSON.stringify payments error]";
-  }
-}
-
 function getPaymentLoadErrorMessage(error: unknown) {
   return (
     getErrorField(error, "message") ??
@@ -100,19 +92,10 @@ function logPaymentsLoadError(error: unknown) {
 
   const message = getErrorField(error, "message");
   const code = getErrorField(error, "code");
-  const details = getErrorField(error, "details");
-  const hint = getErrorField(error, "hint");
 
   console.error("[CoachFort payments] Failed to load payments page data.");
   console.error("[CoachFort payments] error.message", message);
   console.error("[CoachFort payments] error.code", code);
-  console.error("[CoachFort payments] error.details", details);
-  console.error("[CoachFort payments] error.hint", hint);
-  console.error(
-    "[CoachFort payments] JSON.stringify(error, null, 2)",
-    stringifyError(error),
-  );
-  console.error("[CoachFort payments] raw error", error);
 }
 
 export function PaymentsPageClient() {

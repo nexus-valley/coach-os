@@ -7,6 +7,10 @@ import {
   requireAuthenticatedUser,
 } from "@/src/lib/server/documentStorage";
 import { captureServerException } from "@/src/lib/server/monitoring";
+import {
+  InvalidJsonPayloadError,
+  parseJsonBody,
+} from "@/src/lib/server/requestJson";
 import { getSupabaseAdminClient } from "@/src/lib/server/supabaseAdmin";
 
 export const dynamic = "force-dynamic";
@@ -21,7 +25,7 @@ export async function POST(request: Request) {
     const accessToken = getBearerToken(request);
     await requireAuthenticatedUser(accessToken);
     const supabase = getUserScopedSupabase(accessToken);
-    const body = (await request.json()) as { documentId?: unknown };
+    const body = await parseJsonBody<{ documentId?: unknown }>(request);
     const documentId = typeof body.documentId === "string" ? body.documentId : "";
 
     if (!documentId) {
@@ -58,6 +62,10 @@ export async function POST(request: Request) {
       signedUrl: signed.data.signedUrl,
     });
   } catch (error) {
+    if (error instanceof InvalidJsonPayloadError) {
+      return jsonError(error.message, 400);
+    }
+
     if (
       error instanceof Error &&
       !/auth|access|permission|required|not enabled/i.test(error.message)

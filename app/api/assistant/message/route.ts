@@ -5,6 +5,10 @@ import {
   handleAssistantMessage,
 } from "@/src/lib/ai/assistantService";
 import type { AssistantRequest, AssistantScope } from "@/src/lib/ai/assistantTypes";
+import {
+  InvalidJsonPayloadError,
+  parseJsonBody,
+} from "@/src/lib/server/requestJson";
 
 export const runtime = "nodejs";
 
@@ -39,11 +43,9 @@ function isAssistantScope(value: unknown): value is AssistantScope {
 }
 
 async function parseRequest(request: Request): Promise<AssistantRequest> {
-  const body = (await request.json().catch(() => null)) as
-    | Record<string, unknown>
-    | null;
+  const body = await parseJsonBody<Record<string, unknown>>(request);
 
-  if (!body || typeof body.message !== "string") {
+  if (typeof body.message !== "string") {
     throw new Error("Assistant message is required.");
   }
 
@@ -91,9 +93,15 @@ export async function POST(request: Request) {
 
     return Response.json(result);
   } catch (error) {
-    const publicError = getPublicError(error);
-    const status = publicError.status === 500 ? 400 : publicError.status;
+    if (error instanceof InvalidJsonPayloadError) {
+      return Response.json({ error: error.message }, { status: 400 });
+    }
 
-    return Response.json({ error: publicError.message }, { status });
+    const publicError = getPublicError(error);
+
+    return Response.json(
+      { error: publicError.message },
+      { status: publicError.status },
+    );
   }
 }

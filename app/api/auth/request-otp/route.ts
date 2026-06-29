@@ -6,6 +6,10 @@ import {
   requestOtp,
 } from "@/src/lib/server/authOtp";
 import { captureServerException } from "@/src/lib/server/monitoring";
+import {
+  InvalidJsonPayloadError,
+  parseJsonBody,
+} from "@/src/lib/server/requestJson";
 
 export const runtime = "nodejs";
 
@@ -25,10 +29,10 @@ function getStatusForError(error: unknown) {
 
 export async function POST(request: Request) {
   try {
-    const body = (await request.json()) as {
+    const body = await parseJsonBody<{
       email?: unknown;
       purpose?: unknown;
-    };
+    }>(request);
     const email = normalizeEmail(body.email);
     const purpose = normalizePurpose(body.purpose);
     const result = await requestOtp({
@@ -39,6 +43,10 @@ export async function POST(request: Request) {
 
     return NextResponse.json(result);
   } catch (caught) {
+    if (caught instanceof InvalidJsonPayloadError) {
+      return NextResponse.json({ message: caught.message }, { status: 400 });
+    }
+
     const status = getStatusForError(caught);
     const message =
       caught instanceof Error

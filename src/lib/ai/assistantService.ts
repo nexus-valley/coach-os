@@ -25,8 +25,19 @@ function getPublicError(error: unknown) {
   }
 
   if (error instanceof Error) {
+    if (
+      error.message === "Assistant message is required." ||
+      error.message === `Assistant message must be ${maxMessageLength} characters or less.` ||
+      error.message === "Invalid assistant scope."
+    ) {
+      return {
+        message: error.message,
+        status: 400,
+      };
+    }
+
     return {
-      message: error.message,
+      message: "Unable to process assistant request.",
       status: 500,
     };
   }

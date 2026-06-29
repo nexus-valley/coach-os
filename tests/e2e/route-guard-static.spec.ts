@@ -122,4 +122,29 @@ test.describe("static route guard coverage", () => {
     expect(source).not.toMatch(/https:\/\/[a-z0-9]+@/i);
     expect(source).not.toMatch(/sntrys_|[A-Za-z0-9_-]{60,}/);
   });
+
+  test("security sweep keeps malformed JSON and assistant errors safe", () => {
+    for (const path of [
+      "app/api/auth/request-otp/route.ts",
+      "app/api/auth/verify-otp/route.ts",
+      "app/api/auth/reset-password/route.ts",
+      "app/api/documents/download-url/route.ts",
+      "app/api/documents/remove-file/route.ts",
+      "app/api/assistant/message/route.ts",
+    ]) {
+      const source = read(path);
+      expect(source).toContain("InvalidJsonPayloadError");
+      expect(source).toContain("parseJsonBody");
+    }
+
+    const assistantService = read("src/lib/ai/assistantService.ts");
+    expect(assistantService).toContain("Unable to process assistant request.");
+    expect(assistantService).not.toContain("message: error.message,\n      status: 500");
+
+    const legacyPayments = read("src/components/payments/PaymentsPageClient.tsx");
+    expect(legacyPayments).not.toContain("raw error");
+    expect(legacyPayments).not.toContain("JSON.stringify(error");
+    expect(legacyPayments).not.toContain("error.details");
+    expect(legacyPayments).not.toContain("error.hint");
+  });
 });
