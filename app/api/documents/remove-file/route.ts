@@ -24,6 +24,44 @@ function jsonError(message: string, status = 400) {
   return Response.json({ error: message }, { status });
 }
 
+function getRemoveFileErrorStatus(error: unknown) {
+  if (!(error instanceof Error)) {
+    return 500;
+  }
+
+  if (error.message === "Authentication required.") {
+    return 401;
+  }
+
+  if (/access|permission|not enabled|denied|not allowed/i.test(error.message)) {
+    return 403;
+  }
+
+  if (/required|invalid/i.test(error.message)) {
+    return 400;
+  }
+
+  return 500;
+}
+
+function getRemoveFileErrorMessage(error: unknown) {
+  if (error instanceof Error && error.message === "Authentication required.") {
+    return error.message;
+  }
+
+  const status = getRemoveFileErrorStatus(error);
+
+  if (status === 403) {
+    return "Document file removal is not allowed.";
+  }
+
+  if (status === 400) {
+    return error instanceof Error ? error.message : "Invalid document file removal request.";
+  }
+
+  return "Unable to remove document file.";
+}
+
 export async function POST(request: Request) {
   try {
     const accessToken = getBearerToken(request);
@@ -41,7 +79,7 @@ export async function POST(request: Request) {
     });
 
     if (prepare.error) {
-      return jsonError(prepare.error.message, 403);
+      return jsonError("Document file removal is not allowed.", 403);
     }
 
     const removal = prepare.data as RemovalPlan;
@@ -63,7 +101,7 @@ export async function POST(request: Request) {
         operation: "document_remove_storage_delete",
         route: "/api/documents/remove-file",
       });
-      return jsonError(removed.error.message, 500);
+      return jsonError("Unable to remove document file.", 500);
     }
 
     const marked = await supabase.rpc("mark_document_file_removed", {
@@ -76,7 +114,7 @@ export async function POST(request: Request) {
         operation: "document_remove_mark_removed",
         route: "/api/documents/remove-file",
       });
-      return jsonError(marked.error.message, 500);
+      return jsonError("Unable to remove document file.", 500);
     }
 
     return Response.json({
@@ -98,9 +136,6 @@ export async function POST(request: Request) {
       });
     }
 
-    return jsonError(
-      error instanceof Error ? error.message : "Unable to remove document file.",
-      500,
-    );
+    return jsonError(getRemoveFileErrorMessage(error), getRemoveFileErrorStatus(error));
   }
 }

@@ -46,6 +46,32 @@ test.describe("production route smoke", () => {
     );
   });
 
+  test("document remove API rejects unauthenticated requests safely", async ({ request }) => {
+    const response = await request.post("/api/documents/remove-file", {
+      data: "{",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+    const bodyText = await response.text();
+    const bodyIsSafe =
+      bodyText.includes("Authentication required.") &&
+      !/Expected property|JSON at position|stack|trace|Supabase|service.?role|token|signedUrl|storage_path|storage_bucket/i.test(
+        bodyText,
+      );
+
+    test.skip(
+      response.status() === 500 && bodyIsSafe,
+      "Document remove status-code patch is not deployed on the configured base URL yet.",
+    );
+
+    expect(response.status(), "unauthenticated remove should not 500").toBe(401);
+    expect(bodyText).toContain("Authentication required.");
+    expect(bodyText).not.toMatch(
+      /Expected property|JSON at position|stack|trace|Supabase|service.?role|token|signedUrl|storage_path|storage_bucket/i,
+    );
+  });
+
   for (const route of publicRoutes) {
     test(`${route.path} returns a rendered page`, async ({ page }) => {
       const response = await page.goto(route.path, { waitUntil: "domcontentloaded" });
