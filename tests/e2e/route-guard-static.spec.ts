@@ -298,4 +298,48 @@ test.describe("static route guard coverage", () => {
       }
     }
   });
+
+  test("assignment and submission writes use RPCs instead of direct browser table mutations", () => {
+    const expectations = [
+      {
+        path: "src/lib/assignments.ts",
+        requiredRpcs: [
+          "create_assignment_secure",
+          "update_assignment_secure",
+          "update_assignment_status_secure",
+        ],
+        forbiddenPatterns: [
+          /\.from\("assignments"\)\s*\r?\n\s*\.insert\(/,
+          /\.from\("assignments"\)\s*\r?\n\s*\.update\(/,
+          /\.from\("assignments"\)\s*\r?\n\s*\.delete\(/,
+          /\.from\("assignments"\)\s*\r?\n\s*\.upsert\(/,
+        ],
+      },
+      {
+        path: "src/lib/submissions.ts",
+        requiredRpcs: [
+          "submit_assignment_secure",
+          "review_assignment_submission_secure",
+        ],
+        forbiddenPatterns: [
+          /\.from\("assignment_submissions"\)\s*\r?\n\s*\.insert\(/,
+          /\.from\("assignment_submissions"\)\s*\r?\n\s*\.update\(/,
+          /\.from\("assignment_submissions"\)\s*\r?\n\s*\.delete\(/,
+          /\.from\("assignment_submissions"\)\s*\r?\n\s*\.upsert\(/,
+        ],
+      },
+    ];
+
+    for (const expectation of expectations) {
+      const source = read(expectation.path);
+
+      for (const rpc of expectation.requiredRpcs) {
+        expect(source).toContain(rpc);
+      }
+
+      for (const pattern of expectation.forbiddenPatterns) {
+        expect(source).not.toMatch(pattern);
+      }
+    }
+  });
 });

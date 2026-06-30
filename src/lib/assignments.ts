@@ -589,23 +589,18 @@ export async function createAssignment(input: AssignmentInput) {
     role === "trainer" ? user.id : input.trainerUserId?.trim() || null;
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
-    .from("assignments")
-    .insert({
-      attachment_urls_json: validated.attachmentUrls,
-      cohort_id: input.cohortId || null,
-      course_id: input.courseId || null,
-      created_by: user.id,
-      description: input.description.trim() || null,
-      due_at: validated.dueAt,
-      instructions: input.instructions.trim() || null,
-      max_score: validated.maxScore,
-      status: "draft",
-      tenant_id: input.tenantId,
-      title: validated.title,
-      trainer_user_id: trainerUserId,
-    })
-    .select(assignmentColumns)
-    .single();
+    .rpc("create_assignment_secure", {
+      p_attachment_urls_json: validated.attachmentUrls,
+      p_cohort_id: input.cohortId || null,
+      p_course_id: input.courseId || null,
+      p_description: input.description.trim() || null,
+      p_due_at: validated.dueAt,
+      p_instructions: input.instructions.trim() || null,
+      p_max_score: validated.maxScore,
+      p_tenant_id: input.tenantId,
+      p_title: validated.title,
+      p_trainer_user_id: trainerUserId,
+    });
 
   if (error) {
     throw error;
@@ -651,22 +646,19 @@ export async function updateAssignment(input: UpdateAssignmentInput) {
     role === "trainer" ? user.id : input.trainerUserId?.trim() || null;
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
-    .from("assignments")
-    .update({
-      attachment_urls_json: validated.attachmentUrls,
-      cohort_id: input.cohortId || null,
-      course_id: input.courseId || null,
-      description: input.description.trim() || null,
-      due_at: validated.dueAt,
-      instructions: input.instructions.trim() || null,
-      max_score: validated.maxScore,
-      title: validated.title,
-      trainer_user_id: trainerUserId,
-    })
-    .eq("tenant_id", input.tenantId)
-    .eq("id", input.assignmentId)
-    .select(assignmentColumns)
-    .single();
+    .rpc("update_assignment_secure", {
+      p_assignment_id: input.assignmentId,
+      p_attachment_urls_json: validated.attachmentUrls,
+      p_cohort_id: input.cohortId || null,
+      p_course_id: input.courseId || null,
+      p_description: input.description.trim() || null,
+      p_due_at: validated.dueAt,
+      p_instructions: input.instructions.trim() || null,
+      p_max_score: validated.maxScore,
+      p_tenant_id: input.tenantId,
+      p_title: validated.title,
+      p_trainer_user_id: trainerUserId,
+    });
 
   if (error) {
     throw error;
@@ -725,12 +717,11 @@ async function updateAssignmentStatus(params: {
 
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
-    .from("assignments")
-    .update({ status: params.status })
-    .eq("tenant_id", params.tenantId)
-    .eq("id", params.assignmentId)
-    .select(assignmentColumns)
-    .single();
+    .rpc("update_assignment_status_secure", {
+      p_assignment_id: params.assignmentId,
+      p_status: params.status,
+      p_tenant_id: params.tenantId,
+    });
 
   if (error) {
     throw error;

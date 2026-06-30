@@ -362,7 +362,7 @@ export async function submitAssignment(params: {
     throw new Error("Assignment not found in this workspace.");
   }
 
-  const { user } = await ensureCanCreateSubmission(params.tenantId);
+  await ensureCanCreateSubmission(params.tenantId);
   await ensureCanManageAssignment({
     cohortId: assignment.cohort_id,
     courseId: assignment.course_id,
@@ -370,29 +370,15 @@ export async function submitAssignment(params: {
   });
   await ensureStudentsBelongToAssignment(assignment, [params.studentId]);
 
-  const submittedAt = new Date().toISOString();
-  const status =
-    assignment.due_at && new Date(assignment.due_at).getTime() < Date.now()
-      ? "late"
-      : "submitted";
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
-    .from("assignment_submissions")
-    .upsert(
-      {
-        assignment_id: params.assignmentId,
-        attachment_urls_json: normalizeAttachmentUrls(params.attachmentUrls),
-        status,
-        student_id: params.studentId,
-        submission_text: params.submissionText.trim() || null,
-        submitted_at: submittedAt,
-        submitted_by: user.id,
-        tenant_id: params.tenantId,
-      },
-      { onConflict: "assignment_id,student_id" },
-    )
-    .select(submissionColumns)
-    .single();
+    .rpc("submit_assignment_secure", {
+      p_assignment_id: params.assignmentId,
+      p_attachment_urls_json: normalizeAttachmentUrls(params.attachmentUrls),
+      p_student_id: params.studentId,
+      p_submission_text: params.submissionText.trim() || null,
+      p_tenant_id: params.tenantId,
+    });
 
   if (error) {
     throw error;
@@ -502,19 +488,13 @@ export async function reviewSubmission(params: {
 
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
-    .from("assignment_submissions")
-    .update({
-      feedback: params.feedback.trim() || null,
-      reviewed_at: new Date().toISOString(),
-      reviewed_by: user.id,
-      score: rawScore,
-      status: "reviewed",
-    })
-    .eq("tenant_id", params.tenantId)
-    .eq("assignment_id", params.assignmentId)
-    .eq("student_id", params.studentId)
-    .select(submissionColumns)
-    .single();
+    .rpc("review_assignment_submission_secure", {
+      p_assignment_id: params.assignmentId,
+      p_feedback: params.feedback.trim() || null,
+      p_score: rawScore,
+      p_student_id: params.studentId,
+      p_tenant_id: params.tenantId,
+    });
 
   if (error) {
     throw error;
