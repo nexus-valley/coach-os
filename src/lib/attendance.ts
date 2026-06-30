@@ -282,6 +282,58 @@ async function markDelegatedAttendanceWithRpc(params: {
   return data as AttendanceRecord;
 }
 
+async function markAttendanceWithRpc(params: {
+  remarks?: string;
+  sessionId: string;
+  status: AttendanceStatus;
+  studentId: string;
+  tenantId: string;
+}) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .rpc("mark_attendance_secure", {
+      p_remarks: params.remarks?.trim() || null,
+      p_session_id: params.sessionId,
+      p_status: params.status,
+      p_student_id: params.studentId,
+      p_tenant_id: params.tenantId,
+    })
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  return data as AttendanceRecord;
+}
+
+async function bulkMarkAttendanceWithRpc(params: {
+  records: {
+    remarks?: string;
+    status: AttendanceStatus;
+    studentId: string;
+  }[];
+  sessionId: string;
+  tenantId: string;
+}) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.rpc("bulk_mark_attendance_secure", {
+    p_records: params.records.map((record) => ({
+      remarks: record.remarks?.trim() || null,
+      status: record.status,
+      studentId: record.studentId,
+    })),
+    p_session_id: params.sessionId,
+    p_tenant_id: params.tenantId,
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? []) as AttendanceRecord[];
+}
+
 function calculateSummary(total: number, records: AttendanceRecord[]) {
   const summary: AttendanceSummary = {
     absent: 0,
@@ -497,29 +549,7 @@ export async function markAttendance(params: {
     return record;
   }
 
-  const supabase = getSupabaseClient();
-  const { data, error } = await supabase
-    .from("attendance_records")
-    .upsert(
-      {
-        marked_at: new Date().toISOString(),
-        marked_by: user.id,
-        remarks: params.remarks?.trim() || null,
-        session_id: params.sessionId,
-        status: params.status,
-        student_id: params.studentId,
-        tenant_id: params.tenantId,
-      },
-      { onConflict: "session_id,student_id" },
-    )
-    .select(attendanceColumns)
-    .single();
-
-  if (error) {
-    throw error;
-  }
-
-  const record = data as AttendanceRecord;
+  const record = await markAttendanceWithRpc(params);
 
   await logActivity({
     action: "attendance_marked",
@@ -615,27 +645,7 @@ export async function bulkMarkAttendance(params: {
     return records;
   }
 
-  const markedAt = new Date().toISOString();
-  const supabase = getSupabaseClient();
-  const { data, error } = await supabase
-    .from("attendance_records")
-    .upsert(
-      params.records.map((record) => ({
-        marked_at: markedAt,
-        marked_by: user.id,
-        remarks: record.remarks?.trim() || null,
-        session_id: params.sessionId,
-        status: record.status,
-        student_id: record.studentId,
-        tenant_id: params.tenantId,
-      })),
-      { onConflict: "session_id,student_id" },
-    )
-    .select(attendanceColumns);
-
-  if (error) {
-    throw error;
-  }
+  const records = await bulkMarkAttendanceWithRpc(params);
 
   await logActivity({
     action: "attendance_bulk_marked",
@@ -663,7 +673,7 @@ export async function bulkMarkAttendance(params: {
     session,
   });
 
-  return (data ?? []) as AttendanceRecord[];
+  return records;
 }
 
 export async function getStudentAttendanceSummary(params: {

@@ -431,6 +431,135 @@ async function updateDelegatedSessionStatusWithRpc(params: {
   return data as TrainingSession;
 }
 
+async function createSessionWithRpc(
+  input: SessionInput,
+  validated: ReturnType<typeof validateSessionInput>,
+  trainerUserId: string | null,
+) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .rpc("create_session_secure", {
+      p_cohort_id: input.cohortId || null,
+      p_course_id: input.courseId || null,
+      p_delivery_mode: validated.deliveryMode,
+      p_description: input.description.trim() || null,
+      p_join_available_from: validated.joinAvailableFrom,
+      p_meeting_id: validated.meetingId,
+      p_meeting_notes: validated.meetingNotes,
+      p_meeting_passcode: validated.meetingPasscode,
+      p_meeting_provider: validated.meetingProvider,
+      p_meeting_url: validated.meetingUrl,
+      p_recording_url: validated.recordingUrl,
+      p_scheduled_end_at: validated.scheduledEndAt,
+      p_scheduled_start_at: validated.scheduledStartAt,
+      p_tenant_id: input.tenantId,
+      p_timezone: validated.timezone,
+      p_title: validated.title,
+      p_trainer_user_id: trainerUserId,
+    })
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  return data as TrainingSession;
+}
+
+async function updateSessionWithRpc(
+  input: UpdateSessionInput,
+  validated: ReturnType<typeof validateSessionInput>,
+  trainerUserId: string | null,
+) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .rpc("update_session_secure", {
+      p_cohort_id: input.cohortId || null,
+      p_course_id: input.courseId || null,
+      p_delivery_mode: validated.deliveryMode,
+      p_description: input.description.trim() || null,
+      p_join_available_from: validated.joinAvailableFrom,
+      p_meeting_id: validated.meetingId,
+      p_meeting_notes: validated.meetingNotes,
+      p_meeting_passcode: validated.meetingPasscode,
+      p_meeting_provider: validated.meetingProvider,
+      p_meeting_url: validated.meetingUrl,
+      p_recording_url: validated.recordingUrl,
+      p_scheduled_end_at: validated.scheduledEndAt,
+      p_scheduled_start_at: validated.scheduledStartAt,
+      p_session_id: input.sessionId,
+      p_tenant_id: input.tenantId,
+      p_timezone: validated.timezone,
+      p_title: validated.title,
+      p_trainer_user_id: trainerUserId,
+    })
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  return data as TrainingSession;
+}
+
+async function updateSessionStatusWithRpc(params: {
+  sessionId: string;
+  status: Extract<SessionStatus, "canceled" | "completed">;
+  tenantId: string;
+}) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .rpc("update_session_status_secure", {
+      p_session_id: params.sessionId,
+      p_status: params.status,
+      p_tenant_id: params.tenantId,
+    })
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  return data as TrainingSession;
+}
+
+async function updateSessionMeetingDetailsWithRpc(params: {
+  deliveryMode: SessionDeliveryMode;
+  joinAvailableFrom: string | null;
+  meetingId: string | null;
+  meetingNotes: string | null;
+  meetingPasscode: string | null;
+  meetingProvider: SessionMeetingProvider | null;
+  meetingUrl: string | null;
+  recordingUrl: string | null;
+  sessionId: string;
+  tenantId: string;
+  timezone: string;
+}) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .rpc("update_session_meeting_details_secure", {
+      p_delivery_mode: params.deliveryMode,
+      p_join_available_from: params.joinAvailableFrom,
+      p_meeting_id: params.meetingId,
+      p_meeting_notes: params.meetingNotes,
+      p_meeting_passcode: params.meetingPasscode,
+      p_meeting_provider: params.meetingProvider,
+      p_meeting_url: params.meetingUrl,
+      p_recording_url: params.recordingUrl,
+      p_session_id: params.sessionId,
+      p_tenant_id: params.tenantId,
+      p_timezone: params.timezone,
+    })
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  return data as TrainingSession;
+}
+
 async function getDelegatedSessionDecision(params: {
   cohortId?: string | null;
   courseId?: string | null;
@@ -826,37 +955,7 @@ export async function createSession(input: SessionInput) {
     return session;
   }
 
-  const supabase = getSupabaseClient();
-  const { data, error } = await supabase
-    .from("sessions")
-    .insert({
-      cohort_id: input.cohortId || null,
-      course_id: input.courseId || null,
-      created_by: user.id,
-      description: input.description.trim() || null,
-      delivery_mode: validated.deliveryMode,
-      join_available_from: validated.joinAvailableFrom,
-      meeting_id: validated.meetingId,
-      meeting_notes: validated.meetingNotes,
-      meeting_passcode: validated.meetingPasscode,
-      meeting_provider: validated.meetingProvider,
-      meeting_url: validated.meetingUrl,
-      recording_url: validated.recordingUrl,
-      scheduled_end_at: validated.scheduledEndAt,
-      scheduled_start_at: validated.scheduledStartAt,
-      tenant_id: input.tenantId,
-      timezone: validated.timezone,
-      title: validated.title,
-      trainer_user_id: trainerUserId,
-    })
-    .select(sessionColumns)
-    .single();
-
-  if (error) {
-    throw error;
-  }
-
-  const session = data as TrainingSession;
+  const session = await createSessionWithRpc(input, validated, trainerUserId);
 
   await logActivity({
     action:
@@ -945,37 +1044,7 @@ export async function updateSession(input: UpdateSessionInput) {
     return session;
   }
 
-  const supabase = getSupabaseClient();
-  const { data, error } = await supabase
-    .from("sessions")
-    .update({
-      cohort_id: input.cohortId || null,
-      course_id: input.courseId || null,
-      description: input.description.trim() || null,
-      delivery_mode: validated.deliveryMode,
-      join_available_from: validated.joinAvailableFrom,
-      meeting_id: validated.meetingId,
-      meeting_notes: validated.meetingNotes,
-      meeting_passcode: validated.meetingPasscode,
-      meeting_provider: validated.meetingProvider,
-      meeting_url: validated.meetingUrl,
-      recording_url: validated.recordingUrl,
-      scheduled_end_at: validated.scheduledEndAt,
-      scheduled_start_at: validated.scheduledStartAt,
-      timezone: validated.timezone,
-      title: validated.title,
-      trainer_user_id: trainerUserId,
-    })
-    .eq("tenant_id", input.tenantId)
-    .eq("id", input.sessionId)
-    .select(sessionColumns)
-    .single();
-
-  if (error) {
-    throw error;
-  }
-
-  const session = data as TrainingSession;
+  const session = await updateSessionWithRpc(input, validated, trainerUserId);
 
   await logActivity({
     action:
@@ -1059,20 +1128,11 @@ async function updateSessionStatus(params: {
     return session;
   }
 
-  const supabase = getSupabaseClient();
-  const { data, error } = await supabase
-    .from("sessions")
-    .update({ status: params.status })
-    .eq("tenant_id", params.tenantId)
-    .eq("id", params.sessionId)
-    .select(sessionColumns)
-    .single();
-
-  if (error) {
-    throw error;
-  }
-
-  const session = data as TrainingSession;
+  const session = await updateSessionStatusWithRpc({
+    sessionId: params.sessionId,
+    status: params.status,
+    tenantId: params.tenantId,
+  });
 
   await logActivity({
     action: params.action,
@@ -1239,30 +1299,19 @@ export async function updateMeetingDetails(input: {
     return session;
   }
 
-  const supabase = getSupabaseClient();
-  const { data, error } = await supabase
-    .from("sessions")
-    .update({
-      delivery_mode: validated.deliveryMode,
-      join_available_from: validated.joinAvailableFrom,
-      meeting_id: validated.meetingId,
-      meeting_notes: validated.meetingNotes,
-      meeting_passcode: validated.meetingPasscode,
-      meeting_provider: validated.meetingProvider,
-      meeting_url: validated.meetingUrl,
-      recording_url: validated.recordingUrl,
-      timezone: validated.timezone,
-    })
-    .eq("tenant_id", input.tenantId)
-    .eq("id", input.sessionId)
-    .select(sessionColumns)
-    .single();
-
-  if (error) {
-    throw error;
-  }
-
-  const session = data as TrainingSession;
+  const session = await updateSessionMeetingDetailsWithRpc({
+    deliveryMode: validated.deliveryMode,
+    joinAvailableFrom: validated.joinAvailableFrom,
+    meetingId: validated.meetingId,
+    meetingNotes: validated.meetingNotes,
+    meetingPasscode: validated.meetingPasscode,
+    meetingProvider: validated.meetingProvider,
+    meetingUrl: validated.meetingUrl,
+    recordingUrl: validated.recordingUrl,
+    sessionId: input.sessionId,
+    tenantId: input.tenantId,
+    timezone: validated.timezone,
+  });
 
   await logActivity({
     action: "meeting_details_updated",

@@ -254,4 +254,48 @@ test.describe("static route guard coverage", () => {
       }
     }
   });
+
+  test("session and attendance writes use RPCs instead of direct browser table mutations", () => {
+    const expectations = [
+      {
+        path: "src/lib/sessions.ts",
+        requiredRpcs: [
+          "create_session_secure",
+          "update_session_secure",
+          "update_session_status_secure",
+          "update_session_meeting_details_secure",
+        ],
+        forbiddenPatterns: [
+          /\.from\("sessions"\)\s*\r?\n\s*\.insert\(/,
+          /\.from\("sessions"\)\s*\r?\n\s*\.update\(/,
+          /\.from\("sessions"\)\s*\r?\n\s*\.delete\(/,
+        ],
+      },
+      {
+        path: "src/lib/attendance.ts",
+        requiredRpcs: [
+          "mark_attendance_secure",
+          "bulk_mark_attendance_secure",
+        ],
+        forbiddenPatterns: [
+          /\.from\("attendance_records"\)\s*\r?\n\s*\.insert\(/,
+          /\.from\("attendance_records"\)\s*\r?\n\s*\.update\(/,
+          /\.from\("attendance_records"\)\s*\r?\n\s*\.delete\(/,
+          /\.from\("attendance_records"\)\s*\r?\n\s*\.upsert\(/,
+        ],
+      },
+    ];
+
+    for (const expectation of expectations) {
+      const source = read(expectation.path);
+
+      for (const rpc of expectation.requiredRpcs) {
+        expect(source).toContain(rpc);
+      }
+
+      for (const pattern of expectation.forbiddenPatterns) {
+        expect(source).not.toMatch(pattern);
+      }
+    }
+  });
 });
