@@ -84,22 +84,6 @@ function assertInvitationRole(role: InvitationRole) {
   }
 }
 
-function createInviteToken() {
-  const bytes = new Uint8Array(32);
-  crypto.getRandomValues(bytes);
-
-  return btoa(String.fromCharCode(...bytes))
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/g, "");
-}
-
-function getExpiryDate() {
-  const expiresAt = new Date();
-  expiresAt.setDate(expiresAt.getDate() + 7);
-  return expiresAt.toISOString();
-}
-
 function getInvitationStatus(invitation: TeamInvitation): InvitationStatus {
   if (
     invitation.status === "pending" &&
@@ -126,7 +110,6 @@ async function notifyInvitationEvent(params: {
       entityType: "team_invitation",
       message: params.message,
       metadata: {
-        email: params.invitationEmail,
         role: params.role,
       },
       roles: ["owner", "admin"],
@@ -165,7 +148,7 @@ export async function createTeamInvitation(params: {
     throw new Error("Enter a valid email address.");
   }
 
-  const { user } = await requireTenantPermission({
+  await requireTenantPermission({
     description: "Blocked team invitation creation without invite permission.",
     permission: "invite_team",
     tenantId: params.tenantId,
@@ -199,17 +182,11 @@ export async function createTeamInvitation(params: {
   }
 
   const { data, error } = await supabase
-    .from("team_invitations")
-    .insert({
-      email,
-      expires_at: getExpiryDate(),
-      invited_by: user.id,
-      role: params.role,
-      status: "pending",
-      tenant_id: params.tenantId,
-      token: createInviteToken(),
+    .rpc("create_team_invitation_secure", {
+      p_email: email,
+      p_role: params.role,
+      p_tenant_id: params.tenantId,
     })
-    .select(invitationColumns)
     .single();
 
   if (error) {
@@ -222,19 +199,6 @@ export async function createTeamInvitation(params: {
 
   const invitation = data as TeamInvitation;
 
-  await logActivity({
-    action: "invitation_created",
-    description: `Invited ${invitation.email} as ${invitation.role}`,
-    entityId: invitation.id,
-    entityName: invitation.email,
-    entityType: "team_invitation",
-    metadata: {
-      email: invitation.email,
-      expires_at: invitation.expires_at,
-      role: invitation.role,
-    },
-    tenantId: invitation.tenant_id,
-  });
   await notifyInvitationEvent({
     invitationEmail: invitation.email,
     message: `${invitation.email} was invited as ${invitation.role}.`,
@@ -298,15 +262,9 @@ export async function revokeTeamInvitation(invitationId: string) {
   }
 
   const { data, error } = await supabase
-    .from("team_invitations")
-    .update({
-      revoked_at: new Date().toISOString(),
-      status: "revoked",
+    .rpc("cancel_team_invitation_secure", {
+      p_invitation_id: invitation.id,
     })
-    .eq("tenant_id", invitation.tenant_id)
-    .eq("id", invitation.id)
-    .eq("status", "pending")
-    .select(invitationColumns)
     .single();
 
   if (error) {
@@ -315,16 +273,6 @@ export async function revokeTeamInvitation(invitationId: string) {
 
   const revokedInvitation = data as TeamInvitation;
 
-  await logActivity({
-    action: "invitation_revoked",
-    description: `Revoked invitation for ${revokedInvitation.email}`,
-    entityId: revokedInvitation.id,
-    entityName: revokedInvitation.email,
-    entityType: "team_invitation",
-    metadata: { email: revokedInvitation.email, role: revokedInvitation.role },
-    severity: "warning",
-    tenantId: revokedInvitation.tenant_id,
-  });
   await notifyInvitationEvent({
     invitationEmail: revokedInvitation.email,
     message: `Invitation revoked for ${revokedInvitation.email}.`,
@@ -365,15 +313,9 @@ export async function resendTeamInvitation(invitationId: string) {
   }
 
   const { data, error } = await supabase
-    .from("team_invitations")
-    .update({
-      expires_at: getExpiryDate(),
-      status: "pending",
-      token: createInviteToken(),
+    .rpc("resend_team_invitation_secure", {
+      p_invitation_id: invitation.id,
     })
-    .eq("tenant_id", invitation.tenant_id)
-    .eq("id", invitation.id)
-    .select(invitationColumns)
     .single();
 
   if (error) {
@@ -382,19 +324,6 @@ export async function resendTeamInvitation(invitationId: string) {
 
   const resentInvitation = data as TeamInvitation;
 
-  await logActivity({
-    action: "invitation_resent",
-    description: `Refreshed invitation for ${resentInvitation.email}`,
-    entityId: resentInvitation.id,
-    entityName: resentInvitation.email,
-    entityType: "team_invitation",
-    metadata: {
-      email: resentInvitation.email,
-      expires_at: resentInvitation.expires_at,
-      role: resentInvitation.role,
-    },
-    tenantId: resentInvitation.tenant_id,
-  });
   await notifyInvitationEvent({
     invitationEmail: resentInvitation.email,
     message: `Invitation link refreshed for ${resentInvitation.email}.`,

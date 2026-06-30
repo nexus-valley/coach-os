@@ -342,4 +342,77 @@ test.describe("static route guard coverage", () => {
       }
     }
   });
+
+  test("team access writes use RPCs instead of direct browser table mutations", () => {
+    const expectations = [
+      {
+        path: "src/lib/team.ts",
+        requiredRpcs: [
+          "update_tenant_member_role_secure",
+          "remove_tenant_member_secure",
+        ],
+        forbiddenPatterns: [
+          /\.from\("tenant_members"\)\s*\r?\n\s*\.insert\(/,
+          /\.from\("tenant_members"\)\s*\r?\n\s*\.update\(/,
+          /\.from\("tenant_members"\)\s*\r?\n\s*\.delete\(/,
+          /\.from\("tenant_members"\)\s*\r?\n\s*\.upsert\(/,
+        ],
+      },
+      {
+        path: "src/lib/teamInvitations.ts",
+        requiredRpcs: [
+          "create_team_invitation_secure",
+          "cancel_team_invitation_secure",
+          "resend_team_invitation_secure",
+        ],
+        forbiddenPatterns: [
+          /\.from\("team_invitations"\)\s*\r?\n\s*\.insert\(/,
+          /\.from\("team_invitations"\)\s*\r?\n\s*\.update\(/,
+          /\.from\("team_invitations"\)\s*\r?\n\s*\.delete\(/,
+          /\.from\("team_invitations"\)\s*\r?\n\s*\.upsert\(/,
+        ],
+      },
+      {
+        path: "src/lib/trainerAssignments.ts",
+        requiredRpcs: [
+          "assign_trainer_to_course_secure",
+          "remove_trainer_from_course_secure",
+          "assign_trainer_to_cohort_secure",
+          "remove_trainer_from_cohort_secure",
+        ],
+        forbiddenPatterns: [
+          /\.from\("trainer_course_assignments"\)\s*\r?\n\s*\.insert\(/,
+          /\.from\("trainer_course_assignments"\)\s*\r?\n\s*\.delete\(/,
+          /\.from\("trainer_cohort_assignments"\)\s*\r?\n\s*\.insert\(/,
+          /\.from\("trainer_cohort_assignments"\)\s*\r?\n\s*\.delete\(/,
+        ],
+      },
+      {
+        path: "src/lib/delegatedPermissions.ts",
+        requiredRpcs: [
+          "grant_delegated_permission_secure",
+          "revoke_delegated_permission_secure",
+          "expire_delegated_permissions_secure",
+        ],
+        forbiddenPatterns: [
+          /\.from\("delegated_permissions"\)\s*\r?\n\s*\.insert\(/,
+          /\.from\("delegated_permissions"\)\s*\r?\n\s*\.update\(/,
+          /\.from\("delegated_permissions"\)\s*\r?\n\s*\.delete\(/,
+          /\.from\("delegated_permissions"\)\s*\r?\n\s*\.upsert\(/,
+        ],
+      },
+    ];
+
+    for (const expectation of expectations) {
+      const source = read(expectation.path);
+
+      for (const rpc of expectation.requiredRpcs) {
+        expect(source).toContain(rpc);
+      }
+
+      for (const pattern of expectation.forbiddenPatterns) {
+        expect(source).not.toMatch(pattern);
+      }
+    }
+  });
 });

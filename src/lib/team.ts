@@ -1,4 +1,3 @@
-import { logActivity } from "@/src/lib/auditLogger";
 import {
   canDeleteRecords,
   canAccessAttendance,
@@ -116,12 +115,11 @@ export async function updateTenantMemberRole(
   }
 
   const { data, error } = await supabase
-    .from("tenant_members")
-    .update({ role })
-    .eq("tenant_id", tenantId)
-    .eq("id", memberId)
-    .neq("role", "owner")
-    .select(tenantMemberSelect)
+    .rpc("update_tenant_member_role_secure", {
+      p_member_id: memberId,
+      p_role: role,
+      p_tenant_id: tenantId,
+    })
     .single();
 
   if (error) {
@@ -129,17 +127,6 @@ export async function updateTenantMemberRole(
   }
 
   const member = data as TenantMember;
-
-  await logActivity({
-    action: "role_changed",
-    description: `Changed team member role to ${member.role}`,
-    entityId: member.id,
-    entityName: member.role,
-    entityType: "team_member",
-    metadata: { role: member.role, userId: member.user_id },
-    severity: "warning",
-    tenantId: member.tenant_id,
-  });
   await refreshWorkspaceUsageSnapshot(member.tenant_id);
 
   return member;
@@ -153,41 +140,13 @@ export async function removeTenantMember(tenantId: string, memberId: string) {
   });
 
   const supabase = getSupabaseClient();
-  const { data: existingMember, error: existingError } = await supabase
-    .from("tenant_members")
-    .select(tenantMemberSelect)
-    .eq("tenant_id", tenantId)
-    .eq("id", memberId)
-    .neq("role", "owner")
-    .maybeSingle();
-
-  if (existingError) {
-    throw existingError;
-  }
-
-  const { error } = await supabase
-    .from("tenant_members")
-    .delete()
-    .eq("tenant_id", tenantId)
-    .eq("id", memberId)
-    .neq("role", "owner");
+  const { error } = await supabase.rpc("remove_tenant_member_secure", {
+    p_member_id: memberId,
+    p_tenant_id: tenantId,
+  });
 
   if (error) {
     throw error;
-  }
-
-  if (existingMember) {
-    const member = existingMember as TenantMember;
-    await logActivity({
-      action: "team_member_removed",
-      description: "Removed team member from workspace",
-      entityId: member.id,
-      entityName: member.role,
-      entityType: "team_member",
-      metadata: { role: member.role, userId: member.user_id },
-      severity: "critical",
-      tenantId: member.tenant_id,
-    });
   }
 
   await refreshWorkspaceUsageSnapshot(tenantId);

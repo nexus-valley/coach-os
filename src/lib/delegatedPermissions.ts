@@ -401,71 +401,26 @@ export async function createDelegatedPermission(
     throw new Error("Permission expiry must be after the start date.");
   }
 
-  const status: DelegatedPermissionStatus = role === "owner" ? "active" : "pending";
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
-    .from("delegated_permissions")
-    .insert({
-      approved_by: status === "active" ? user.id : null,
-      expires_at: expiresAt,
-      granted_by: user.id,
-      metadata_json: input.metadata ?? {},
-      permission_key: input.permissionKey,
-      reason: input.reason?.trim() || null,
-      scope_id: input.scopeType === "workspace" ? null : input.scopeId ?? null,
-      scope_type: input.scopeType ?? "workspace",
-      starts_at: startsAt,
-      status,
-      tenant_id: input.tenantId,
-      user_id: input.userId,
+    .rpc("grant_delegated_permission_secure", {
+      p_expires_at: expiresAt,
+      p_metadata: input.metadata ?? {},
+      p_permission_key: input.permissionKey,
+      p_reason: input.reason?.trim() || null,
+      p_scope_id: input.scopeType === "workspace" ? null : input.scopeId ?? null,
+      p_scope_type: input.scopeType ?? "workspace",
+      p_starts_at: startsAt,
+      p_tenant_id: input.tenantId,
+      p_user_id: input.userId,
     })
-    .select(delegatedPermissionSelect)
     .single();
 
   if (error) {
     throw error;
   }
 
-  const created = data as DelegatedPermission;
-  await logActivity({
-    action: "delegated_permission_created",
-    description:
-      status === "pending"
-        ? "Requested a delegated permission pending owner approval."
-        : "Granted an active delegated permission.",
-    entityId: created.id,
-    entityName: delegatedPermissionLabels[created.permission_key],
-    entityType: "delegated_permission",
-    metadata: {
-      expires_at: created.expires_at,
-      granted_by: user.id,
-      permission_key: created.permission_key,
-      scope_id: created.scope_id,
-      scope_type: created.scope_type,
-      target_user_id: created.user_id,
-    },
-    severity: status === "active" ? "warning" : "info",
-    tenantId: input.tenantId,
-  });
-
-  if (status === "active") {
-    await logActivity({
-      action: "delegated_permission_activated",
-      description: "Activated a delegated permission exception.",
-      entityId: created.id,
-      entityName: delegatedPermissionLabels[created.permission_key],
-      entityType: "delegated_permission",
-      metadata: {
-        approved_by: user.id,
-        permission_key: created.permission_key,
-        target_user_id: created.user_id,
-      },
-      severity: "warning",
-      tenantId: input.tenantId,
-    });
-  }
-
-  return created;
+  return data as DelegatedPermission;
 }
 
 export async function revokeDelegatedPermission(
@@ -502,40 +457,17 @@ export async function revokeDelegatedPermission(
   }
 
   const { data, error } = await supabase
-    .from("delegated_permissions")
-    .update({
-      revoked_at: new Date().toISOString(),
-      revoked_by: user.id,
-      status: "revoked",
+    .rpc("revoke_delegated_permission_secure", {
+      p_permission_id: permissionId,
+      p_tenant_id: tenantId,
     })
-    .eq("tenant_id", tenantId)
-    .eq("id", permissionId)
-    .select(delegatedPermissionSelect)
     .single();
 
   if (error) {
     throw error;
   }
 
-  const revoked = data as DelegatedPermission;
-  await logActivity({
-    action: "delegated_permission_revoked",
-    description: "Revoked a delegated permission exception.",
-    entityId: revoked.id,
-    entityName: delegatedPermissionLabels[revoked.permission_key],
-    entityType: "delegated_permission",
-    metadata: {
-      permission_key: revoked.permission_key,
-      revoked_by: user.id,
-      scope_id: revoked.scope_id,
-      scope_type: revoked.scope_type,
-      target_user_id: revoked.user_id,
-    },
-    severity: "critical",
-    tenantId,
-  });
-
-  return revoked;
+  return data as DelegatedPermission;
 }
 
 export async function hasDelegatedPermission(input: DelegatedPermissionCheck) {
@@ -631,55 +563,20 @@ export async function getEffectivePermissions(
   return [...basePermissions, ...delegated];
 }
 
-export async function expireDelegatedPermissions(tenantId?: string) {
-  const user = await getCurrentUser();
+export async function expireDelegatedPermissions(tenantId: string) {
   const supabase = getSupabaseClient();
-  let query = supabase
-    .from("delegated_permissions")
-    .update({ status: "expired" })
-    .eq("status", "active")
-    .not("expires_at", "is", null)
-    .lte("expires_at", new Date().toISOString())
-    .select(delegatedPermissionSelect);
-
-  if (tenantId) {
-    const role = await getMemberRoleForTenant(tenantId, user.id);
-
-    if (role !== "owner" && role !== "admin") {
-      throw new Error("Only owners and admins can expire delegated permissions.");
-    }
-
-    query = query.eq("tenant_id", tenantId);
-  }
-
-  const { data, error } = await query;
+  const { data, error } = await supabase.rpc(
+    "expire_delegated_permissions_secure",
+    {
+      p_tenant_id: tenantId,
+    },
+  );
 
   if (error) {
     throw error;
   }
 
-  const expired = (data ?? []) as DelegatedPermission[];
-
-  await Promise.all(
-    expired.map((permission) =>
-      logActivity({
-        action: "delegated_permission_expired",
-        description: "Marked an expired delegated permission inactive.",
-        entityId: permission.id,
-        entityName: delegatedPermissionLabels[permission.permission_key],
-        entityType: "delegated_permission",
-        metadata: {
-          expires_at: permission.expires_at,
-          permission_key: permission.permission_key,
-          target_user_id: permission.user_id,
-        },
-        severity: "warning",
-        tenantId: permission.tenant_id,
-      }),
-    ),
-  );
-
-  return expired.length;
+  return typeof data === "number" ? data : 0;
 }
 
 export async function explainPermissionSource(params: {
