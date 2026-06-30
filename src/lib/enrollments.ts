@@ -1,5 +1,3 @@
-import { logActivity } from "@/src/lib/auditLogger";
-import { requireTenantPermission } from "@/src/lib/permissions";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 import { getCurrentTrainerScope } from "@/src/lib/trainerAssignments";
 import type { Course } from "@/src/lib/courses";
@@ -161,54 +159,14 @@ export async function getEnrollmentsForCourse(params: {
 }
 
 export async function createEnrollment(input: CreateEnrollmentInput) {
-  await requireTenantPermission({
-    description: "Blocked enrollment creation without student management permission.",
-    permission: "manage_students",
-    tenantId: input.tenantId,
-  });
-
   const supabase = getSupabaseClient();
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
-
-  if (userError) {
-    throw userError;
-  }
-
-  if (!user) {
-    throw new Error("You must be logged in to create an enrollment.");
-  }
-
-  const { data: existing, error: existingError } = await supabase
-    .from("enrollments")
-    .select("id")
-    .eq("tenant_id", input.tenantId)
-    .eq("student_id", input.studentId)
-    .eq("course_id", input.courseId)
-    .maybeSingle();
-
-  if (existingError) {
-    throw existingError;
-  }
-
-  if (existing) {
-    throw new Error("This student is already enrolled in that course.");
-  }
-
   const { data, error } = await supabase
-    .from("enrollments")
-    .insert({
-      course_id: input.courseId,
-      created_by: user.id,
-      status: input.status ?? "active",
-      student_id: input.studentId,
-      tenant_id: input.tenantId,
+    .rpc("create_enrollment_secure", {
+      p_course_id: input.courseId,
+      p_status: input.status ?? "active",
+      p_student_id: input.studentId,
+      p_tenant_id: input.tenantId,
     })
-    .select(
-      "id,tenant_id,student_id,course_id,status,enrolled_at,completed_at,created_by,created_at,updated_at",
-    )
     .single();
 
   if (error) {
@@ -221,46 +179,19 @@ export async function createEnrollment(input: CreateEnrollmentInput) {
 
   const enrollment = data as Enrollment;
 
-  await logActivity({
-    action: "enrollment_created",
-    description: "Added student enrollment",
-    entityId: enrollment.id,
-    entityName: "Course enrollment",
-    entityType: "enrollment",
-    metadata: {
-      courseId: enrollment.course_id,
-      studentId: enrollment.student_id,
-      status: enrollment.status,
-    },
-    tenantId: enrollment.tenant_id,
-  });
-
   return enrollment;
 }
 
 export async function updateEnrollmentStatus(
   input: UpdateEnrollmentStatusInput,
 ) {
-  await requireTenantPermission({
-    description: "Blocked enrollment update without student management permission.",
-    permission: "manage_students",
-    tenantId: input.tenantId,
-  });
-
-  const completedAt =
-    input.status === "completed" ? new Date().toISOString() : null;
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
-    .from("enrollments")
-    .update({
-      completed_at: completedAt,
-      status: input.status,
+    .rpc("update_enrollment_status_secure", {
+      p_enrollment_id: input.enrollmentId,
+      p_status: input.status,
+      p_tenant_id: input.tenantId,
     })
-    .eq("tenant_id", input.tenantId)
-    .eq("id", input.enrollmentId)
-    .select(
-      "id,tenant_id,student_id,course_id,status,enrolled_at,completed_at,created_by,created_at,updated_at",
-    )
     .single();
 
   if (error) {
@@ -274,51 +205,13 @@ export async function deleteEnrollment(params: {
   enrollmentId: string;
   tenantId: string;
 }) {
-  await requireTenantPermission({
-    description: "Blocked enrollment deletion without delete permission.",
-    permission: "delete_records",
-    tenantId: params.tenantId,
-  });
-
   const supabase = getSupabaseClient();
-  const { data: existingEnrollment, error: existingError } = await supabase
-    .from("enrollments")
-    .select(
-      "id,tenant_id,student_id,course_id,status,enrolled_at,completed_at,created_by,created_at,updated_at",
-    )
-    .eq("tenant_id", params.tenantId)
-    .eq("id", params.enrollmentId)
-    .maybeSingle();
-
-  if (existingError) {
-    throw existingError;
-  }
-
-  const { error } = await supabase
-    .from("enrollments")
-    .delete()
-    .eq("tenant_id", params.tenantId)
-    .eq("id", params.enrollmentId);
+  const { error } = await supabase.rpc("remove_enrollment_secure", {
+    p_enrollment_id: params.enrollmentId,
+    p_tenant_id: params.tenantId,
+  });
 
   if (error) {
     throw error;
-  }
-
-  if (existingEnrollment) {
-    const enrollment = existingEnrollment as Enrollment;
-    await logActivity({
-      action: "enrollment_deleted",
-      description: "Removed course enrollment",
-      entityId: enrollment.id,
-      entityName: "Course enrollment",
-      entityType: "enrollment",
-      metadata: {
-        courseId: enrollment.course_id,
-        status: enrollment.status,
-        studentId: enrollment.student_id,
-      },
-      severity: "warning",
-      tenantId: enrollment.tenant_id,
-    });
   }
 }

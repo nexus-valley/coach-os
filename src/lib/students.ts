@@ -1,6 +1,4 @@
-import { logActivity } from "@/src/lib/auditLogger";
 import { runAutomationTrigger } from "@/src/lib/automationTriggers";
-import { requireTenantPermission } from "@/src/lib/permissions";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 import { getCurrentTrainerScope } from "@/src/lib/trainerAssignments";
 import {
@@ -107,27 +105,9 @@ export async function getStudentsForTenant(tenantId: string) {
 }
 
 export async function createStudent(input: StudentInput) {
-  await requireTenantPermission({
-    description: "Blocked student creation without student management permission.",
-    permission: "manage_students",
-    tenantId: input.tenantId,
-  });
   await enforceWorkspaceLimit(input.tenantId, "students");
 
   const supabase = getSupabaseClient();
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
-
-  if (userError) {
-    throw userError;
-  }
-
-  if (!user) {
-    throw new Error("You must be logged in to add a student.");
-  }
-
   const fullName = input.fullName.trim();
 
   if (!fullName) {
@@ -135,20 +115,15 @@ export async function createStudent(input: StudentInput) {
   }
 
   const { data, error } = await supabase
-    .from("students")
-    .insert({
-      created_by: user.id,
-      email: input.email.trim() || null,
-      full_name: fullName,
-      notes: input.notes.trim() || null,
-      phone: input.phone.trim() || null,
-      source: input.source.trim() || null,
-      status: input.status,
-      tenant_id: input.tenantId,
+    .rpc("create_student_secure", {
+      p_email: input.email,
+      p_full_name: fullName,
+      p_notes: input.notes,
+      p_phone: input.phone,
+      p_source: input.source,
+      p_status: input.status,
+      p_tenant_id: input.tenantId,
     })
-    .select(
-      "id,tenant_id,full_name,email,phone,status,source,notes,created_by,created_at,updated_at",
-    )
     .single();
 
   if (error) {
@@ -157,14 +132,6 @@ export async function createStudent(input: StudentInput) {
 
   const student = data as Student;
 
-  await logActivity({
-    action: "student_created",
-    description: "Created new student profile",
-    entityId: student.id,
-    entityName: student.full_name,
-    entityType: "student",
-    tenantId: student.tenant_id,
-  });
   await refreshWorkspaceUsageSnapshot(student.tenant_id);
   await runAutomationTrigger("student_created", {
     entityId: student.id,
@@ -213,12 +180,6 @@ export async function getStudentById(params: {
 }
 
 export async function updateStudent(input: UpdateStudentInput) {
-  await requireTenantPermission({
-    description: "Blocked student update without student management permission.",
-    permission: "manage_students",
-    tenantId: input.tenantId,
-  });
-
   const fullName = input.fullName.trim();
 
   if (!fullName) {
@@ -227,84 +188,37 @@ export async function updateStudent(input: UpdateStudentInput) {
 
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
-    .from("students")
-    .update({
-      email: input.email.trim() || null,
-      full_name: fullName,
-      notes: input.notes.trim() || null,
-      phone: input.phone.trim() || null,
-      source: input.source.trim() || null,
-      status: input.status,
+    .rpc("update_student_secure", {
+      p_email: input.email,
+      p_full_name: fullName,
+      p_notes: input.notes,
+      p_phone: input.phone,
+      p_source: input.source,
+      p_status: input.status,
+      p_student_id: input.studentId,
+      p_tenant_id: input.tenantId,
     })
-    .eq("tenant_id", input.tenantId)
-    .eq("id", input.studentId)
-    .select(
-      "id,tenant_id,full_name,email,phone,status,source,notes,created_by,created_at,updated_at",
-    )
     .single();
 
   if (error) {
     throw error;
   }
 
-  const student = data as Student;
-
-  await logActivity({
-    action: "student_updated",
-    description: "Updated student profile",
-    entityId: student.id,
-    entityName: student.full_name,
-    entityType: "student",
-    metadata: { status: student.status },
-    tenantId: student.tenant_id,
-  });
-
-  return student;
+  return data as Student;
 }
 
 export async function deleteStudent(params: {
   studentId: string;
   tenantId: string;
 }) {
-  await requireTenantPermission({
-    description: "Blocked student deletion without delete permission.",
-    permission: "delete_records",
-    tenantId: params.tenantId,
-  });
-
   const supabase = getSupabaseClient();
-  const { data: existingStudent, error: existingError } = await supabase
-    .from("students")
-    .select("id,tenant_id,full_name,status")
-    .eq("tenant_id", params.tenantId)
-    .eq("id", params.studentId)
-    .maybeSingle();
-
-  if (existingError) {
-    throw existingError;
-  }
-
-  const { error } = await supabase
-    .from("students")
-    .delete()
-    .eq("tenant_id", params.tenantId)
-    .eq("id", params.studentId);
+  const { error } = await supabase.rpc("delete_student_secure", {
+    p_student_id: params.studentId,
+    p_tenant_id: params.tenantId,
+  });
 
   if (error) {
     throw error;
-  }
-
-  if (existingStudent) {
-    await logActivity({
-      action: "student_deleted",
-      description: "Deleted student profile",
-      entityId: existingStudent.id,
-      entityName: existingStudent.full_name,
-      entityType: "student",
-      metadata: { status: existingStudent.status },
-      severity: "critical",
-      tenantId: existingStudent.tenant_id,
-    });
   }
 
   await refreshWorkspaceUsageSnapshot(params.tenantId);

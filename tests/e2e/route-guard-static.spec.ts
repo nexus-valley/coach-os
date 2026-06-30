@@ -147,4 +147,58 @@ test.describe("static route guard coverage", () => {
     expect(legacyPayments).not.toContain("error.details");
     expect(legacyPayments).not.toContain("error.hint");
   });
+
+  test("student enrollment writes use RPCs instead of direct browser table mutations", () => {
+    const expectations = [
+      {
+        path: "src/lib/students.ts",
+        requiredRpcs: [
+          "create_student_secure",
+          "update_student_secure",
+          "delete_student_secure",
+        ],
+        forbiddenPatterns: [
+          /\.from\("students"\)\s*\r?\n\s*\.insert\(/,
+          /\.from\("students"\)\s*\r?\n\s*\.update\(/,
+          /\.from\("students"\)\s*\r?\n\s*\.delete\(/,
+        ],
+      },
+      {
+        path: "src/lib/enrollments.ts",
+        requiredRpcs: [
+          "create_enrollment_secure",
+          "update_enrollment_status_secure",
+          "remove_enrollment_secure",
+        ],
+        forbiddenPatterns: [
+          /\.from\("enrollments"\)\s*\r?\n\s*\.insert\(/,
+          /\.from\("enrollments"\)\s*\r?\n\s*\.update\(/,
+          /\.from\("enrollments"\)\s*\r?\n\s*\.delete\(/,
+        ],
+      },
+      {
+        path: "src/lib/cohorts.ts",
+        requiredRpcs: [
+          "add_cohort_member_secure",
+          "remove_cohort_member_secure",
+        ],
+        forbiddenPatterns: [
+          /\.from\("cohort_members"\)\s*\r?\n\s*\.insert\(/,
+          /\.from\("cohort_members"\)\s*\r?\n\s*\.delete\(/,
+        ],
+      },
+    ];
+
+    for (const expectation of expectations) {
+      const source = read(expectation.path);
+
+      for (const rpc of expectation.requiredRpcs) {
+        expect(source).toContain(rpc);
+      }
+
+      for (const pattern of expectation.forbiddenPatterns) {
+        expect(source).not.toMatch(pattern);
+      }
+    }
+  });
 });

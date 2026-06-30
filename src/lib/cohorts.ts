@@ -462,37 +462,13 @@ export async function addStudentToCohort(params: {
   studentId: string;
   tenantId: string;
 }) {
-  await requireTenantPermission({
-    description: "Blocked cohort member update without student management permission.",
-    permission: "manage_students",
-    tenantId: params.tenantId,
-  });
-
   const supabase = getSupabaseClient();
-  const { data: existing, error: existingError } = await supabase
-    .from("cohort_members")
-    .select("id")
-    .eq("tenant_id", params.tenantId)
-    .eq("cohort_id", params.cohortId)
-    .eq("student_id", params.studentId)
-    .maybeSingle();
-
-  if (existingError) {
-    throw existingError;
-  }
-
-  if (existing) {
-    throw new Error("This student is already in that cohort.");
-  }
-
   const { data, error } = await supabase
-    .from("cohort_members")
-    .insert({
-      cohort_id: params.cohortId,
-      student_id: params.studentId,
-      tenant_id: params.tenantId,
+    .rpc("add_cohort_member_secure", {
+      p_cohort_id: params.cohortId,
+      p_student_id: params.studentId,
+      p_tenant_id: params.tenantId,
     })
-    .select(cohortMemberColumns)
     .single();
 
   if (error) {
@@ -511,19 +487,12 @@ export async function removeStudentFromCohort(params: {
   studentId: string;
   tenantId: string;
 }) {
-  await requireTenantPermission({
-    description: "Blocked cohort member removal without student management permission.",
-    permission: "manage_students",
-    tenantId: params.tenantId,
-  });
-
   const supabase = getSupabaseClient();
-  const { error } = await supabase
-    .from("cohort_members")
-    .delete()
-    .eq("tenant_id", params.tenantId)
-    .eq("cohort_id", params.cohortId)
-    .eq("student_id", params.studentId);
+  const { error } = await supabase.rpc("remove_cohort_member_secure", {
+    p_cohort_id: params.cohortId,
+    p_student_id: params.studentId,
+    p_tenant_id: params.tenantId,
+  });
 
   if (error) {
     throw error;
