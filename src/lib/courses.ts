@@ -1,5 +1,3 @@
-import { logActivity } from "@/src/lib/auditLogger";
-import { requireTenantPermission } from "@/src/lib/permissions";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 import { getCurrentTrainerScope } from "@/src/lib/trainerAssignments";
 import {
@@ -104,17 +102,6 @@ export type DeleteLessonInput = {
   tenantId: string;
 };
 
-function createSlug(title: string) {
-  return (
-    title
-      .toLowerCase()
-      .trim()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/(^-|-$)/g, "")
-      .slice(0, 64) || "course"
-  );
-}
-
 export async function getCoursesForTenant(tenantId: string) {
   const supabase = getSupabaseClient();
   const trainerScope = await getCurrentTrainerScope(tenantId);
@@ -145,27 +132,9 @@ export async function getCoursesForTenant(tenantId: string) {
 }
 
 export async function createCourse(input: CreateCourseInput) {
-  await requireTenantPermission({
-    description: "Blocked course creation without course management permission.",
-    permission: "manage_courses",
-    tenantId: input.tenantId,
-  });
   await enforceWorkspaceLimit(input.tenantId, "courses");
 
   const supabase = getSupabaseClient();
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
-
-  if (userError) {
-    throw userError;
-  }
-
-  if (!user) {
-    throw new Error("You must be logged in to create a course.");
-  }
-
   const title = input.title.trim();
 
   if (!title) {
@@ -173,18 +142,12 @@ export async function createCourse(input: CreateCourseInput) {
   }
 
   const { data, error } = await supabase
-    .from("courses")
-    .insert({
-      created_by: user.id,
-      description: input.description.trim() || null,
-      slug: createSlug(title),
-      status: input.status,
-      tenant_id: input.tenantId,
-      title,
+    .rpc("create_course_secure", {
+      p_description: input.description,
+      p_status: input.status,
+      p_tenant_id: input.tenantId,
+      p_title: title,
     })
-    .select(
-      "id,tenant_id,title,slug,description,status,thumbnail_url,created_by,created_at,updated_at",
-    )
     .single();
 
   if (error) {
@@ -193,15 +156,6 @@ export async function createCourse(input: CreateCourseInput) {
 
   const course = data as Course;
 
-  await logActivity({
-    action: "course_created",
-    description: "Created new course",
-    entityId: course.id,
-    entityName: course.title,
-    entityType: "course",
-    metadata: { status: course.status },
-    tenantId: course.tenant_id,
-  });
   await refreshWorkspaceUsageSnapshot(course.tenant_id);
 
   return course;
@@ -280,12 +234,6 @@ export async function getCourseStructure(courseId: string, tenantId: string) {
 }
 
 export async function createCourseSection(input: CourseSectionInput) {
-  await requireTenantPermission({
-    description: "Blocked course section creation without course management permission.",
-    permission: "manage_courses",
-    tenantId: input.tenantId,
-  });
-
   const title = input.title.trim();
 
   if (!title) {
@@ -294,42 +242,22 @@ export async function createCourseSection(input: CourseSectionInput) {
 
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
-    .from("course_sections")
-    .insert({
-      course_id: input.courseId,
-      sort_order: input.sortOrder ?? 0,
-      tenant_id: input.tenantId,
-      title,
+    .rpc("create_course_section_secure", {
+      p_course_id: input.courseId,
+      p_sort_order: input.sortOrder ?? 0,
+      p_tenant_id: input.tenantId,
+      p_title: title,
     })
-    .select("id,course_id,tenant_id,title,sort_order,created_at,updated_at")
     .single();
 
   if (error) {
     throw error;
   }
 
-  const section = data as CourseSection;
-
-  await logActivity({
-    action: "course_section_created",
-    description: "Added course section",
-    entityId: section.id,
-    entityName: section.title,
-    entityType: "course_section",
-    metadata: { courseId: section.course_id },
-    tenantId: section.tenant_id,
-  });
-
-  return section;
+  return data as CourseSection;
 }
 
 export async function updateCourseSection(input: UpdateCourseSectionInput) {
-  await requireTenantPermission({
-    description: "Blocked course section update without course management permission.",
-    permission: "manage_courses",
-    tenantId: input.tenantId,
-  });
-
   const title = input.title.trim();
 
   if (!title) {
@@ -338,86 +266,35 @@ export async function updateCourseSection(input: UpdateCourseSectionInput) {
 
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
-    .from("course_sections")
-    .update({ title })
-    .eq("tenant_id", input.tenantId)
-    .eq("course_id", input.courseId)
-    .eq("id", input.sectionId)
-    .select("id,course_id,tenant_id,title,sort_order,created_at,updated_at")
+    .rpc("update_course_section_secure", {
+      p_course_id: input.courseId,
+      p_section_id: input.sectionId,
+      p_tenant_id: input.tenantId,
+      p_title: title,
+    })
     .single();
 
   if (error) {
     throw error;
   }
 
-  const section = data as CourseSection;
-
-  await logActivity({
-    action: "course_section_updated",
-    description: "Updated course section",
-    entityId: section.id,
-    entityName: section.title,
-    entityType: "course_section",
-    metadata: { courseId: section.course_id },
-    tenantId: section.tenant_id,
-  });
-
-  return section;
+  return data as CourseSection;
 }
 
 export async function deleteCourseSection(input: DeleteCourseSectionInput) {
-  await requireTenantPermission({
-    description: "Blocked course section deletion without delete permission.",
-    permission: "delete_records",
-    tenantId: input.tenantId,
-  });
-
   const supabase = getSupabaseClient();
-  const { data: existingSection, error: existingError } = await supabase
-    .from("course_sections")
-    .select("id,course_id,tenant_id,title,sort_order,created_at,updated_at")
-    .eq("tenant_id", input.tenantId)
-    .eq("course_id", input.courseId)
-    .eq("id", input.sectionId)
-    .maybeSingle();
-
-  if (existingError) {
-    throw existingError;
-  }
-
-  const { error } = await supabase
-    .from("course_sections")
-    .delete()
-    .eq("tenant_id", input.tenantId)
-    .eq("course_id", input.courseId)
-    .eq("id", input.sectionId);
+  const { error } = await supabase.rpc("delete_course_section_secure", {
+    p_course_id: input.courseId,
+    p_section_id: input.sectionId,
+    p_tenant_id: input.tenantId,
+  });
 
   if (error) {
     throw error;
-  }
-
-  if (existingSection) {
-    const section = existingSection as CourseSection;
-    await logActivity({
-      action: "course_section_deleted",
-      description: "Deleted course section",
-      entityId: section.id,
-      entityName: section.title,
-      entityType: "course_section",
-      metadata: { courseId: section.course_id },
-      severity: "warning",
-      tenantId: section.tenant_id,
-    });
   }
 }
 
 export async function createLesson(input: LessonInput) {
-  await requireTenantPermission({
-    description: "Blocked lesson creation without course management permission.",
-    permission: "manage_courses",
-    tenantId: input.tenantId,
-  });
-
   const title = input.title.trim();
 
   if (!title) {
@@ -426,50 +303,28 @@ export async function createLesson(input: LessonInput) {
 
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
-    .from("lessons")
-    .insert({
-      content: input.content.trim() || null,
-      course_id: input.courseId,
-      is_preview: input.isPreview,
-      lesson_type: input.lessonType,
-      resource_url: input.resourceUrl.trim() || null,
-      section_id: input.sectionId,
-      sort_order: input.sortOrder ?? 0,
-      tenant_id: input.tenantId,
-      title,
-      video_url: input.videoUrl.trim() || null,
+    .rpc("create_lesson_secure", {
+      p_content: input.content,
+      p_course_id: input.courseId,
+      p_is_preview: input.isPreview,
+      p_lesson_type: input.lessonType,
+      p_resource_url: input.resourceUrl,
+      p_section_id: input.sectionId,
+      p_sort_order: input.sortOrder ?? 0,
+      p_tenant_id: input.tenantId,
+      p_title: title,
+      p_video_url: input.videoUrl,
     })
-    .select(
-      "id,section_id,course_id,tenant_id,title,lesson_type,content,video_url,resource_url,sort_order,is_preview,created_at,updated_at",
-    )
     .single();
 
   if (error) {
     throw error;
   }
 
-  const lesson = data as Lesson;
-
-  await logActivity({
-    action: "lesson_created",
-    description: "Added course lesson",
-    entityId: lesson.id,
-    entityName: lesson.title,
-    entityType: "lesson",
-    metadata: { courseId: lesson.course_id, lessonType: lesson.lesson_type },
-    tenantId: lesson.tenant_id,
-  });
-
-  return lesson;
+  return data as Lesson;
 }
 
 export async function updateLesson(input: UpdateLessonInput) {
-  await requireTenantPermission({
-    description: "Blocked lesson update without course management permission.",
-    permission: "manage_courses",
-    tenantId: input.tenantId,
-  });
-
   const title = input.title.trim();
 
   if (!title) {
@@ -478,89 +333,37 @@ export async function updateLesson(input: UpdateLessonInput) {
 
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
-    .from("lessons")
-    .update({
-      content: input.content.trim() || null,
-      is_preview: input.isPreview,
-      lesson_type: input.lessonType,
-      resource_url: input.resourceUrl.trim() || null,
-      title,
-      video_url: input.videoUrl.trim() || null,
+    .rpc("update_lesson_secure", {
+      p_content: input.content,
+      p_course_id: input.courseId,
+      p_is_preview: input.isPreview,
+      p_lesson_id: input.lessonId,
+      p_lesson_type: input.lessonType,
+      p_resource_url: input.resourceUrl,
+      p_section_id: input.sectionId,
+      p_tenant_id: input.tenantId,
+      p_title: title,
+      p_video_url: input.videoUrl,
     })
-    .eq("tenant_id", input.tenantId)
-    .eq("course_id", input.courseId)
-    .eq("section_id", input.sectionId)
-    .eq("id", input.lessonId)
-    .select(
-      "id,section_id,course_id,tenant_id,title,lesson_type,content,video_url,resource_url,sort_order,is_preview,created_at,updated_at",
-    )
     .single();
 
   if (error) {
     throw error;
   }
 
-  const lesson = data as Lesson;
-
-  await logActivity({
-    action: "lesson_updated",
-    description: "Updated course lesson",
-    entityId: lesson.id,
-    entityName: lesson.title,
-    entityType: "lesson",
-    metadata: { courseId: lesson.course_id, lessonType: lesson.lesson_type },
-    tenantId: lesson.tenant_id,
-  });
-
-  return lesson;
+  return data as Lesson;
 }
 
 export async function deleteLesson(input: DeleteLessonInput) {
-  await requireTenantPermission({
-    description: "Blocked lesson deletion without delete permission.",
-    permission: "delete_records",
-    tenantId: input.tenantId,
-  });
-
   const supabase = getSupabaseClient();
-  const { data: existingLesson, error: existingError } = await supabase
-    .from("lessons")
-    .select(
-      "id,section_id,course_id,tenant_id,title,lesson_type,content,video_url,resource_url,sort_order,is_preview,created_at,updated_at",
-    )
-    .eq("tenant_id", input.tenantId)
-    .eq("course_id", input.courseId)
-    .eq("section_id", input.sectionId)
-    .eq("id", input.lessonId)
-    .maybeSingle();
-
-  if (existingError) {
-    throw existingError;
-  }
-
-  const { error } = await supabase
-    .from("lessons")
-    .delete()
-    .eq("tenant_id", input.tenantId)
-    .eq("course_id", input.courseId)
-    .eq("section_id", input.sectionId)
-    .eq("id", input.lessonId);
+  const { error } = await supabase.rpc("delete_lesson_secure", {
+    p_course_id: input.courseId,
+    p_lesson_id: input.lessonId,
+    p_section_id: input.sectionId,
+    p_tenant_id: input.tenantId,
+  });
 
   if (error) {
     throw error;
-  }
-
-  if (existingLesson) {
-    const lesson = existingLesson as Lesson;
-    await logActivity({
-      action: "lesson_deleted",
-      description: "Deleted course lesson",
-      entityId: lesson.id,
-      entityName: lesson.title,
-      entityType: "lesson",
-      metadata: { courseId: lesson.course_id, lessonType: lesson.lesson_type },
-      severity: "warning",
-      tenantId: lesson.tenant_id,
-    });
   }
 }

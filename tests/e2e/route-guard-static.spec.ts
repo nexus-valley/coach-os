@@ -201,4 +201,57 @@ test.describe("static route guard coverage", () => {
       }
     }
   });
+
+  test("course and cohort writes use RPCs instead of direct browser table mutations", () => {
+    const expectations = [
+      {
+        path: "src/lib/courses.ts",
+        requiredRpcs: [
+          "create_course_secure",
+          "create_course_section_secure",
+          "update_course_section_secure",
+          "delete_course_section_secure",
+          "create_lesson_secure",
+          "update_lesson_secure",
+          "delete_lesson_secure",
+        ],
+        forbiddenPatterns: [
+          /\.from\("courses"\)\s*\r?\n\s*\.insert\(/,
+          /\.from\("courses"\)\s*\r?\n\s*\.update\(/,
+          /\.from\("courses"\)\s*\r?\n\s*\.delete\(/,
+          /\.from\("course_sections"\)\s*\r?\n\s*\.insert\(/,
+          /\.from\("course_sections"\)\s*\r?\n\s*\.update\(/,
+          /\.from\("course_sections"\)\s*\r?\n\s*\.delete\(/,
+          /\.from\("lessons"\)\s*\r?\n\s*\.insert\(/,
+          /\.from\("lessons"\)\s*\r?\n\s*\.update\(/,
+          /\.from\("lessons"\)\s*\r?\n\s*\.delete\(/,
+        ],
+      },
+      {
+        path: "src/lib/cohorts.ts",
+        requiredRpcs: [
+          "create_cohort_secure",
+          "update_cohort_secure",
+          "delete_cohort_secure",
+        ],
+        forbiddenPatterns: [
+          /\.from\("cohorts"\)\s*\r?\n\s*\.insert\(/,
+          /\.from\("cohorts"\)\s*\r?\n\s*\.update\(/,
+          /\.from\("cohorts"\)\s*\r?\n\s*\.delete\(/,
+        ],
+      },
+    ];
+
+    for (const expectation of expectations) {
+      const source = read(expectation.path);
+
+      for (const rpc of expectation.requiredRpcs) {
+        expect(source).toContain(rpc);
+      }
+
+      for (const pattern of expectation.forbiddenPatterns) {
+        expect(source).not.toMatch(pattern);
+      }
+    }
+  });
 });

@@ -1,6 +1,4 @@
-import { logActivity } from "@/src/lib/auditLogger";
 import type { Course } from "@/src/lib/courses";
-import { requireTenantPermission } from "@/src/lib/permissions";
 import type { Student } from "@/src/lib/students";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 import { getCurrentTrainerScope } from "@/src/lib/trainerAssignments";
@@ -55,35 +53,6 @@ const cohortColumns =
 
 const cohortMemberColumns =
   "id,tenant_id,cohort_id,student_id,enrolled_at";
-
-async function getCohortStudentCount(params: {
-  cohortId: string;
-  tenantId: string;
-}) {
-  const supabase = getSupabaseClient();
-  const { count, error } = await supabase
-    .from("cohort_members")
-    .select("id", { count: "exact", head: true })
-    .eq("tenant_id", params.tenantId)
-    .eq("cohort_id", params.cohortId);
-
-  if (error) {
-    throw error;
-  }
-
-  return count ?? 0;
-}
-
-function getCohortAuditMetadata(cohort: Cohort, studentCount: number) {
-  return {
-    cohort_id: cohort.id,
-    cohort_name: cohort.name,
-    end_date: cohort.end_date,
-    linked_course_id: cohort.course_id,
-    start_date: cohort.start_date,
-    student_count: studentCount,
-  };
-}
 
 async function attachCohortRelations(cohorts: Cohort[], tenantId: string) {
   if (cohorts.length === 0) {
@@ -193,12 +162,6 @@ export async function getCohortById(params: {
 }
 
 export async function createCohort(input: CohortInput) {
-  await requireTenantPermission({
-    description: "Blocked cohort creation without course management permission.",
-    permission: "manage_courses",
-    tenantId: input.tenantId,
-  });
-
   const name = input.name.trim();
 
   if (!name) {
@@ -211,44 +174,24 @@ export async function createCohort(input: CohortInput) {
 
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
-    .from("cohorts")
-    .insert({
-      course_id: input.courseId,
-      description: input.description.trim() || null,
-      end_date: input.endDate || null,
-      name,
-      start_date: input.startDate || null,
-      tenant_id: input.tenantId,
+    .rpc("create_cohort_secure", {
+      p_course_id: input.courseId,
+      p_description: input.description,
+      p_end_date: input.endDate || null,
+      p_name: name,
+      p_start_date: input.startDate || null,
+      p_tenant_id: input.tenantId,
     })
-    .select(cohortColumns)
     .single();
 
   if (error) {
     throw error;
   }
 
-  const cohort = data as Cohort;
-
-  await logActivity({
-    action: "cohort_created",
-    description: "Created cohort",
-    entityId: cohort.id,
-    entityName: cohort.name,
-    entityType: "cohort",
-    metadata: getCohortAuditMetadata(cohort, 0),
-    tenantId: cohort.tenant_id,
-  });
-
-  return cohort;
+  return data as Cohort;
 }
 
 export async function updateCohort(input: UpdateCohortInput) {
-  await requireTenantPermission({
-    description: "Blocked cohort update without course management permission.",
-    permission: "manage_courses",
-    tenantId: input.tenantId,
-  });
-
   const name = input.name.trim();
 
   if (!name) {
@@ -257,94 +200,36 @@ export async function updateCohort(input: UpdateCohortInput) {
 
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
-    .from("cohorts")
-    .update({
-      course_id: input.courseId,
-      description: input.description.trim() || null,
-      end_date: input.endDate || null,
-      name,
-      start_date: input.startDate || null,
+    .rpc("update_cohort_secure", {
+      p_cohort_id: input.cohortId,
+      p_course_id: input.courseId,
+      p_description: input.description,
+      p_end_date: input.endDate || null,
+      p_name: name,
+      p_start_date: input.startDate || null,
+      p_tenant_id: input.tenantId,
     })
-    .eq("tenant_id", input.tenantId)
-    .eq("id", input.cohortId)
-    .select(cohortColumns)
     .single();
 
   if (error) {
     throw error;
   }
 
-  const cohort = data as Cohort;
-  const studentCount = await getCohortStudentCount({
-    cohortId: cohort.id,
-    tenantId: cohort.tenant_id,
-  });
-
-  await logActivity({
-    action: "cohort_updated",
-    description: "Updated cohort",
-    entityId: cohort.id,
-    entityName: cohort.name,
-    entityType: "cohort",
-    metadata: getCohortAuditMetadata(cohort, studentCount),
-    tenantId: cohort.tenant_id,
-  });
-
-  return cohort;
+  return data as Cohort;
 }
 
 export async function deleteCohort(params: {
   cohortId: string;
   tenantId: string;
 }) {
-  await requireTenantPermission({
-    description: "Blocked cohort deletion without delete permission.",
-    permission: "delete_records",
-    tenantId: params.tenantId,
-  });
-
   const supabase = getSupabaseClient();
-  const { data: existingCohort, error: existingError } = await supabase
-    .from("cohorts")
-    .select(cohortColumns)
-    .eq("tenant_id", params.tenantId)
-    .eq("id", params.cohortId)
-    .maybeSingle();
-
-  if (existingError) {
-    throw existingError;
-  }
-
-  const studentCount = existingCohort
-    ? await getCohortStudentCount({
-        cohortId: existingCohort.id,
-        tenantId: existingCohort.tenant_id,
-      })
-    : 0;
-
-  const { error } = await supabase
-    .from("cohorts")
-    .delete()
-    .eq("tenant_id", params.tenantId)
-    .eq("id", params.cohortId);
+  const { error } = await supabase.rpc("delete_cohort_secure", {
+    p_cohort_id: params.cohortId,
+    p_tenant_id: params.tenantId,
+  });
 
   if (error) {
     throw error;
-  }
-
-  if (existingCohort) {
-    const cohort = existingCohort as Cohort;
-
-    await logActivity({
-      action: "cohort_deleted",
-      description: "Deleted cohort",
-      entityId: cohort.id,
-      entityName: cohort.name,
-      entityType: "cohort",
-      metadata: getCohortAuditMetadata(cohort, studentCount),
-      severity: "warning",
-      tenantId: cohort.tenant_id,
-    });
   }
 }
 
