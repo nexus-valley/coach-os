@@ -562,4 +562,50 @@ test.describe("static route guard coverage", () => {
       "upi://pay",
     );
   });
+
+  test("student progress and certificates use secure RPC paths", () => {
+    const studentPortal = read("src/lib/studentPortal.ts");
+    const certificates = read("src/lib/certificates.ts");
+    const module69_8Sql = read("supabase/module69_8_student_progress_certificates.sql");
+
+    for (const rpc of [
+      "mark_lesson_progress_secure",
+      "recalculate_student_course_progress_secure",
+      "get_certificate_data_secure",
+      "m69_8_assert_can_manage_progress",
+    ]) {
+      expect(module69_8Sql).toContain(rpc);
+    }
+
+    expect(module69_8Sql).toContain("array['manage_students', 'manage_courses']");
+    expect(module69_8Sql).toContain(
+      "revoke execute on function public.m69_8_assert_can_manage_progress",
+    );
+
+    expect(studentPortal).toContain("mark_lesson_progress_secure");
+    expect(certificates).toContain("recalculate_student_course_progress_secure");
+    expect(certificates).toContain("get_certificate_data_secure");
+
+    for (const source of [studentPortal, certificates]) {
+      for (const pattern of [
+        /\.from\("lesson_progress"\)\s*\r?\n\s*\.insert\(/,
+        /\.from\("lesson_progress"\)\s*\r?\n\s*\.update\(/,
+        /\.from\("lesson_progress"\)\s*\r?\n\s*\.delete\(/,
+        /\.from\("lesson_progress"\)\s*\r?\n\s*\.upsert\(/,
+        /\.from\("enrollments"\)\s*\r?\n\s*\.insert\(/,
+        /\.from\("enrollments"\)\s*\r?\n\s*\.update\(/,
+        /\.from\("enrollments"\)\s*\r?\n\s*\.delete\(/,
+        /\.from\("enrollments"\)\s*\r?\n\s*\.upsert\(/,
+        /\.from\("certificates"\)\s*\r?\n\s*\.(insert|update|delete|upsert)\(/,
+        /\.from\("student_certificates"\)\s*\r?\n\s*\.(insert|update|delete|upsert)\(/,
+        /\.from\("certificate_templates"\)\s*\r?\n\s*\.(insert|update|delete|upsert)\(/,
+      ]) {
+        expect(source).not.toMatch(pattern);
+      }
+    }
+
+    expect(certificates).not.toContain('runAutomationTrigger("certificate_issued"');
+    expect(certificates).not.toContain('action: "certificate_generated"');
+    expect(studentPortal).not.toContain("student_name: scope.student.full_name");
+  });
 });

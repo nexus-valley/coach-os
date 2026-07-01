@@ -3,7 +3,6 @@ import type {
   CourseSection,
   Lesson,
 } from "@/src/lib/courses";
-import { syncEnrollmentCompletion } from "@/src/lib/certificates";
 import {
   getCohortsForStudent,
   type CohortWithCourse,
@@ -1085,11 +1084,10 @@ export async function getStudentPortalOverview(params: StudentPortalRequest) {
       action: "student_portal_previewed",
       description: "Previewed student portal",
       entityId: scope.student.id,
-      entityName: scope.student.full_name,
+      entityName: "Student portal",
       entityType: "student",
       metadata: {
-        student_id: scope.student.id,
-        student_name: scope.student.full_name,
+        studentId: scope.student.id,
       },
       tenantId: params.tenantId,
     });
@@ -1236,40 +1234,19 @@ export async function updateLessonProgress(params: {
   }
 
   const supabase = getSupabaseClient();
-  const completedAt =
-    params.status === "completed" ? new Date().toISOString() : null;
-
   const { data, error } = await supabase
-    .from("lesson_progress")
-    .upsert(
-      {
-        completed_at: completedAt,
-        course_id: params.courseId,
-        lesson_id: params.lessonId,
-        status: params.status,
-        student_id: params.studentId,
-        tenant_id: params.tenantId,
-      },
-      {
-        onConflict: "tenant_id,student_id,course_id,lesson_id",
-      },
-    )
-    .select(progressSelect)
-    .eq("tenant_id", params.tenantId)
-    .eq("student_id", params.studentId)
-    .eq("course_id", params.courseId)
-    .eq("lesson_id", params.lessonId)
+    .rpc("mark_lesson_progress_secure", {
+      p_course_id: params.courseId,
+      p_lesson_id: params.lessonId,
+      p_status: params.status,
+      p_student_id: params.studentId,
+      p_tenant_id: params.tenantId,
+    })
     .single();
 
   if (error) {
     throw error;
   }
-
-  await syncEnrollmentCompletion(
-    params.studentId,
-    params.courseId,
-    params.tenantId,
-  );
 
   return data as LessonProgress;
 }
