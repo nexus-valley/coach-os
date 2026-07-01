@@ -61,8 +61,6 @@ export type NotificationFilters = {
 
 const notificationSelect =
   "id,tenant_id,user_id,type,title,message,entity_type,entity_id,severity,status,action_url,metadata_json,created_at,read_at";
-const preferencesSelect =
-  "id,tenant_id,user_id,enable_in_app,enable_email,enable_whatsapp,enable_attendance_alerts,enable_payment_alerts,enable_session_reminders,enable_system_notifications,created_at,updated_at";
 
 function isMissingTableError(error: { code?: string; message?: string } | null) {
   const message = error?.message?.toLowerCase() ?? "";
@@ -149,21 +147,18 @@ export async function createNotification(input: {
 }) {
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
-    .from("notifications")
-    .insert({
-      action_url: input.actionUrl ?? null,
-      entity_id: input.entityId ?? null,
-      entity_type: input.entityType ?? null,
-      message: input.message,
-      metadata_json: input.metadata ?? {},
-      severity: input.severity ?? "info",
-      status: "unread",
-      tenant_id: input.tenantId,
-      title: input.title,
-      type: input.type,
-      user_id: input.userId,
+    .rpc("create_notification_secure", {
+      p_action_url: input.actionUrl ?? null,
+      p_entity_id: input.entityId ?? null,
+      p_entity_type: input.entityType ?? null,
+      p_message: input.message,
+      p_metadata: input.metadata ?? {},
+      p_severity: input.severity ?? "info",
+      p_tenant_id: input.tenantId,
+      p_title: input.title,
+      p_type: input.type,
+      p_user_id: input.userId,
     })
-    .select(notificationSelect)
     .single();
 
   if (error) {
@@ -316,24 +311,18 @@ async function updateNotificationStatus(input: {
   status: Extract<NotificationStatus, "archived" | "read">;
   tenantId: string;
 }) {
-  const user = await getCurrentUser();
-  const role = await getMemberRoleForTenant(input.tenantId, user.id);
   const supabase = getSupabaseClient();
-  const patch =
-    input.status === "read"
-      ? { read_at: new Date().toISOString(), status: "read" }
-      : { status: "archived" };
-  let query = supabase
-    .from("notifications")
-    .update(patch)
-    .eq("tenant_id", input.tenantId)
-    .eq("id", input.notificationId);
-
-  if (role !== "owner" && role !== "admin") {
-    query = query.eq("user_id", user.id);
-  }
-
-  const { data, error } = await query.select(notificationSelect).single();
+  const { data, error } = await supabase
+    .rpc(
+      input.status === "read"
+        ? "mark_notification_read_secure"
+        : "archive_notification_secure",
+      {
+        p_notification_id: input.notificationId,
+        p_tenant_id: input.tenantId,
+      },
+    )
+    .single();
 
   if (error) {
     throw error;
@@ -381,14 +370,12 @@ export async function archiveNotification(
 }
 
 export async function getNotificationPreferences(tenantId: string) {
-  const user = await getCurrentUser();
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
-    .from("notification_preferences")
-    .select(preferencesSelect)
-    .eq("tenant_id", tenantId)
-    .eq("user_id", user.id)
-    .maybeSingle();
+    .rpc("ensure_notification_preferences_secure", {
+      p_tenant_id: tenantId,
+    })
+    .single();
 
   if (error) {
     if (isMissingTableError(error)) {
@@ -398,28 +385,7 @@ export async function getNotificationPreferences(tenantId: string) {
     throw error;
   }
 
-  if (data) {
-    return data as NotificationPreferences;
-  }
-
-  const { data: created, error: createError } = await supabase
-    .from("notification_preferences")
-    .insert({
-      tenant_id: tenantId,
-      user_id: user.id,
-    })
-    .select(preferencesSelect)
-    .single();
-
-  if (createError) {
-    if (isMissingTableError(createError)) {
-      return null;
-    }
-
-    throw createError;
-  }
-
-  return created as NotificationPreferences;
+  return data as NotificationPreferences;
 }
 
 export async function updateNotificationPreferences(
@@ -437,19 +403,12 @@ export async function updateNotificationPreferences(
     >
   >,
 ) {
-  const user = await getCurrentUser();
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
-    .from("notification_preferences")
-    .upsert(
-      {
-        ...preferences,
-        tenant_id: tenantId,
-        user_id: user.id,
-      },
-      { onConflict: "tenant_id,user_id" },
-    )
-    .select(preferencesSelect)
+    .rpc("update_notification_preferences_secure", {
+      p_preferences: preferences,
+      p_tenant_id: tenantId,
+    })
     .single();
 
   if (error) {

@@ -44,19 +44,6 @@ const auditLogListSelect =
   "id,tenant_id,user_id,user_name,user_email,action,entity_type,entity_id,entity_name,description,severity,created_at";
 const auditLogDetailSelect = `${auditLogListSelect},metadata`;
 
-function getUserDisplayName(user: {
-  email?: string;
-  user_metadata?: Record<string, unknown>;
-}) {
-  const metadataName = user.user_metadata?.full_name;
-
-  if (typeof metadataName === "string" && metadataName.trim()) {
-    return metadataName.trim();
-  }
-
-  return user.email?.split("@")[0] ?? "Workspace user";
-}
-
 function getStartDateForRange(dateRange: AuditLogFilters["dateRange"]) {
   const now = new Date();
 
@@ -138,32 +125,17 @@ function sanitizeSearchFilter(search: string) {
 export async function logActivity(input: LogActivityInput) {
   try {
     const supabase = getSupabaseClient();
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
-
-    if (userError || !user) {
-      return null;
-    }
-
-    const userId = input.userId ?? user.id;
     const { data, error } = await supabase
-      .from("audit_logs")
-      .insert({
-        action: input.action,
-        description: input.description ?? null,
-        entity_id: input.entityId ?? null,
-        entity_name: input.entityName ?? null,
-        entity_type: input.entityType,
-        metadata: input.metadata ?? {},
-        severity: input.severity ?? inferSeverity(input.action),
-        tenant_id: input.tenantId,
-        user_email: user.email ?? null,
-        user_id: userId,
-        user_name: getUserDisplayName(user),
+      .rpc("record_audit_event_secure", {
+        p_action: input.action,
+        p_description: input.description ?? null,
+        p_entity_id: input.entityId ?? null,
+        p_entity_name: input.entityName ?? null,
+        p_entity_type: input.entityType,
+        p_metadata: input.metadata ?? {},
+        p_severity: input.severity ?? inferSeverity(input.action),
+        p_tenant_id: input.tenantId,
       })
-      .select(auditLogDetailSelect)
       .single();
 
     if (error) {

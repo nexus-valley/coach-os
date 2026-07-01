@@ -415,4 +415,75 @@ test.describe("static route guard coverage", () => {
       }
     }
   });
+
+  test("notification reminder and audit writes use RPCs instead of direct browser table mutations", () => {
+    const expectations = [
+      {
+        path: "src/lib/notifications.ts",
+        requiredRpcs: [
+          "create_notification_secure",
+          "mark_notification_read_secure",
+          "archive_notification_secure",
+          "ensure_notification_preferences_secure",
+          "update_notification_preferences_secure",
+        ],
+        forbiddenPatterns: [
+          /\.from\("notifications"\)\s*\r?\n\s*\.insert\(/,
+          /\.from\("notifications"\)\s*\r?\n\s*\.update\(/,
+          /\.from\("notifications"\)\s*\r?\n\s*\.delete\(/,
+          /\.from\("notifications"\)\s*\r?\n\s*\.upsert\(/,
+          /\.from\("notification_preferences"\)\s*\r?\n\s*\.insert\(/,
+          /\.from\("notification_preferences"\)\s*\r?\n\s*\.update\(/,
+          /\.from\("notification_preferences"\)\s*\r?\n\s*\.delete\(/,
+          /\.from\("notification_preferences"\)\s*\r?\n\s*\.upsert\(/,
+        ],
+      },
+      {
+        path: "src/lib/reminders.ts",
+        requiredRpcs: [
+          "create_reminder_secure",
+          "update_reminder_status_secure",
+          "delete_reminder_secure",
+        ],
+        forbiddenPatterns: [
+          /\.from\("reminders"\)\s*\r?\n\s*\.insert\(/,
+          /\.from\("reminders"\)\s*\r?\n\s*\.update\(/,
+          /\.from\("reminders"\)\s*\r?\n\s*\.delete\(/,
+          /\.from\("reminders"\)\s*\r?\n\s*\.upsert\(/,
+        ],
+      },
+      {
+        path: "src/lib/auditLogger.ts",
+        requiredRpcs: ["record_audit_event_secure"],
+        forbiddenPatterns: [
+          /\.from\("audit_logs"\)\s*\r?\n\s*\.insert\(/,
+          /\.from\("audit_logs"\)\s*\r?\n\s*\.update\(/,
+          /\.from\("audit_logs"\)\s*\r?\n\s*\.delete\(/,
+          /\.from\("audit_logs"\)\s*\r?\n\s*\.upsert\(/,
+        ],
+      },
+      {
+        path: "src/lib/communication.ts",
+        requiredRpcs: ["queue_communication_log_secure"],
+        forbiddenPatterns: [
+          /\.from\("communication_logs"\)\s*\r?\n\s*\.insert\(/,
+          /\.from\("communication_logs"\)\s*\r?\n\s*\.update\(/,
+          /\.from\("communication_logs"\)\s*\r?\n\s*\.delete\(/,
+          /\.from\("communication_logs"\)\s*\r?\n\s*\.upsert\(/,
+        ],
+      },
+    ];
+
+    for (const expectation of expectations) {
+      const source = read(expectation.path);
+
+      for (const rpc of expectation.requiredRpcs) {
+        expect(source).toContain(rpc);
+      }
+
+      for (const pattern of expectation.forbiddenPatterns) {
+        expect(source).not.toMatch(pattern);
+      }
+    }
+  });
 });

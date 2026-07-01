@@ -18,9 +18,6 @@ export type CommunicationLog = {
   user_id: string | null;
 };
 
-const communicationLogSelect =
-  "id,tenant_id,user_id,channel,type,status,target,subject,message,metadata_json,created_at";
-
 function isMissingTableError(error: { code?: string; message?: string } | null) {
   const message = error?.message?.toLowerCase() ?? "";
 
@@ -45,19 +42,17 @@ export async function queueCommunicationLog(input: {
 }) {
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
-    .from("communication_logs")
-    .insert({
-      channel: input.channel,
-      message: input.message ?? null,
-      metadata_json: input.metadata ?? {},
-      status: input.status ?? "queued",
-      subject: input.subject ?? null,
-      target: input.target ?? null,
-      tenant_id: input.tenantId,
-      type: input.type,
-      user_id: input.userId ?? null,
+    .rpc("queue_communication_log_secure", {
+      p_channel: input.channel,
+      p_message: input.message ?? null,
+      p_metadata: input.metadata ?? {},
+      p_status: input.status ?? "queued",
+      p_subject: input.subject ?? null,
+      p_target: input.target ?? null,
+      p_tenant_id: input.tenantId,
+      p_type: input.type,
+      p_user_id: input.userId ?? null,
     })
-    .select(communicationLogSelect)
     .single();
 
   if (error) {
@@ -104,7 +99,7 @@ export async function logNotificationDelivery(input: {
     channel: "in_app",
     message: input.message,
     metadata: { notificationId: input.notificationId },
-    status: "sent",
+    status: "queued",
     subject: input.title,
     tenantId: input.tenantId,
     type: input.type,

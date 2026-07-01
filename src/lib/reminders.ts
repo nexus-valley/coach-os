@@ -1,7 +1,6 @@
 import type { Course } from "@/src/lib/courses";
 import type { Payment } from "@/src/lib/payments";
 import type { Student } from "@/src/lib/students";
-import { logActivity } from "@/src/lib/auditLogger";
 import { requireTenantPermission } from "@/src/lib/permissions";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 
@@ -180,18 +179,16 @@ export async function createReminder(payload: CreateReminderPayload) {
 
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
-    .from("reminders")
-    .insert({
-      course_id: payload.course_id || null,
-      description: payload.description.trim() || null,
-      due_at: payload.due_at,
-      payment_id: payload.payment_id || null,
-      reminder_type: payload.reminder_type,
-      student_id: payload.student_id || null,
-      tenant_id: payload.tenant_id,
-      title,
+    .rpc("create_reminder_secure", {
+      p_course_id: payload.course_id || null,
+      p_description: payload.description.trim() || null,
+      p_due_at: payload.due_at,
+      p_payment_id: payload.payment_id || null,
+      p_reminder_type: payload.reminder_type,
+      p_student_id: payload.student_id || null,
+      p_tenant_id: payload.tenant_id,
+      p_title: title,
     })
-    .select(reminderSelect)
     .single();
 
   if (error) {
@@ -199,21 +196,6 @@ export async function createReminder(payload: CreateReminderPayload) {
   }
 
   const reminder = data as Reminder;
-
-  await logActivity({
-    action: "reminder_created",
-    description: "Created reminder",
-    entityId: reminder.id,
-    entityName: reminder.title,
-    entityType: "reminder",
-    metadata: {
-      courseId: reminder.course_id,
-      dueAt: reminder.due_at,
-      studentId: reminder.student_id,
-      type: reminder.reminder_type,
-    },
-    tenantId: reminder.tenant_id,
-  });
 
   return reminder;
 }
@@ -231,11 +213,11 @@ export async function updateReminderStatus(
 
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
-    .from("reminders")
-    .update({ status })
-    .eq("tenant_id", tenantId)
-    .eq("id", reminderId)
-    .select(reminderSelect)
+    .rpc("update_reminder_status_secure", {
+      p_reminder_id: reminderId,
+      p_status: status,
+      p_tenant_id: tenantId,
+    })
     .single();
 
   if (error) {
@@ -243,20 +225,6 @@ export async function updateReminderStatus(
   }
 
   const reminder = data as Reminder;
-
-  await logActivity({
-    action:
-      status === "completed" ? "reminder_completed" : "reminder_status_updated",
-    description:
-      status === "completed"
-        ? "Marked reminder as completed"
-        : `Updated reminder status to ${status}`,
-    entityId: reminder.id,
-    entityName: reminder.title,
-    entityType: "reminder",
-    metadata: { status: reminder.status },
-    tenantId: reminder.tenant_id,
-  });
 
   return reminder;
 }
@@ -269,43 +237,13 @@ export async function deleteReminder(reminderId: string, tenantId: string) {
   });
 
   const supabase = getSupabaseClient();
-  const { data: existingReminder, error: existingError } = await supabase
-    .from("reminders")
-    .select(reminderSelect)
-    .eq("tenant_id", tenantId)
-    .eq("id", reminderId)
-    .maybeSingle();
-
-  if (existingError) {
-    throw existingError;
-  }
-
-  const { error } = await supabase
-    .from("reminders")
-    .delete()
-    .eq("tenant_id", tenantId)
-    .eq("id", reminderId);
+  const { error } = await supabase.rpc("delete_reminder_secure", {
+    p_reminder_id: reminderId,
+    p_tenant_id: tenantId,
+  });
 
   if (error) {
     throw error;
-  }
-
-  if (existingReminder) {
-    const reminder = existingReminder as Reminder;
-    await logActivity({
-      action: "reminder_deleted",
-      description: "Deleted reminder",
-      entityId: reminder.id,
-      entityName: reminder.title,
-      entityType: "reminder",
-      metadata: {
-        dueAt: reminder.due_at,
-        status: reminder.status,
-        type: reminder.reminder_type,
-      },
-      severity: "warning",
-      tenantId: reminder.tenant_id,
-    });
   }
 }
 
