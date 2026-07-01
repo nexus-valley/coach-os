@@ -448,9 +448,7 @@ export function PaymentLinksPageClient() {
     form.paymentUrl.trim() ||
     (Number(form.amount) > 0
       ? buildManualUpiPaymentUrl(Number(form.amount), tenantSettings)
-      : `upi://pay?pa=YOUR_UPI_ID&pn=${encodeURIComponent(
-          workspaceBranding.displayName,
-        )}&am=AMOUNT&cu=INR`);
+      : "");
 
   function getPaymentLinkShareUrl(link: PaymentLinkWithRelations) {
     const message = buildPaymentReminderMessage({

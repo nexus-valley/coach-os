@@ -1,9 +1,7 @@
 import type { Course } from "@/src/lib/courses";
 import type { Enrollment } from "@/src/lib/enrollments";
 import type { Student } from "@/src/lib/students";
-import { logActivity } from "@/src/lib/auditLogger";
-import { runAutomationTrigger } from "@/src/lib/automationTriggers";
-import { requireEffectivePermission, requireTenantPermission } from "@/src/lib/permissions";
+import { requireEffectivePermission } from "@/src/lib/permissions";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 
 export type PaymentMethod = "UPI" | "Cash" | "Bank" | "UPI Link";
@@ -51,6 +49,12 @@ export type CreatePaymentInput = {
 
 const paymentSelect =
   "id,tenant_id,student_id,course_id,enrollment_id,amount,currency,payment_method,status,paid_at,receipt_number,receipt_generated_at,notes,created_at";
+
+function legacyPaymentWriteRetired(): never {
+  throw new Error(
+    "Legacy payment writes are retired. Use Finance Center to manage invoices, payments, and receipts.",
+  );
+}
 
 async function loadPaymentRelations(payments: Payment[], tenantId: string) {
   const supabase = getSupabaseClient();
@@ -145,77 +149,9 @@ export async function getPaymentsForTenant(tenantId: string) {
   return getPaymentsByFilter(tenantId);
 }
 
-export async function createPayment(input: CreatePaymentInput) {
-  await requireEffectivePermission({
-    action: "create_payment",
-    description: "Blocked payment creation without payment management permission.",
-    entityId: input.student_id,
-    entityType: "student",
-    permission: "manage_payments",
-    scopeId: input.student_id,
-    scopeType: "student",
-    tenantId: input.tenant_id,
-  });
-
-  const supabase = getSupabaseClient();
-  if (!Number.isFinite(input.amount) || input.amount <= 0) {
-    throw new Error("Payment amount must be greater than zero.");
-  }
-
-  const { data, error } = await supabase
-    .from("payments")
-    .insert({
-      amount: input.amount,
-      course_id: input.course_id,
-      currency: "USD",
-      enrollment_id: input.enrollment_id,
-      notes: input.notes.trim() || null,
-      payment_method: input.payment_method,
-      status: input.status,
-      student_id: input.student_id,
-      tenant_id: input.tenant_id,
-    })
-    .select(paymentSelect)
-    .single();
-
-  if (error) {
-    throw error;
-  }
-
-  const payment = data as Payment;
-
-  await logActivity({
-    action: "payment_created",
-    description: "Recorded payment",
-    entityId: payment.id,
-    entityName: `${payment.currency} ${payment.amount}`,
-    entityType: "payment",
-    metadata: {
-      amount: payment.amount,
-      courseId: payment.course_id,
-      method: payment.payment_method,
-      status: payment.status,
-      studentId: payment.student_id,
-    },
-    tenantId: payment.tenant_id,
-  });
-
-  if (payment.status === "completed") {
-    await runAutomationTrigger("payment_received", {
-      entityId: payment.id,
-      entityType: "payment",
-      metadata: {
-        amount: payment.amount,
-        course_id: payment.course_id,
-        currency: payment.currency,
-        status: payment.status,
-        student_id: payment.student_id,
-      },
-      tenantId: payment.tenant_id,
-    });
-  }
-
-  return payment;
+export async function createPayment(input: CreatePaymentInput): Promise<Payment> {
+  void input;
+  legacyPaymentWriteRetired();
 }
 
 export async function getPaymentsByStudent(studentId: string, tenantId: string) {
@@ -225,52 +161,11 @@ export async function getPaymentsByStudent(studentId: string, tenantId: string) 
   });
 }
 
-export async function deletePayment(paymentId: string, tenantId: string) {
-  await requireTenantPermission({
-    description: "Blocked payment deletion without delete permission.",
-    permission: "delete_records",
-    tenantId,
-  });
-
-  const supabase = getSupabaseClient();
-  const { data: existingPayment, error: existingError } = await supabase
-    .from("payments")
-    .select(paymentSelect)
-    .eq("tenant_id", tenantId)
-    .eq("id", paymentId)
-    .maybeSingle();
-
-  if (existingError) {
-    throw existingError;
-  }
-
-  const { error } = await supabase
-    .from("payments")
-    .delete()
-    .eq("tenant_id", tenantId)
-    .eq("id", paymentId);
-
-  if (error) {
-    throw error;
-  }
-
-  if (existingPayment) {
-    const payment = existingPayment as Payment;
-    await logActivity({
-      action: "payment_deleted",
-      description: "Deleted payment record",
-      entityId: payment.id,
-      entityName: `${payment.currency} ${payment.amount}`,
-      entityType: "payment",
-      metadata: {
-        amount: payment.amount,
-        courseId: payment.course_id,
-        method: payment.payment_method,
-        status: payment.status,
-        studentId: payment.student_id,
-      },
-      severity: "warning",
-      tenantId: payment.tenant_id,
-    });
-  }
+export async function deletePayment(
+  paymentId: string,
+  tenantId: string,
+): Promise<void> {
+  void paymentId;
+  void tenantId;
+  legacyPaymentWriteRetired();
 }

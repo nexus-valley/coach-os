@@ -1,8 +1,6 @@
 import type { Course } from "@/src/lib/courses";
 import type { Payment, PaymentWithRelations } from "@/src/lib/payments";
 import type { Student } from "@/src/lib/students";
-import { logActivity } from "@/src/lib/auditLogger";
-import { requireTenantPermission } from "@/src/lib/permissions";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 
 type ReceiptCourse = Pick<Course, "id" | "tenant_id" | "title">;
@@ -13,6 +11,12 @@ type ReceiptStudent = Pick<
 
 const receiptPaymentSelect =
   "id,tenant_id,student_id,course_id,enrollment_id,amount,currency,payment_method,status,paid_at,receipt_number,receipt_generated_at,notes,created_at";
+
+function legacyReceiptWriteRetired(): never {
+  throw new Error(
+    "Legacy receipt generation is retired. Use Finance Center receipts.",
+  );
+}
 
 function padReceiptSequence(value: number) {
   return String(value).padStart(4, "0");
@@ -76,98 +80,10 @@ export async function generateReceiptNumber(
 export async function attachReceiptToPayment(
   paymentId: string,
   tenantId: string,
-) {
-  await requireTenantPermission({
-    description: "Blocked receipt generation without payment management permission.",
-    permission: "manage_payments",
-    tenantId,
-  });
-
-  const supabase = getSupabaseClient();
-  const existingReceipt = await getPaymentReceipt(paymentId, tenantId);
-
-  if (!existingReceipt) {
-    throw new Error("Payment not found in this workspace.");
-  }
-
-  if (existingReceipt.receipt_number) {
-    return existingReceipt;
-  }
-
-  const receiptNumber = await generateReceiptNumber(paymentId, tenantId);
-  const { data, error } = await supabase
-    .from("payments")
-    .update({
-      receipt_generated_at: new Date().toISOString(),
-      receipt_number: receiptNumber,
-    })
-    .eq("tenant_id", tenantId)
-    .eq("id", paymentId)
-    .select(receiptPaymentSelect)
-    .single();
-
-  if (error) {
-    if (error.code === "23505") {
-      const fallbackReceiptNumber = `RCPT-${new Date().getFullYear()}-${paymentId
-        .replace(/-/g, "")
-        .slice(0, 8)
-        .toUpperCase()}`;
-      const fallbackResult = await supabase
-        .from("payments")
-        .update({
-          receipt_generated_at: new Date().toISOString(),
-          receipt_number: fallbackReceiptNumber,
-        })
-        .eq("tenant_id", tenantId)
-        .eq("id", paymentId)
-        .select(receiptPaymentSelect)
-        .single();
-
-      if (fallbackResult.error) {
-        throw fallbackResult.error;
-      }
-
-      const fallbackReceipt = await attachReceiptRelations(
-        fallbackResult.data as Payment,
-      );
-
-      await logActivity({
-        action: "receipt_generated",
-        description: "Generated payment receipt",
-        entityId: fallbackReceipt.id,
-        entityName: fallbackReceipt.receipt_number ?? "Receipt",
-        entityType: "receipt",
-        metadata: {
-          amount: fallbackReceipt.amount,
-          paymentId: fallbackReceipt.id,
-          receiptNumber: fallbackReceipt.receipt_number,
-        },
-        tenantId: fallbackReceipt.tenant_id,
-      });
-
-      return fallbackReceipt;
-    }
-
-    throw error;
-  }
-
-  const receipt = await attachReceiptRelations(data as Payment);
-
-  await logActivity({
-    action: "receipt_generated",
-    description: "Generated payment receipt",
-    entityId: receipt.id,
-    entityName: receipt.receipt_number ?? "Receipt",
-    entityType: "receipt",
-    metadata: {
-      amount: receipt.amount,
-      paymentId: receipt.id,
-      receiptNumber: receipt.receipt_number,
-    },
-    tenantId: receipt.tenant_id,
-  });
-
-  return receipt;
+): Promise<PaymentWithRelations> {
+  void paymentId;
+  void tenantId;
+  legacyReceiptWriteRetired();
 }
 
 export async function getPaymentReceipt(paymentId: string, tenantId: string) {

@@ -486,4 +486,80 @@ test.describe("static route guard coverage", () => {
       }
     }
   });
+
+  test("legacy billing and payment writes are retired in favor of finance RPCs", () => {
+    const finance = read("src/lib/finance.ts");
+    const module55Sql = read("supabase/module55_tenant_finance_center.sql");
+
+    for (const rpc of [
+      "create_invoice",
+      "update_invoice",
+      "void_invoice",
+      "record_payment",
+      "cancel_payment",
+      "apply_invoice_adjustment",
+      "get_student_finance_summary",
+    ]) {
+      expect(module55Sql).toContain(rpc);
+    }
+
+    for (const rpc of [
+      "create_invoice",
+      "void_invoice",
+      "record_payment",
+      "cancel_payment",
+      "apply_invoice_adjustment",
+      "get_student_finance_summary",
+    ]) {
+      expect(finance).toContain(rpc);
+    }
+
+    const expectations = [
+      {
+        path: "src/lib/payments.ts",
+        retiredMessage: "Legacy payment writes are retired",
+        forbiddenPatterns: [
+          /\.from\("payments"\)\s*\r?\n\s*\.insert\(/,
+          /\.from\("payments"\)\s*\r?\n\s*\.update\(/,
+          /\.from\("payments"\)\s*\r?\n\s*\.delete\(/,
+          /\.from\("payments"\)\s*\r?\n\s*\.upsert\(/,
+        ],
+      },
+      {
+        path: "src/lib/paymentLinks.ts",
+        retiredMessage: "Payment links are on hold",
+        forbiddenPatterns: [
+          /\.from\("payment_links"\)\s*\r?\n\s*\.insert\(/,
+          /\.from\("payment_links"\)\s*\r?\n\s*\.update\(/,
+          /\.from\("payment_links"\)\s*\r?\n\s*\.delete\(/,
+          /\.from\("payment_links"\)\s*\r?\n\s*\.upsert\(/,
+          /\.from\("payments"\)\s*\r?\n\s*\.insert\(/,
+          /upi:\/\/pay/,
+        ],
+      },
+      {
+        path: "src/lib/receipts.ts",
+        retiredMessage: "Legacy receipt generation is retired",
+        forbiddenPatterns: [
+          /\.from\("payments"\)\s*\r?\n\s*\.insert\(/,
+          /\.from\("payments"\)\s*\r?\n\s*\.update\(/,
+          /\.from\("payments"\)\s*\r?\n\s*\.delete\(/,
+          /\.from\("payments"\)\s*\r?\n\s*\.upsert\(/,
+        ],
+      },
+    ];
+
+    for (const expectation of expectations) {
+      const source = read(expectation.path);
+      expect(source).toContain(expectation.retiredMessage);
+
+      for (const pattern of expectation.forbiddenPatterns) {
+        expect(source).not.toMatch(pattern);
+      }
+    }
+
+    expect(read("src/components/payment-links/PaymentLinksPageClient.tsx")).not.toContain(
+      "upi://pay",
+    );
+  });
 });
