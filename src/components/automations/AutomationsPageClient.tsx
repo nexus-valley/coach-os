@@ -24,7 +24,6 @@ import {
   type AutomationRun,
   type AutomationTriggerType,
 } from "@/src/lib/automations";
-import { runAutomationRule } from "@/src/lib/automationRunner";
 import { logActivity } from "@/src/lib/auditLogger";
 import { canManageAutomations as canManageAutomationsForRole } from "@/src/lib/permissions";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
@@ -431,36 +430,6 @@ export function AutomationsPageClient() {
     }
   }
 
-  async function handleTest(rule: AutomationRule) {
-    if (!tenant || !canManageAutomations) {
-      return;
-    }
-
-    setMutatingId(`test-${rule.id}`);
-    setActionError("");
-    setSuccess("");
-
-    try {
-      const result = await runAutomationRule(rule, {
-        entityType: "automation",
-        metadata: { manualTest: true },
-        tenantId: tenant.id,
-        triggerSource: "manual_test",
-      });
-
-      await refreshAutomationData();
-      setSuccess(
-        result.status === "success"
-          ? `Automation "${rule.name}" executed.`
-          : `Automation "${rule.name}" ${result.status}.`,
-      );
-    } catch (caught) {
-      setActionError(getErrorMessage(caught, "Unable to test automation."));
-    } finally {
-      setMutatingId("");
-    }
-  }
-
   return (
     <div className="mx-auto max-w-7xl">
       <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
@@ -655,14 +624,6 @@ export function AutomationsPageClient() {
                   variant="secondary"
                 >
                   {rule.status === "active" ? "Disable" : "Enable"}
-                </Button>
-                <Button
-                  disabled={mutatingId === `test-${rule.id}`}
-                  onClick={() => handleTest(rule)}
-                  size="sm"
-                  type="button"
-                >
-                  {mutatingId === `test-${rule.id}` ? "Running..." : "Run test"}
                 </Button>
                 <Button
                   onClick={() => openEditForm(rule)}

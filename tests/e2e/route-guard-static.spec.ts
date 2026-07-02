@@ -608,4 +608,61 @@ test.describe("static route guard coverage", () => {
     expect(certificates).not.toContain('action: "certificate_generated"');
     expect(studentPortal).not.toContain("student_name: scope.student.full_name");
   });
+
+  test("automation writes use secure RPC paths and browser runner is retired", () => {
+    const automations = read("src/lib/automations.ts");
+    const automationRunner = read("src/lib/automationRunner.ts");
+    const automationPage = read("src/components/automations/AutomationsPageClient.tsx");
+    const automationTriggers = read("src/lib/automationTriggers.ts");
+    const module69_9Sql = read("supabase/module69_9_automation_write_consolidation.sql");
+
+    for (const rpc of [
+      "create_automation_rule_secure",
+      "update_automation_rule_secure",
+      "set_automation_rule_enabled_secure",
+      "delete_automation_rule_secure",
+      "create_automation_condition_secure",
+      "update_automation_condition_secure",
+      "delete_automation_condition_secure",
+      "create_automation_action_secure",
+      "update_automation_action_secure",
+      "delete_automation_action_secure",
+    ]) {
+      expect(module69_9Sql).toContain(rpc);
+    }
+
+    expect(module69_9Sql).toContain(
+      "revoke execute on function public.run_automation_trigger_unvalidated",
+    );
+    expect(module69_9Sql).toContain(
+      "grant execute on function public.run_automation_trigger",
+    );
+
+    for (const rpc of [
+      "create_automation_rule_secure",
+      "update_automation_rule_secure",
+      "set_automation_rule_enabled_secure",
+      "delete_automation_rule_secure",
+    ]) {
+      expect(automations).toContain(rpc);
+    }
+
+    for (const source of [automations, automationRunner]) {
+      for (const pattern of [
+        /\.from\("automation_rules"\)\s*\r?\n\s*\.(insert|update|delete|upsert)\(/,
+        /\.from\("automation_rule_conditions"\)\s*\r?\n\s*\.(insert|update|delete|upsert)\(/,
+        /\.from\("automation_rule_actions"\)\s*\r?\n\s*\.(insert|update|delete|upsert)\(/,
+        /\.from\("automation_runs"\)\s*\r?\n\s*\.(insert|update|delete|upsert)\(/,
+        /\.from\("automation_run_logs"\)\s*\r?\n\s*\.(insert|update|delete|upsert)\(/,
+      ]) {
+        expect(source).not.toMatch(pattern);
+      }
+    }
+
+    expect(automationPage).not.toContain("runAutomationRule");
+    expect(automationPage).not.toContain("Run test");
+    expect(automationRunner).toContain("Browser-side automation action execution is retired");
+    expect(automationTriggers).toContain("run_automation_trigger");
+    expect(automationTriggers).not.toContain("run_automation_trigger_unvalidated");
+  });
 });

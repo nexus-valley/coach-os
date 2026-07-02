@@ -217,35 +217,6 @@ function normalizeRun(row: Record<string, unknown>): AutomationRun {
   };
 }
 
-function buildRulePayload(
-  payload: AutomationRulePayload | UpdateAutomationRulePayload,
-) {
-  const name = payload.name.trim();
-
-  if (!name) {
-    throw new Error("Automation name is required.");
-  }
-
-  if (payload.actions.length === 0) {
-    throw new Error("At least one automation action is required.");
-  }
-
-  return {
-    action_type: payload.actions[0]?.action_type ?? "create_notification",
-    config: payload.actions[0]?.config_json ?? {},
-    description: payload.description?.trim() || null,
-    execution_mode: payload.execution_mode,
-    is_active: payload.status === "active",
-    metadata_json: {
-      engine: "workflow_v1",
-      phase: "foundation",
-    },
-    name,
-    status: payload.status,
-    trigger_type: payload.trigger_type,
-  };
-}
-
 async function getRelatedRows(tenantId: string, ruleIds: string[]) {
   if (ruleIds.length === 0) {
     return { actions: [], conditions: [] };
@@ -334,84 +305,14 @@ function attachRelatedRows(
   });
 }
 
-async function replaceRuleRows(
-  tenantId: string,
-  ruleId: string,
-  payload: AutomationRulePayload | UpdateAutomationRulePayload,
-) {
-  const supabase = getSupabaseClient();
-  const [conditionDelete, actionDelete] = await Promise.all([
-    supabase
-      .from("automation_rule_conditions")
-      .delete()
-      .eq("tenant_id", tenantId)
-      .eq("rule_id", ruleId),
-    supabase
-      .from("automation_rule_actions")
-      .delete()
-      .eq("tenant_id", tenantId)
-      .eq("rule_id", ruleId),
-  ]);
+async function attachRelatedRowsForRule(rule: AutomationRule) {
+  const related = await getRelatedRows(rule.tenant_id, [rule.id]);
 
-  if (
-    conditionDelete.error &&
-    !isOptionalAutomationSchemaError(conditionDelete.error)
-  ) {
-    throw conditionDelete.error;
-  }
-
-  if (actionDelete.error && !isOptionalAutomationSchemaError(actionDelete.error)) {
-    throw actionDelete.error;
-  }
-
-  const conditionRows = (payload.conditions ?? []).map((condition, index) => ({
-    condition_type: condition.condition_type,
-    operator: condition.operator ?? condition.condition_type,
-    rule_id: ruleId,
-    sort_order: index,
-    tenant_id: tenantId,
-    value_json: condition.value_json ?? {},
-  }));
-  const actionRows = payload.actions.map((action, index) => ({
-    action_type: action.action_type,
-    config_json: action.config_json ?? {},
-    rule_id: ruleId,
-    sort_order: index,
-    tenant_id: tenantId,
-  }));
-
-  const [conditionInsert, actionInsert] = await Promise.all([
-    conditionRows.length
-      ? supabase
-          .from("automation_rule_conditions")
-          .insert(conditionRows)
-          .select(automationConditionSelect)
-      : Promise.resolve({ data: [], error: null }),
-    supabase
-      .from("automation_rule_actions")
-      .insert(actionRows)
-      .select(automationActionSelect),
-  ]);
-
-  if (
-    conditionInsert.error &&
-    !isOptionalAutomationSchemaError(conditionInsert.error)
-  ) {
-    throw conditionInsert.error;
-  }
-
-  if (actionInsert.error && !isOptionalAutomationSchemaError(actionInsert.error)) {
-    throw actionInsert.error;
-  }
-
-  return {
-    actions: ((actionInsert.data ?? []) as Record<string, unknown>[]).map(
-      normalizeAction,
-    ),
-    conditions: ((conditionInsert.data ?? []) as Record<string, unknown>[]).map(
-      normalizeCondition,
-    ),
-  };
+  return attachRelatedRows(
+    [rule],
+    related.conditions,
+    related.actions,
+  )[0];
 }
 
 export async function getAutomationRules(tenantId: string) {
@@ -452,17 +353,17 @@ export async function createAutomationRule(payload: AutomationRulePayload) {
   await enforceWorkspaceLimit(payload.tenant_id, "automations");
 
   const supabase = getSupabaseClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
   const { data, error } = await supabase
-    .from("automation_rules")
-    .insert({
-      ...buildRulePayload(payload),
-      created_by: user?.id ?? null,
-      tenant_id: payload.tenant_id,
+    .rpc("create_automation_rule_secure", {
+      p_actions: payload.actions,
+      p_conditions: payload.conditions ?? [],
+      p_description: payload.description?.trim() || null,
+      p_execution_mode: payload.execution_mode,
+      p_name: payload.name.trim(),
+      p_status: payload.status,
+      p_tenant_id: payload.tenant_id,
+      p_trigger_type: payload.trigger_type,
     })
-    .select(automationRuleSelect)
     .single();
 
   if (error) {
@@ -470,12 +371,7 @@ export async function createAutomationRule(payload: AutomationRulePayload) {
   }
 
   const rule = normalizeRule(data as Record<string, unknown>);
-  const related = await replaceRuleRows(payload.tenant_id, rule.id, payload);
-  const createdRule = {
-    ...rule,
-    actions: related.actions,
-    conditions: related.conditions,
-  };
+  const createdRule = await attachRelatedRowsForRule(rule);
 
   await refreshWorkspaceUsageSnapshot(rule.tenant_id);
   await logActivity({
@@ -507,11 +403,17 @@ export async function updateAutomationRule(
 
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
-    .from("automation_rules")
-    .update(buildRulePayload(payload))
-    .eq("tenant_id", tenantId)
-    .eq("id", ruleId)
-    .select(automationRuleSelect)
+    .rpc("update_automation_rule_secure", {
+      p_actions: payload.actions,
+      p_conditions: payload.conditions ?? [],
+      p_description: payload.description?.trim() || null,
+      p_execution_mode: payload.execution_mode,
+      p_name: payload.name.trim(),
+      p_rule_id: ruleId,
+      p_status: payload.status,
+      p_tenant_id: tenantId,
+      p_trigger_type: payload.trigger_type,
+    })
     .single();
 
   if (error) {
@@ -519,12 +421,7 @@ export async function updateAutomationRule(
   }
 
   const rule = normalizeRule(data as Record<string, unknown>);
-  const related = await replaceRuleRows(tenantId, rule.id, payload);
-  const updatedRule = {
-    ...rule,
-    actions: related.actions,
-    conditions: related.conditions,
-  };
+  const updatedRule = await attachRelatedRowsForRule(rule);
 
   await logActivity({
     action: "automation_updated",
@@ -556,11 +453,11 @@ export async function toggleAutomationRule(
   const supabase = getSupabaseClient();
   const status: AutomationRuleStatus = isActive ? "active" : "inactive";
   const { data, error } = await supabase
-    .from("automation_rules")
-    .update({ is_active: isActive, status })
-    .eq("tenant_id", tenantId)
-    .eq("id", ruleId)
-    .select(automationRuleSelect)
+    .rpc("set_automation_rule_enabled_secure", {
+      p_enabled: isActive,
+      p_rule_id: ruleId,
+      p_tenant_id: tenantId,
+    })
     .single();
 
   if (error) {
@@ -591,11 +488,10 @@ export async function deleteAutomationRule(ruleId: string, tenantId: string) {
   });
 
   const supabase = getSupabaseClient();
-  const { error } = await supabase
-    .from("automation_rules")
-    .delete()
-    .eq("tenant_id", tenantId)
-    .eq("id", ruleId);
+  const { error } = await supabase.rpc("delete_automation_rule_secure", {
+    p_rule_id: ruleId,
+    p_tenant_id: tenantId,
+  });
 
   if (error) {
     throw error;
