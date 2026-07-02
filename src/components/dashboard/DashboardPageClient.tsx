@@ -16,13 +16,6 @@ import {
   type DashboardMetrics,
 } from "@/src/lib/dashboard";
 import {
-  backfillDemoMessages,
-  getDemoWorkspaceStatus,
-  resetDemoWorkspace,
-  seedDemoWorkspace,
-  type DemoWorkspaceStatus,
-} from "@/src/lib/demoWorkspace";
-import {
   getUserNotifications,
   type Notification,
 } from "@/src/lib/notifications";
@@ -195,16 +188,6 @@ function SessionPreviewList({
 export function DashboardPageClient() {
   const router = useRouter();
   const [currentRole, setCurrentRole] = useState<MemberRole | null>(null);
-  const [demoError, setDemoError] = useState("");
-  const [demoIntent] = useState(
-    () =>
-      typeof window !== "undefined" &&
-      new URLSearchParams(window.location.search).get("demo") === "1",
-  );
-  const [demoLoading, setDemoLoading] = useState(false);
-  const [demoMessage, setDemoMessage] = useState("");
-  const [demoResetting, setDemoResetting] = useState(false);
-  const [demoStatus, setDemoStatus] = useState<DemoWorkspaceStatus | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
@@ -258,9 +241,6 @@ export function DashboardPageClient() {
         const workspaceSubscription = canViewUsage
           ? await getTenantSubscription(currentTenant.id)
           : null;
-        const workspaceDemoStatus = canViewUsage
-          ? await getDemoWorkspaceStatus(currentTenant.id)
-          : null;
         const recentNotifications = user
           ? await getUserNotifications(currentTenant.id, {
               limit: 5,
@@ -276,7 +256,6 @@ export function DashboardPageClient() {
         setNotifications(recentNotifications);
         setCurrentRole(memberRole);
         setPlan(workspaceSubscription?.plan ?? "free");
-        setDemoStatus(workspaceDemoStatus);
         setTrialStatus(workspaceTrialStatus);
         setUsage(workspaceUsage);
         setError("");
@@ -299,93 +278,6 @@ export function DashboardPageClient() {
       active = false;
     };
   }, [router]);
-
-  async function handleLoadDemoData() {
-    if (!tenant) {
-      setDemoError("Workspace context is not available.");
-      return;
-    }
-
-    setDemoLoading(true);
-    setDemoError("");
-    setDemoMessage("");
-
-    try {
-      const backfillOnly = Boolean(demoStatus?.needsConversationBackfill);
-      const result = backfillOnly
-        ? await backfillDemoMessages(tenant.id)
-        : await seedDemoWorkspace(tenant.id);
-      const dashboardMetrics = await getDashboardMetrics(tenant.id);
-      const workspaceUsage =
-        currentRole === "owner" || currentRole === "admin"
-          ? await refreshWorkspaceUsageSnapshot(tenant.id)
-          : null;
-
-      setMetrics(dashboardMetrics);
-      setUsage(workspaceUsage);
-      setDemoStatus(result.status);
-      setDemoMessage(
-        backfillOnly && result.summary.conversations > 0
-          ? `Messages backfilled. Added ${result.summary.conversations} demo threads.`
-          : "alreadyLoaded" in result && result.alreadyLoaded
-          ? "Demo data is already loaded in this workspace. Use reset to remove tracked demo records."
-          : `Demo data loaded. Added ${result.status.recordCount} tracked sample records.`,
-      );
-    } catch (caught) {
-      setDemoError(
-        getErrorMessage(
-          caught,
-          demoStatus?.needsConversationBackfill
-            ? "Unable to backfill messages."
-            : "Unable to load demo data.",
-        ),
-      );
-    } finally {
-      setDemoLoading(false);
-    }
-  }
-
-  async function handleResetDemoData() {
-    if (!tenant) {
-      setDemoError("Workspace context is not available.");
-      return;
-    }
-
-    const confirmed = window.confirm(
-      "Reset demo data? This deletes only records tracked as demo-generated for this workspace.",
-    );
-
-    if (!confirmed) {
-      return;
-    }
-
-    setDemoResetting(true);
-    setDemoError("");
-    setDemoMessage("");
-
-    try {
-      const result = await resetDemoWorkspace(tenant.id);
-      const [dashboardMetrics, workspaceUsage, workspaceDemoStatus] =
-        await Promise.all([
-          getDashboardMetrics(tenant.id),
-          currentRole === "owner" || currentRole === "admin"
-            ? refreshWorkspaceUsageSnapshot(tenant.id)
-            : Promise.resolve(null),
-          getDemoWorkspaceStatus(tenant.id),
-        ]);
-
-      setMetrics(dashboardMetrics);
-      setUsage(workspaceUsage);
-      setDemoStatus(workspaceDemoStatus);
-      setDemoMessage(
-        `Demo data reset. Removed ${result.recordCount} tracked demo records.`,
-      );
-    } catch (caught) {
-      setDemoError(getErrorMessage(caught, "Unable to reset demo data."));
-    } finally {
-      setDemoResetting(false);
-    }
-  }
 
   const maxCourseRevenue = useMemo(() => {
     if (!metrics?.courseRevenue.length) {
@@ -461,7 +353,6 @@ export function DashboardPageClient() {
         ]
       : []),
   ];
-  const canLoadDemo = currentRole === "owner" || currentRole === "admin";
   const canViewUsage = currentRole === "owner" || currentRole === "admin";
   const limits = getPlanLimits(plan);
   const nearLimitResources =
@@ -511,112 +402,24 @@ export function DashboardPageClient() {
       <Card className="mt-8 border-[#D8E8F0] bg-white p-6 text-[#0B1F33] shadow-2xl shadow-[#0B2A3D]/10">
         <div className="grid gap-5 lg:grid-cols-[1fr_auto] lg:items-center">
           <div>
-            <Badge
-              className={
-                demoIntent
-                  ? "border-[#9ADDEA] bg-[#EAF8FC] text-[#0B6F87]"
-                  : "border-[#D8E8F0] bg-[#F6FBFE] text-[#425B76]"
-              }
-            >
-              {demoIntent ? "Demo mode" : "Demo readiness"}
+            <Badge className="border-[#D8E8F0] bg-[#F6FBFE] text-[#425B76]">
+              Workspace overview
             </Badge>
-            {demoIntent ? (
-              <span className="ml-3 inline-flex rounded-full border border-[#9ADDEA] bg-[#EAF8FC] px-3 py-1 text-xs font-semibold text-[#0B6F87]">
-                Demo version
-              </span>
-            ) : null}
-            <h3 className="mt-4 text-xl font-semibold">
-              {demoIntent ? "Demo Mode" : "Load a safe sample CoachFort workspace"}
-            </h3>
+            <h3 className="mt-4 text-xl font-semibold">Manage core records</h3>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-[#425B76]">
-              {demoIntent
-                ? "You are viewing a CoachFort demo workspace. Sample data can be loaded to explore students, courses, payments, reports, reminders, and WhatsApp-ready workflows."
-                : "Add tracked demo students, courses, cohorts, sessions, attendance, assignments, payments, notifications, and message threads to this workspace. Reset removes only demo-generated records tracked by the seeder."}
+              Review live workspace data through the hardened module flows for
+              students, courses, finance, reports, and operations.
             </p>
-            {canLoadDemo && demoStatus ? (
-              <div className="mt-4 flex flex-wrap items-center gap-2 text-xs font-semibold text-[#425B76]">
-                <Badge
-                  className={
-                    demoStatus.loaded
-                      ? "border-[#BBF7D0] bg-[#ECFDF3] text-[#166534]"
-                      : "border-[#D8E8F0] bg-[#F6FBFE] text-[#425B76]"
-                  }
-                >
-                  {demoStatus.loaded ? "Demo data loaded" : "Not loaded"}
-                </Badge>
-                <span>{demoStatus.recordCount} tracked records</span>
-                {demoStatus.needsConversationBackfill ? (
-                  <span>Message threads need backfill</span>
-                ) : null}
-                {demoStatus.lastLoadedAt ? (
-                  <span>Loaded {formatDate(demoStatus.lastLoadedAt)}</span>
-                ) : null}
-                {demoStatus.batchId ? (
-                  <span className="max-w-full truncate">
-                    Batch {demoStatus.batchId.slice(0, 8)}
-                  </span>
-                ) : null}
-              </div>
-            ) : null}
           </div>
-          {canLoadDemo ? (
-            <div className="flex flex-col gap-3 sm:flex-row lg:justify-end">
-              <Button
-                disabled={
-                  demoLoading ||
-                  demoResetting ||
-                  Boolean(demoStatus?.loaded && !demoStatus.needsConversationBackfill)
-                }
-                onClick={handleLoadDemoData}
-                type="button"
-              >
-                {demoLoading
-                  ? "Loading..."
-                  : demoStatus?.needsConversationBackfill
-                    ? "Backfill Messages"
-                    : "Load Demo Data"}
-              </Button>
-              <Button
-                disabled={demoLoading || demoResetting || !demoStatus?.loaded}
-                onClick={handleResetDemoData}
-                type="button"
-                variant="secondary"
-              >
-                {demoResetting ? "Resetting..." : "Reset Demo Data"}
-              </Button>
-              <Button href="/app/students" type="button" variant="secondary">
-                View Students
-              </Button>
-              <Button href="/app/courses" type="button" variant="secondary">
-                View Courses
-              </Button>
-            </div>
-          ) : (
-            <div className="flex flex-col gap-3 sm:flex-row lg:justify-end">
-              <Badge className="border-[#D8E8F0] bg-[#F6FBFE] text-[#425B76]">
-                Owner/admin only
-              </Badge>
-              <Button href="/app/students" type="button" variant="secondary">
-                View Students
-              </Button>
-              <Button href="/app/courses" type="button" variant="secondary">
-                View Courses
-              </Button>
-            </div>
-          )}
+          <div className="flex flex-col gap-3 sm:flex-row lg:justify-end">
+            <Button href="/app/students" type="button" variant="secondary">
+              View Students
+            </Button>
+            <Button href="/app/courses" type="button" variant="secondary">
+              View Courses
+            </Button>
+          </div>
         </div>
-
-        {demoMessage ? (
-          <div className="mt-5">
-            <FeedbackAlert tone="success">{demoMessage}</FeedbackAlert>
-          </div>
-        ) : null}
-
-        {demoError ? (
-          <div className="mt-5">
-            <FeedbackAlert>{demoError}</FeedbackAlert>
-          </div>
-        ) : null}
       </Card>
 
       {canViewUsage && (trialStatus?.expired || nearLimitResources.length > 0) ? (

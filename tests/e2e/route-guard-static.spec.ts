@@ -1,11 +1,31 @@
 import { expect, test } from "@playwright/test";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 const root = process.cwd();
 
 function read(path: string) {
   return readFileSync(join(root, path), "utf8");
+}
+
+function listSourceFiles(dir: string): string[] {
+  const absolute = join(root, dir);
+  const entries = readdirSync(absolute);
+  const files: string[] = [];
+
+  for (const entry of entries) {
+    const relative = `${dir}/${entry}`;
+    const fullPath = join(root, relative);
+    const stats = statSync(fullPath);
+
+    if (stats.isDirectory()) {
+      files.push(...listSourceFiles(relative));
+    } else if (/\.(ts|tsx)$/.test(entry)) {
+      files.push(relative);
+    }
+  }
+
+  return files;
 }
 
 test.describe("static route guard coverage", () => {
@@ -664,5 +684,23 @@ test.describe("static route guard coverage", () => {
     expect(automationRunner).toContain("Browser-side automation action execution is retired");
     expect(automationTriggers).toContain("run_automation_trigger");
     expect(automationTriggers).not.toContain("run_automation_trigger_unvalidated");
+  });
+
+  test("demo workspace direct-write seeder is not reachable from client components", () => {
+    const dashboard = read("src/components/dashboard/DashboardPageClient.tsx");
+
+    expect(dashboard).not.toContain("seedDemoWorkspace");
+    expect(dashboard).not.toContain("resetDemoWorkspace");
+    expect(dashboard).not.toContain("backfillDemoMessages");
+    expect(dashboard).not.toContain("@/src/lib/demoWorkspace");
+
+    const clientFiles = [
+      ...listSourceFiles("app"),
+      ...listSourceFiles("src"),
+    ].filter((path) => read(path).startsWith('"use client";'));
+
+    for (const path of clientFiles) {
+      expect(read(path), path).not.toContain("@/src/lib/demoWorkspace");
+    }
   });
 });
