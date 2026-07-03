@@ -1,5 +1,3 @@
-import { logActivity } from "@/src/lib/auditLogger";
-import { createNotificationForTenantRoles } from "@/src/lib/notifications";
 import { requireTenantPermission } from "@/src/lib/permissions";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 
@@ -121,61 +119,10 @@ function normalizePaymentTransaction(row: PaymentTransaction) {
   } satisfies PaymentTransaction;
 }
 
-function calculateInvoiceTotals(input: CreateDraftInvoiceInput["items"]) {
-  return input.reduce(
-    (totals, item) => {
-      const quantity = Math.max(1, Number(item.quantity) || 1);
-      const unitPrice = Math.max(0, Number(item.unitPrice) || 0);
-      const taxPercent = Math.max(0, Number(item.taxPercent) || 0);
-      const subtotal = quantity * unitPrice;
-      const taxAmount = subtotal * (taxPercent / 100);
-
-      return {
-        subtotal: totals.subtotal + subtotal,
-        taxAmount: totals.taxAmount + taxAmount,
-      };
-    },
-    { subtotal: 0, taxAmount: 0 },
+function legacySubscriptionBillingWriteRetired(): never {
+  throw new Error(
+    "Legacy subscription billing writes are retired. Manage subscriptions from the Platform Console.",
   );
-}
-
-async function generateInvoiceNumber() {
-  const supabase = getSupabaseClient();
-  const { count, error } = await supabase
-    .from("invoices")
-    .select("id", { count: "exact", head: true });
-
-  if (error) {
-    throw error;
-  }
-
-  return `CF-INV-${String((count ?? 0) + 1).padStart(6, "0")}`;
-}
-
-async function notifyBillingEvent(params: {
-  actionUrl?: string;
-  entityId: string;
-  message: string;
-  severity?: "info" | "warning";
-  tenantId: string;
-  title: string;
-  type?: "invoice_notice" | "payment_reminder" | "subscription_notice";
-}) {
-  try {
-    await createNotificationForTenantRoles({
-      actionUrl: params.actionUrl ?? "/app/subscription",
-      entityId: params.entityId,
-      entityType: "invoice",
-      message: params.message,
-      roles: ["owner", "admin"],
-      severity: params.severity ?? "info",
-      tenantId: params.tenantId,
-      title: params.title,
-      type: params.type ?? "invoice_notice",
-    });
-  } catch {
-    // Notifications are non-blocking for billing foundation workflows.
-  }
 }
 
 export async function getInvoices(tenantId: string) {
@@ -234,89 +181,8 @@ export async function getPaymentHistory(tenantId: string) {
 }
 
 export async function createDraftInvoice(input: CreateDraftInvoiceInput) {
-  await requireTenantPermission({
-    description: "Blocked draft invoice creation without billing permission.",
-    permission: "access_subscription",
-    tenantId: input.tenantId,
-  });
-
-  if (input.items.length === 0) {
-    throw new Error("At least one invoice item is required.");
-  }
-
-  const totals = calculateInvoiceTotals(input.items);
-  const totalAmount = totals.subtotal + totals.taxAmount;
-  const supabase = getSupabaseClient();
-  const { data: invoiceData, error: invoiceError } = await supabase
-    .from("invoices")
-    .insert({
-      billing_address: input.billingAddress?.trim() || null,
-      billing_email: input.billingEmail?.trim() || null,
-      billing_name: input.billingName?.trim() || null,
-      currency: input.currency ?? "INR",
-      due_at: input.dueAt ?? null,
-      gst_number: input.gstNumber?.trim() || null,
-      invoice_number: await generateInvoiceNumber(),
-      status: "draft",
-      subscription_id: input.subscriptionId ?? null,
-      subtotal: totals.subtotal,
-      tax_amount: totals.taxAmount,
-      tenant_id: input.tenantId,
-      total_amount: totalAmount,
-    })
-    .select(invoiceSelect)
-    .single();
-
-  if (invoiceError) {
-    throw invoiceError;
-  }
-
-  const invoice = normalizeInvoice(invoiceData as Invoice);
-  const itemPayload = input.items.map((item) => {
-    const quantity = Math.max(1, Number(item.quantity) || 1);
-    const unitPrice = Math.max(0, Number(item.unitPrice) || 0);
-    const taxPercent = Math.max(0, Number(item.taxPercent) || 0);
-    const subtotal = quantity * unitPrice;
-    const lineTotal = subtotal + subtotal * (taxPercent / 100);
-
-    return {
-      description: item.description.trim(),
-      invoice_id: invoice.id,
-      line_total: lineTotal,
-      quantity,
-      tax_percent: taxPercent,
-      unit_price: unitPrice,
-    };
-  });
-  const { data: itemsData, error: itemsError } = await supabase
-    .from("invoice_items")
-    .insert(itemPayload)
-    .select(invoiceItemSelect);
-
-  if (itemsError) {
-    throw itemsError;
-  }
-
-  await logActivity({
-    action: "invoice_created",
-    description: `Created draft invoice ${invoice.invoice_number}.`,
-    entityId: invoice.id,
-    entityName: invoice.invoice_number,
-    entityType: "invoice",
-    metadata: { totalAmount: invoice.total_amount },
-    tenantId: input.tenantId,
-  });
-  await notifyBillingEvent({
-    entityId: invoice.id,
-    message: `Draft invoice ${invoice.invoice_number} is ready for review.`,
-    tenantId: input.tenantId,
-    title: `Invoice created: ${invoice.invoice_number}`,
-  });
-
-  return {
-    ...invoice,
-    items: ((itemsData ?? []) as InvoiceItem[]).map(normalizeInvoiceItem),
-  } satisfies InvoiceWithItems;
+  void input;
+  legacySubscriptionBillingWriteRetired();
 }
 
 export async function markInvoicePaid(params: {
@@ -324,84 +190,6 @@ export async function markInvoicePaid(params: {
   providerTransactionId?: string;
   tenantId: string;
 }) {
-  await requireTenantPermission({
-    description: "Blocked invoice payment update without billing permission.",
-    permission: "access_subscription",
-    tenantId: params.tenantId,
-  });
-
-  const supabase = getSupabaseClient();
-  const paidAt = new Date().toISOString();
-  const { data: invoiceData, error: invoiceError } = await supabase
-    .from("invoices")
-    .update({
-      paid_at: paidAt,
-      status: "paid",
-    })
-    .eq("tenant_id", params.tenantId)
-    .eq("id", params.invoiceId)
-    .select(invoiceSelect)
-    .single();
-
-  if (invoiceError) {
-    throw invoiceError;
-  }
-
-  const invoice = normalizeInvoice(invoiceData as Invoice);
-  const { data: transactionData, error: transactionError } = await supabase
-    .from("payment_transactions")
-    .insert({
-      amount: invoice.total_amount,
-      currency: invoice.currency,
-      invoice_id: invoice.id,
-      metadata_json: { source: "manual_foundation" },
-      provider: "manual",
-      provider_transaction_id: params.providerTransactionId?.trim() || null,
-      status: "success",
-      tenant_id: params.tenantId,
-    })
-    .select(paymentTransactionSelect)
-    .single();
-
-  if (transactionError) {
-    throw transactionError;
-  }
-
-  await logActivity({
-    action: "invoice_paid",
-    description: `Marked invoice ${invoice.invoice_number} as paid.`,
-    entityId: invoice.id,
-    entityName: invoice.invoice_number,
-    entityType: "invoice",
-    metadata: { totalAmount: invoice.total_amount },
-    tenantId: params.tenantId,
-  });
-
-  await logActivity({
-    action: "payment_recorded",
-    description: `Recorded manual billing payment for ${invoice.invoice_number}.`,
-    entityId: transactionData.id,
-    entityName: invoice.invoice_number,
-    entityType: "payment_transaction",
-    metadata: {
-      amount: invoice.total_amount,
-      invoiceId: invoice.id,
-      provider: "manual",
-    },
-    tenantId: params.tenantId,
-  });
-  await notifyBillingEvent({
-    entityId: invoice.id,
-    message: `Manual payment recorded for ${invoice.invoice_number}.`,
-    tenantId: params.tenantId,
-    title: `Invoice paid: ${invoice.invoice_number}`,
-    type: "invoice_notice",
-  });
-
-  return {
-    invoice,
-    transaction: normalizePaymentTransaction(
-      transactionData as PaymentTransaction,
-    ),
-  };
+  void params;
+  legacySubscriptionBillingWriteRetired();
 }

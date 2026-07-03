@@ -615,6 +615,62 @@ test.describe("static route guard coverage", () => {
     }
   });
 
+  test("legacy subscription billing helpers fail closed", () => {
+    const expectations = [
+      {
+        path: "src/lib/billing.ts",
+        retiredFunctions: ["updateBillingProfile"],
+        forbiddenPatterns: [
+          /\.from\("tenants"\)\s*\r?\n\s*\.update\(/,
+        ],
+      },
+      {
+        path: "src/lib/subscription.ts",
+        retiredFunctions: ["updateTenantPlanForTesting"],
+        forbiddenPatterns: [
+          /\.from\("tenants"\)\s*\r?\n\s*\.update\(/,
+        ],
+      },
+      {
+        path: "src/lib/subscriptions.ts",
+        retiredFunctions: [
+          "createSubscription",
+          "cancelSubscription",
+          "updateWorkspacePlanManual",
+        ],
+        forbiddenPatterns: [
+          /\.from\("subscriptions"\)\s*\r?\n\s*\.insert\(/,
+          /\.from\("subscriptions"\)\s*\r?\n\s*\.update\(/,
+          /\.from\("tenants"\)\s*\r?\n\s*\.update\(/,
+        ],
+      },
+      {
+        path: "src/lib/invoices.ts",
+        retiredFunctions: ["createDraftInvoice", "markInvoicePaid"],
+        forbiddenPatterns: [
+          /\.from\("invoices"\)\s*\r?\n\s*\.insert\(/,
+          /\.from\("invoices"\)\s*\r?\n\s*\.update\(/,
+          /\.from\("invoice_items"\)\s*\r?\n\s*\.insert\(/,
+          /\.from\("payment_transactions"\)\s*\r?\n\s*\.insert\(/,
+        ],
+      },
+    ];
+
+    for (const expectation of expectations) {
+      const source = read(expectation.path);
+
+      expect(source).toContain("Legacy subscription billing writes are retired");
+
+      for (const functionName of expectation.retiredFunctions) {
+        expect(source).toContain(`function ${functionName}`);
+      }
+
+      for (const pattern of expectation.forbiddenPatterns) {
+        expect(source).not.toMatch(pattern);
+      }
+    }
+  });
+
   test("student progress and certificates use secure RPC paths", () => {
     const studentPortal = read("src/lib/studentPortal.ts");
     const certificates = read("src/lib/certificates.ts");

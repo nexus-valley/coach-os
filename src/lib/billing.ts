@@ -1,14 +1,10 @@
 import { getInvoices, getPaymentHistory } from "@/src/lib/invoices";
-import { logActivity } from "@/src/lib/auditLogger";
 import {
   getAvailablePlans,
   getPlanUpgradeRecommendation,
   type PlanResource,
 } from "@/src/lib/plans";
-import {
-  getMemberRoleForTenant,
-  requireTenantPermission,
-} from "@/src/lib/permissions";
+import { requireTenantPermission } from "@/src/lib/permissions";
 import {
   getBillingAccessState,
   getCurrentSubscription,
@@ -111,58 +107,10 @@ export async function getBillingProfile(tenantId: string): Promise<BillingProfil
 }
 
 export async function updateBillingProfile(input: BillingProfileInput) {
-  const { user } = await requireTenantPermission({
-    description: "Blocked billing profile update without billing permission.",
-    permission: "access_subscription",
-    tenantId: input.tenantId,
-  });
-  const role = await getMemberRoleForTenant(input.tenantId, user.id);
-
-  if (role !== "owner") {
-    await logActivity({
-      action: "access_denied",
-      description: "Blocked owner-only billing profile update.",
-      entityName: "Billing Profile",
-      entityType: "security",
-      metadata: { role },
-      severity: "warning",
-      tenantId: input.tenantId,
-    });
-
-    throw new Error("Only the workspace owner can update billing profile.");
-  }
-
-  const supabase = getSupabaseClient();
-  const updatePayload = {
-    billing_address_json: input.billingAddress ?? {},
-    billing_email: input.billingEmail?.trim() || null,
-    billing_gst_number: input.billingGstNumber?.trim() || null,
-    billing_status: input.billingStatus ?? "profile_updated",
-  };
-  const { error } = await supabase
-    .from("tenants")
-    .update(updatePayload)
-    .eq("id", input.tenantId);
-
-  if (error) {
-    throw error;
-  }
-
-  await logActivity({
-    action: "billing_profile_updated",
-    description: "Updated workspace billing profile.",
-    entityName: "Billing Profile",
-    entityType: "subscription",
-    metadata: {
-      changedFields: Object.entries(updatePayload)
-        .filter(([, value]) => value !== null)
-        .map(([key]) => key),
-    },
-    severity: "warning",
-    tenantId: input.tenantId,
-  });
-
-  return getBillingProfile(input.tenantId);
+  void input;
+  throw new Error(
+    "Legacy subscription billing writes are retired. Manage subscriptions from the Platform Console.",
+  );
 }
 
 export async function getBillingSummary(tenantId: string) {

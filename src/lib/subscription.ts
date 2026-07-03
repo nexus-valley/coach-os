@@ -1,16 +1,10 @@
-import { logActivity } from "@/src/lib/auditLogger";
 import {
   getPlanLimits,
-  getStoredPlanForPlanKey,
   normalizePlanKey,
   type PlanKey,
   type PlanResource,
   type ResourceLimit,
 } from "@/src/lib/plans";
-import {
-  getMemberRoleForTenant,
-  requireTenantPermission,
-} from "@/src/lib/permissions";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 
 export type SubscriptionPlan = PlanKey;
@@ -90,55 +84,9 @@ export async function updateTenantPlanForTesting(
   tenantId: string,
   plan: SubscriptionPlan,
 ) {
-  const { user } = await requireTenantPermission({
-    description: "Blocked subscription plan change without owner permission.",
-    permission: "access_subscription",
-    tenantId,
-  });
-  const role = await getMemberRoleForTenant(tenantId, user.id);
-
-  if (role !== "owner") {
-    await logActivity({
-      action: "access_denied",
-      description: "Blocked owner-only subscription plan change.",
-      entityName: "Subscription",
-      entityType: "security",
-      metadata: { role },
-      severity: "warning",
-      tenantId,
-    });
-
-    throw new Error("Only the workspace owner can change plans.");
-  }
-
-  const supabase = getSupabaseClient();
-  const { data, error } = await supabase
-    .from("tenants")
-    .update({
-      plan: getStoredPlanForPlanKey(plan),
-      plan_started_at: new Date().toISOString(),
-      subscription_status: "active",
-    })
-    .eq("id", tenantId)
-    .select(subscriptionSelect)
-    .single();
-
-  if (error) {
-    throw error;
-  }
-
-  const subscription = normalizeSubscription(data as TenantSubscription);
-
-  await logActivity({
-    action: "plan_updated",
-    description: `Changed testing plan to ${subscription.plan}`,
-    entityId: subscription.id,
-    entityName: subscription.plan,
-    entityType: "subscription",
-    metadata: { plan: subscription.plan },
-    severity: "critical",
-    tenantId,
-  });
-
-  return subscription;
+  void tenantId;
+  void plan;
+  throw new Error(
+    "Legacy subscription billing writes are retired. Manage subscriptions from the Platform Console.",
+  );
 }
