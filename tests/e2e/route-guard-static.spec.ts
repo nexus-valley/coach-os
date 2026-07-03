@@ -687,6 +687,59 @@ test.describe("static route guard coverage", () => {
     }
   });
 
+  test("legacy conversation helpers fail closed while academy chat uses RPCs", () => {
+    const conversations = read("src/lib/conversations.ts");
+    const messages = read("src/lib/messages.ts");
+    const academyChat = read("src/lib/academyChat.ts");
+    const teamMessagesPage = read("src/components/messages/MessagesPageClient.tsx");
+    const teamThreadPage = read("src/components/messages/ThreadDetailClient.tsx");
+    const portalMessagesPage = read("src/components/portal/StudentPortalMessages.tsx");
+
+    for (const source of [conversations, messages]) {
+      expect(source).toContain(
+        "Legacy conversation writes are retired. Use the Academy Chat module.",
+      );
+
+      for (const pattern of [
+        /\.from\("conversation_threads"\)\s*\r?\n\s*\.insert\(/,
+        /\.from\("conversation_threads"\)\s*\r?\n\s*\.update\(/,
+        /\.from\("conversation_threads"\)\s*\r?\n\s*\.delete\(/,
+        /\.from\("conversation_threads"\)\s*\r?\n\s*\.upsert\(/,
+        /\.from\("conversation_participants"\)\s*\r?\n\s*\.insert\(/,
+        /\.from\("conversation_participants"\)\s*\r?\n\s*\.update\(/,
+        /\.from\("conversation_participants"\)\s*\r?\n\s*\.delete\(/,
+        /\.from\("conversation_participants"\)\s*\r?\n\s*\.upsert\(/,
+        /\.from\("conversation_messages"\)\s*\r?\n\s*\.insert\(/,
+        /\.from\("conversation_messages"\)\s*\r?\n\s*\.update\(/,
+        /\.from\("conversation_messages"\)\s*\r?\n\s*\.delete\(/,
+        /\.from\("conversation_messages"\)\s*\r?\n\s*\.upsert\(/,
+      ]) {
+        expect(source).not.toMatch(pattern);
+      }
+    }
+
+    for (const rpc of [
+      "get_team_chat_threads",
+      "get_team_chat_thread",
+      "get_student_chat_threads",
+      "get_student_chat_thread",
+      "create_student_direct_chat",
+      "create_student_support_thread",
+      "send_team_chat_message",
+      "send_student_chat_message",
+      "close_chat_thread",
+      "mark_chat_thread_read",
+    ]) {
+      expect(academyChat).toContain(rpc);
+    }
+
+    for (const source of [teamMessagesPage, teamThreadPage, portalMessagesPage]) {
+      expect(source).toContain("@/src/lib/academyChat");
+      expect(source).not.toContain("@/src/lib/conversations");
+      expect(source).not.toContain("@/src/lib/messages");
+    }
+  });
+
   test("student progress and certificates use secure RPC paths", () => {
     const studentPortal = read("src/lib/studentPortal.ts");
     const certificates = read("src/lib/certificates.ts");

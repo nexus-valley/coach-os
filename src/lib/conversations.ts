@@ -1,4 +1,3 @@
-import { logActivity } from "@/src/lib/auditLogger";
 import type { Course } from "@/src/lib/courses";
 import type { CohortWithCourse } from "@/src/lib/cohorts";
 import {
@@ -97,6 +96,12 @@ const threadSelect =
 const participantSelect =
   "id,tenant_id,thread_id,user_id,student_id,role,last_read_at,created_at";
 
+function legacyConversationWriteRetired(): never {
+  throw new Error(
+    "Legacy conversation writes are retired. Use the Academy Chat module.",
+  );
+}
+
 export function isRecoverableConversationError(error: {
   code?: string;
   message?: string;
@@ -164,27 +169,6 @@ async function getCurrentUserAndRole(tenantId: string) {
   return { role, user };
 }
 
-function canCreateThreadType(
-  role: MemberRole | null,
-  threadType: ConversationThreadType,
-) {
-  if (role === "owner" || role === "admin") {
-    return true;
-  }
-
-  if (role === "staff") {
-    return ["direct_message", "staff_note"].includes(threadType);
-  }
-
-  if (role === "trainer") {
-    return ["cohort_discussion", "course_discussion", "direct_message"].includes(
-      threadType,
-    );
-  }
-
-  return false;
-}
-
 async function getUserParticipantThreadIds(tenantId: string, userId: string) {
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
@@ -245,58 +229,6 @@ async function getTrainerScopedStudentIds(params: {
       ),
     ]),
   );
-}
-
-async function ensureThreadScope(input: CreateConversationThreadInput) {
-  const { role, user } = await getCurrentUserAndRole(input.tenantId);
-
-  if (!canCreateThreadType(role, input.threadType)) {
-    throw new Error("You do not have permission to create this conversation.");
-  }
-
-  if (role === "trainer") {
-    const scope = await getCurrentTrainerScope(input.tenantId);
-    const studentIds = scope
-      ? await getTrainerScopedStudentIds({
-          cohortIds: scope.cohortIds,
-          courseIds: scope.courseIds,
-          tenantId: input.tenantId,
-        })
-      : [];
-    const courseAllowed =
-      input.threadType === "course_discussion" &&
-      Boolean(input.courseId) &&
-      Boolean(scope?.courseIds.includes(input.courseId ?? ""));
-    const cohortAllowed =
-      input.threadType === "cohort_discussion" &&
-      Boolean(input.cohortId) &&
-      Boolean(scope?.cohortIds.includes(input.cohortId ?? ""));
-    const studentAllowed =
-      input.threadType === "direct_message" &&
-      Boolean(input.studentId) &&
-      studentIds.includes(input.studentId ?? "");
-
-    if (!courseAllowed && !cohortAllowed && !studentAllowed) {
-      await logActivity({
-        action: "access_denied",
-        description: "Blocked trainer conversation outside assignment scope.",
-        entityName: "Conversation scope",
-        entityType: "security",
-        metadata: {
-          cohortId: input.cohortId ?? null,
-          courseId: input.courseId ?? null,
-          threadType: input.threadType,
-        },
-        severity: "warning",
-        tenantId: input.tenantId,
-      });
-      throw new Error(
-        "Trainers can only create conversations for assigned courses, cohorts, or scoped students.",
-      );
-    }
-  }
-
-  return { role, user };
 }
 
 function buildTrainerThreadFilter(params: {
@@ -765,68 +697,8 @@ export async function getConversationThreadById(params: {
 export async function createConversationThread(
   input: CreateConversationThreadInput,
 ) {
-  const title = input.title.trim();
-
-  if (!title) {
-    throw new Error("Conversation title is required.");
-  }
-
-  const { role, user } = await ensureThreadScope(input);
-  const supabase = getSupabaseClient();
-  const { data, error } = await supabase
-    .from("conversation_threads")
-    .insert({
-      cohort_id: input.cohortId || null,
-      course_id: input.courseId || null,
-      created_by: user.id,
-      description: input.description?.trim() || null,
-      entity_id: input.entityId ?? null,
-      entity_type: input.entityType ?? null,
-      status: "active",
-      student_id: input.studentId || null,
-      tenant_id: input.tenantId,
-      thread_type: input.threadType,
-      title,
-    })
-    .select(threadSelect)
-    .single();
-
-  if (error) {
-    throw error;
-  }
-
-  const thread = data as ConversationThread;
-
-  await ensureDefaultParticipantsForThread({
-    participantStudentIds: Array.from(
-      new Set([
-        ...(input.participantStudentIds ?? []),
-        ...(input.studentId ? [input.studentId] : []),
-      ]),
-    ),
-    participantUserIds: input.participantUserIds ?? [],
-    role,
-    tenantId: input.tenantId,
-    threadId: thread.id,
-    userId: user.id,
-  });
-
-  await logActivity({
-    action: "conversation_created",
-    description: `Created ${input.threadType.replaceAll("_", " ")} conversation`,
-    entityId: thread.id,
-    entityName: thread.title ?? "Conversation",
-    entityType: "conversation",
-    metadata: {
-      cohortId: thread.cohort_id,
-      courseId: thread.course_id,
-      studentId: thread.student_id,
-      threadType: thread.thread_type,
-    },
-    tenantId: thread.tenant_id,
-  });
-
-  return thread;
+  void input;
+  legacyConversationWriteRetired();
 }
 
 export async function addConversationParticipant(input: {
@@ -836,32 +708,8 @@ export async function addConversationParticipant(input: {
   threadId: string;
   userId?: string | null;
 }) {
-  if (!input.userId && !input.studentId) {
-    throw new Error("A participant must include a user or student.");
-  }
-
-  const supabase = getSupabaseClient();
-  const { data, error } = await supabase
-    .from("conversation_participants")
-    .insert({
-      role: input.role ?? null,
-      student_id: input.studentId ?? null,
-      tenant_id: input.tenantId,
-      thread_id: input.threadId,
-      user_id: input.userId ?? null,
-    })
-    .select(participantSelect)
-    .maybeSingle();
-
-  if (error) {
-    if (error.code === "23505") {
-      return null;
-    }
-
-    throw error;
-  }
-
-  return (data as ConversationParticipant | null) ?? null;
+  void input;
+  legacyConversationWriteRetired();
 }
 
 export async function ensureDefaultParticipantsForThread(input: {
@@ -872,113 +720,20 @@ export async function ensureDefaultParticipantsForThread(input: {
   threadId: string;
   userId: string;
 }) {
-  const canManageParticipants = input.role === "owner" || input.role === "admin";
-  const supabase = getSupabaseClient();
-  const { data, error } = canManageParticipants
-    ? await supabase
-        .from("tenant_members")
-        .select("user_id,role")
-        .eq("tenant_id", input.tenantId)
-        .in("role", ["owner", "admin"])
-    : { data: [], error: null };
-
-  if (error) {
-    throw error;
-  }
-
-  const defaultUsers = [
-    ...((data ?? []) as { role: ConversationParticipantRole; user_id: string }[]),
-    { role: input.role as ConversationParticipantRole, user_id: input.userId },
-    ...(canManageParticipants
-      ? (input.participantUserIds ?? []).map((userId) => ({
-          role: null,
-          user_id: userId,
-        }))
-      : []),
-  ];
-  const uniqueUsers = new Map(defaultUsers.map((item) => [item.user_id, item.role]));
-  const studentParticipantIds =
-    canManageParticipants || input.role === "trainer"
-      ? (input.participantStudentIds ?? [])
-      : [];
-
-  await Promise.all([
-    ...Array.from(uniqueUsers.entries()).map(([userId, participantRole]) =>
-      addConversationParticipant({
-        role: participantRole,
-        tenantId: input.tenantId,
-        threadId: input.threadId,
-        userId,
-      }),
-    ),
-    ...studentParticipantIds.map((studentId) =>
-      addConversationParticipant({
-        role: "student",
-        studentId,
-        tenantId: input.tenantId,
-        threadId: input.threadId,
-      }),
-    ),
-  ]);
-}
-
-async function updateThreadStatus(input: {
-  action: "conversation_archived" | "conversation_locked";
-  status: Extract<ConversationThreadStatus, "archived" | "locked">;
-  tenantId: string;
-  threadId: string;
-}) {
-  const { role } = await getCurrentUserAndRole(input.tenantId);
-
-  if (role !== "owner" && role !== "admin") {
-    throw new Error("Only owner/admin users can archive or lock conversations.");
-  }
-
-  const supabase = getSupabaseClient();
-  const { data, error } = await supabase
-    .from("conversation_threads")
-    .update({ status: input.status })
-    .eq("tenant_id", input.tenantId)
-    .eq("id", input.threadId)
-    .select(threadSelect)
-    .single();
-
-  if (error) {
-    throw error;
-  }
-
-  const thread = data as ConversationThread;
-
-  await logActivity({
-    action: input.action,
-    description: `${input.status === "locked" ? "Locked" : "Archived"} conversation`,
-    entityId: thread.id,
-    entityName: thread.title ?? "Conversation",
-    entityType: "conversation",
-    metadata: { status: thread.status, threadType: thread.thread_type },
-    severity: input.status === "locked" ? "warning" : "info",
-    tenantId: thread.tenant_id,
-  });
-
-  return thread;
+  void input;
+  legacyConversationWriteRetired();
 }
 
 export async function archiveConversationThread(tenantId: string, threadId: string) {
-  return updateThreadStatus({
-    action: "conversation_archived",
-    status: "archived",
-    tenantId,
-    threadId,
-  });
+  void tenantId;
+  void threadId;
+  legacyConversationWriteRetired();
 }
 
 export async function lockConversationThread(tenantId: string, threadId: string) {
-  return updateThreadStatus({
-    action: "conversation_locked",
-    status: "locked",
-    tenantId,
-    threadId,
-  });
+  void tenantId;
+  void threadId;
+  legacyConversationWriteRetired();
 }
 
 export async function getConversationParticipants(params: {
