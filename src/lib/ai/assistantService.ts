@@ -55,29 +55,16 @@ async function recordTeamAudit(
     scope: string;
     status: "blocked" | "failed" | "success";
     tenantId: string;
-    userId: string;
-    userEmail?: string | null;
     messageLength: number;
   },
 ) {
   try {
-    await supabase.from("audit_logs").insert({
-      action: "ai_assistant_used",
-      description: "AI assistant request processed.",
-      entity_id: null,
-      entity_name: null,
-      entity_type: "assistant",
-      metadata: {
-        message_length: input.messageLength,
-        provider: input.provider,
-        scope: input.scope,
-        status: input.status,
-      },
-      severity: "info",
-      tenant_id: input.tenantId,
-      user_email: input.userEmail ?? null,
-      user_id: input.userId,
-      user_name: input.userEmail?.split("@")[0] ?? "Workspace user",
+    await supabase.rpc("record_ai_assistant_audit_secure", {
+      p_message_length: input.messageLength,
+      p_provider: input.provider,
+      p_scope: input.scope,
+      p_status: input.status,
+      p_tenant_id: input.tenantId,
     });
   } catch {
     // Audit failures should not block a read-only assistant response.
@@ -164,8 +151,6 @@ export async function handleAssistantMessage(
       scope: request.scope,
       status: "success",
       tenantId: context.tenantId,
-      userEmail: user.email,
-      userId: user.id,
     });
   }
 
