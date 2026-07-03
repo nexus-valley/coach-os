@@ -242,35 +242,11 @@ export async function getWorkspaceUsage(tenantId: string) {
 }
 
 export async function refreshWorkspaceUsageSnapshot(tenantId: string) {
-  const tenant = await getTenantPlanRecord(tenantId);
-  let usage: WorkspaceUsage;
-
   try {
-    usage = await getWorkspaceUsage(tenantId);
+    return await getWorkspaceUsage(tenantId);
   } catch {
     return emptyUsage;
   }
-
-  if (!tenant) {
-    return usage;
-  }
-
-  const plan = normalizePlanKey(tenant.plan);
-  const limits = getPlanDefinition(plan).limits;
-  const supabase = getSupabaseClient();
-  const { error } = await supabase
-    .from("tenants")
-    .update({
-      plan_limits_json: limits,
-      usage_snapshot_json: usage,
-    })
-    .eq("id", tenantId);
-
-  if (error && !isMissingColumnError(error)) {
-    return usage;
-  }
-
-  return usage;
 }
 
 export async function getTrialStatus(tenantId: string): Promise<TrialStatus> {

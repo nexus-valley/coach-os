@@ -671,6 +671,22 @@ test.describe("static route guard coverage", () => {
     }
   });
 
+  test("tenant usage snapshot helper is read-only from browser paths", () => {
+    const usage = read("src/lib/usage.ts");
+
+    expect(usage).toContain("function refreshWorkspaceUsageSnapshot");
+    expect(usage).toContain("getWorkspaceUsage(tenantId)");
+
+    for (const pattern of [
+      /\.from\("tenants"\)\s*\r?\n\s*\.insert\(/,
+      /\.from\("tenants"\)\s*\r?\n\s*\.update\(/,
+      /\.from\("tenants"\)\s*\r?\n\s*\.upsert\(/,
+      /\.from\("tenants"\)\s*\r?\n\s*\.delete\(/,
+    ]) {
+      expect(usage).not.toMatch(pattern);
+    }
+  });
+
   test("student progress and certificates use secure RPC paths", () => {
     const studentPortal = read("src/lib/studentPortal.ts");
     const certificates = read("src/lib/certificates.ts");
