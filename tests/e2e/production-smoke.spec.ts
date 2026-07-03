@@ -14,7 +14,11 @@ const publicRoutes = [
 const privateRoutes = [
   { path: "/app/documents", fallbackText: /Login to CoachFort|Secure access|Document Center|Documents/i },
   { path: "/app/finance", fallbackText: /Login to CoachFort|Secure access|Finance/i },
+  { path: "/app/payment-links", fallbackText: /Login to CoachFort|Secure access|Payment gateway on hold|Finance/i },
+  { path: "/app/payments", fallbackText: /Login to CoachFort|Secure access|Finance/i },
+  { path: "/app/receipts", fallbackText: /Login to CoachFort|Secure access|Finance/i },
   { path: "/app/reports", fallbackText: /Login to CoachFort|Secure access|Reports/i },
+  { path: "/app/subscription", fallbackText: /Login to CoachFort|Secure access|Subscription/i },
   { path: "/portal/documents", fallbackText: /Login as a student|Student Portal|Documents/i },
   { path: "/portal/payments", fallbackText: /Login as a student|Student Portal|Payments|Finance/i },
   { path: "/platform", fallbackText: /Login to CoachFort|Secure access|Platform|Access denied/i },

@@ -9,7 +9,6 @@ import { Card } from "@/src/components/ui/Card";
 import { AccessDeniedCard } from "@/src/components/security/AccessDeniedCard";
 import {
   getBillingSummary,
-  updateBillingProfile,
   type BillingProfile,
 } from "@/src/lib/billing";
 import type {
@@ -37,7 +36,6 @@ import type {
   BillingSubscription,
   SubscriptionAccessState,
 } from "@/src/lib/subscriptions";
-import { updateWorkspacePlanManual } from "@/src/lib/subscriptions";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 import { canAccessSubscription } from "@/src/lib/permissions";
 import { getCurrentMemberRole, type MemberRole } from "@/src/lib/team";
@@ -92,17 +90,6 @@ const emptyUsage: UsageCounts = {
   students: 0,
   team_members: 0,
   trainers: 0,
-};
-
-const emptyBillingProfileForm = {
-  billingEmail: "",
-  billingGstNumber: "",
-  city: "",
-  country: "",
-  line1: "",
-  line2: "",
-  postalCode: "",
-  state: "",
 };
 
 function formatPlan(plan: SubscriptionPlan) {
@@ -180,6 +167,25 @@ function BillingStatusBadge({ status }: { status: string }) {
   return <Badge>{formatStatus(status)}</Badge>;
 }
 
+function ReadOnlyField({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-[#15181b] p-4">
+      <p className="text-xs font-semibold uppercase text-slate-500">
+        {label}
+      </p>
+      <p className="mt-2 break-words text-sm font-semibold text-white">
+        {value || "Not added"}
+      </p>
+    </div>
+  );
+}
+
 function UsageCard({
   limit,
   resource,
@@ -243,22 +249,12 @@ function UsageCard({
 
 export function SubscriptionPageClient() {
   const router = useRouter();
-  const [actionError, setActionError] = useState("");
-  const [actionMessage, setActionMessage] = useState("");
   const [billingSummary, setBillingSummary] = useState<BillingSummary | null>(
     null,
   );
-  const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">(
-    "monthly",
-  );
-  const [billingProfileForm, setBillingProfileForm] = useState(
-    emptyBillingProfileForm,
-  );
-  const [savingBillingProfile, setSavingBillingProfile] = useState(false);
   const [currentRole, setCurrentRole] = useState<MemberRole | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
-  const [mutatingPlan, setMutatingPlan] = useState<SubscriptionPlan | "">("");
   const [subscription, setSubscription] =
     useState<TenantSubscription | null>(null);
   const [selectedInvoice, setSelectedInvoice] =
@@ -271,7 +267,9 @@ export function SubscriptionPageClient() {
     () => getPlanLimits(subscription?.plan ?? "free"),
     [subscription?.plan],
   );
-  const canManageSubscription = currentRole === "owner";
+  const billingCycle =
+    billingSummary?.currentSubscriptionStatus.billingCycle ?? "monthly";
+  const billingProfile = billingSummary?.billingProfile;
 
   useEffect(() => {
     let active = true;
@@ -331,27 +329,6 @@ export function SubscriptionPageClient() {
 
         setSubscription(currentSubscription);
         setBillingSummary(currentBillingSummary);
-        setBillingCycle(
-          currentBillingSummary.currentSubscriptionStatus.billingCycle,
-        );
-        setBillingProfileForm({
-          billingEmail: currentBillingSummary.billingProfile.billingEmail,
-          billingGstNumber:
-            currentBillingSummary.billingProfile.billingGstNumber,
-          city:
-            currentBillingSummary.billingProfile.billingAddress.city ?? "",
-          country:
-            currentBillingSummary.billingProfile.billingAddress.country ?? "",
-          line1:
-            currentBillingSummary.billingProfile.billingAddress.line1 ?? "",
-          line2:
-            currentBillingSummary.billingProfile.billingAddress.line2 ?? "",
-          postalCode:
-            currentBillingSummary.billingProfile.billingAddress.postalCode ??
-            "",
-          state:
-            currentBillingSummary.billingProfile.billingAddress.state ?? "",
-        });
         setTrialStatus(currentTrialStatus);
         setUsage(currentUsage);
       } catch (caught) {
@@ -373,83 +350,6 @@ export function SubscriptionPageClient() {
       active = false;
     };
   }, [router]);
-
-  async function handlePlanChange(plan: SubscriptionPlan) {
-    if (!tenant || !canManageSubscription || plan === subscription?.plan) {
-      return;
-    }
-
-    setActionError("");
-    setActionMessage("");
-    setMutatingPlan(plan);
-
-    try {
-      const updatedSubscription = await updateWorkspacePlanManual({
-        billingCycle,
-        plan,
-        tenantId: tenant.id,
-      });
-
-      setSubscription(updatedSubscription);
-      setActionMessage(
-        `Testing plan changed to ${formatPlan(updatedSubscription.plan)}.`,
-      );
-    } catch (caught) {
-      setActionError(getErrorMessage(caught, "Unable to change plan."));
-    } finally {
-      setMutatingPlan("");
-    }
-  }
-
-  async function handleBillingProfileSave() {
-    if (!tenant || !canManageSubscription) {
-      return;
-    }
-
-    const email = billingProfileForm.billingEmail.trim();
-
-    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      setActionError("Enter a valid billing email address.");
-      return;
-    }
-
-    setActionError("");
-    setActionMessage("");
-    setSavingBillingProfile(true);
-
-    try {
-      const billingProfile = await updateBillingProfile({
-        billingAddress: {
-          city: billingProfileForm.city.trim(),
-          country: billingProfileForm.country.trim(),
-          line1: billingProfileForm.line1.trim(),
-          line2: billingProfileForm.line2.trim(),
-          postalCode: billingProfileForm.postalCode.trim(),
-          state: billingProfileForm.state.trim(),
-        },
-        billingEmail: email,
-        billingGstNumber: billingProfileForm.billingGstNumber.trim(),
-        billingStatus: "profile_updated",
-        tenantId: tenant.id,
-      });
-
-      setBillingSummary((current) =>
-        current
-          ? {
-              ...current,
-              billingProfile,
-            }
-          : current,
-      );
-      setActionMessage("Billing profile updated.");
-    } catch (caught) {
-      setActionError(
-        getErrorMessage(caught, "Unable to update billing profile."),
-      );
-    } finally {
-      setSavingBillingProfile(false);
-    }
-  }
 
   if (loading) {
     return (
@@ -497,17 +397,22 @@ export function SubscriptionPageClient() {
         <StatusBadge status={subscription.subscription_status} />
       </div>
 
-      {actionError ? (
-        <div className="mt-6 rounded-3xl border border-red-400/30 bg-red-500/10 p-4 text-sm text-red-100">
-          {actionError}
+      <Card className="mt-6 border-teal-400/30 bg-teal-400/10 p-5 text-teal-50">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-semibold">
+              Subscription is managed by the platform owner.
+            </p>
+            <p className="mt-2 text-sm leading-6 text-teal-100/80">
+              Contact platform support or your platform admin to change plans.
+              Payment gateway billing is not connected yet.
+            </p>
+          </div>
+          <Button href="/app/finance" type="button" variant="secondary">
+            Open Finance Center
+          </Button>
         </div>
-      ) : null}
-
-      {actionMessage ? (
-        <div className="mt-6 rounded-3xl border border-teal-400/30 bg-teal-400/10 p-4 text-sm text-teal-100">
-          {actionMessage}
-        </div>
-      ) : null}
+      </Card>
 
       <section className="mt-8 grid gap-5 xl:grid-cols-[0.8fr_1.2fr]">
         <Card className="border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/10">
@@ -543,7 +448,7 @@ export function SubscriptionPageClient() {
             </div>
           </div>
           <div className="mt-5 rounded-3xl border border-amber-400/30 bg-amber-400/10 p-4 text-sm leading-6 text-amber-100">
-            Testing only — payment gateway not connected yet.
+            Read-only - payment gateway billing is not connected yet.
           </div>
           <div className="mt-5 rounded-3xl border border-white/10 bg-[#15181b] p-5 text-sm leading-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -666,132 +571,48 @@ export function SubscriptionPageClient() {
                 Billing profile
               </Badge>
               <h3 className="mt-4 text-2xl font-semibold">
-                GST-ready workspace details
+                Workspace billing details
               </h3>
               <p className="mt-2 text-sm leading-6 text-slate-400">
-                Store billing email, GST number, and billing address for future
-                invoices and payment provider integrations.
+                These details are read-only for tenant users. Contact platform
+                support or your platform admin to update subscription billing
+                records.
               </p>
             </div>
           </div>
           <div className="mt-6 grid gap-4 sm:grid-cols-2">
-            <label className="text-sm font-semibold text-slate-300">
-              Billing email
-              <input
-                className="mt-2 w-full rounded-2xl border border-white/10 bg-[#15181b] px-4 py-3 text-white outline-none transition focus:border-teal-300"
-                disabled={!canManageSubscription || savingBillingProfile}
-                onChange={(event) =>
-                  setBillingProfileForm((current) => ({
-                    ...current,
-                    billingEmail: event.target.value,
-                  }))
-                }
-                placeholder="billing@example.com"
-                type="email"
-                value={billingProfileForm.billingEmail}
-              />
-            </label>
-            <label className="text-sm font-semibold text-slate-300">
-              GST number
-              <input
-                className="mt-2 w-full rounded-2xl border border-white/10 bg-[#15181b] px-4 py-3 text-white outline-none transition focus:border-teal-300"
-                disabled={!canManageSubscription || savingBillingProfile}
-                onChange={(event) =>
-                  setBillingProfileForm((current) => ({
-                    ...current,
-                    billingGstNumber: event.target.value,
-                  }))
-                }
-                placeholder="Optional"
-                value={billingProfileForm.billingGstNumber}
-              />
-            </label>
-            <label className="text-sm font-semibold text-slate-300 sm:col-span-2">
-              Address line 1
-              <input
-                className="mt-2 w-full rounded-2xl border border-white/10 bg-[#15181b] px-4 py-3 text-white outline-none transition focus:border-teal-300"
-                disabled={!canManageSubscription || savingBillingProfile}
-                onChange={(event) =>
-                  setBillingProfileForm((current) => ({
-                    ...current,
-                    line1: event.target.value,
-                  }))
-                }
-                placeholder="Institute billing address"
-                value={billingProfileForm.line1}
-              />
-            </label>
-            <label className="text-sm font-semibold text-slate-300 sm:col-span-2">
-              Address line 2
-              <input
-                className="mt-2 w-full rounded-2xl border border-white/10 bg-[#15181b] px-4 py-3 text-white outline-none transition focus:border-teal-300"
-                disabled={!canManageSubscription || savingBillingProfile}
-                onChange={(event) =>
-                  setBillingProfileForm((current) => ({
-                    ...current,
-                    line2: event.target.value,
-                  }))
-                }
-                placeholder="Optional"
-                value={billingProfileForm.line2}
-              />
-            </label>
-            <label className="text-sm font-semibold text-slate-300">
-              City
-              <input
-                className="mt-2 w-full rounded-2xl border border-white/10 bg-[#15181b] px-4 py-3 text-white outline-none transition focus:border-teal-300"
-                disabled={!canManageSubscription || savingBillingProfile}
-                onChange={(event) =>
-                  setBillingProfileForm((current) => ({
-                    ...current,
-                    city: event.target.value,
-                  }))
-                }
-                value={billingProfileForm.city}
-              />
-            </label>
-            <label className="text-sm font-semibold text-slate-300">
-              State
-              <input
-                className="mt-2 w-full rounded-2xl border border-white/10 bg-[#15181b] px-4 py-3 text-white outline-none transition focus:border-teal-300"
-                disabled={!canManageSubscription || savingBillingProfile}
-                onChange={(event) =>
-                  setBillingProfileForm((current) => ({
-                    ...current,
-                    state: event.target.value,
-                  }))
-                }
-                value={billingProfileForm.state}
-              />
-            </label>
-            <label className="text-sm font-semibold text-slate-300">
-              Country
-              <input
-                className="mt-2 w-full rounded-2xl border border-white/10 bg-[#15181b] px-4 py-3 text-white outline-none transition focus:border-teal-300"
-                disabled={!canManageSubscription || savingBillingProfile}
-                onChange={(event) =>
-                  setBillingProfileForm((current) => ({
-                    ...current,
-                    country: event.target.value,
-                  }))
-                }
-                value={billingProfileForm.country}
-              />
-            </label>
-            <label className="text-sm font-semibold text-slate-300">
-              Postal code
-              <input
-                className="mt-2 w-full rounded-2xl border border-white/10 bg-[#15181b] px-4 py-3 text-white outline-none transition focus:border-teal-300"
-                disabled={!canManageSubscription || savingBillingProfile}
-                onChange={(event) =>
-                  setBillingProfileForm((current) => ({
-                    ...current,
-                    postalCode: event.target.value,
-                  }))
-                }
-                value={billingProfileForm.postalCode}
-              />
-            </label>
+            <ReadOnlyField
+              label="Billing email"
+              value={billingProfile?.billingEmail ?? ""}
+            />
+            <ReadOnlyField
+              label="GST number"
+              value={billingProfile?.billingGstNumber ?? ""}
+            />
+            <ReadOnlyField
+              label="Address line 1"
+              value={billingProfile?.billingAddress.line1 ?? ""}
+            />
+            <ReadOnlyField
+              label="Address line 2"
+              value={billingProfile?.billingAddress.line2 ?? ""}
+            />
+            <ReadOnlyField
+              label="City"
+              value={billingProfile?.billingAddress.city ?? ""}
+            />
+            <ReadOnlyField
+              label="State"
+              value={billingProfile?.billingAddress.state ?? ""}
+            />
+            <ReadOnlyField
+              label="Country"
+              value={billingProfile?.billingAddress.country ?? ""}
+            />
+            <ReadOnlyField
+              label="Postal code"
+              value={billingProfile?.billingAddress.postalCode ?? ""}
+            />
           </div>
           <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm text-slate-400">
@@ -801,14 +622,9 @@ export function SubscriptionPageClient() {
                   "not_configured",
               )}
             </p>
-            <Button
-              disabled={!canManageSubscription || savingBillingProfile}
-              onClick={handleBillingProfileSave}
-              type="button"
-              variant="secondary"
-            >
-              {savingBillingProfile ? "Saving..." : "Save billing profile"}
-            </Button>
+            <p className="rounded-full border border-white/10 bg-white/10 px-4 py-2 text-xs font-semibold uppercase text-slate-400">
+              Platform-managed
+            </p>
           </div>
         </Card>
       </section>
@@ -943,31 +759,17 @@ export function SubscriptionPageClient() {
               Plan comparison
             </h3>
             <p className="mt-2 text-sm text-slate-400">
-              Upgrade-ready UI for SaaS billing. Owners can manually switch
-              plans while gateway integration is pending.
+              Compare available plan limits. Plan changes are handled by the
+              platform owner while gateway billing is not connected.
             </p>
           </div>
           <p className="rounded-full border border-white/10 bg-white/10 px-4 py-2 text-sm text-slate-300">
-            {canManageSubscription ? "Owner controls enabled" : "View only"}
+            Platform-managed
           </p>
         </div>
-        <div className="mt-5 inline-flex rounded-2xl border border-white/10 bg-[#101214] p-1 text-sm font-semibold text-slate-300">
-          {(["monthly", "yearly"] as const).map((cycle) => (
-            <button
-              className={[
-                "rounded-xl px-4 py-2 transition",
-                billingCycle === cycle
-                  ? "bg-white text-[#101214]"
-                  : "text-slate-400 hover:text-white",
-              ].join(" ")}
-              key={cycle}
-              onClick={() => setBillingCycle(cycle)}
-              type="button"
-            >
-              {cycle === "monthly" ? "Monthly" : "Yearly"}
-            </button>
-          ))}
-        </div>
+        <p className="mt-5 text-sm font-semibold uppercase text-slate-500">
+          Showing {billingCycle} billing
+        </p>
 
         <div className="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
           {plans.map((planOption) => {
@@ -1041,25 +843,13 @@ export function SubscriptionPageClient() {
                     <Button disabled className="w-full" type="button">
                       Current plan
                     </Button>
-                  ) : canManageSubscription ? (
-                    <Button
-                      className="w-full"
-                      disabled={mutatingPlan === planOption.plan}
-                      onClick={() => handlePlanChange(planOption.plan)}
-                      type="button"
-                      variant="secondary"
-                    >
-                      {mutatingPlan === planOption.plan
-                        ? "Changing..."
-                        : "Change for testing"}
-                    </Button>
                   ) : (
                     <Button disabled className="w-full" type="button">
-                      Payment integration coming soon
+                      Contact platform admin
                     </Button>
                   )}
                   <p className="mt-3 text-center text-xs text-slate-500">
-                    Razorpay and Stripe checkout are prepared but not connected.
+                    Tenant-side checkout and plan changes are not enabled.
                   </p>
                 </div>
               </Card>

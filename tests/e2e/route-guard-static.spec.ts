@@ -583,6 +583,38 @@ test.describe("static route guard coverage", () => {
     );
   });
 
+  test("tenant subscription page is read-only and platform-managed", () => {
+    const source = read("src/components/subscription/SubscriptionPageClient.tsx");
+
+    expect(source).toContain("Subscription is managed by the platform owner.");
+    expect(source).toContain("Contact platform support or your platform admin");
+    expect(source).toContain("Platform-managed");
+
+    for (const forbidden of [
+      "updateBillingProfile",
+      "updateWorkspacePlanManual",
+      "handlePlanChange",
+      "handleBillingProfileSave",
+      "Change for testing",
+      "Save billing profile",
+      "Owner controls enabled",
+    ]) {
+      expect(source).not.toContain(forbidden);
+    }
+
+    for (const forbiddenPattern of [
+      /\.from\("tenants"\)\s*\r?\n\s*\.update\(/,
+      /\.from\("subscriptions"\)\s*\r?\n\s*\.insert\(/,
+      /\.from\("subscriptions"\)\s*\r?\n\s*\.update\(/,
+      /\.from\("invoices"\)\s*\r?\n\s*\.insert\(/,
+      /\.from\("invoices"\)\s*\r?\n\s*\.update\(/,
+      /\.from\("invoice_items"\)\s*\r?\n\s*\.insert\(/,
+      /\.from\("payment_transactions"\)\s*\r?\n\s*\.insert\(/,
+    ]) {
+      expect(source).not.toMatch(forbiddenPattern);
+    }
+  });
+
   test("student progress and certificates use secure RPC paths", () => {
     const studentPortal = read("src/lib/studentPortal.ts");
     const certificates = read("src/lib/certificates.ts");
