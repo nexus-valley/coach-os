@@ -259,27 +259,14 @@ async function insertExportLog(params: {
   tenantId: string;
 }) {
   const supabase = getSupabaseClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
   const { data, error } = await supabase
-    .from("backup_export_logs")
-    .insert({
-      completed_at:
-        params.status === "completed" || params.status === "failed"
-          ? new Date().toISOString()
-          : null,
-      export_type: params.exportType,
-      metadata_json: params.metadata ?? {},
-      requested_by: user?.id ?? null,
-      row_count: params.rowCount ?? null,
-      status: params.status,
-      tenant_id: params.tenantId,
+    .rpc("record_backup_export_log_secure", {
+      p_export_type: params.exportType,
+      p_metadata: params.metadata ?? {},
+      p_row_count: params.rowCount ?? null,
+      p_status: params.status,
+      p_tenant_id: params.tenantId,
     })
-    .select(
-      "id,tenant_id,requested_by,export_type,status,row_count,metadata_json,created_at,completed_at",
-    )
     .single();
 
   if (error) {
@@ -287,6 +274,32 @@ async function insertExportLog(params: {
   }
 
   return data as BackupExportLog;
+}
+
+function getBackupExportErrorCategory(caught: unknown) {
+  if (!(caught instanceof Error)) {
+    return "unknown";
+  }
+
+  const message = caught.message.toLowerCase();
+
+  if (message.includes("permission") || message.includes("access")) {
+    return "access_denied";
+  }
+
+  if (message.includes("network") || message.includes("fetch")) {
+    return "network";
+  }
+
+  if (message.includes("timeout")) {
+    return "timeout";
+  }
+
+  if (message.includes("row") || message.includes("limit")) {
+    return "row_limit";
+  }
+
+  return "export_failed";
 }
 
 export async function getBackupRecoveryData(tenantId: string) {
@@ -439,7 +452,7 @@ export async function exportTenantDataset(tenantId: string, exportType: string) 
     await insertExportLog({
       exportType,
       metadata: {
-        error: caught instanceof Error ? caught.message : "Export failed.",
+        errorCategory: getBackupExportErrorCategory(caught),
         startedLogId: startedLog.id,
         table: config.table,
       },
@@ -454,7 +467,7 @@ export async function exportTenantDataset(tenantId: string, exportType: string) 
       entityName: exportType,
       entityType: "backup_export",
       metadata: {
-        error: caught instanceof Error ? caught.message : "Export failed.",
+        errorCategory: getBackupExportErrorCategory(caught),
         exportType,
         table: config.table,
       },
