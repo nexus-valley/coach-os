@@ -44,14 +44,6 @@ export async function signUpWithPassword(params: {
     throw error;
   }
 
-  if (data.user) {
-    await supabase.from("profiles").upsert({
-      email: params.email,
-      full_name: params.fullName,
-      id: data.user.id,
-    });
-  }
-
   return data.user;
 }
 

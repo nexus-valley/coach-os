@@ -890,4 +890,29 @@ test.describe("static route guard coverage", () => {
       }
     }
   });
+
+  test("signup relies on auth profile trigger and active profile writes stay retired", () => {
+    const auth = read("src/lib/auth.ts");
+    const signup = read("src/components/auth/SignupForm.tsx");
+    const schema = read("supabase/schema.sql");
+
+    expect(signup).toContain("signUpWithPassword");
+    expect(auth).toContain("supabase.auth.signUp");
+    expect(auth).not.toMatch(
+      /\.from\(["'`]profiles["'`]\)[\s\S]{0,700}\.(insert|update|upsert|delete)\(/,
+    );
+    expect(schema).toContain("handle_new_user_profile");
+    expect(schema).toContain("on_auth_user_created_profile");
+
+    const activeSourceFiles = [
+      ...listSourceFiles("app"),
+      ...listSourceFiles("src"),
+    ].filter((path) => path !== "src/lib/demoWorkspace.ts");
+
+    for (const path of activeSourceFiles) {
+      expect(read(path), `${path} should not directly write profiles`).not.toMatch(
+        /\.from\(["'`]profiles["'`]\)[\s\S]{0,700}\.(insert|update|upsert|delete)\(/,
+      );
+    }
+  });
 });
