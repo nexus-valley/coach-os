@@ -860,4 +860,34 @@ test.describe("static route guard coverage", () => {
       expect(read(path), path).not.toContain("@/src/lib/demoWorkspace");
     }
   });
+
+  test("workspace bootstrap uses RPC and active tenant member writes stay retired", () => {
+    const tenant = read("src/lib/tenant.ts");
+
+    expect(tenant).toContain("create_workspace_with_owner");
+    expect(tenant).toContain(
+      "Workspace setup is temporarily unavailable. Please contact support.",
+    );
+    expect(tenant).not.toMatch(/\.from\("tenants"\)[\s\S]{0,700}\.insert\(/);
+    expect(tenant).not.toMatch(
+      /\.from\("tenant_members"\)[\s\S]{0,700}\.insert\(/,
+    );
+
+    const activeSourceFiles = [
+      ...listSourceFiles("app"),
+      ...listSourceFiles("src"),
+    ].filter((path) => path !== "src/lib/demoWorkspace.ts");
+
+    for (const path of activeSourceFiles) {
+      const source = read(path);
+
+      for (const table of ["tenants", "tenant_members"]) {
+        expect(source, `${path} should not directly write ${table}`).not.toMatch(
+          new RegExp(
+            String.raw`\.from\(["'\`]${table}["'\`]\)[\s\S]{0,700}\.(insert|update|upsert|delete)\(`,
+          ),
+        );
+      }
+    }
+  });
 });
