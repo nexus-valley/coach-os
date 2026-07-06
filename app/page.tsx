@@ -3,6 +3,7 @@ import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
 import { MarketingFooter } from "@/src/components/layout/MarketingFooter";
 import { MarketingHeader } from "@/src/components/layout/MarketingHeader";
+import { EarlyAccessNotice } from "@/src/components/marketing/EarlyAccessNotice";
 import { Fragment } from "react";
 
 const whatsappUrl = "https://wa.me/917338841434";
@@ -240,6 +241,7 @@ export default function Home() {
   return (
     <main className="min-h-screen overflow-hidden bg-[#F3FAFD] text-[#0B1F33]">
       <MarketingHeader />
+      <EarlyAccessNotice />
 
       <section className="relative overflow-hidden border-b border-[#D8E8F0] bg-[linear-gradient(135deg,#F3FAFD_0%,#FFFFFF_42%,#EAF8FC_100%)]">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_10%_10%,rgba(46,203,234,0.18),transparent_32rem),radial-gradient(circle_at_90%_20%,rgba(217,163,47,0.16),transparent_28rem)]" />

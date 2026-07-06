@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { CoachFortBrandAsset } from "@/src/components/branding/CoachFortBrandAsset";
+import { EarlyAccessNotice } from "@/src/components/marketing/EarlyAccessNotice";
 
 type AuthCardProps = {
   children: React.ReactNode;
@@ -22,7 +23,13 @@ export function AuthCard({
   return (
     <main className="min-h-screen bg-zinc-950 text-white">
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_20%_0%,rgba(255,255,255,0.18),transparent_30rem),linear-gradient(135deg,rgba(63,63,70,0.28),transparent_36rem)]" />
-      <div className="relative mx-auto grid min-h-screen max-w-7xl items-center gap-10 px-5 py-10 sm:px-6 lg:grid-cols-[0.9fr_1.1fr] lg:px-8">
+      <div className="relative">
+        <EarlyAccessNotice
+          className="border-b border-white/10 bg-zinc-900/80"
+          tone="dark"
+        />
+      </div>
+      <div className="relative mx-auto grid min-h-[calc(100vh-4.5rem)] max-w-7xl items-center gap-10 px-5 py-10 sm:px-6 lg:grid-cols-[0.9fr_1.1fr] lg:px-8">
         <section className="hidden lg:block">
           <div className="max-w-xl">
             <CoachFortBrandAsset
