@@ -228,16 +228,18 @@ export function AssistantPage({
                   ? "Student assistant"
                   : `${resolvedRole ?? "team"} assistant`}
               </Badge>
+              <Badge tone="warning">Preview</Badge>
             </div>
             <p className="mt-2 max-w-3xl text-sm text-[#5B7083]">
               {scope === "student" && studentName
-                ? `Guidance for ${studentName}, based only on their own portal context.`
-                : "Role-aware guidance based on safe workspace summaries."}
+                ? `Preview guidance for ${studentName}, based only on their own portal context.`
+                : "Preview guidance based on safe workspace summaries. Responses use limited allowlisted context and may be incomplete."}
             </p>
           </div>
           <Card className="rounded-2xl bg-[#F8FCFE] p-4 text-sm text-[#425B76] lg:max-w-sm">
-            AI can make mistakes. It suggests next steps only and does not
-            perform actions. Verify critical information before acting.
+            AI Assistant Preview can make mistakes. It suggests next steps only,
+            uses limited allowlisted summaries, and does not perform actions.
+            Verify critical information before acting.
           </Card>
         </div>
       </section>
@@ -306,9 +308,11 @@ export function AssistantPage({
             </div>
           </Card>
           <Card className="rounded-3xl p-5 text-sm leading-6 text-[#425B76]">
-            <h2 className="font-semibold text-[#0B1F33]">Safety boundary</h2>
+            <h2 className="font-semibold text-[#0B1F33]">
+              Preview safety boundary
+            </h2>
             <p className="mt-2">
-              This foundation uses allowlisted summaries only. It cannot modify
+              This preview uses allowlisted summaries only. It cannot modify
               payments, attendance, courses, students, sessions, automations, or
               settings.
             </p>
