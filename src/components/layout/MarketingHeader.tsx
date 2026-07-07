@@ -38,7 +38,7 @@ export function MarketingHeader() {
               Login
             </Button>
             <Button href="/signup" size="sm">
-              Sign Up
+              Early Access
             </Button>
             <Button href="/demo" size="sm" variant="secondary">
               Try Demo
@@ -60,7 +60,7 @@ export function MarketingHeader() {
             className="rounded-full bg-[#145DA0] px-2 py-2 text-white shadow-sm shadow-[#145DA0]/15 transition hover:bg-[#0F4C81]"
             href="/signup"
           >
-            Sign Up
+            Early Access
           </Link>
           <Link
             className="rounded-full border border-[#D8E8F0] bg-white px-2 py-2 text-[#0B2A3D] transition hover:bg-[#F3FAFD]"

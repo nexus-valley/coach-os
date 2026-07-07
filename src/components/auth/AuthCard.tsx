@@ -40,8 +40,9 @@ export function AuthCard({
               Premium workspace infrastructure for modern coaching teams.
             </h1>
             <p className="mt-6 text-lg leading-8 text-zinc-400">
-              Authenticate, create your tenant, and enter the operating system
-              that will power courses, cohorts, CRM, automation, and analytics.
+              Sign in or continue from an invitation to access courses,
+              cohorts, CRM, manual finance tracking, WhatsApp-ready workflows,
+              and analytics.
             </p>
           </div>
         </section>

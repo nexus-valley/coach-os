@@ -13,8 +13,8 @@ const valuePills = [
   "Course Delivery",
   "Live Cohorts",
   "Certificates",
-  "WhatsApp Automation",
-  "Payments",
+  "WhatsApp-ready Workflows",
+  "Manual Payments",
   "Analytics",
   "Admin Controls",
 ];
@@ -46,14 +46,14 @@ const features = [
     description:
       "Manage fee plans, invoices, manual payment records, receipts, and due status in Finance Center.",
     icon: "PY",
-    title: "Payments",
+    title: "Manual Payments",
   },
   {
-    bullets: ["Templates", "Reminders", "Rule setup"],
+    bullets: ["Templates", "Reminders", "Manual sharing"],
     description:
-      "Share reminders, receipts, and certificates through WhatsApp-ready templates, with automation rules for follow-ups.",
+      "Prepare reminders, receipts, and certificates with WhatsApp-ready templates for manual sharing and follow-up workflows.",
     icon: "WA",
-    title: "WhatsApp & Email Automation",
+    title: "WhatsApp-ready Communication",
   },
   {
     bullets: ["Engagement base", "Learner touchpoints", "Future-ready"],
@@ -136,7 +136,7 @@ function HeroVisual() {
                 CoachFort command center
               </p>
               <p className="mt-1 text-xs font-medium text-[#66788F]">
-                Live operating snapshot
+                Early-access operating snapshot
               </p>
             </div>
             <span className="rounded-full border border-[#9ADDEA] bg-[#EAF8FC] px-3 py-1 text-xs font-semibold text-[#0B6F87]">
@@ -147,7 +147,7 @@ function HeroVisual() {
           <div className="grid gap-3 py-5 sm:grid-cols-3">
             {[
               ["Students", "2,480", "+18%"],
-              ["Revenue", "₹8.4L", "This month"],
+              ["Revenue", "Rs 8.4L", "This month"],
               ["Completion", "91%", "On track"],
             ].map(([label, value, note]) => (
               <div
@@ -200,7 +200,7 @@ function HeroVisual() {
             <div className="space-y-3">
               <div className="rounded-2xl border border-[#D8E8F0] bg-white p-4 shadow-sm shadow-[#0B2A3D]/5">
                 <p className="text-sm font-semibold text-[#0B1F33]">
-                  WhatsApp automation
+                  WhatsApp-ready follow-ups
                 </p>
                 <p className="mt-2 text-xs leading-5 text-[#66788F]">
                   Payment follow-up and completion reminders are ready for
@@ -260,7 +260,7 @@ export default function Home() {
             </p>
             <div className="mt-9 flex flex-col gap-3 sm:flex-row sm:items-center">
               <Button href="/signup" size="lg">
-                Start Free / Sign Up
+                Early access signup
               </Button>
               <Button href="/demo" size="lg" variant="secondary">
                 Try Live Demo
@@ -273,7 +273,7 @@ export default function Home() {
               </a>
             </div>
             <p className="mt-5 text-sm font-medium text-[#66788F]">
-              No credit card required &bull; Google sign-in &bull; Demo
+              Invite-based onboarding &bull; Google sign-in &bull; Demo
               workspace ready
             </p>
           </div>
@@ -457,7 +457,7 @@ export default function Home() {
             </p>
             <p>
               From managing students and courses to tracking payments and
-              sending WhatsApp reminders, CoachFort brings everything into one
+              preparing WhatsApp reminders, CoachFort brings everything into one
               simple platform.
             </p>
             <p>
