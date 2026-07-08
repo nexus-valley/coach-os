@@ -28,6 +28,14 @@ import {
   type PlatformTenantDetail,
   type PlatformTenantSummary,
 } from "@/src/lib/platform";
+import {
+  getPlatformPlanCatalog,
+  getTenantEntitlementState,
+  type CanonicalPlanCatalogItem,
+  type TenantEntitlementFeature,
+  type TenantEntitlementLimit,
+  type TenantEntitlementState,
+} from "@/src/lib/subscriptionEntitlements";
 
 type PlanFormState = {
   aiMonthlyLimit: string;
@@ -234,9 +242,53 @@ function planFormFromPlan(plan: PlatformSubscriptionPlan): PlanFormState {
   };
 }
 
+function booleanLabel(value: boolean) {
+  return value ? "true" : "false";
+}
+
+function displayLimitValue(value: number | string | null | undefined) {
+  return value === null || typeof value === "undefined" ? "Unlimited" : String(value);
+}
+
+function entitlementTone(value: string | null | undefined) {
+  if (value === "included" || value === "active" || value === "trial") {
+    return "success" as const;
+  }
+
+  if (
+    value === "coming_soon" ||
+    value === "platform_approval_required" ||
+    value === "addon" ||
+    value === "past_due" ||
+    value === "warn"
+  ) {
+    return "warning" as const;
+  }
+
+  if (
+    value === "locked" ||
+    value === "disabled" ||
+    value === "suspended" ||
+    value === "cancelled" ||
+    value === "expired" ||
+    value === "hard"
+  ) {
+    return "danger" as const;
+  }
+
+  return "light" as const;
+}
+
 export function PlatformOwnerConsolePage() {
   const [adminContext, setAdminContext] = useState<PlatformAdminContext | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [canonicalEntitlementError, setCanonicalEntitlementError] =
+    useState<string | null>(null);
+  const [canonicalEntitlementState, setCanonicalEntitlementState] =
+    useState<TenantEntitlementState | null>(null);
+  const [canonicalPlanCatalog, setCanonicalPlanCatalog] = useState<
+    CanonicalPlanCatalogItem[]
+  >([]);
   const [dashboard, setDashboard] = useState<PlatformDashboard | null>(null);
   const [loading, setLoading] = useState(true);
   const [paymentFilter, setPaymentFilter] = useState<PaymentStatusFilter>("all");
@@ -302,6 +354,22 @@ export function PlatformOwnerConsolePage() {
     [selectedTenantId, tenants],
   );
 
+  const loadCanonicalEntitlements = useCallback(async (tenantId: string | null) => {
+    setCanonicalEntitlementError(null);
+
+    try {
+      const [catalogData, entitlementData] = await Promise.all([
+        getPlatformPlanCatalog(),
+        tenantId ? getTenantEntitlementState(tenantId) : Promise.resolve(null),
+      ]);
+      setCanonicalPlanCatalog(catalogData);
+      setCanonicalEntitlementState(entitlementData);
+    } catch (error) {
+      setCanonicalEntitlementState(null);
+      setCanonicalEntitlementError(normalizePlatformError(error));
+    }
+  }, []);
+
   const loadTenantDetail = useCallback(async (tenantId: string) => {
     const detail = await getPlatformTenantDetail(tenantId);
     setSelectedTenantDetail(detail);
@@ -321,6 +389,9 @@ export function PlatformOwnerConsolePage() {
         setTenants([]);
         setPlans([]);
         setSelectedTenantDetail(null);
+        setCanonicalPlanCatalog([]);
+        setCanonicalEntitlementState(null);
+        setCanonicalEntitlementError(null);
         return;
       }
 
@@ -342,12 +413,13 @@ export function PlatformOwnerConsolePage() {
       if (nextTenantId) {
         await loadTenantDetail(nextTenantId);
       }
+      await loadCanonicalEntitlements(nextTenantId);
     } catch (error) {
       setActionError(normalizePlatformError(error));
     } finally {
       setLoading(false);
     }
-  }, [loadTenantDetail, selectedTenantId]);
+  }, [loadCanonicalEntitlements, loadTenantDetail, selectedTenantId]);
 
   useEffect(() => {
     if (initialLoadStarted.current) return;
@@ -360,7 +432,7 @@ export function PlatformOwnerConsolePage() {
     setSelectedTenantId(tenantId);
 
     try {
-      await loadTenantDetail(tenantId);
+      await Promise.all([loadTenantDetail(tenantId), loadCanonicalEntitlements(tenantId)]);
     } catch (error) {
       setActionError(normalizePlatformError(error));
     }
@@ -556,6 +628,13 @@ export function PlatformOwnerConsolePage() {
           <section className="space-y-6">
             <TenantDetailPanel
               detail={selectedTenantDetail}
+              selectedTenantName={selectedTenant?.name}
+            />
+
+            <CanonicalEntitlementPanel
+              catalog={canonicalPlanCatalog}
+              entitlement={canonicalEntitlementState}
+              error={canonicalEntitlementError}
               selectedTenantName={selectedTenant?.name}
             />
 
@@ -905,6 +984,264 @@ function TenantDetailPanel({
         </InfoPanel>
       </div>
     </Card>
+  );
+}
+
+function CanonicalEntitlementPanel({
+  catalog,
+  entitlement,
+  error,
+  selectedTenantName,
+}: {
+  catalog: CanonicalPlanCatalogItem[];
+  entitlement: TenantEntitlementState | null;
+  error: string | null;
+  selectedTenantName?: string | null;
+}) {
+  const keyFeatureKeys = ["payment_gateway", "live_classes", "students", "courses"];
+  const keyFeatures = keyFeatureKeys.map((featureKey) => ({
+    featureKey,
+    feature:
+      entitlement?.features.find((item) => item.feature_key === featureKey) ?? null,
+  }));
+  const keyLimits = ["students", "courses", "storage_mb", "document_uploads"]
+    .map((resourceKey) => ({
+      limit: entitlement?.limits.find((item) => item.resource_key === resourceKey) ?? null,
+      resourceKey,
+    }))
+    .filter((item) => item.limit);
+  const usageEntries = entitlement
+    ? Object.entries(entitlement.latest_usage).filter(([, value]) => value !== null)
+    : [];
+  const assignment = entitlement?.assignment ?? null;
+
+  return (
+    <Card className="p-5">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <p className="text-sm font-semibold uppercase tracking-[0.06em] text-[#5D7185]">
+            Canonical entitlement foundation
+          </p>
+          <h2 className="mt-1 text-xl font-semibold">Read-only subscription entitlements</h2>
+          <p className="mt-1 max-w-3xl text-sm text-[#5D7185]">
+            Read-only view of the new entitlement foundation. No checkout, payment
+            enforcement, plan assignment, or feature gate changes are active from this
+            panel.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Badge tone="dark">Read-only</Badge>
+          <Badge tone="warning">Checkout off</Badge>
+        </div>
+      </div>
+
+      <p className="mt-4 rounded-2xl border border-[#FED7AA] bg-[#FFF7ED] p-3 text-sm text-[#9A3412]">
+        Payment gateway is not active. Checkout is not enabled.
+      </p>
+
+      {error ? (
+        <p className="mt-4 rounded-2xl border border-[#FECACA] bg-[#FEF2F2] p-3 text-sm text-[#B91C1C]">
+          Canonical entitlement data is currently unavailable: {error}
+        </p>
+      ) : null}
+
+      <div className="mt-5 grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
+        <div className="rounded-2xl border border-[#D8E8F0] bg-[#F8FBFD] p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold">Plan catalog summary</p>
+              <p className="text-xs text-[#5D7185]">
+                Canonical plans returned by get_platform_plan_catalog().
+              </p>
+            </div>
+            <Badge tone="light">{catalog.length} plans</Badge>
+          </div>
+          <div className="mt-4 space-y-3">
+            {catalog.length === 0 ? (
+              <p className="rounded-2xl border border-dashed border-[#D8E8F0] bg-white p-3 text-sm text-[#5D7185]">
+                No canonical catalog rows returned for this platform role.
+              </p>
+            ) : (
+              catalog.slice(0, 6).map((plan) => (
+                <div
+                  className="rounded-2xl border border-[#D8E8F0] bg-white p-3"
+                  key={plan.id || plan.code}
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="font-semibold">{plan.name}</p>
+                      <p className="text-sm text-[#5D7185]">{plan.code}</p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Badge tone={statusTone(plan.status)}>{formatLabel(plan.status)}</Badge>
+                      <Badge tone={plan.is_public ? "success" : "light"}>
+                        {plan.is_public ? "Public" : "Private"}
+                      </Badge>
+                    </div>
+                  </div>
+                  <div className="mt-3 grid grid-cols-3 gap-2 text-xs text-[#5D7185]">
+                    <span>{plan.prices.length} prices</span>
+                    <span>{plan.usage_limits.length} limits</span>
+                    <span>{plan.feature_entitlements.length} features</span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-[#D8E8F0] bg-[#F8FBFD] p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold">Selected tenant entitlement state</p>
+              <p className="text-xs text-[#5D7185]">
+                {selectedTenantName ?? "Select a tenant"} canonical assignment and usage.
+              </p>
+            </div>
+            <Badge tone={assignment ? entitlementTone(assignment.status) : "light"}>
+              {assignment ? formatLabel(assignment.status) : "No assignment"}
+            </Badge>
+          </div>
+
+          {!entitlement ? (
+            <p className="mt-4 rounded-2xl border border-dashed border-[#D8E8F0] bg-white p-3 text-sm text-[#5D7185]">
+              Select a tenant to load canonical entitlement state.
+            </p>
+          ) : (
+            <div className="mt-4 space-y-4">
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                <SmallMetric
+                  label="Payment forced"
+                  value={entitlement.payment_forced ? 1 : 0}
+                />
+                <SmallMetric
+                  label="Gateway required"
+                  value={entitlement.gateway_required ? 1 : 0}
+                />
+                <SmallMetric label="Warnings" value={entitlement.warnings.length} />
+                <SmallMetric label="Limits" value={entitlement.limits.length} />
+              </div>
+
+              <div className="grid gap-4 lg:grid-cols-2">
+                <InfoPanel title="Canonical Assignment">
+                  <InfoRow label="Plan" value={assignment?.plan_code ?? "Not assigned"} />
+                  <InfoRow label="Status" value={formatLabel(assignment?.status)} />
+                  <InfoRow
+                    label="Payment status"
+                    value={formatLabel(assignment?.payment_status)}
+                  />
+                  <InfoRow label="Currency" value={assignment?.currency ?? "Not set"} />
+                  <InfoRow
+                    label="Payment forced"
+                    value={booleanLabel(entitlement.payment_forced)}
+                  />
+                  <InfoRow
+                    label="Gateway required"
+                    value={booleanLabel(entitlement.gateway_required)}
+                  />
+                </InfoPanel>
+
+                <InfoPanel title="Latest Canonical Usage">
+                  {usageEntries.length === 0 ? (
+                    <p className="text-sm text-[#5D7185]">No canonical usage snapshot.</p>
+                  ) : (
+                    usageEntries.slice(0, 6).map(([key, value]) => (
+                      <InfoRow
+                        key={key}
+                        label={formatLabel(key)}
+                        value={String(value)}
+                      />
+                    ))
+                  )}
+                </InfoPanel>
+              </div>
+
+              <div className="grid gap-4 lg:grid-cols-2">
+                <div className="rounded-2xl border border-[#D8E8F0] bg-white p-3">
+                  <p className="text-sm font-semibold">Key limits</p>
+                  <div className="mt-3 space-y-2">
+                    {keyLimits.length === 0 ? (
+                      <p className="text-sm text-[#5D7185]">No key limits configured.</p>
+                    ) : (
+                      keyLimits.map(({ limit, resourceKey }) => (
+                        <LimitSummaryRow
+                          key={resourceKey}
+                          limit={limit}
+                          resourceKey={resourceKey}
+                        />
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-[#D8E8F0] bg-white p-3">
+                  <p className="text-sm font-semibold">Key feature statuses</p>
+                  <div className="mt-3 space-y-2">
+                    {keyFeatures.map(({ feature, featureKey }) => (
+                      <FeatureSummaryRow
+                        feature={feature}
+                        featureKey={featureKey}
+                        key={featureKey}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+function LimitSummaryRow({
+  limit,
+  resourceKey,
+}: {
+  limit: TenantEntitlementLimit | null;
+  resourceKey: string;
+}) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-[#D8E8F0] bg-[#F8FBFD] px-3 py-2 text-sm">
+      <div>
+        <p className="font-semibold">{formatLabel(resourceKey)}</p>
+        <p className="text-xs text-[#5D7185]">
+          Base {displayLimitValue(limit?.base_limit_value)}
+          {limit?.override_type ? ` | ${formatLabel(limit.override_type)}` : ""}
+        </p>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge tone={entitlementTone(limit?.enforcement_mode)}>
+          {formatLabel(limit?.enforcement_mode)}
+        </Badge>
+        <span className="font-semibold">{displayLimitValue(limit?.limit_value)}</span>
+      </div>
+    </div>
+  );
+}
+
+function FeatureSummaryRow({
+  feature,
+  featureKey,
+}: {
+  feature: TenantEntitlementFeature | null;
+  featureKey: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-[#D8E8F0] bg-[#F8FBFD] px-3 py-2 text-sm">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="font-semibold">{formatLabel(featureKey)}</p>
+        <Badge tone={entitlementTone(feature?.effective_status)}>
+          {formatLabel(feature?.effective_status ?? "not configured")}
+        </Badge>
+      </div>
+      <p className="mt-1 text-xs text-[#5D7185]">
+        Reason: {formatLabel(feature?.reason)} | Plan:{" "}
+        {formatLabel(feature?.plan_status)} | Module 62:{" "}
+        {formatLabel(feature?.module62_status)}
+      </p>
+    </div>
   );
 }
 
