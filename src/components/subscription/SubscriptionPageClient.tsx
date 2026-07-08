@@ -32,6 +32,12 @@ import {
   type SubscriptionPlan,
   type TenantSubscription,
 } from "@/src/lib/subscription";
+import {
+  getTenantEntitlementState,
+  type TenantEntitlementFeature,
+  type TenantEntitlementLimit,
+  type TenantEntitlementState,
+} from "@/src/lib/subscriptionEntitlements";
 import type {
   BillingSubscription,
   SubscriptionAccessState,
@@ -104,6 +110,10 @@ function formatStatus(value: string) {
   return value.replace("_", " ");
 }
 
+function formatCanonicalStatus(value: string | null | undefined) {
+  return value ? value.replace(/_/g, " ") : "Not set";
+}
+
 function formatDate(value: string | null) {
   if (!value) {
     return "Not set";
@@ -125,6 +135,43 @@ function formatCurrency(value: number, currency = "INR") {
 
 function formatLimit(limit: ResourceLimit) {
   return formatResourceLimit(limit);
+}
+
+function formatCanonicalLimit(value: number | string | null | undefined) {
+  return value === null || typeof value === "undefined" ? "Unlimited" : String(value);
+}
+
+function booleanLabel(value: boolean | null | undefined) {
+  return value ? "true" : "false";
+}
+
+function entitlementTone(value: string | null | undefined) {
+  if (value === "included" || value === "active" || value === "trial") {
+    return "success" as const;
+  }
+
+  if (
+    value === "coming_soon" ||
+    value === "platform_approval_required" ||
+    value === "addon" ||
+    value === "past_due" ||
+    value === "warn"
+  ) {
+    return "warning" as const;
+  }
+
+  if (
+    value === "locked" ||
+    value === "disabled" ||
+    value === "suspended" ||
+    value === "cancelled" ||
+    value === "expired" ||
+    value === "hard"
+  ) {
+    return "danger" as const;
+  }
+
+  return "light" as const;
 }
 
 function getErrorMessage(caught: unknown, fallback: string) {
@@ -247,11 +294,235 @@ function UsageCard({
   );
 }
 
+function CanonicalEntitlementSummary({
+  entitlement,
+  error,
+}: {
+  entitlement: TenantEntitlementState | null;
+  error: string | null;
+}) {
+  const assignment = entitlement?.assignment ?? null;
+  const keyFeatureKeys = [
+    "payment_gateway",
+    "live_classes",
+    "students",
+    "courses",
+    "document_uploads",
+    "ai_assistant",
+  ];
+  const keyFeatures = keyFeatureKeys.map((featureKey) => ({
+    feature:
+      entitlement?.features.find((item) => item.feature_key === featureKey) ?? null,
+    featureKey,
+  }));
+  const usageEntries = entitlement
+    ? Object.entries(entitlement.latest_usage).filter(([, value]) => value !== null)
+    : [];
+  const visibleLimits = entitlement?.limits ?? [];
+
+  return (
+    <Card className="mt-6 border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/10">
+      <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
+        <div>
+          <Badge className="border-white/15 bg-white/10 text-white">
+            Read-only entitlement summary
+          </Badge>
+          <h3 className="mt-4 text-2xl font-semibold">
+            Canonical plan, usage, and feature access
+          </h3>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
+            This does not change your plan or billing. Payment gateway is not
+            active. Checkout is not enabled.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Badge className="border-white/15 bg-white/10 text-white">Read-only</Badge>
+          <Badge className="border-amber-400/30 bg-amber-400/10 text-amber-200">
+            Checkout off
+          </Badge>
+        </div>
+      </div>
+
+      {error ? (
+        <div className="mt-5 rounded-3xl border border-amber-400/30 bg-amber-400/10 p-4 text-sm leading-6 text-amber-100">
+          Canonical entitlement summary is currently unavailable: {error}
+        </div>
+      ) : null}
+
+      {!entitlement ? (
+        <div className="mt-5 rounded-3xl border border-white/10 bg-[#15181b] p-5 text-sm leading-6 text-slate-400">
+          No canonical entitlement assignment is available yet. The existing
+          subscription summary above remains the active tenant-facing reference.
+        </div>
+      ) : (
+        <div className="mt-6 grid gap-5">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <ReadOnlyField label="Plan" value={assignment?.plan_code ?? ""} />
+            <ReadOnlyField label="Status" value={formatCanonicalStatus(assignment?.status)} />
+            <ReadOnlyField
+              label="Payment status"
+              value={formatCanonicalStatus(assignment?.payment_status)}
+            />
+            <ReadOnlyField label="Currency" value={assignment?.currency ?? ""} />
+            <ReadOnlyField
+              label="Billing cycle"
+              value={formatCanonicalStatus(assignment?.billing_cycle)}
+            />
+            <ReadOnlyField
+              label="Payment forced"
+              value={booleanLabel(entitlement.payment_forced)}
+            />
+            <ReadOnlyField
+              label="Gateway required"
+              value={booleanLabel(entitlement.gateway_required)}
+            />
+            <ReadOnlyField
+              label="Warnings"
+              value={entitlement.warnings.length.toString()}
+            />
+          </div>
+
+          <div className="grid gap-5 xl:grid-cols-[0.95fr_1.05fr]">
+            <div className="rounded-3xl border border-white/10 bg-[#15181b] p-5">
+              <p className="text-sm font-semibold text-white">Latest usage</p>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                {usageEntries.length === 0 ? (
+                  <p className="text-sm text-slate-400">No canonical usage snapshot.</p>
+                ) : (
+                  usageEntries.slice(0, 10).map(([key, value]) => (
+                    <CanonicalInfoRow
+                      key={key}
+                      label={formatCanonicalStatus(key)}
+                      value={String(value)}
+                    />
+                  ))
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-3xl border border-white/10 bg-[#15181b] p-5">
+              <p className="text-sm font-semibold text-white">Usage limits</p>
+              <div className="mt-4 space-y-3">
+                {visibleLimits.length === 0 ? (
+                  <p className="text-sm text-slate-400">No canonical limits configured.</p>
+                ) : (
+                  visibleLimits.map((limit, index) => (
+                    <CanonicalLimitRow
+                      key={limit.resource_key ?? `limit-${index}`}
+                      limit={limit}
+                    />
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+
+          {entitlement.warnings.length > 0 ? (
+            <div className="rounded-3xl border border-amber-400/30 bg-amber-400/10 p-5 text-amber-100">
+              <p className="text-sm font-semibold">Usage warnings</p>
+              <div className="mt-3 grid gap-3 md:grid-cols-2">
+                {entitlement.warnings.map((warning, index) => (
+                  <CanonicalInfoRow
+                    key={`${String(warning.resource_key ?? "warning")}-${index}`}
+                    label={formatCanonicalStatus(String(warning.resource_key ?? "Warning"))}
+                    value={`${String(warning.current_usage ?? "0")} / ${formatCanonicalLimit(
+                      warning.limit_value as number | string | null | undefined,
+                    )}`}
+                  />
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          <div className="rounded-3xl border border-white/10 bg-[#15181b] p-5">
+            <p className="text-sm font-semibold text-white">Key feature statuses</p>
+            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {keyFeatures.map(({ feature, featureKey }) => (
+                <CanonicalFeatureRow
+                  feature={feature}
+                  featureKey={featureKey}
+                  key={featureKey}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function CanonicalInfoRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-[#101214] p-4">
+      <p className="text-xs font-semibold uppercase text-slate-500">{label}</p>
+      <p className="mt-2 break-words text-sm font-semibold text-white">
+        {value || "Not set"}
+      </p>
+    </div>
+  );
+}
+
+function CanonicalLimitRow({ limit }: { limit: TenantEntitlementLimit }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-[#101214] p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-white">
+            {formatCanonicalStatus(limit.resource_key)}
+          </p>
+          <p className="mt-1 text-xs text-slate-500">
+            Base {formatCanonicalLimit(limit.base_limit_value)}
+            {limit.override_type
+              ? ` | ${formatCanonicalStatus(limit.override_type)}`
+              : ""}
+          </p>
+        </div>
+        <Badge tone={entitlementTone(limit.enforcement_mode)}>
+          {formatCanonicalStatus(limit.enforcement_mode)}
+        </Badge>
+      </div>
+      <p className="mt-3 text-xl font-semibold text-white">
+        {formatCanonicalLimit(limit.limit_value)}
+      </p>
+    </div>
+  );
+}
+
+function CanonicalFeatureRow({
+  feature,
+  featureKey,
+}: {
+  feature: TenantEntitlementFeature | null;
+  featureKey: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-[#101214] p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <p className="text-sm font-semibold text-white">
+          {formatCanonicalStatus(featureKey)}
+        </p>
+        <Badge tone={entitlementTone(feature?.effective_status)}>
+          {formatCanonicalStatus(feature?.effective_status ?? "not configured")}
+        </Badge>
+      </div>
+      <p className="mt-2 text-xs leading-5 text-slate-500">
+        Reason: {formatCanonicalStatus(feature?.reason)} | Plan:{" "}
+        {formatCanonicalStatus(feature?.plan_status)}
+      </p>
+    </div>
+  );
+}
+
 export function SubscriptionPageClient() {
   const router = useRouter();
   const [billingSummary, setBillingSummary] = useState<BillingSummary | null>(
     null,
   );
+  const [canonicalEntitlementError, setCanonicalEntitlementError] =
+    useState<string | null>(null);
+  const [canonicalEntitlementState, setCanonicalEntitlementState] =
+    useState<TenantEntitlementState | null>(null);
   const [currentRole, setCurrentRole] = useState<MemberRole | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -315,11 +586,24 @@ export function SubscriptionPageClient() {
           return;
         }
 
-        const [currentSubscription, currentUsage, currentBillingSummary] =
-          await Promise.all([
+        const [
+          currentSubscription,
+          currentUsage,
+          currentBillingSummary,
+          canonicalEntitlementResult,
+        ] = await Promise.all([
           getTenantSubscription(currentTenant.id),
           refreshWorkspaceUsageSnapshot(currentTenant.id),
           getBillingSummary(currentTenant.id),
+          getTenantEntitlementState(currentTenant.id)
+            .then((data) => ({ data, error: null }))
+            .catch((caught: unknown) => ({
+              data: null,
+              error: getErrorMessage(
+                caught,
+                "Unable to load canonical entitlement summary.",
+              ),
+            })),
         ]);
         const currentTrialStatus = await getTrialStatus(currentTenant.id);
 
@@ -329,6 +613,8 @@ export function SubscriptionPageClient() {
 
         setSubscription(currentSubscription);
         setBillingSummary(currentBillingSummary);
+        setCanonicalEntitlementError(canonicalEntitlementResult.error);
+        setCanonicalEntitlementState(canonicalEntitlementResult.data);
         setTrialStatus(currentTrialStatus);
         setUsage(currentUsage);
       } catch (caught) {
@@ -413,6 +699,11 @@ export function SubscriptionPageClient() {
           </Button>
         </div>
       </Card>
+
+      <CanonicalEntitlementSummary
+        entitlement={canonicalEntitlementState}
+        error={canonicalEntitlementError}
+      />
 
       <section className="mt-8 grid gap-5 xl:grid-cols-[0.8fr_1.2fr]">
         <Card className="border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/10">
