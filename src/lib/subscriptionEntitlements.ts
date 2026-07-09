@@ -95,6 +95,39 @@ export type SetTenantSubscriptionPlanInput = {
   trialEndsAt?: string | null;
 };
 
+export type PlatformUpgradeRequestStatus =
+  | "approved"
+  | "cancelled"
+  | "in_review"
+  | "open"
+  | "rejected";
+
+export type PlatformUpgradeRequest = {
+  created_at: string | null;
+  current_assignment: TenantEntitlementAssignment | null;
+  gateway_required: boolean;
+  metadata_present: boolean;
+  payment_forced: boolean;
+  reason: string | null;
+  request_id: string;
+  requested_by: string | null;
+  requested_by_email: string | null;
+  requested_plan_code: string | null;
+  requested_plan_name: string | null;
+  status: PlatformUpgradeRequestStatus | string | null;
+  tenant_id: string | null;
+  tenant_name: string | null;
+  tenant_slug: string | null;
+  updated_at: string | null;
+};
+
+export type GetPlatformUpgradeRequestsInput = {
+  limit?: number;
+  offset?: number;
+  status?: PlatformUpgradeRequestStatus | null;
+  tenantId?: string | null;
+};
+
 function isRecord(value: unknown): value is JsonRecord {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -201,6 +234,44 @@ function normalizeTenantEntitlementState(value: unknown): TenantEntitlementState
   };
 }
 
+function normalizeTenantEntitlementAssignment(
+  value: unknown,
+): TenantEntitlementAssignment | null {
+  if (!isRecord(value) || Object.keys(value).length === 0) return null;
+
+  return {
+    billing_cycle: asString(value.billing_cycle),
+    currency: asString(value.currency),
+    payment_status: asString(value.payment_status),
+    plan_code: asString(value.plan_code),
+    plan_name: asString(value.plan_name),
+    source: asString(value.source),
+    status: asString(value.status),
+    trial_ends_at: asString(value.trial_ends_at),
+  };
+}
+
+function normalizePlatformUpgradeRequest(row: JsonRecord): PlatformUpgradeRequest {
+  return {
+    created_at: asString(row.created_at),
+    current_assignment: normalizeTenantEntitlementAssignment(row.current_assignment),
+    gateway_required: asBoolean(row.gateway_required),
+    metadata_present: asBoolean(row.metadata_present),
+    payment_forced: asBoolean(row.payment_forced),
+    reason: asString(row.reason),
+    request_id: asString(row.request_id) ?? "",
+    requested_by: asString(row.requested_by),
+    requested_by_email: asString(row.requested_by_email),
+    requested_plan_code: asString(row.requested_plan_code),
+    requested_plan_name: asString(row.requested_plan_name),
+    status: asString(row.status),
+    tenant_id: asString(row.tenant_id),
+    tenant_name: asString(row.tenant_name),
+    tenant_slug: asString(row.tenant_slug),
+    updated_at: asString(row.updated_at),
+  };
+}
+
 export async function getPlatformPlanCatalog(): Promise<CanonicalPlanCatalogItem[]> {
   const supabase = getSupabaseClient();
   const { data, error } = await supabase.rpc("get_platform_plan_catalog");
@@ -225,6 +296,24 @@ export async function getTenantEntitlementState(
   }
 
   return normalizeTenantEntitlementState(data);
+}
+
+export async function getPlatformUpgradeRequests(
+  input: GetPlatformUpgradeRequestsInput = {},
+): Promise<PlatformUpgradeRequest[]> {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.rpc("get_platform_upgrade_requests", {
+    p_limit: input.limit ?? 50,
+    p_offset: input.offset ?? 0,
+    p_status: input.status ?? null,
+    p_tenant_id: input.tenantId ?? null,
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return asArray(data).map(normalizePlatformUpgradeRequest);
 }
 
 export async function setTenantSubscriptionPlan(

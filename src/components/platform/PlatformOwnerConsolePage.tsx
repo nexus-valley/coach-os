@@ -30,9 +30,12 @@ import {
 } from "@/src/lib/platform";
 import {
   getPlatformPlanCatalog,
+  getPlatformUpgradeRequests,
   getTenantEntitlementState,
   setTenantSubscriptionPlan,
   type CanonicalPlanCatalogItem,
+  type PlatformUpgradeRequest,
+  type PlatformUpgradeRequestStatus,
   type SetTenantSubscriptionPlanInput,
   type TenantEntitlementFeature,
   type TenantEntitlementLimit,
@@ -100,6 +103,13 @@ type PaymentStatusFilter =
   | "unpaid"
   | "waived";
 type TenantSort = "activity" | "name" | "newest" | "students";
+type UpgradeRequestStatusFilter =
+  | "all"
+  | "approved"
+  | "cancelled"
+  | "in_review"
+  | "open"
+  | "rejected";
 
 const emptyPlanForm: PlanFormState = {
   aiMonthlyLimit: "",
@@ -185,6 +195,14 @@ const canonicalBillingCycles: SetTenantSubscriptionPlanInput["billingCycle"][] =
   "monthly",
   "yearly",
   "custom",
+];
+const upgradeRequestStatuses: UpgradeRequestStatusFilter[] = [
+  "all",
+  "open",
+  "in_review",
+  "approved",
+  "rejected",
+  "cancelled",
 ];
 
 function formatLabel(value: string | null | undefined) {
@@ -450,6 +468,11 @@ export function PlatformOwnerConsolePage() {
   const [success, setSuccess] = useState<string | null>(null);
   const [supportForm, setSupportForm] = useState<SupportFormState>(emptySupportForm);
   const [tenants, setTenants] = useState<PlatformTenantSummary[]>([]);
+  const [upgradeRequestError, setUpgradeRequestError] = useState<string | null>(null);
+  const [upgradeRequests, setUpgradeRequests] = useState<PlatformUpgradeRequest[]>([]);
+  const [upgradeRequestStatusFilter, setUpgradeRequestStatusFilter] =
+    useState<UpgradeRequestStatusFilter>("all");
+  const [upgradeRequestsTenantOnly, setUpgradeRequestsTenantOnly] = useState(false);
   const initialLoadStarted = useRef(false);
 
   const totalTeamMembers = useMemo(
@@ -519,6 +542,44 @@ export function PlatformOwnerConsolePage() {
     }
   }, []);
 
+  const loadUpgradeRequests = useCallback(
+    async ({
+      role,
+      status,
+      tenantId,
+      tenantOnly,
+    }: {
+      role: PlatformAdminContext["role"] | null | undefined;
+      status: UpgradeRequestStatusFilter;
+      tenantId: string | null;
+      tenantOnly: boolean;
+    }) => {
+      setUpgradeRequestError(null);
+
+      if (!canManagePlans(role)) {
+        setUpgradeRequests([]);
+        return;
+      }
+
+      try {
+        const requests = await getPlatformUpgradeRequests({
+          limit: 50,
+          offset: 0,
+          status:
+            status === "all"
+              ? null
+              : (status as PlatformUpgradeRequestStatus),
+          tenantId: tenantOnly ? tenantId : null,
+        });
+        setUpgradeRequests(requests);
+      } catch (error) {
+        setUpgradeRequests([]);
+        setUpgradeRequestError(normalizePlatformError(error));
+      }
+    },
+    [],
+  );
+
   const loadTenantDetail = useCallback(async (tenantId: string) => {
     const detail = await getPlatformTenantDetail(tenantId);
     setSelectedTenantDetail(detail);
@@ -562,13 +623,28 @@ export function PlatformOwnerConsolePage() {
       if (nextTenantId) {
         await loadTenantDetail(nextTenantId);
       }
-      await loadCanonicalEntitlements(nextTenantId);
+      await Promise.all([
+        loadCanonicalEntitlements(nextTenantId),
+        loadUpgradeRequests({
+          role: context.role,
+          status: upgradeRequestStatusFilter,
+          tenantId: nextTenantId,
+          tenantOnly: upgradeRequestsTenantOnly,
+        }),
+      ]);
     } catch (error) {
       setActionError(normalizePlatformError(error));
     } finally {
       setLoading(false);
     }
-  }, [loadCanonicalEntitlements, loadTenantDetail, selectedTenantId]);
+  }, [
+    loadCanonicalEntitlements,
+    loadTenantDetail,
+    loadUpgradeRequests,
+    selectedTenantId,
+    upgradeRequestStatusFilter,
+    upgradeRequestsTenantOnly,
+  ]);
 
   useEffect(() => {
     if (initialLoadStarted.current) return;
@@ -581,7 +657,16 @@ export function PlatformOwnerConsolePage() {
     setSelectedTenantId(tenantId);
 
     try {
-      await Promise.all([loadTenantDetail(tenantId), loadCanonicalEntitlements(tenantId)]);
+      await Promise.all([
+        loadTenantDetail(tenantId),
+        loadCanonicalEntitlements(tenantId),
+        loadUpgradeRequests({
+          role: adminContext?.role,
+          status: upgradeRequestStatusFilter,
+          tenantId,
+          tenantOnly: upgradeRequestsTenantOnly,
+        }),
+      ]);
     } catch (error) {
       setActionError(normalizePlatformError(error));
     }
@@ -768,6 +853,28 @@ export function PlatformOwnerConsolePage() {
     }
   };
 
+  const handleUpgradeRequestStatusFilterChange = (
+    nextStatus: UpgradeRequestStatusFilter,
+  ) => {
+    setUpgradeRequestStatusFilter(nextStatus);
+    void loadUpgradeRequests({
+      role: adminContext?.role,
+      status: nextStatus,
+      tenantId: selectedTenantId,
+      tenantOnly: upgradeRequestsTenantOnly,
+    });
+  };
+
+  const handleUpgradeRequestTenantFilterChange = (nextTenantOnly: boolean) => {
+    setUpgradeRequestsTenantOnly(nextTenantOnly);
+    void loadUpgradeRequests({
+      role: adminContext?.role,
+      status: upgradeRequestStatusFilter,
+      tenantId: selectedTenantId,
+      tenantOnly: nextTenantOnly,
+    });
+  };
+
   if (loading) {
     return <PlatformLoadingState />;
   }
@@ -852,6 +959,26 @@ export function PlatformOwnerConsolePage() {
               setConfirmed={setCanonicalAssignmentConfirmed}
               setForm={setCanonicalAssignmentForm}
               onSave={handleSaveCanonicalAssignment}
+            />
+
+            <UpgradeRequestReviewPanel
+              adminRole={adminContext.role}
+              error={upgradeRequestError}
+              requests={upgradeRequests}
+              selectedTenantId={selectedTenantId}
+              selectedTenantName={selectedTenant?.name}
+              statusFilter={upgradeRequestStatusFilter}
+              tenantOnly={upgradeRequestsTenantOnly}
+              onStatusFilterChange={handleUpgradeRequestStatusFilterChange}
+              onTenantOnlyChange={handleUpgradeRequestTenantFilterChange}
+              onRefresh={() =>
+                void loadUpgradeRequests({
+                  role: adminContext.role,
+                  status: upgradeRequestStatusFilter,
+                  tenantId: selectedTenantId,
+                  tenantOnly: upgradeRequestsTenantOnly,
+                })
+              }
             />
 
             <SubscriptionPanel
@@ -1772,6 +1899,192 @@ function CanonicalAssignmentControlsPanel({
         </div>
       )}
     </Card>
+  );
+}
+
+function UpgradeRequestReviewPanel({
+  adminRole,
+  error,
+  requests,
+  selectedTenantId,
+  selectedTenantName,
+  statusFilter,
+  tenantOnly,
+  onStatusFilterChange,
+  onTenantOnlyChange,
+  onRefresh,
+}: {
+  adminRole: PlatformAdminContext["role"];
+  error: string | null;
+  requests: PlatformUpgradeRequest[];
+  selectedTenantId: string | null;
+  selectedTenantName?: string | null;
+  statusFilter: UpgradeRequestStatusFilter;
+  tenantOnly: boolean;
+  onStatusFilterChange: (status: UpgradeRequestStatusFilter) => void;
+  onTenantOnlyChange: (tenantOnly: boolean) => void;
+  onRefresh: () => void;
+}) {
+  const canViewRequests = canManagePlans(adminRole);
+
+  return (
+    <Card className="p-5">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <p className="text-sm font-semibold uppercase tracking-[0.06em] text-[#5D7185]">
+            Upgrade request review
+          </p>
+          <h2 className="mt-1 text-xl font-semibold">Tenant upgrade request queue</h2>
+          <p className="mt-1 max-w-3xl text-sm text-[#5D7185]">
+            Read-only review queue for tenant upgrade requests. Approval, rejection,
+            payment, and plan assignment are handled separately.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Badge tone="dark">Read-only</Badge>
+          <Badge tone="warning">No actions</Badge>
+        </div>
+      </div>
+
+      {!canViewRequests ? (
+        <p className="mt-4 rounded-2xl border border-[#D8E8F0] bg-[#F8FBFD] p-4 text-sm text-[#5D7185]">
+          Upgrade request review is restricted to platform owner/admin roles.
+        </p>
+      ) : (
+        <>
+          <div className="mt-5 grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] md:items-end">
+            <SelectField
+              label="Status filter"
+              onChange={(value) =>
+                onStatusFilterChange(value as UpgradeRequestStatusFilter)
+              }
+              value={statusFilter}
+            >
+              {upgradeRequestStatuses.map((status) => (
+                <option key={status} value={status}>
+                  {status === "all" ? "All statuses" : formatLabel(status)}
+                </option>
+              ))}
+            </SelectField>
+
+            <label className="flex min-h-11 items-center gap-3 rounded-2xl border border-[#D8E8F0] bg-white px-3 text-sm text-[#0B1F33]">
+              <input
+                checked={tenantOnly}
+                className="h-4 w-4"
+                disabled={!selectedTenantId}
+                onChange={(event) => onTenantOnlyChange(event.target.checked)}
+                type="checkbox"
+              />
+              <span>
+                {selectedTenantId
+                  ? `Show selected tenant only: ${selectedTenantName ?? "selected tenant"}`
+                  : "Select a tenant to filter"}
+              </span>
+            </label>
+
+            <Button onClick={onRefresh} type="button" variant="secondary">
+              Refresh
+            </Button>
+          </div>
+
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Badge tone="light">{requests.length} requests</Badge>
+            <Badge tone={tenantOnly ? "dark" : "light"}>
+              {tenantOnly ? "Selected tenant" : "All tenants"}
+            </Badge>
+            <Badge tone="light">
+              {statusFilter === "all" ? "All statuses" : formatLabel(statusFilter)}
+            </Badge>
+          </div>
+
+          {error ? (
+            <p className="mt-4 rounded-2xl border border-[#FECACA] bg-[#FEF2F2] p-3 text-sm text-[#B91C1C]">
+              Upgrade requests are currently unavailable: {error}
+            </p>
+          ) : null}
+
+          <div className="mt-4 space-y-3">
+            {!error && requests.length === 0 ? (
+              <p className="rounded-2xl border border-dashed border-[#D8E8F0] bg-white p-4 text-sm text-[#5D7185]">
+                No upgrade requests yet. Tenant upgrade request UI has not been
+                enabled.
+              </p>
+            ) : (
+              requests.map((request) => (
+                <UpgradeRequestCard
+                  key={request.request_id || `${request.tenant_id}-${request.created_at}`}
+                  request={request}
+                />
+              ))
+            )}
+          </div>
+        </>
+      )}
+    </Card>
+  );
+}
+
+function UpgradeRequestCard({ request }: { request: PlatformUpgradeRequest }) {
+  const assignment = request.current_assignment;
+
+  return (
+    <div className="rounded-2xl border border-[#D8E8F0] bg-white p-4">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <p className="font-semibold">
+            {request.tenant_name ?? "Unknown tenant"}
+          </p>
+          <p className="text-sm text-[#5D7185]">
+            {request.tenant_slug ?? "no slug"} | Requested by{" "}
+            {request.requested_by_email ?? "unknown requester"}
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Badge tone={statusTone(request.status)}>{formatLabel(request.status)}</Badge>
+          <Badge tone={request.metadata_present ? "warning" : "light"}>
+            {request.metadata_present ? "Metadata present" : "No metadata"}
+          </Badge>
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        <InfoPanel title="Requested plan">
+          <InfoRow
+            label="Plan"
+            value={
+              request.requested_plan_name
+                ? `${request.requested_plan_name} (${request.requested_plan_code ?? "no code"})`
+                : request.requested_plan_code ?? "Not set"
+            }
+          />
+          <InfoRow label="Reason" value={request.reason ?? "Not provided"} />
+          <InfoRow label="Created" value={toDisplayDate(request.created_at)} />
+          <InfoRow label="Updated" value={toDisplayDate(request.updated_at)} />
+        </InfoPanel>
+
+        <InfoPanel title="Current canonical assignment">
+          <InfoRow label="Plan" value={assignment?.plan_code ?? "Not assigned"} />
+          <InfoRow label="Status" value={formatLabel(assignment?.status)} />
+          <InfoRow
+            label="Payment status"
+            value={formatLabel(assignment?.payment_status)}
+          />
+          <InfoRow label="Currency" value={assignment?.currency ?? "Not set"} />
+          <InfoRow
+            label="Billing cycle"
+            value={formatLabel(assignment?.billing_cycle)}
+          />
+          <InfoRow
+            label="Payment forced"
+            value={booleanLabel(request.payment_forced)}
+          />
+          <InfoRow
+            label="Gateway required"
+            value={booleanLabel(request.gateway_required)}
+          />
+        </InfoPanel>
+      </div>
+    </div>
   );
 }
 
