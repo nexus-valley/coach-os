@@ -34,9 +34,11 @@ import {
 } from "@/src/lib/subscription";
 import {
   getTenantEntitlementState,
+  getTenantUpgradeRequests,
   type TenantEntitlementFeature,
   type TenantEntitlementLimit,
   type TenantEntitlementState,
+  type TenantUpgradeRequest,
 } from "@/src/lib/subscriptionEntitlements";
 import type {
   BillingSubscription,
@@ -514,6 +516,99 @@ function CanonicalFeatureRow({
   );
 }
 
+function UpgradeRequestStatusPanel({
+  error,
+  requests,
+}: {
+  error: string | null;
+  requests: TenantUpgradeRequest[];
+}) {
+  return (
+    <Card className="mt-6 border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/10">
+      <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
+        <div>
+          <Badge className="border-white/15 bg-white/10 text-white">
+            Upgrade request status
+          </Badge>
+          <h3 className="mt-4 text-2xl font-semibold">Plan upgrade request history</h3>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
+            Read-only request history. This does not submit a request, change your
+            plan, start checkout, or activate payment gateway billing.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Badge className="border-white/15 bg-white/10 text-white">Read-only</Badge>
+          <Badge className="border-amber-400/30 bg-amber-400/10 text-amber-200">
+            No checkout
+          </Badge>
+        </div>
+      </div>
+
+      {error ? (
+        <div className="mt-5 rounded-3xl border border-amber-400/30 bg-amber-400/10 p-4 text-sm leading-6 text-amber-100">
+          Upgrade request history is currently unavailable: {error}
+        </div>
+      ) : null}
+
+      {!error && requests.length === 0 ? (
+        <div className="mt-5 rounded-3xl border border-white/10 bg-[#15181b] p-5 text-sm leading-6 text-slate-400">
+          Plan upgrade requests are not enabled yet. Public requestable plans are
+          pending platform review.
+        </div>
+      ) : null}
+
+      {!error && requests.length > 0 ? (
+        <div className="mt-5 space-y-4">
+          {requests.map((request) => (
+            <UpgradeRequestHistoryCard
+              key={request.request_id || `${request.requested_plan_code}-${request.created_at}`}
+              request={request}
+            />
+          ))}
+        </div>
+      ) : null}
+    </Card>
+  );
+}
+
+function UpgradeRequestHistoryCard({
+  request,
+}: {
+  request: TenantUpgradeRequest;
+}) {
+  return (
+    <div className="rounded-3xl border border-white/10 bg-[#15181b] p-5">
+      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
+        <div>
+          <p className="text-sm text-slate-500">Requested plan</p>
+          <p className="mt-1 text-lg font-semibold text-white">
+            {request.requested_plan_name
+              ? `${request.requested_plan_name} (${request.requested_plan_code ?? "no code"})`
+              : request.requested_plan_code ?? "Not set"}
+          </p>
+        </div>
+        <Badge tone={entitlementTone(request.status)}>
+          {formatCanonicalStatus(request.status)}
+        </Badge>
+      </div>
+
+      <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <ReadOnlyField label="Reason" value={request.reason ?? ""} />
+        <ReadOnlyField label="Created" value={formatDate(request.created_at)} />
+        <ReadOnlyField label="Updated" value={formatDate(request.updated_at)} />
+        <ReadOnlyField
+          label="Entitlement changed"
+          value={booleanLabel(request.entitlement_changed)}
+        />
+        <ReadOnlyField
+          label="Payment gateway called"
+          value={booleanLabel(request.payment_gateway_called)}
+        />
+      </div>
+    </div>
+  );
+}
+
 export function SubscriptionPageClient() {
   const router = useRouter();
   const [billingSummary, setBillingSummary] = useState<BillingSummary | null>(
@@ -532,6 +627,10 @@ export function SubscriptionPageClient() {
     useState<InvoiceWithItems | null>(null);
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [trialStatus, setTrialStatus] = useState<TrialStatus | null>(null);
+  const [upgradeRequestError, setUpgradeRequestError] = useState<string | null>(
+    null,
+  );
+  const [upgradeRequests, setUpgradeRequests] = useState<TenantUpgradeRequest[]>([]);
   const [usage, setUsage] = useState<UsageCounts>(emptyUsage);
 
   const limits = useMemo(
@@ -591,6 +690,7 @@ export function SubscriptionPageClient() {
           currentUsage,
           currentBillingSummary,
           canonicalEntitlementResult,
+          upgradeRequestResult,
         ] = await Promise.all([
           getTenantSubscription(currentTenant.id),
           refreshWorkspaceUsageSnapshot(currentTenant.id),
@@ -604,6 +704,15 @@ export function SubscriptionPageClient() {
                 "Unable to load canonical entitlement summary.",
               ),
             })),
+          getTenantUpgradeRequests({ tenantId: currentTenant.id })
+            .then((data) => ({ data, error: null }))
+            .catch((caught: unknown) => ({
+              data: [],
+              error: getErrorMessage(
+                caught,
+                "Unable to load upgrade request history.",
+              ),
+            })),
         ]);
         const currentTrialStatus = await getTrialStatus(currentTenant.id);
 
@@ -615,6 +724,8 @@ export function SubscriptionPageClient() {
         setBillingSummary(currentBillingSummary);
         setCanonicalEntitlementError(canonicalEntitlementResult.error);
         setCanonicalEntitlementState(canonicalEntitlementResult.data);
+        setUpgradeRequestError(upgradeRequestResult.error);
+        setUpgradeRequests(upgradeRequestResult.data);
         setTrialStatus(currentTrialStatus);
         setUsage(currentUsage);
       } catch (caught) {
@@ -703,6 +814,11 @@ export function SubscriptionPageClient() {
       <CanonicalEntitlementSummary
         entitlement={canonicalEntitlementState}
         error={canonicalEntitlementError}
+      />
+
+      <UpgradeRequestStatusPanel
+        error={upgradeRequestError}
+        requests={upgradeRequests}
       />
 
       <section className="mt-8 grid gap-5 xl:grid-cols-[0.8fr_1.2fr]">

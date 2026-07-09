@@ -121,11 +121,30 @@ export type PlatformUpgradeRequest = {
   updated_at: string | null;
 };
 
+export type TenantUpgradeRequest = {
+  created_at: string | null;
+  entitlement_changed: boolean;
+  payment_gateway_called: boolean;
+  reason: string | null;
+  request_id: string;
+  requested_plan_code: string | null;
+  requested_plan_name: string | null;
+  status: PlatformUpgradeRequestStatus | string | null;
+  tenant_id: string | null;
+  updated_at: string | null;
+};
+
 export type GetPlatformUpgradeRequestsInput = {
   limit?: number;
   offset?: number;
   status?: PlatformUpgradeRequestStatus | null;
   tenantId?: string | null;
+};
+
+export type GetTenantUpgradeRequestsInput = {
+  limit?: number;
+  status?: PlatformUpgradeRequestStatus | null;
+  tenantId: string;
 };
 
 function isRecord(value: unknown): value is JsonRecord {
@@ -272,6 +291,21 @@ function normalizePlatformUpgradeRequest(row: JsonRecord): PlatformUpgradeReques
   };
 }
 
+function normalizeTenantUpgradeRequest(row: JsonRecord): TenantUpgradeRequest {
+  return {
+    created_at: asString(row.created_at),
+    entitlement_changed: asBoolean(row.entitlement_changed),
+    payment_gateway_called: asBoolean(row.payment_gateway_called),
+    reason: asString(row.reason),
+    request_id: asString(row.request_id) ?? "",
+    requested_plan_code: asString(row.requested_plan_code),
+    requested_plan_name: asString(row.requested_plan_name),
+    status: asString(row.status),
+    tenant_id: asString(row.tenant_id),
+    updated_at: asString(row.updated_at),
+  };
+}
+
 export async function getPlatformPlanCatalog(): Promise<CanonicalPlanCatalogItem[]> {
   const supabase = getSupabaseClient();
   const { data, error } = await supabase.rpc("get_platform_plan_catalog");
@@ -314,6 +348,23 @@ export async function getPlatformUpgradeRequests(
   }
 
   return asArray(data).map(normalizePlatformUpgradeRequest);
+}
+
+export async function getTenantUpgradeRequests(
+  input: GetTenantUpgradeRequestsInput,
+): Promise<TenantUpgradeRequest[]> {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.rpc("get_tenant_upgrade_requests", {
+    p_limit: input.limit ?? 20,
+    p_status: input.status ?? null,
+    p_tenant_id: input.tenantId,
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return asArray(data).map(normalizeTenantUpgradeRequest);
 }
 
 export async function setTenantSubscriptionPlan(
