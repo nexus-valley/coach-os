@@ -16,6 +16,26 @@ function jsonError(message: string, status = 400) {
   return Response.json({ error: message }, { status });
 }
 
+type DocumentDetailResponse = {
+  document?: {
+    tenant_id?: unknown;
+  };
+};
+
+function getQuotaErrorMessage(message: string) {
+  const normalized = message.toLowerCase();
+
+  if (normalized.includes("storage quota")) {
+    return "Storage quota exceeded. Please free up space or upgrade your plan.";
+  }
+
+  if (normalized.includes("document upload limit")) {
+    return "Document upload limit reached. Please upgrade your plan.";
+  }
+
+  return "Document upload quota could not be verified.";
+}
+
 export async function POST(request: Request) {
   try {
     const accessToken = getBearerToken(request);
@@ -34,6 +54,46 @@ export async function POST(request: Request) {
     }
 
     const { safeFileName } = await validateDocumentFile(file);
+    const documentDetail = await supabase.rpc("get_document_detail", {
+      p_document_id: documentId,
+    });
+
+    if (documentDetail.error) {
+      return jsonError(documentDetail.error.message, 403);
+    }
+
+    const documentTenantId = (documentDetail.data as DocumentDetailResponse | null)
+      ?.document?.tenant_id;
+
+    if (typeof documentTenantId !== "string" || !documentTenantId) {
+      captureServerException(new Error("Document detail missing tenant id."), {
+        documentId,
+        operation: "document_upload_quota_tenant_lookup",
+        route: "/api/documents/upload",
+      });
+      return jsonError("Document upload quota could not be verified.", 500);
+    }
+
+    const quota = await supabase.rpc("assert_tenant_document_upload_quota", {
+      p_file_size_bytes: file.size,
+      p_tenant_id: documentTenantId,
+    });
+
+    if (quota.error) {
+      if (quota.error.code !== "22023" && quota.error.code !== "42501") {
+        captureServerException(quota.error, {
+          documentId,
+          operation: "document_upload_quota_check",
+          route: "/api/documents/upload",
+          tenantId: documentTenantId,
+        });
+      }
+
+      return jsonError(getQuotaErrorMessage(quota.error.message), 403);
+    }
+
+    // Quota is checked before the storage write. A future reservation/finalize
+    // flow can close the remaining concurrency gap if upload volume requires it.
     const prepare = await supabase.rpc("prepare_document_file_upload", {
       p_document_id: documentId,
       p_file_mime_type: file.type,
