@@ -151,12 +151,19 @@ function booleanLabel(value: boolean | null | undefined) {
 }
 
 function entitlementTone(value: string | null | undefined) {
-  if (value === "included" || value === "active" || value === "trial") {
+  if (
+    value === "approved" ||
+    value === "included" ||
+    value === "active" ||
+    value === "trial"
+  ) {
     return "success" as const;
   }
 
   if (
     value === "coming_soon" ||
+    value === "in_review" ||
+    value === "open" ||
     value === "platform_approval_required" ||
     value === "addon" ||
     value === "past_due" ||
@@ -177,6 +184,42 @@ function entitlementTone(value: string | null | undefined) {
   }
 
   return "light" as const;
+}
+
+function requestBlockingLabel(plan: TenantRequestablePlan) {
+  if (plan.blocking_request_status === "approved") {
+    return "Approved - waiting for platform follow-up";
+  }
+
+  if (
+    plan.blocking_request_status === "open" ||
+    plan.blocking_request_status === "in_review" ||
+    plan.has_open_request
+  ) {
+    return "Request already open/in review";
+  }
+
+  if (plan.has_blocking_request) {
+    return "Platform follow-up pending";
+  }
+
+  return "Requestable";
+}
+
+function requestBlockingDescription(plan: TenantRequestablePlan) {
+  if (plan.blocking_request_status === "approved") {
+    return "The platform has approved this request. Your current plan is unchanged until CoachFort completes the separate activation/assignment step. No checkout or payment has been started from this approval.";
+  }
+
+  if (
+    plan.blocking_request_status === "open" ||
+    plan.blocking_request_status === "in_review" ||
+    plan.has_open_request
+  ) {
+    return "Request already open/in review for this plan.";
+  }
+
+  return "Request is already being handled by platform operations.";
 }
 
 function getErrorMessage(caught: unknown, fallback: string) {
@@ -542,10 +585,11 @@ function RequestPlanUpgradePanel({
   const [selectedPlanCode, setSelectedPlanCode] = useState("");
   const selectedPlan =
     plans.find((plan) => plan.plan_code === selectedPlanCode) ?? null;
+  const blockingPlans = plans.filter((plan) => plan.has_blocking_request);
   const submitDisabled =
     submitting ||
     !selectedPlan ||
-    selectedPlan.has_open_request ||
+    selectedPlan.has_blocking_request ||
     reason.trim().length === 0 ||
     !confirmed;
 
@@ -628,16 +672,42 @@ function RequestPlanUpgradePanel({
               <option value="">Select a requestable plan</option>
               {plans.map((plan) => (
                 <option
-                  disabled={plan.has_open_request}
+                  disabled={plan.has_blocking_request}
                   key={plan.plan_code}
                   value={plan.plan_code}
                 >
                   {plan.plan_name ?? plan.plan_code}
-                  {plan.has_open_request ? " - request already open" : ""}
+                  {plan.has_blocking_request
+                    ? ` - ${requestBlockingLabel(plan)}`
+                    : ""}
                 </option>
               ))}
             </select>
           </div>
+
+          {blockingPlans.length > 0 ? (
+            <div className="space-y-3">
+              {blockingPlans.map((plan) => (
+                <div
+                  className="rounded-3xl border border-amber-400/30 bg-amber-400/10 p-4 text-sm leading-6 text-amber-100"
+                  key={plan.plan_code}
+                >
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <p className="font-semibold">
+                        {plan.plan_name ?? plan.plan_code}:{" "}
+                        {requestBlockingLabel(plan)}
+                      </p>
+                      <p className="mt-1">{requestBlockingDescription(plan)}</p>
+                    </div>
+                    <Badge tone="warning">
+                      {formatCanonicalStatus(plan.blocking_request_status)}
+                    </Badge>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : null}
 
           {selectedPlan ? (
             <div className="rounded-3xl border border-white/10 bg-[#15181b] p-5">
@@ -652,14 +722,32 @@ function RequestPlanUpgradePanel({
                       "Request access to this plan. Platform review is required before any plan change."}
                   </p>
                 </div>
-                <Badge tone={selectedPlan.has_open_request ? "warning" : "success"}>
-                  {selectedPlan.has_open_request ? "Open request" : "Requestable"}
+                <Badge tone={selectedPlan.has_blocking_request ? "warning" : "success"}>
+                  {requestBlockingLabel(selectedPlan)}
                 </Badge>
               </div>
-              {selectedPlan.has_open_request ? (
+              {selectedPlan.has_blocking_request ? (
                 <p className="mt-4 rounded-2xl border border-amber-400/30 bg-amber-400/10 p-4 text-sm text-amber-100">
-                  Request already open/in review for this plan.
+                  {requestBlockingDescription(selectedPlan)}
                 </p>
+              ) : null}
+              {selectedPlan.blocking_request_status === "approved" ? (
+                <div className="mt-4 rounded-2xl border border-teal-400/30 bg-teal-400/10 p-4 text-sm leading-6 text-teal-100">
+                  <p className="font-semibold">
+                    Approved - waiting for platform follow-up/manual assignment.
+                  </p>
+                  <p className="mt-1">
+                    This approval does not activate the requested plan, start
+                    checkout, or change billing. The canonical entitlement summary
+                    remains the source of truth until CoachFort completes the
+                    separate assignment step.
+                  </p>
+                  {selectedPlan.latest_reviewed_at ? (
+                    <p className="mt-2 text-teal-200">
+                      Reviewed {formatDate(selectedPlan.latest_reviewed_at)}
+                    </p>
+                  ) : null}
+                </div>
               ) : null}
             </div>
           ) : null}
@@ -802,6 +890,14 @@ function UpgradeRequestHistoryCard({
         <ReadOnlyField label="Created" value={formatDate(request.created_at)} />
         <ReadOnlyField label="Updated" value={formatDate(request.updated_at)} />
         <ReadOnlyField
+          label="Reviewed at"
+          value={formatDate(request.reviewed_at)}
+        />
+        <ReadOnlyField
+          label="Review note"
+          value={request.review_note ?? ""}
+        />
+        <ReadOnlyField
           label="Entitlement changed"
           value={booleanLabel(request.entitlement_changed)}
         />
@@ -810,6 +906,14 @@ function UpgradeRequestHistoryCard({
           value={booleanLabel(request.payment_gateway_called)}
         />
       </div>
+
+      {request.status === "approved" ? (
+        <div className="mt-5 rounded-3xl border border-teal-400/30 bg-teal-400/10 p-4 text-sm leading-6 text-teal-100">
+          Approved for platform follow-up only. This does not activate the
+          requested plan, change billing, start checkout, or charge money.
+          Canonical entitlement assignment remains the source of truth.
+        </div>
+      ) : null}
     </div>
   );
 }

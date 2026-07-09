@@ -150,9 +150,15 @@ export type TenantUpgradeRequest = {
 };
 
 export type TenantRequestablePlan = {
+  blocking_request_status: string | null;
   current_assignment: TenantEntitlementAssignment | null;
   display_order: number | null;
+  has_blocking_request: boolean;
   has_open_request: boolean;
+  latest_request_id: string | null;
+  latest_request_status: string | null;
+  latest_review_note: string | null;
+  latest_reviewed_at: string | null;
   plan_code: string;
   plan_name: string | null;
   request_description: string | null;
@@ -381,9 +387,15 @@ function normalizeTenantUpgradeRequest(row: JsonRecord): TenantUpgradeRequest {
 
 function normalizeTenantRequestablePlan(row: JsonRecord): TenantRequestablePlan {
   return {
+    blocking_request_status: asString(row.blocking_request_status),
     current_assignment: normalizeTenantEntitlementAssignment(row.current_assignment),
     display_order: asNumber(row.display_order),
+    has_blocking_request: asBoolean(row.has_blocking_request),
     has_open_request: asBoolean(row.has_open_request),
+    latest_request_id: asString(row.latest_request_id),
+    latest_request_status: asString(row.latest_request_status),
+    latest_review_note: asString(row.latest_review_note),
+    latest_reviewed_at: asString(row.latest_reviewed_at),
     plan_code: asString(row.plan_code) ?? "",
     plan_name: asString(row.plan_name),
     request_description: asString(row.request_description),
