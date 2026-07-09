@@ -77,6 +77,24 @@ export type TenantEntitlementState = {
   warnings: JsonRecord[];
 };
 
+export type SetTenantSubscriptionPlanInput = {
+  billingCycle: "custom" | "monthly" | "yearly";
+  currency: "EUR" | "INR" | "USD";
+  metadata?: JsonRecord;
+  paymentStatus: "not_required" | "overdue" | "paid" | "unpaid" | "waived";
+  planCode: string;
+  status:
+    | "active"
+    | "cancelled"
+    | "expired"
+    | "grace"
+    | "past_due"
+    | "suspended"
+    | "trial";
+  tenantId: string;
+  trialEndsAt?: string | null;
+};
+
 function isRecord(value: unknown): value is JsonRecord {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -200,6 +218,28 @@ export async function getTenantEntitlementState(
   const supabase = getSupabaseClient();
   const { data, error } = await supabase.rpc("get_tenant_entitlement_state", {
     p_tenant_id: tenantId,
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return normalizeTenantEntitlementState(data);
+}
+
+export async function setTenantSubscriptionPlan(
+  input: SetTenantSubscriptionPlanInput,
+): Promise<TenantEntitlementState> {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.rpc("set_tenant_subscription_plan", {
+    p_billing_cycle: input.billingCycle,
+    p_currency: input.currency,
+    p_metadata_json: input.metadata ?? {},
+    p_payment_status: input.paymentStatus,
+    p_plan_code: input.planCode,
+    p_status: input.status,
+    p_tenant_id: input.tenantId,
+    p_trial_ends_at: input.trialEndsAt ?? null,
   });
 
   if (error) {

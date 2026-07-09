@@ -31,7 +31,9 @@ import {
 import {
   getPlatformPlanCatalog,
   getTenantEntitlementState,
+  setTenantSubscriptionPlan,
   type CanonicalPlanCatalogItem,
+  type SetTenantSubscriptionPlanInput,
   type TenantEntitlementFeature,
   type TenantEntitlementLimit,
   type TenantEntitlementState,
@@ -69,6 +71,16 @@ type SupportFormState = {
   note: string;
   noteType: "billing" | "follow_up" | "general" | "onboarding" | "risk" | "technical";
   status: "archived" | "in_progress" | "open" | "resolved";
+};
+
+type CanonicalAssignmentFormState = {
+  billingCycle: SetTenantSubscriptionPlanInput["billingCycle"] | "";
+  currency: SetTenantSubscriptionPlanInput["currency"] | "";
+  note: string;
+  paymentStatus: SetTenantSubscriptionPlanInput["paymentStatus"] | "";
+  planCode: string;
+  status: SetTenantSubscriptionPlanInput["status"] | "";
+  trialEndsAt: string;
 };
 
 type SubscriptionStatusFilter =
@@ -110,6 +122,16 @@ const emptySupportForm: SupportFormState = {
   status: "open",
 };
 
+const emptyCanonicalAssignmentForm: CanonicalAssignmentFormState = {
+  billingCycle: "monthly",
+  currency: "INR",
+  note: "",
+  paymentStatus: "not_required",
+  planCode: "",
+  status: "trial",
+  trialEndsAt: "",
+};
+
 const subscriptionStatuses: SubscriptionFormState["status"][] = [
   "trial",
   "active",
@@ -137,6 +159,32 @@ const supportStatuses: SupportFormState["status"][] = [
   "in_progress",
   "resolved",
   "archived",
+];
+const canonicalAssignmentStatuses: SetTenantSubscriptionPlanInput["status"][] = [
+  "trial",
+  "active",
+  "past_due",
+  "grace",
+  "suspended",
+  "cancelled",
+  "expired",
+];
+const canonicalPaymentStatuses: SetTenantSubscriptionPlanInput["paymentStatus"][] = [
+  "not_required",
+  "unpaid",
+  "paid",
+  "overdue",
+  "waived",
+];
+const canonicalCurrencies: SetTenantSubscriptionPlanInput["currency"][] = [
+  "INR",
+  "USD",
+  "EUR",
+];
+const canonicalBillingCycles: SetTenantSubscriptionPlanInput["billingCycle"][] = [
+  "monthly",
+  "yearly",
+  "custom",
 ];
 
 function formatLabel(value: string | null | undefined) {
@@ -206,6 +254,96 @@ function buildSubscriptionForm(detail: PlatformTenantDetail | null): Subscriptio
     trialEndsAt: toDateInput(detail?.subscription.trial_ends_at),
     trialStartedAt: toDateInput(detail?.subscription.trial_started_at),
   };
+}
+
+function buildCanonicalAssignmentForm(
+  entitlement: TenantEntitlementState | null,
+): CanonicalAssignmentFormState {
+  const assignment = entitlement?.assignment;
+
+  return {
+    billingCycle:
+      assignment?.billing_cycle === "yearly" || assignment?.billing_cycle === "custom"
+        ? assignment.billing_cycle
+        : "monthly",
+    currency:
+      assignment?.currency === "USD" || assignment?.currency === "EUR"
+        ? assignment.currency
+        : "INR",
+    note: "",
+    paymentStatus:
+      assignment?.payment_status === "unpaid" ||
+      assignment?.payment_status === "paid" ||
+      assignment?.payment_status === "overdue" ||
+      assignment?.payment_status === "waived"
+        ? assignment.payment_status
+        : "not_required",
+    planCode: assignment?.plan_code ?? "",
+    status:
+      assignment?.status === "active" ||
+      assignment?.status === "past_due" ||
+      assignment?.status === "grace" ||
+      assignment?.status === "suspended" ||
+      assignment?.status === "cancelled" ||
+      assignment?.status === "expired"
+        ? assignment.status
+        : "trial",
+    trialEndsAt: toDateInput(assignment?.trial_ends_at),
+  };
+}
+
+function canonicalAssignmentSummary(
+  assignment: TenantEntitlementState["assignment"] | null,
+) {
+  if (!assignment) return "No canonical assignment";
+
+  return [
+    assignment.plan_code ?? "no plan",
+    assignment.status ?? "no status",
+    assignment.payment_status ?? "no payment status",
+    assignment.currency ?? "no currency",
+    assignment.billing_cycle ?? "no cycle",
+  ].join(" / ");
+}
+
+function canonicalFormSummary(form: CanonicalAssignmentFormState) {
+  return [
+    form.planCode || "no plan",
+    form.status || "no status",
+    form.paymentStatus || "no payment status",
+    form.currency || "no currency",
+    form.billingCycle || "no cycle",
+  ].join(" / ");
+}
+
+function hasLegacyCanonicalMismatch(
+  detail: PlatformTenantDetail | null,
+  entitlement: TenantEntitlementState | null,
+) {
+  const legacy = detail?.subscription;
+  const canonical = entitlement?.assignment;
+
+  if (!legacy) return false;
+  if (!canonical) {
+    return Boolean(
+      legacy.plan_code ||
+        legacy.status ||
+        legacy.payment_status ||
+        legacy.currency ||
+        legacy.billing_cycle,
+    );
+  }
+
+  const compare = (left: string | null | undefined, right: string | null | undefined) =>
+    (left ?? "").toLowerCase() === (right ?? "").toLowerCase();
+
+  return !(
+    compare(legacy.plan_code, canonical.plan_code) &&
+    compare(legacy.status, canonical.status) &&
+    compare(legacy.payment_status, canonical.payment_status) &&
+    compare(legacy.currency, canonical.currency) &&
+    compare(legacy.billing_cycle, canonical.billing_cycle)
+  );
 }
 
 function canManageBilling(role: PlatformAdminContext["role"] | null | undefined) {
@@ -282,6 +420,12 @@ function entitlementTone(value: string | null | undefined) {
 export function PlatformOwnerConsolePage() {
   const [adminContext, setAdminContext] = useState<PlatformAdminContext | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [canonicalAssignmentConfirmed, setCanonicalAssignmentConfirmed] =
+    useState(false);
+  const [canonicalAssignmentError, setCanonicalAssignmentError] =
+    useState<string | null>(null);
+  const [canonicalAssignmentForm, setCanonicalAssignmentForm] =
+    useState<CanonicalAssignmentFormState>(emptyCanonicalAssignmentForm);
   const [canonicalEntitlementError, setCanonicalEntitlementError] =
     useState<string | null>(null);
   const [canonicalEntitlementState, setCanonicalEntitlementState] =
@@ -364,8 +508,13 @@ export function PlatformOwnerConsolePage() {
       ]);
       setCanonicalPlanCatalog(catalogData);
       setCanonicalEntitlementState(entitlementData);
+      setCanonicalAssignmentForm(buildCanonicalAssignmentForm(entitlementData));
+      setCanonicalAssignmentConfirmed(false);
+      setCanonicalAssignmentError(null);
     } catch (error) {
       setCanonicalEntitlementState(null);
+      setCanonicalAssignmentForm(emptyCanonicalAssignmentForm);
+      setCanonicalAssignmentConfirmed(false);
       setCanonicalEntitlementError(normalizePlatformError(error));
     }
   }, []);
@@ -497,6 +646,57 @@ export function PlatformOwnerConsolePage() {
       await Promise.all([loadTenantDetail(selectedTenantId), loadPlatform()]);
     } catch (error) {
       setActionError(normalizePlatformError(error));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveCanonicalAssignment = async () => {
+    if (
+      !adminContext ||
+      !selectedTenantId ||
+      !canManagePlans(adminContext.role) ||
+      !canonicalAssignmentForm.planCode ||
+      !canonicalAssignmentForm.status ||
+      !canonicalAssignmentForm.paymentStatus ||
+      !canonicalAssignmentForm.currency ||
+      !canonicalAssignmentForm.billingCycle ||
+      !canonicalAssignmentForm.note.trim() ||
+      !canonicalAssignmentConfirmed
+    ) {
+      return;
+    }
+
+    setSaving(true);
+    setCanonicalAssignmentError(null);
+    setActionError(null);
+    setSuccess(null);
+
+    try {
+      const entitlement = await setTenantSubscriptionPlan({
+        billingCycle: canonicalAssignmentForm.billingCycle,
+        currency: canonicalAssignmentForm.currency,
+        metadata: {
+          module: "71.7G5",
+          operator_note: canonicalAssignmentForm.note.trim(),
+          source: "platform_manual_assignment_ui",
+        },
+        paymentStatus: canonicalAssignmentForm.paymentStatus,
+        planCode: canonicalAssignmentForm.planCode,
+        status: canonicalAssignmentForm.status,
+        tenantId: selectedTenantId,
+        trialEndsAt: dateOrNull(canonicalAssignmentForm.trialEndsAt),
+      });
+      setCanonicalEntitlementState(entitlement);
+      setCanonicalAssignmentConfirmed(false);
+      setCanonicalAssignmentForm(buildCanonicalAssignmentForm(entitlement));
+      setSuccess("Canonical entitlement assignment updated.");
+      await Promise.all([
+        loadCanonicalEntitlements(selectedTenantId),
+        loadTenantDetail(selectedTenantId),
+      ]);
+    } catch (error) {
+      setCanonicalAssignmentError(normalizePlatformError(error));
     } finally {
       setSaving(false);
     }
@@ -636,6 +836,22 @@ export function PlatformOwnerConsolePage() {
               entitlement={canonicalEntitlementState}
               error={canonicalEntitlementError}
               selectedTenantName={selectedTenant?.name}
+            />
+
+            <CanonicalAssignmentControlsPanel
+              adminRole={adminContext.role}
+              catalog={canonicalPlanCatalog}
+              confirmed={canonicalAssignmentConfirmed}
+              detail={selectedTenantDetail}
+              entitlement={canonicalEntitlementState}
+              error={canonicalAssignmentError}
+              form={canonicalAssignmentForm}
+              saving={saving}
+              selectedTenantId={selectedTenantId}
+              selectedTenantName={selectedTenant?.name}
+              setConfirmed={setCanonicalAssignmentConfirmed}
+              setForm={setCanonicalAssignmentForm}
+              onSave={handleSaveCanonicalAssignment}
             />
 
             <SubscriptionPanel
@@ -1242,6 +1458,320 @@ function FeatureSummaryRow({
         {formatLabel(feature?.module62_status)}
       </p>
     </div>
+  );
+}
+
+function CanonicalAssignmentControlsPanel({
+  adminRole,
+  catalog,
+  confirmed,
+  detail,
+  entitlement,
+  error,
+  form,
+  saving,
+  selectedTenantId,
+  selectedTenantName,
+  setConfirmed,
+  setForm,
+  onSave,
+}: {
+  adminRole: PlatformAdminContext["role"];
+  catalog: CanonicalPlanCatalogItem[];
+  confirmed: boolean;
+  detail: PlatformTenantDetail | null;
+  entitlement: TenantEntitlementState | null;
+  error: string | null;
+  form: CanonicalAssignmentFormState;
+  saving: boolean;
+  selectedTenantId: string | null;
+  selectedTenantName?: string | null;
+  setConfirmed: React.Dispatch<React.SetStateAction<boolean>>;
+  setForm: React.Dispatch<React.SetStateAction<CanonicalAssignmentFormState>>;
+  onSave: () => void;
+}) {
+  const canEditCanonical = canManagePlans(adminRole);
+  const availablePlans = catalog.filter((plan) => plan.status !== "archived");
+  const assignment = entitlement?.assignment ?? null;
+  const mismatch = hasLegacyCanonicalMismatch(detail, entitlement);
+  const keyFeatures = ["payment_gateway", "live_classes"].map((featureKey) => ({
+    feature:
+      entitlement?.features.find((item) => item.feature_key === featureKey) ?? null,
+    featureKey,
+  }));
+  const keyLimits = ["students", "courses"]
+    .map((resourceKey) => ({
+      limit: entitlement?.limits.find((item) => item.resource_key === resourceKey) ?? null,
+      resourceKey,
+    }))
+    .filter((item) => item.limit);
+  const canSave =
+    canEditCanonical &&
+    Boolean(selectedTenantId) &&
+    Boolean(form.planCode) &&
+    Boolean(form.status) &&
+    Boolean(form.paymentStatus) &&
+    Boolean(form.currency) &&
+    Boolean(form.billingCycle) &&
+    Boolean(form.note.trim()) &&
+    confirmed &&
+    !saving;
+
+  return (
+    <Card className="p-5">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <p className="text-sm font-semibold uppercase tracking-[0.06em] text-[#5D7185]">
+            Canonical assignment controls
+          </p>
+          <h2 className="mt-1 text-xl font-semibold">
+            Manual canonical subscription assignment
+          </h2>
+          <p className="mt-1 max-w-3xl text-sm text-[#5D7185]">
+            This updates canonical entitlement assignment only. It does not charge
+            money, activate checkout, or update legacy billing records. Payment
+            gateway remains inactive unless separately enabled in a reviewed
+            gateway module.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Badge tone="dark">Canonical only</Badge>
+          <Badge tone="warning">Checkout off</Badge>
+        </div>
+      </div>
+
+      {error ? (
+        <p className="mt-4 rounded-2xl border border-[#FECACA] bg-[#FEF2F2] p-3 text-sm text-[#B91C1C]">
+          Canonical assignment update failed: {error}
+        </p>
+      ) : null}
+
+      {mismatch ? (
+        <p className="mt-4 rounded-2xl border border-[#FED7AA] bg-[#FFF7ED] p-3 text-sm text-[#9A3412]">
+          Canonical entitlement assignment may differ from legacy billing records
+          during transition. Legacy billing is retained for historical/platform
+          operations until a reviewed migration sync is approved.
+        </p>
+      ) : null}
+
+      <div className="mt-5 grid gap-4 lg:grid-cols-2">
+        <InfoPanel title="Current Canonical Assignment">
+          <InfoRow label="Tenant" value={selectedTenantName ?? "No tenant selected"} />
+          <InfoRow label="Plan" value={assignment?.plan_code ?? "Not assigned"} />
+          <InfoRow label="Status" value={formatLabel(assignment?.status)} />
+          <InfoRow
+            label="Payment status"
+            value={formatLabel(assignment?.payment_status)}
+          />
+          <InfoRow label="Currency" value={assignment?.currency ?? "Not set"} />
+          <InfoRow
+            label="Billing cycle"
+            value={formatLabel(assignment?.billing_cycle)}
+          />
+          <InfoRow
+            label="Payment forced"
+            value={booleanLabel(Boolean(entitlement?.payment_forced))}
+          />
+          <InfoRow
+            label="Gateway required"
+            value={booleanLabel(Boolean(entitlement?.gateway_required))}
+          />
+        </InfoPanel>
+
+        <InfoPanel title="Legacy Module 56 Billing Reference">
+          <InfoRow label="Plan" value={detail?.subscription.plan_name ?? "Not set"} />
+          <InfoRow label="Status" value={formatLabel(detail?.subscription.status)} />
+          <InfoRow
+            label="Payment status"
+            value={formatLabel(detail?.subscription.payment_status)}
+          />
+          <InfoRow label="Currency" value={detail?.subscription.currency ?? "Not set"} />
+          <InfoRow
+            label="Billing cycle"
+            value={formatLabel(detail?.subscription.billing_cycle)}
+          />
+          <InfoRow
+            label="Amount"
+            value={toCurrency(
+              detail?.subscription.amount,
+              detail?.subscription.currency ?? "INR",
+            )}
+          />
+        </InfoPanel>
+      </div>
+
+      <div className="mt-5 grid gap-4 lg:grid-cols-2">
+        <div className="rounded-2xl border border-[#D8E8F0] bg-[#F8FBFD] p-4">
+          <p className="text-sm font-semibold">Current limits</p>
+          <div className="mt-3 space-y-2">
+            {keyLimits.length === 0 ? (
+              <p className="text-sm text-[#5D7185]">No key canonical limits.</p>
+            ) : (
+              keyLimits.map(({ limit, resourceKey }) => (
+                <LimitSummaryRow
+                  key={resourceKey}
+                  limit={limit}
+                  resourceKey={resourceKey}
+                />
+              ))
+            )}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-[#D8E8F0] bg-[#F8FBFD] p-4">
+          <p className="text-sm font-semibold">Gateway and live class status</p>
+          <div className="mt-3 space-y-2">
+            {keyFeatures.map(({ feature, featureKey }) => (
+              <FeatureSummaryRow
+                feature={feature}
+                featureKey={featureKey}
+                key={featureKey}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {!canEditCanonical ? (
+        <p className="mt-5 rounded-2xl border border-[#D8E8F0] bg-[#F8FBFD] p-4 text-sm text-[#5D7185]">
+          Your platform role can view canonical entitlement state but cannot change
+          canonical subscription assignment.
+        </p>
+      ) : (
+        <div className="mt-5 rounded-2xl border border-[#D8E8F0] bg-white p-4">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            <SelectField
+              label="Canonical plan"
+              onChange={(value) => {
+                setConfirmed(false);
+                setForm((current) => ({ ...current, planCode: value }));
+              }}
+              value={form.planCode}
+            >
+              <option value="">Select plan</option>
+              {availablePlans.map((plan) => (
+                <option key={plan.id || plan.code} value={plan.code}>
+                  {plan.name} ({plan.code}, {formatLabel(plan.status)})
+                </option>
+              ))}
+            </SelectField>
+            <SelectField
+              label="Canonical status"
+              onChange={(value) => {
+                setConfirmed(false);
+                setForm((current) => ({
+                  ...current,
+                  status: value as CanonicalAssignmentFormState["status"],
+                }));
+              }}
+              value={form.status}
+            >
+              {canonicalAssignmentStatuses.map((status) => (
+                <option key={status} value={status}>
+                  {formatLabel(status)}
+                </option>
+              ))}
+            </SelectField>
+            <SelectField
+              label="Payment status"
+              onChange={(value) => {
+                setConfirmed(false);
+                setForm((current) => ({
+                  ...current,
+                  paymentStatus:
+                    value as CanonicalAssignmentFormState["paymentStatus"],
+                }));
+              }}
+              value={form.paymentStatus}
+            >
+              {canonicalPaymentStatuses.map((status) => (
+                <option key={status} value={status}>
+                  {formatLabel(status)}
+                </option>
+              ))}
+            </SelectField>
+            <SelectField
+              label="Currency"
+              onChange={(value) => {
+                setConfirmed(false);
+                setForm((current) => ({
+                  ...current,
+                  currency: value as CanonicalAssignmentFormState["currency"],
+                }));
+              }}
+              value={form.currency}
+            >
+              {canonicalCurrencies.map((currency) => (
+                <option key={currency} value={currency}>
+                  {currency}
+                </option>
+              ))}
+            </SelectField>
+            <SelectField
+              label="Billing cycle"
+              onChange={(value) => {
+                setConfirmed(false);
+                setForm((current) => ({
+                  ...current,
+                  billingCycle:
+                    value as CanonicalAssignmentFormState["billingCycle"],
+                }));
+              }}
+              value={form.billingCycle}
+            >
+              {canonicalBillingCycles.map((cycle) => (
+                <option key={cycle} value={cycle}>
+                  {formatLabel(cycle)}
+                </option>
+              ))}
+            </SelectField>
+            <InputField
+              label="Trial ends"
+              onChange={(value) => {
+                setConfirmed(false);
+                setForm((current) => ({ ...current, trialEndsAt: value }));
+              }}
+              type="datetime-local"
+              value={form.trialEndsAt}
+            />
+          </div>
+          <TextAreaField
+            label="Reason / operator note"
+            onChange={(value) => {
+              setConfirmed(false);
+              setForm((current) => ({ ...current, note: value }));
+            }}
+            value={form.note}
+          />
+
+          <label className="mt-4 flex gap-3 rounded-2xl border border-[#D8E8F0] bg-[#F8FBFD] p-4 text-sm text-[#0B1F33]">
+            <input
+              checked={confirmed}
+              className="mt-1 h-4 w-4"
+              onChange={(event) => setConfirmed(event.target.checked)}
+              type="checkbox"
+            />
+            <span>
+              Confirm assignment for {selectedTenantName ?? "the selected tenant"}:
+              old canonical assignment is {canonicalAssignmentSummary(assignment)};
+              new canonical assignment is {canonicalFormSummary(form)}. No payment
+              will be charged. Checkout will not be enabled. Legacy billing records
+              will not be updated.
+            </span>
+          </label>
+
+          <div className="mt-4 flex flex-wrap gap-3">
+            <Button disabled={!canSave} onClick={onSave} type="button">
+              Save canonical assignment
+            </Button>
+            <p className="text-sm text-[#5D7185]">
+              Save calls only set_tenant_subscription_plan and then re-fetches
+              canonical state. No legacy billing RPC is called from this control.
+            </p>
+          </div>
+        </div>
+      )}
+    </Card>
   );
 }
 
