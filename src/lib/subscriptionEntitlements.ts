@@ -102,9 +102,15 @@ export type PlatformUpgradeRequestStatus =
   | "open"
   | "rejected";
 
+export type ReviewUpgradeRequestStatus = Exclude<
+  PlatformUpgradeRequestStatus,
+  "open"
+>;
+
 export type PlatformUpgradeRequest = {
   created_at: string | null;
   current_assignment: TenantEntitlementAssignment | null;
+  decision_metadata_present: boolean;
   gateway_required: boolean;
   metadata_present: boolean;
   payment_forced: boolean;
@@ -114,6 +120,10 @@ export type PlatformUpgradeRequest = {
   requested_by_email: string | null;
   requested_plan_code: string | null;
   requested_plan_name: string | null;
+  review_note: string | null;
+  reviewed_at: string | null;
+  reviewed_by: string | null;
+  reviewed_by_email: string | null;
   status: PlatformUpgradeRequestStatus | string | null;
   tenant_id: string | null;
   tenant_name: string | null;
@@ -123,12 +133,17 @@ export type PlatformUpgradeRequest = {
 
 export type TenantUpgradeRequest = {
   created_at: string | null;
+  decision_metadata_present: boolean;
   entitlement_changed: boolean;
   payment_gateway_called: boolean;
   reason: string | null;
   request_id: string;
   requested_plan_code: string | null;
   requested_plan_name: string | null;
+  review_note: string | null;
+  reviewed_at: string | null;
+  reviewed_by: string | null;
+  reviewed_by_email: string | null;
   status: PlatformUpgradeRequestStatus | string | null;
   tenant_id: string | null;
   updated_at: string | null;
@@ -151,6 +166,27 @@ export type PlanUpgradeRequestResult = {
   payment_gateway_called: boolean;
   request_id: string;
   requested_plan_code: string | null;
+  status: string | null;
+  tenant_id: string | null;
+};
+
+export type ReviewTenantPlanUpgradeRequestInput = {
+  metadataJson?: JsonRecord;
+  requestId: string;
+  reviewNote?: string | null;
+  status: ReviewUpgradeRequestStatus;
+};
+
+export type ReviewTenantPlanUpgradeRequestResult = {
+  assignment_changed: boolean;
+  entitlement_changed: boolean;
+  payment_gateway_called: boolean;
+  previous_status: string | null;
+  request_id: string;
+  requested_plan_code: string | null;
+  review_note: string | null;
+  reviewed_at: string | null;
+  reviewed_by: string | null;
   status: string | null;
   tenant_id: string | null;
 };
@@ -301,6 +337,7 @@ function normalizePlatformUpgradeRequest(row: JsonRecord): PlatformUpgradeReques
   return {
     created_at: asString(row.created_at),
     current_assignment: normalizeTenantEntitlementAssignment(row.current_assignment),
+    decision_metadata_present: asBoolean(row.decision_metadata_present),
     gateway_required: asBoolean(row.gateway_required),
     metadata_present: asBoolean(row.metadata_present),
     payment_forced: asBoolean(row.payment_forced),
@@ -310,6 +347,10 @@ function normalizePlatformUpgradeRequest(row: JsonRecord): PlatformUpgradeReques
     requested_by_email: asString(row.requested_by_email),
     requested_plan_code: asString(row.requested_plan_code),
     requested_plan_name: asString(row.requested_plan_name),
+    review_note: asString(row.review_note),
+    reviewed_at: asString(row.reviewed_at),
+    reviewed_by: asString(row.reviewed_by),
+    reviewed_by_email: asString(row.reviewed_by_email),
     status: asString(row.status),
     tenant_id: asString(row.tenant_id),
     tenant_name: asString(row.tenant_name),
@@ -321,12 +362,17 @@ function normalizePlatformUpgradeRequest(row: JsonRecord): PlatformUpgradeReques
 function normalizeTenantUpgradeRequest(row: JsonRecord): TenantUpgradeRequest {
   return {
     created_at: asString(row.created_at),
+    decision_metadata_present: asBoolean(row.decision_metadata_present),
     entitlement_changed: asBoolean(row.entitlement_changed),
     payment_gateway_called: asBoolean(row.payment_gateway_called),
     reason: asString(row.reason),
     request_id: asString(row.request_id) ?? "",
     requested_plan_code: asString(row.requested_plan_code),
     requested_plan_name: asString(row.requested_plan_name),
+    review_note: asString(row.review_note),
+    reviewed_at: asString(row.reviewed_at),
+    reviewed_by: asString(row.reviewed_by),
+    reviewed_by_email: asString(row.reviewed_by_email),
     status: asString(row.status),
     tenant_id: asString(row.tenant_id),
     updated_at: asString(row.updated_at),
@@ -357,6 +403,26 @@ function normalizePlanUpgradeRequestResult(
     payment_gateway_called: asBoolean(row.payment_gateway_called),
     request_id: asString(row.request_id) ?? "",
     requested_plan_code: asString(row.requested_plan_code),
+    status: asString(row.status),
+    tenant_id: asString(row.tenant_id),
+  };
+}
+
+function normalizeReviewTenantPlanUpgradeRequestResult(
+  value: unknown,
+): ReviewTenantPlanUpgradeRequestResult {
+  const row = isRecord(value) ? value : {};
+
+  return {
+    assignment_changed: asBoolean(row.assignment_changed),
+    entitlement_changed: asBoolean(row.entitlement_changed),
+    payment_gateway_called: asBoolean(row.payment_gateway_called),
+    previous_status: asString(row.previous_status),
+    request_id: asString(row.request_id) ?? "",
+    requested_plan_code: asString(row.requested_plan_code),
+    review_note: asString(row.review_note),
+    reviewed_at: asString(row.reviewed_at),
+    reviewed_by: asString(row.reviewed_by),
     status: asString(row.status),
     tenant_id: asString(row.tenant_id),
   };
@@ -456,6 +522,27 @@ export async function requestPlanUpgrade(
   }
 
   return normalizePlanUpgradeRequestResult(data);
+}
+
+export async function reviewTenantPlanUpgradeRequest(
+  input: ReviewTenantPlanUpgradeRequestInput,
+): Promise<ReviewTenantPlanUpgradeRequestResult> {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.rpc(
+    "review_tenant_plan_upgrade_request",
+    {
+      p_metadata_json: input.metadataJson ?? {},
+      p_request_id: input.requestId,
+      p_review_note: input.reviewNote ?? null,
+      p_status: input.status,
+    },
+  );
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return normalizeReviewTenantPlanUpgradeRequestResult(data);
 }
 
 export async function setTenantSubscriptionPlan(

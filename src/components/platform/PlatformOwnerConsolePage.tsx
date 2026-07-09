@@ -32,10 +32,12 @@ import {
   getPlatformPlanCatalog,
   getPlatformUpgradeRequests,
   getTenantEntitlementState,
+  reviewTenantPlanUpgradeRequest,
   setTenantSubscriptionPlan,
   type CanonicalPlanCatalogItem,
   type PlatformUpgradeRequest,
   type PlatformUpgradeRequestStatus,
+  type ReviewUpgradeRequestStatus,
   type SetTenantSubscriptionPlanInput,
   type TenantEntitlementFeature,
   type TenantEntitlementLimit,
@@ -110,6 +112,11 @@ type UpgradeRequestStatusFilter =
   | "in_review"
   | "open"
   | "rejected";
+type ReviewUpgradeRequestSubmitInput = {
+  request: PlatformUpgradeRequest;
+  reviewNote: string | null;
+  status: ReviewUpgradeRequestStatus;
+};
 
 const emptyPlanForm: PlanFormState = {
   aiMonthlyLimit: "",
@@ -204,6 +211,22 @@ const upgradeRequestStatuses: UpgradeRequestStatusFilter[] = [
   "rejected",
   "cancelled",
 ];
+const upgradeReviewTerminalStatuses = new Set([
+  "approved",
+  "cancelled",
+  "rejected",
+]);
+const openUpgradeReviewActions: ReviewUpgradeRequestStatus[] = [
+  "in_review",
+  "approved",
+  "rejected",
+  "cancelled",
+];
+const inReviewUpgradeReviewActions: ReviewUpgradeRequestStatus[] = [
+  "approved",
+  "rejected",
+  "cancelled",
+];
 
 function formatLabel(value: string | null | undefined) {
   if (!value) return "Not set";
@@ -211,11 +234,18 @@ function formatLabel(value: string | null | undefined) {
 }
 
 function statusTone(value: string | null | undefined) {
-  if (value === "active" || value === "paid" || value === "resolved") {
+  if (
+    value === "active" ||
+    value === "approved" ||
+    value === "paid" ||
+    value === "resolved"
+  ) {
     return "success" as const;
   }
 
   if (
+    value === "in_review" ||
+    value === "open" ||
     value === "past_due" ||
     value === "overdue" ||
     value === "suspended" ||
@@ -225,7 +255,7 @@ function statusTone(value: string | null | undefined) {
     return "warning" as const;
   }
 
-  if (value === "cancelled" || value === "archived") {
+  if (value === "cancelled" || value === "archived" || value === "rejected") {
     return "danger" as const;
   }
 
@@ -400,6 +430,25 @@ function planFormFromPlan(plan: PlatformSubscriptionPlan): PlanFormState {
 
 function booleanLabel(value: boolean) {
   return value ? "true" : "false";
+}
+
+function reviewActionLabel(status: ReviewUpgradeRequestStatus) {
+  if (status === "in_review") return "Mark in review";
+  if (status === "approved") return "Approve request";
+  if (status === "rejected") return "Reject request";
+  return "Cancel request";
+}
+
+function reviewActionRequiresNote(status: ReviewUpgradeRequestStatus) {
+  return status !== "in_review";
+}
+
+function reviewActionsForStatus(
+  status: string | null | undefined,
+): ReviewUpgradeRequestStatus[] {
+  if (status === "open") return openUpgradeReviewActions;
+  if (status === "in_review") return inReviewUpgradeReviewActions;
+  return [];
 }
 
 function displayLimitValue(value: number | string | null | undefined) {
@@ -787,6 +836,54 @@ export function PlatformOwnerConsolePage() {
     }
   };
 
+  const handleReviewUpgradeRequest = async ({
+    request,
+    reviewNote,
+    status,
+  }: ReviewUpgradeRequestSubmitInput) => {
+    if (!adminContext || !canManagePlans(adminContext.role)) {
+      return "Upgrade request review is restricted to platform owner/admin roles.";
+    }
+
+    setSaving(true);
+    setActionError(null);
+    setUpgradeRequestError(null);
+    setSuccess(null);
+
+    try {
+      await reviewTenantPlanUpgradeRequest({
+        metadataJson: {
+          assignment_changed: false,
+          checkout_enabled: false,
+          module: "71.7G17",
+          payment_gateway_called: false,
+          requested_plan_code: request.requested_plan_code,
+          source: "platform_upgrade_request_review_ui",
+        },
+        requestId: request.request_id,
+        reviewNote,
+        status,
+      });
+      setSuccess(`Upgrade request status updated to ${formatLabel(status)}.`);
+      await Promise.all([
+        loadUpgradeRequests({
+          role: adminContext.role,
+          status: upgradeRequestStatusFilter,
+          tenantId: selectedTenantId,
+          tenantOnly: upgradeRequestsTenantOnly,
+        }),
+        selectedTenantId
+          ? loadCanonicalEntitlements(selectedTenantId)
+          : Promise.resolve(),
+      ]);
+      return null;
+    } catch (error) {
+      return normalizePlatformError(error);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleRecordSupportNote = async () => {
     if (!adminContext || !selectedTenantId || !canManageSupport(adminContext.role)) {
       return;
@@ -967,8 +1064,10 @@ export function PlatformOwnerConsolePage() {
               requests={upgradeRequests}
               selectedTenantId={selectedTenantId}
               selectedTenantName={selectedTenant?.name}
+              saving={saving}
               statusFilter={upgradeRequestStatusFilter}
               tenantOnly={upgradeRequestsTenantOnly}
+              onReviewRequest={handleReviewUpgradeRequest}
               onStatusFilterChange={handleUpgradeRequestStatusFilterChange}
               onTenantOnlyChange={handleUpgradeRequestTenantFilterChange}
               onRefresh={() =>
@@ -1908,8 +2007,10 @@ function UpgradeRequestReviewPanel({
   requests,
   selectedTenantId,
   selectedTenantName,
+  saving,
   statusFilter,
   tenantOnly,
+  onReviewRequest,
   onStatusFilterChange,
   onTenantOnlyChange,
   onRefresh,
@@ -1919,13 +2020,17 @@ function UpgradeRequestReviewPanel({
   requests: PlatformUpgradeRequest[];
   selectedTenantId: string | null;
   selectedTenantName?: string | null;
+  saving: boolean;
   statusFilter: UpgradeRequestStatusFilter;
   tenantOnly: boolean;
+  onReviewRequest: (
+    input: ReviewUpgradeRequestSubmitInput,
+  ) => Promise<string | null>;
   onStatusFilterChange: (status: UpgradeRequestStatusFilter) => void;
   onTenantOnlyChange: (tenantOnly: boolean) => void;
   onRefresh: () => void;
 }) {
-  const canViewRequests = canManagePlans(adminRole);
+  const canReviewRequests = canManagePlans(adminRole);
 
   return (
     <Card className="p-5">
@@ -1936,17 +2041,18 @@ function UpgradeRequestReviewPanel({
           </p>
           <h2 className="mt-1 text-xl font-semibold">Tenant upgrade request queue</h2>
           <p className="mt-1 max-w-3xl text-sm text-[#5D7185]">
-            Read-only review queue for tenant upgrade requests. Approval, rejection,
-            payment, and plan assignment are handled separately.
+            Review queue for tenant upgrade requests. Review actions update request
+            status only. Payment, checkout, and plan assignment are handled
+            separately.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Badge tone="dark">Read-only</Badge>
-          <Badge tone="warning">No actions</Badge>
+          <Badge tone="dark">Status review</Badge>
+          <Badge tone="warning">No payment action</Badge>
         </div>
       </div>
 
-      {!canViewRequests ? (
+      {!canReviewRequests ? (
         <p className="mt-4 rounded-2xl border border-[#D8E8F0] bg-[#F8FBFD] p-4 text-sm text-[#5D7185]">
           Upgrade request review is restricted to platform owner/admin roles.
         </p>
@@ -2013,7 +2119,10 @@ function UpgradeRequestReviewPanel({
               requests.map((request) => (
                 <UpgradeRequestCard
                   key={request.request_id || `${request.tenant_id}-${request.created_at}`}
+                  canReview={canReviewRequests}
                   request={request}
+                  saving={saving}
+                  onReviewRequest={onReviewRequest}
                 />
               ))
             )}
@@ -2024,8 +2133,67 @@ function UpgradeRequestReviewPanel({
   );
 }
 
-function UpgradeRequestCard({ request }: { request: PlatformUpgradeRequest }) {
+function UpgradeRequestCard({
+  canReview,
+  request,
+  saving,
+  onReviewRequest,
+}: {
+  canReview: boolean;
+  request: PlatformUpgradeRequest;
+  saving: boolean;
+  onReviewRequest: (
+    input: ReviewUpgradeRequestSubmitInput,
+  ) => Promise<string | null>;
+}) {
   const assignment = request.current_assignment;
+  const availableActions = reviewActionsForStatus(request.status);
+  const isTerminal = upgradeReviewTerminalStatuses.has(request.status ?? "");
+  const [selectedAction, setSelectedAction] =
+    useState<ReviewUpgradeRequestStatus | null>(null);
+  const [reviewNote, setReviewNote] = useState("");
+  const [confirmed, setConfirmed] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const noteRequired = selectedAction
+    ? reviewActionRequiresNote(selectedAction)
+    : false;
+  const canSubmitReview =
+    Boolean(selectedAction) &&
+    confirmed &&
+    !saving &&
+    request.request_id.length > 0 &&
+    (!noteRequired || reviewNote.trim().length > 0);
+
+  const selectAction = (status: ReviewUpgradeRequestStatus) => {
+    setSelectedAction(status);
+    setConfirmed(false);
+    setActionError(null);
+  };
+
+  const submitReview = async () => {
+    if (!selectedAction) return;
+
+    if (reviewActionRequiresNote(selectedAction) && !reviewNote.trim()) {
+      setActionError("A review note is required for this action.");
+      return;
+    }
+
+    const error = await onReviewRequest({
+      request,
+      reviewNote: reviewNote.trim() || null,
+      status: selectedAction,
+    });
+
+    if (error) {
+      setActionError(error);
+      return;
+    }
+
+    setSelectedAction(null);
+    setReviewNote("");
+    setConfirmed(false);
+    setActionError(null);
+  };
 
   return (
     <div className="rounded-2xl border border-[#D8E8F0] bg-white p-4">
@@ -2044,10 +2212,15 @@ function UpgradeRequestCard({ request }: { request: PlatformUpgradeRequest }) {
           <Badge tone={request.metadata_present ? "warning" : "light"}>
             {request.metadata_present ? "Metadata present" : "No metadata"}
           </Badge>
+          <Badge tone={request.decision_metadata_present ? "warning" : "light"}>
+            {request.decision_metadata_present
+              ? "Decision metadata"
+              : "No decision metadata"}
+          </Badge>
         </div>
       </div>
 
-      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+      <div className="mt-4 grid gap-4 lg:grid-cols-3">
         <InfoPanel title="Requested plan">
           <InfoRow
             label="Plan"
@@ -2060,6 +2233,20 @@ function UpgradeRequestCard({ request }: { request: PlatformUpgradeRequest }) {
           <InfoRow label="Reason" value={request.reason ?? "Not provided"} />
           <InfoRow label="Created" value={toDisplayDate(request.created_at)} />
           <InfoRow label="Updated" value={toDisplayDate(request.updated_at)} />
+        </InfoPanel>
+
+        <InfoPanel title="Review status">
+          <InfoRow label="Status" value={formatLabel(request.status)} />
+          <InfoRow
+            label="Reviewed by"
+            value={request.reviewed_by_email ?? request.reviewed_by ?? "Not reviewed"}
+          />
+          <InfoRow label="Reviewed at" value={toDisplayDate(request.reviewed_at)} />
+          <InfoRow label="Review note" value={request.review_note ?? "Not set"} />
+          <InfoRow
+            label="Decision metadata"
+            value={request.decision_metadata_present ? "Present" : "Not present"}
+          />
         </InfoPanel>
 
         <InfoPanel title="Current canonical assignment">
@@ -2083,6 +2270,125 @@ function UpgradeRequestCard({ request }: { request: PlatformUpgradeRequest }) {
             value={booleanLabel(request.gateway_required)}
           />
         </InfoPanel>
+      </div>
+
+      <div className="mt-4 rounded-2xl border border-[#D8E8F0] bg-[#F8FBFD] p-4">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <p className="text-sm font-semibold text-[#0B1F33]">
+              Review action
+            </p>
+            <p className="mt-1 text-sm text-[#5D7185]">
+              This only updates the request review status. It does not change the
+              tenant plan, start checkout, charge money, or activate the payment
+              gateway. Canonical assignment remains separate.
+            </p>
+          </div>
+          <Badge tone={isTerminal ? "success" : "warning"}>
+            {isTerminal ? "Terminal state" : "Reviewable"}
+          </Badge>
+        </div>
+
+        {!canReview ? (
+          <p className="mt-3 text-sm text-[#5D7185]">
+            Review actions are restricted to platform owner/admin roles.
+          </p>
+        ) : isTerminal ? (
+          <p className="mt-3 text-sm text-[#5D7185]">
+            This request is {formatLabel(request.status)}. No further review
+            actions are available.
+          </p>
+        ) : (
+          <>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {availableActions.map((status) => (
+                <Button
+                  key={status}
+                  onClick={() => selectAction(status)}
+                  type="button"
+                  variant={selectedAction === status ? "primary" : "secondary"}
+                >
+                  {reviewActionLabel(status)}
+                </Button>
+              ))}
+            </div>
+
+            {selectedAction ? (
+              <div className="mt-4 rounded-2xl border border-[#D8E8F0] bg-white p-4">
+                <p className="text-sm font-semibold text-[#0B1F33]">
+                  {reviewActionLabel(selectedAction)}
+                </p>
+                <p className="mt-1 text-sm text-[#5D7185]">
+                  {selectedAction === "approved"
+                    ? `Approving this request does not activate ${request.requested_plan_name ?? request.requested_plan_code ?? "the requested plan"} or change billing. Use canonical assignment controls separately if you decide to change the tenant plan.`
+                    : "This action updates the request status only. It does not assign a plan or change billing."}
+                </p>
+                <ul className="mt-3 space-y-1 text-sm text-[#5D7185]">
+                  <li>This only updates the request review status.</li>
+                  <li>This does not change the tenant plan.</li>
+                  <li>This does not start checkout.</li>
+                  <li>This does not charge money.</li>
+                  <li>Payment gateway remains inactive.</li>
+                  <li>Canonical assignment remains separate.</li>
+                </ul>
+
+                <TextAreaField
+                  label={
+                    noteRequired
+                      ? "Review note (required)"
+                      : "Review note (optional)"
+                  }
+                  onChange={setReviewNote}
+                  value={reviewNote}
+                />
+
+                <label className="mt-3 flex items-start gap-3 text-sm text-[#0B1F33]">
+                  <input
+                    checked={confirmed}
+                    className="mt-1 h-4 w-4"
+                    onChange={(event) => setConfirmed(event.target.checked)}
+                    type="checkbox"
+                  />
+                  <span>
+                    Confirm {reviewActionLabel(selectedAction).toLowerCase()} for{" "}
+                    {request.tenant_name ?? "this tenant"}. No payment will be
+                    charged. Checkout will not be enabled. Canonical assignment
+                    will not be changed.
+                  </span>
+                </label>
+
+                {actionError ? (
+                  <p className="mt-3 rounded-2xl border border-[#FECACA] bg-[#FEF2F2] p-3 text-sm text-[#B91C1C]">
+                    {actionError}
+                  </p>
+                ) : null}
+
+                <div className="mt-4 flex flex-wrap gap-3">
+                  <Button
+                    disabled={!canSubmitReview}
+                    onClick={() => void submitReview()}
+                    type="button"
+                  >
+                    Submit review status
+                  </Button>
+                  <Button
+                    disabled={saving}
+                    onClick={() => {
+                      setSelectedAction(null);
+                      setReviewNote("");
+                      setConfirmed(false);
+                      setActionError(null);
+                    }}
+                    type="button"
+                    variant="secondary"
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+          </>
+        )}
       </div>
     </div>
   );
