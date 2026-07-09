@@ -134,6 +134,27 @@ export type TenantUpgradeRequest = {
   updated_at: string | null;
 };
 
+export type TenantRequestablePlan = {
+  current_assignment: TenantEntitlementAssignment | null;
+  display_order: number | null;
+  has_open_request: boolean;
+  plan_code: string;
+  plan_name: string | null;
+  request_description: string | null;
+  request_label: string | null;
+  tier_rank: number | null;
+  trial_days: number | null;
+};
+
+export type PlanUpgradeRequestResult = {
+  entitlement_changed: boolean;
+  payment_gateway_called: boolean;
+  request_id: string;
+  requested_plan_code: string | null;
+  status: string | null;
+  tenant_id: string | null;
+};
+
 export type GetPlatformUpgradeRequestsInput = {
   limit?: number;
   offset?: number;
@@ -144,6 +165,12 @@ export type GetPlatformUpgradeRequestsInput = {
 export type GetTenantUpgradeRequestsInput = {
   limit?: number;
   status?: PlatformUpgradeRequestStatus | null;
+  tenantId: string;
+};
+
+export type RequestPlanUpgradeInput = {
+  reason?: string | null;
+  requestedPlanCode: string;
   tenantId: string;
 };
 
@@ -306,6 +333,35 @@ function normalizeTenantUpgradeRequest(row: JsonRecord): TenantUpgradeRequest {
   };
 }
 
+function normalizeTenantRequestablePlan(row: JsonRecord): TenantRequestablePlan {
+  return {
+    current_assignment: normalizeTenantEntitlementAssignment(row.current_assignment),
+    display_order: asNumber(row.display_order),
+    has_open_request: asBoolean(row.has_open_request),
+    plan_code: asString(row.plan_code) ?? "",
+    plan_name: asString(row.plan_name),
+    request_description: asString(row.request_description),
+    request_label: asString(row.request_label),
+    tier_rank: asNumber(row.tier_rank),
+    trial_days: asNumber(row.trial_days),
+  };
+}
+
+function normalizePlanUpgradeRequestResult(
+  value: unknown,
+): PlanUpgradeRequestResult {
+  const row = isRecord(value) ? value : {};
+
+  return {
+    entitlement_changed: asBoolean(row.entitlement_changed),
+    payment_gateway_called: asBoolean(row.payment_gateway_called),
+    request_id: asString(row.request_id) ?? "",
+    requested_plan_code: asString(row.requested_plan_code),
+    status: asString(row.status),
+    tenant_id: asString(row.tenant_id),
+  };
+}
+
 export async function getPlatformPlanCatalog(): Promise<CanonicalPlanCatalogItem[]> {
   const supabase = getSupabaseClient();
   const { data, error } = await supabase.rpc("get_platform_plan_catalog");
@@ -330,6 +386,24 @@ export async function getTenantEntitlementState(
   }
 
   return normalizeTenantEntitlementState(data);
+}
+
+export async function getTenantRequestablePlanCatalog(
+  tenantId: string,
+): Promise<TenantRequestablePlan[]> {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.rpc(
+    "get_tenant_requestable_plan_catalog",
+    {
+      p_tenant_id: tenantId,
+    },
+  );
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return asArray(data).map(normalizeTenantRequestablePlan);
 }
 
 export async function getPlatformUpgradeRequests(
@@ -365,6 +439,23 @@ export async function getTenantUpgradeRequests(
   }
 
   return asArray(data).map(normalizeTenantUpgradeRequest);
+}
+
+export async function requestPlanUpgrade(
+  input: RequestPlanUpgradeInput,
+): Promise<PlanUpgradeRequestResult> {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.rpc("request_plan_upgrade", {
+    p_reason: input.reason ?? null,
+    p_requested_plan_code: input.requestedPlanCode,
+    p_tenant_id: input.tenantId,
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return normalizePlanUpgradeRequestResult(data);
 }
 
 export async function setTenantSubscriptionPlan(

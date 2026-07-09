@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 
 import { Badge } from "@/src/components/ui/Badge";
 import { Button } from "@/src/components/ui/Button";
@@ -34,10 +34,13 @@ import {
 } from "@/src/lib/subscription";
 import {
   getTenantEntitlementState,
+  getTenantRequestablePlanCatalog,
   getTenantUpgradeRequests,
+  requestPlanUpgrade,
   type TenantEntitlementFeature,
   type TenantEntitlementLimit,
   type TenantEntitlementState,
+  type TenantRequestablePlan,
   type TenantUpgradeRequest,
 } from "@/src/lib/subscriptionEntitlements";
 import type {
@@ -516,6 +519,208 @@ function CanonicalFeatureRow({
   );
 }
 
+function RequestPlanUpgradePanel({
+  error,
+  onSubmit,
+  plans,
+  submitError,
+  submitSuccess,
+  submitting,
+}: {
+  error: string | null;
+  onSubmit: (input: {
+    reason: string;
+    requestedPlanCode: string;
+  }) => Promise<boolean>;
+  plans: TenantRequestablePlan[];
+  submitError: string | null;
+  submitSuccess: string | null;
+  submitting: boolean;
+}) {
+  const [confirmed, setConfirmed] = useState(false);
+  const [reason, setReason] = useState("");
+  const [selectedPlanCode, setSelectedPlanCode] = useState("");
+  const selectedPlan =
+    plans.find((plan) => plan.plan_code === selectedPlanCode) ?? null;
+  const submitDisabled =
+    submitting ||
+    !selectedPlan ||
+    selectedPlan.has_open_request ||
+    reason.trim().length === 0 ||
+    !confirmed;
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (submitDisabled || !selectedPlan) {
+      return;
+    }
+
+    const submitted = await onSubmit({
+      reason: reason.trim(),
+      requestedPlanCode: selectedPlan.plan_code,
+    });
+
+    if (submitted) {
+      setConfirmed(false);
+      setReason("");
+      setSelectedPlanCode("");
+    }
+  }
+
+  return (
+    <Card className="mt-6 border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/10">
+      <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
+        <div>
+          <Badge className="border-white/15 bg-white/10 text-white">
+            Request plan upgrade
+          </Badge>
+          <h3 className="mt-4 text-2xl font-semibold">
+            Send a request to platform operations
+          </h3>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
+            This only sends a request to CoachFort platform operations. It does
+            not change your plan, start checkout, charge money, or activate the
+            payment gateway. Platform review is required.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Badge className="border-white/15 bg-white/10 text-white">
+            Request only
+          </Badge>
+          <Badge className="border-amber-400/30 bg-amber-400/10 text-amber-200">
+            No checkout
+          </Badge>
+        </div>
+      </div>
+
+      {error ? (
+        <div className="mt-5 rounded-3xl border border-amber-400/30 bg-amber-400/10 p-4 text-sm leading-6 text-amber-100">
+          Requestable plans are currently unavailable: {error}
+        </div>
+      ) : null}
+
+      {!error && plans.length === 0 ? (
+        <div className="mt-5 rounded-3xl border border-white/10 bg-[#15181b] p-5 text-sm leading-6 text-slate-400">
+          Plan upgrade requests are not enabled yet. Public requestable plans are
+          pending platform review.
+        </div>
+      ) : null}
+
+      {!error && plans.length > 0 ? (
+        <form className="mt-6 space-y-5" onSubmit={handleSubmit}>
+          <div>
+            <label
+              className="text-sm font-semibold text-white"
+              htmlFor="requested-plan"
+            >
+              Requested plan
+            </label>
+            <select
+              className="mt-2 w-full rounded-2xl border border-white/10 bg-[#15181b] px-4 py-3 text-sm text-white outline-none transition focus:border-[#2ECBEA]"
+              id="requested-plan"
+              onChange={(event) => {
+                setSelectedPlanCode(event.target.value);
+                setConfirmed(false);
+              }}
+              value={selectedPlanCode}
+            >
+              <option value="">Select a requestable plan</option>
+              {plans.map((plan) => (
+                <option
+                  disabled={plan.has_open_request}
+                  key={plan.plan_code}
+                  value={plan.plan_code}
+                >
+                  {plan.plan_name ?? plan.plan_code}
+                  {plan.has_open_request ? " - request already open" : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {selectedPlan ? (
+            <div className="rounded-3xl border border-white/10 bg-[#15181b] p-5">
+              <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
+                <div>
+                  <p className="text-sm font-semibold text-white">
+                    {selectedPlan.request_label ??
+                      `Request ${selectedPlan.plan_name ?? selectedPlan.plan_code}`}
+                  </p>
+                  <p className="mt-2 text-sm leading-6 text-slate-400">
+                    {selectedPlan.request_description ??
+                      "Request access to this plan. Platform review is required before any plan change."}
+                  </p>
+                </div>
+                <Badge tone={selectedPlan.has_open_request ? "warning" : "success"}>
+                  {selectedPlan.has_open_request ? "Open request" : "Requestable"}
+                </Badge>
+              </div>
+              {selectedPlan.has_open_request ? (
+                <p className="mt-4 rounded-2xl border border-amber-400/30 bg-amber-400/10 p-4 text-sm text-amber-100">
+                  Request already open/in review for this plan.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+
+          <div>
+            <label className="text-sm font-semibold text-white" htmlFor="request-reason">
+              Reason or use case
+            </label>
+            <textarea
+              className="mt-2 min-h-32 w-full rounded-2xl border border-white/10 bg-[#15181b] px-4 py-3 text-sm leading-6 text-white outline-none transition placeholder:text-slate-600 focus:border-[#2ECBEA]"
+              id="request-reason"
+              maxLength={1200}
+              onChange={(event) => setReason(event.target.value)}
+              placeholder="Share why this plan is needed, expected growth, or any setup context for platform review."
+              value={reason}
+            />
+            <p className="mt-2 text-xs text-slate-500">
+              {reason.trim().length}/1200 characters
+            </p>
+          </div>
+
+          <label className="flex items-start gap-3 rounded-3xl border border-white/10 bg-[#15181b] p-4 text-sm leading-6 text-slate-300">
+            <input
+              checked={confirmed}
+              className="mt-1 h-4 w-4 rounded border-white/20 bg-[#101214]"
+              onChange={(event) => setConfirmed(event.target.checked)}
+              type="checkbox"
+            />
+            <span>
+              I understand this only sends a request, does not change the plan,
+              does not start checkout, does not charge money, and payment
+              gateway remains inactive until platform review is completed.
+            </span>
+          </label>
+
+          {submitError ? (
+            <div className="rounded-3xl border border-red-400/30 bg-red-500/10 p-4 text-sm leading-6 text-red-100">
+              {submitError}
+            </div>
+          ) : null}
+
+          {submitSuccess ? (
+            <div className="rounded-3xl border border-teal-400/30 bg-teal-400/10 p-4 text-sm leading-6 text-teal-100">
+              {submitSuccess}
+            </div>
+          ) : null}
+
+          <div className="flex flex-wrap items-center gap-3">
+            <Button disabled={submitDisabled} type="submit">
+              {submitting ? "Sending request..." : "Submit upgrade request"}
+            </Button>
+            <p className="text-sm text-slate-500">
+              No payment, checkout, billing, or assignment action is performed.
+            </p>
+          </div>
+        </form>
+      ) : null}
+    </Card>
+  );
+}
+
 function UpgradeRequestStatusPanel({
   error,
   requests,
@@ -627,10 +832,19 @@ export function SubscriptionPageClient() {
     useState<InvoiceWithItems | null>(null);
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [trialStatus, setTrialStatus] = useState<TrialStatus | null>(null);
+  const [requestablePlanError, setRequestablePlanError] = useState<string | null>(
+    null,
+  );
+  const [requestablePlans, setRequestablePlans] = useState<TenantRequestablePlan[]>([]);
   const [upgradeRequestError, setUpgradeRequestError] = useState<string | null>(
     null,
   );
   const [upgradeRequests, setUpgradeRequests] = useState<TenantUpgradeRequest[]>([]);
+  const [upgradeRequestSubmitError, setUpgradeRequestSubmitError] =
+    useState<string | null>(null);
+  const [upgradeRequestSubmitSuccess, setUpgradeRequestSubmitSuccess] =
+    useState<string | null>(null);
+  const [upgradeRequestSubmitting, setUpgradeRequestSubmitting] = useState(false);
   const [usage, setUsage] = useState<UsageCounts>(emptyUsage);
 
   const limits = useMemo(
@@ -690,6 +904,7 @@ export function SubscriptionPageClient() {
           currentUsage,
           currentBillingSummary,
           canonicalEntitlementResult,
+          requestablePlanResult,
           upgradeRequestResult,
         ] = await Promise.all([
           getTenantSubscription(currentTenant.id),
@@ -702,6 +917,15 @@ export function SubscriptionPageClient() {
               error: getErrorMessage(
                 caught,
                 "Unable to load canonical entitlement summary.",
+              ),
+            })),
+          getTenantRequestablePlanCatalog(currentTenant.id)
+            .then((data) => ({ data, error: null }))
+            .catch((caught: unknown) => ({
+              data: [],
+              error: getErrorMessage(
+                caught,
+                "Unable to load requestable plans.",
               ),
             })),
           getTenantUpgradeRequests({ tenantId: currentTenant.id })
@@ -724,6 +948,8 @@ export function SubscriptionPageClient() {
         setBillingSummary(currentBillingSummary);
         setCanonicalEntitlementError(canonicalEntitlementResult.error);
         setCanonicalEntitlementState(canonicalEntitlementResult.data);
+        setRequestablePlanError(requestablePlanResult.error);
+        setRequestablePlans(requestablePlanResult.data);
         setUpgradeRequestError(upgradeRequestResult.error);
         setUpgradeRequests(upgradeRequestResult.data);
         setTrialStatus(currentTrialStatus);
@@ -747,6 +973,52 @@ export function SubscriptionPageClient() {
       active = false;
     };
   }, [router]);
+
+  async function handleUpgradeRequestSubmit({
+    reason,
+    requestedPlanCode,
+  }: {
+    reason: string;
+    requestedPlanCode: string;
+  }): Promise<boolean> {
+    if (!tenant) {
+      setUpgradeRequestSubmitError("Workspace context is not available.");
+      return false;
+    }
+
+    setUpgradeRequestSubmitting(true);
+    setUpgradeRequestSubmitError(null);
+    setUpgradeRequestSubmitSuccess(null);
+
+    try {
+      await requestPlanUpgrade({
+        reason,
+        requestedPlanCode,
+        tenantId: tenant.id,
+      });
+
+      const [nextRequests, nextRequestablePlans] = await Promise.all([
+        getTenantUpgradeRequests({ tenantId: tenant.id }),
+        getTenantRequestablePlanCatalog(tenant.id),
+      ]);
+
+      setUpgradeRequests(nextRequests);
+      setUpgradeRequestError(null);
+      setRequestablePlans(nextRequestablePlans);
+      setRequestablePlanError(null);
+      setUpgradeRequestSubmitSuccess(
+        "Upgrade request sent for platform review. No plan, billing, or checkout change was made.",
+      );
+      return true;
+    } catch (caught) {
+      setUpgradeRequestSubmitError(
+        getErrorMessage(caught, "Unable to submit upgrade request."),
+      );
+      return false;
+    } finally {
+      setUpgradeRequestSubmitting(false);
+    }
+  }
 
   if (loading) {
     return (
@@ -814,6 +1086,15 @@ export function SubscriptionPageClient() {
       <CanonicalEntitlementSummary
         entitlement={canonicalEntitlementState}
         error={canonicalEntitlementError}
+      />
+
+      <RequestPlanUpgradePanel
+        error={requestablePlanError}
+        onSubmit={handleUpgradeRequestSubmit}
+        plans={requestablePlans}
+        submitError={upgradeRequestSubmitError}
+        submitSuccess={upgradeRequestSubmitSuccess}
+        submitting={upgradeRequestSubmitting}
       />
 
       <UpgradeRequestStatusPanel
