@@ -43,7 +43,7 @@ const allFeatures: Record<FeatureKey, boolean> = {
   certificates: true,
   cohorts: true,
   courses: true,
-  live_classes: true,
+  live_classes: false,
   messages: true,
   reports: true,
   students: true,
@@ -56,16 +56,20 @@ export const planDefinitions: Record<PlanKey, PlanDefinition> = {
       monthly: null,
       yearly: null,
     },
-    description: "Custom commercial plan for large institutes and advanced needs.",
-    displayName: "Enterprise",
-    features: allFeatures,
+    description:
+      "Contact-sales plan for multi-branch academies and high-scale needs.",
+    displayName: "Premium",
+    features: {
+      ...allFeatures,
+      live_classes: false,
+    },
     key: "enterprise",
     limits: {
-      automations: "unlimited",
-      courses: "unlimited",
-      students: "unlimited",
-      team_members: "unlimited",
-      trainers: "unlimited",
+      automations: 25000,
+      courses: 150,
+      students: 5000,
+      team_members: 100,
+      trainers: 75,
     },
     target: "Large academy or multi-location institute",
   },
@@ -74,65 +78,73 @@ export const planDefinitions: Record<PlanKey, PlanDefinition> = {
       monthly: 0,
       yearly: 0,
     },
-    description: "Core workspace for validating CoachFort with a small team.",
-    displayName: "Free",
+    description:
+      "Legacy preview fallback. Public paid packaging starts with Starter.",
+    displayName: "Starter preview",
     features: {
       ...allFeatures,
+      automations: false,
       branded_portal: false,
+      live_classes: false,
       reports: false,
     },
     key: "free",
     limits: {
-      automations: 1,
-      courses: 2,
-      students: 25,
-      team_members: 2,
-      trainers: 1,
+      automations: 0,
+      courses: 5,
+      students: 100,
+      team_members: 5,
+      trainers: 3,
     },
     target: "Solo coach starting out",
   },
   growth: {
     billing: {
-      monthly: 4999,
-      yearly: 49990,
+      monthly: 5999,
+      yearly: 59990,
     },
-    description: "Unlimited workspace foundation for serious coaching teams.",
+    description: "Main paid plan for growing coaching teams and institutes.",
     displayName: "Growth",
-    features: allFeatures,
+    features: {
+      ...allFeatures,
+      live_classes: false,
+    },
     key: "growth",
     limits: {
-      automations: "unlimited",
-      courses: "unlimited",
-      students: "unlimited",
-      team_members: "unlimited",
-      trainers: "unlimited",
+      automations: 5000,
+      courses: 25,
+      students: 500,
+      team_members: 20,
+      trainers: 15,
     },
     target: "Scaling academy or multi-program business",
   },
   starter: {
     billing: {
-      monthly: 1999,
-      yearly: 19990,
+      monthly: 1499,
+      yearly: 14990,
     },
-    description: "More room for a growing coaching business.",
+    description: "Paid launch plan for small coaching centers and teams.",
     displayName: "Starter",
     features: {
       ...allFeatures,
+      automations: false,
       branded_portal: false,
+      live_classes: false,
     },
     key: "starter",
     limits: {
-      automations: 10,
-      courses: 20,
-      students: 200,
-      team_members: 10,
-      trainers: 5,
+      automations: 0,
+      courses: 5,
+      students: 100,
+      team_members: 5,
+      trainers: 3,
     },
     target: "Active coach with a small team",
   },
 };
 
-export const planOrder: PlanKey[] = ["free", "starter", "growth", "enterprise"];
+export const planOrder: PlanKey[] = ["starter", "growth", "enterprise"];
 
 export const planResourceLabels: Record<PlanResource, string> = {
   automations: "Automations",
@@ -143,7 +155,7 @@ export const planResourceLabels: Record<PlanResource, string> = {
 };
 
 export function normalizePlanKey(value: unknown): PlanKey {
-  if (value === "enterprise") {
+  if (value === "enterprise" || value === "premium") {
     return "enterprise";
   }
 
