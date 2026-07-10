@@ -61,6 +61,61 @@ import {
 
 type UsageCounts = WorkspaceUsage;
 
+type RazorpayCheckoutInstance = {
+  on?: (event: "payment.failed", handler: (response: unknown) => void) => void;
+  open: () => void;
+};
+
+type RazorpayCheckoutOptions = {
+  amount: number;
+  currency: "INR";
+  description: string;
+  handler: (response: RazorpaySuccessResponse) => void | Promise<void>;
+  key: string;
+  modal?: {
+    ondismiss?: () => void;
+  };
+  name: string;
+  order_id: string;
+};
+
+type RazorpaySuccessResponse = {
+  razorpay_order_id?: string;
+  razorpay_payment_id?: string;
+  razorpay_signature?: string;
+};
+
+type RazorpayOrderResponse = {
+  activationEnabled: false;
+  amount: number;
+  billingCycle: "monthly" | "yearly";
+  currency: "INR";
+  description: string;
+  keyId: string;
+  name: string;
+  orderId: string;
+  planCode: "growth" | "starter";
+  razorpayOrderId: string;
+};
+
+type RazorpayActivationResponse = {
+  activated?: boolean;
+  activationEventId?: string | null;
+  activationEnabled?: boolean;
+  activationStatus?: string;
+  assignmentId?: string | null;
+  idempotent?: boolean;
+  orderId?: string;
+  pending?: boolean;
+  planCode?: string | null;
+  reason?: string;
+  tenantId?: string;
+};
+
+type RazorpayWindow = typeof window & {
+  Razorpay?: new (options: RazorpayCheckoutOptions) => RazorpayCheckoutInstance;
+};
+
 type BillingSummary = {
   accessState: SubscriptionAccessState;
   billingProfile: BillingProfile;
@@ -102,6 +157,22 @@ const emptyUsage: UsageCounts = {
   team_members: 0,
   trainers: 0,
 };
+
+const razorpayCheckoutScriptUrl = "https://checkout.razorpay.com/v1/checkout.js";
+const razorpayRegressionTenantId = "29a33701-82ed-4c7f-8042-0a1af8296ce5";
+const razorpayTestCheckoutPlans: {
+  billingCycle: "monthly" | "yearly";
+  label: string;
+}[] = [
+  {
+    billingCycle: "monthly",
+    label: "Test checkout: Growth Monthly \u20b95,999",
+  },
+  {
+    billingCycle: "yearly",
+    label: "Test checkout: Growth Yearly \u20b959,990",
+  },
+];
 
 function formatPlan(plan: SubscriptionPlan) {
   return getPlanDisplayName(plan);
@@ -559,6 +630,388 @@ function CanonicalFeatureRow({
         {formatCanonicalStatus(feature?.plan_status)}
       </p>
     </div>
+  );
+}
+
+async function getClientAccessToken() {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.auth.getSession();
+
+  if (error || !data.session?.access_token) {
+    throw new Error("Your session expired. Please sign in again.");
+  }
+
+  return data.session.access_token;
+}
+
+async function parseApiJson<T>(response: Response, fallback: string) {
+  const payload = (await response.json().catch(() => ({}))) as {
+    error?: string;
+  };
+
+  if (!response.ok) {
+    throw new Error(payload.error ?? fallback);
+  }
+
+  return payload as T;
+}
+
+let razorpayCheckoutScriptPromise: Promise<void> | null = null;
+
+function loadRazorpayCheckoutScript() {
+  const razorpayWindow = window as RazorpayWindow;
+
+  if (razorpayWindow.Razorpay) {
+    return Promise.resolve();
+  }
+
+  if (razorpayCheckoutScriptPromise) {
+    return razorpayCheckoutScriptPromise;
+  }
+
+  razorpayCheckoutScriptPromise = new Promise((resolve, reject) => {
+    const existingScript = document.querySelector<HTMLScriptElement>(
+      `script[src="${razorpayCheckoutScriptUrl}"]`,
+    );
+
+    if (existingScript) {
+      existingScript.addEventListener("load", () => resolve(), { once: true });
+      existingScript.addEventListener(
+        "error",
+        () => reject(new Error("Unable to load Razorpay checkout.")),
+        { once: true },
+      );
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.async = true;
+    script.src = razorpayCheckoutScriptUrl;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("Unable to load Razorpay checkout."));
+    document.body.appendChild(script);
+  });
+
+  return razorpayCheckoutScriptPromise;
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+function activationComplete(payload: RazorpayActivationResponse) {
+  return (
+    payload.activated === true ||
+    payload.activationStatus === "activated" ||
+    payload.activationStatus === "skipped_already_active"
+  );
+}
+
+function activationMessage(payload: RazorpayActivationResponse) {
+  if (activationComplete(payload)) {
+    return "Verified payment activation is complete. Refresh the page if the subscription summary has not updated yet.";
+  }
+
+  if (payload.pending) {
+    return "Payment is being verified. This may take a few seconds.";
+  }
+
+  if (payload.activationStatus === "failed") {
+    return payload.reason ?? "Verified payment activation failed.";
+  }
+
+  return payload.reason ?? "Still waiting for verified server confirmation.";
+}
+
+function RazorpayTestCheckoutPanel({
+  currentRole,
+  tenantId,
+}: {
+  currentRole: MemberRole | null;
+  tenantId: string | null;
+}) {
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [checkingStatus, setCheckingStatus] = useState(false);
+  const [creatingCycle, setCreatingCycle] = useState<"monthly" | "yearly" | null>(
+    null,
+  );
+  const [lastOrder, setLastOrder] = useState<RazorpayOrderResponse | null>(null);
+  const [lastPaymentSignal, setLastPaymentSignal] =
+    useState<RazorpaySuccessResponse | null>(null);
+
+  const eligible =
+    tenantId === razorpayRegressionTenantId &&
+    (currentRole === "owner" || currentRole === "admin");
+
+  if (!eligible || !tenantId) {
+    return null;
+  }
+
+  const activeTenantId = tenantId;
+
+  async function postJson<T>(
+    url: string,
+    body: Record<string, string>,
+    fallback: string,
+  ) {
+    const token = await getClientAccessToken();
+    const response = await fetch(url, {
+      body: JSON.stringify(body),
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      method: "POST",
+    });
+
+    return parseApiJson<T>(response, fallback);
+  }
+
+  async function postActivationStatus(orderId: string) {
+    const token = await getClientAccessToken();
+    const response = await fetch("/api/billing/razorpay/activate", {
+      body: JSON.stringify({
+        orderId,
+        tenantId: activeTenantId,
+      }),
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      method: "POST",
+    });
+    const payload = (await response.json().catch(() => ({}))) as
+      RazorpayActivationResponse & {
+        error?: string;
+      };
+
+    if (response.ok || payload.pending === true) {
+      return payload;
+    }
+
+    if (typeof payload.activationStatus === "string") {
+      return payload;
+    }
+
+    throw new Error(payload.error ?? "Unable to check activation status.");
+  }
+
+  async function checkActivationStatus(orderId: string, poll = false) {
+    setCheckingStatus(true);
+    setActionError(null);
+
+    try {
+      const maxAttempts = poll ? 8 : 1;
+      let lastResponse: RazorpayActivationResponse | null = null;
+
+      for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        try {
+          lastResponse = await postActivationStatus(orderId);
+        } catch (caught) {
+          if (!poll || attempt === maxAttempts) {
+            throw caught;
+          }
+
+          lastResponse = {
+            pending: true,
+            reason: getErrorMessage(
+              caught,
+              "Payment is being verified. This may take a few seconds.",
+            ),
+          };
+        }
+
+        setActionMessage(activationMessage(lastResponse));
+
+        if (activationComplete(lastResponse) || !lastResponse.pending || !poll) {
+          break;
+        }
+
+        await sleep(3000);
+      }
+
+      if (poll && lastResponse?.pending) {
+        setActionMessage(
+          "Still waiting for webhook confirmation. Please try Check Status again after a minute.",
+        );
+      }
+    } catch (caught) {
+      setActionError(
+        getErrorMessage(caught, "Unable to check activation status."),
+      );
+    } finally {
+      setCheckingStatus(false);
+    }
+  }
+
+  async function handleCheckout(billingCycle: "monthly" | "yearly") {
+    setActionError(null);
+    setActionMessage(null);
+    setCreatingCycle(billingCycle);
+
+    try {
+      const order = await postJson<RazorpayOrderResponse>(
+        "/api/billing/razorpay/orders",
+        {
+          billingCycle,
+          planCode: "growth",
+          tenantId: activeTenantId,
+        },
+        "Unable to create Razorpay test order.",
+      );
+
+      if (order.activationEnabled !== false) {
+        throw new Error("Checkout response failed the activation safety check.");
+      }
+
+      setLastOrder(order);
+      setActionMessage("Opening Razorpay test checkout.");
+      await loadRazorpayCheckoutScript();
+
+      const razorpayWindow = window as RazorpayWindow;
+
+      if (!razorpayWindow.Razorpay) {
+        throw new Error("Razorpay checkout is not available.");
+      }
+
+      const checkout = new razorpayWindow.Razorpay({
+        amount: order.amount,
+        currency: order.currency,
+        description: order.description,
+        handler: async (response) => {
+          setLastPaymentSignal(response);
+          setActionError(null);
+          setActionMessage(
+            "Payment returned from Razorpay. Waiting for verified server confirmation.",
+          );
+          await checkActivationStatus(order.orderId, true);
+        },
+        key: order.keyId,
+        modal: {
+          ondismiss: () => {
+            setActionMessage(
+              "Checkout was closed. No activation was attempted from the browser.",
+            );
+          },
+        },
+        name: order.name,
+        order_id: order.razorpayOrderId,
+      });
+
+      checkout.on?.("payment.failed", () => {
+        setActionMessage(
+          "Razorpay reported a failed payment. No activation was attempted.",
+        );
+      });
+      checkout.open();
+    } catch (caught) {
+      setActionError(
+        getErrorMessage(caught, "Unable to start Razorpay test checkout."),
+      );
+    } finally {
+      setCreatingCycle(null);
+    }
+  }
+
+  return (
+    <Card className="mt-6 border-sky-400/30 bg-sky-400/10 p-6 text-white shadow-2xl shadow-black/10">
+      <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
+        <div>
+          <Badge className="border-sky-300/30 bg-sky-300/10 text-sky-100">
+            Razorpay Test Checkout
+          </Badge>
+          <h3 className="mt-4 text-2xl font-semibold">Razorpay test checkout</h3>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">
+            Test mode only. No live payment is enabled. Activation happens only
+            after verified server-side payment confirmation. Browser success is
+            not activation.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Badge className="border-amber-400/30 bg-amber-400/10 text-amber-100">
+            Regression tenant
+          </Badge>
+          <Badge className="border-white/15 bg-white/10 text-white">
+            Owner/admin only
+          </Badge>
+        </div>
+      </div>
+
+      <div className="mt-6 grid gap-4 md:grid-cols-2">
+        {razorpayTestCheckoutPlans.map((option) => (
+          <div
+            className="rounded-3xl border border-white/10 bg-[#101214] p-5"
+            key={option.billingCycle}
+          >
+            <p className="text-sm font-semibold text-white">
+              Growth {option.billingCycle}
+            </p>
+            <p className="mt-2 text-sm leading-6 text-slate-400">
+              Creates a Razorpay test order only after you click. Premium and
+              public checkout remain unavailable.
+            </p>
+            <Button
+              className="mt-5 w-full"
+              disabled={creatingCycle !== null || checkingStatus}
+              onClick={() => void handleCheckout(option.billingCycle)}
+              type="button"
+              variant="secondary"
+            >
+              {creatingCycle === option.billingCycle
+                ? "Starting test checkout..."
+                : option.label}
+            </Button>
+          </div>
+        ))}
+      </div>
+
+      {lastOrder ? (
+        <div className="mt-6 rounded-3xl border border-white/10 bg-[#101214] p-5">
+          <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
+            <div>
+              <p className="text-sm font-semibold text-white">Payment status</p>
+              <p className="mt-2 text-xs leading-5 text-slate-500">
+                Internal order id:{" "}
+                <span className="break-all font-semibold text-slate-300">
+                  {lastOrder.orderId}
+                </span>
+              </p>
+              <p className="mt-1 text-xs leading-5 text-slate-500">
+                Plan: {formatCanonicalStatus(lastOrder.planCode)} | Billing:{" "}
+                {formatCanonicalStatus(lastOrder.billingCycle)}
+              </p>
+              {lastPaymentSignal?.razorpay_payment_id ? (
+                <p className="mt-1 text-xs leading-5 text-slate-500">
+                  Razorpay payment signal received. Waiting for webhook-backed
+                  verification.
+                </p>
+              ) : null}
+            </div>
+            <Button
+              disabled={checkingStatus}
+              onClick={() => void checkActivationStatus(lastOrder.orderId)}
+              type="button"
+              variant="secondary"
+            >
+              {checkingStatus ? "Checking..." : "Check activation status"}
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
+      {actionMessage ? (
+        <div className="mt-5 rounded-3xl border border-white/10 bg-white/10 p-4 text-sm leading-6 text-slate-100">
+          {actionMessage}
+        </div>
+      ) : null}
+
+      {actionError ? (
+        <div className="mt-5 rounded-3xl border border-red-400/30 bg-red-500/10 p-4 text-sm leading-6 text-red-100">
+          {actionError}
+        </div>
+      ) : null}
+    </Card>
   );
 }
 
@@ -1190,6 +1643,11 @@ export function SubscriptionPageClient() {
       <CanonicalEntitlementSummary
         entitlement={canonicalEntitlementState}
         error={canonicalEntitlementError}
+      />
+
+      <RazorpayTestCheckoutPanel
+        currentRole={currentRole}
+        tenantId={tenant?.id ?? null}
       />
 
       <RequestPlanUpgradePanel
