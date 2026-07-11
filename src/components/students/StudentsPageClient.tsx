@@ -10,6 +10,7 @@ import { Card } from "@/src/components/ui/Card";
 import { EmptyState } from "@/src/components/ui/EmptyState";
 import { FeedbackAlert } from "@/src/components/ui/FeedbackAlert";
 import { FormField } from "@/src/components/ui/FormField";
+import { SectionHeader } from "@/src/components/ui/SectionHeader";
 import { Skeleton } from "@/src/components/ui/Skeleton";
 import { TableShell } from "@/src/components/ui/TableShell";
 import {
@@ -189,19 +190,26 @@ export function StudentsPageClient() {
     }
   }
 
+  const activeStudents = students.filter((student) => student.status === "active")
+    .length;
+  const leadStudents = students.filter((student) => student.status === "lead")
+    .length;
+  const blockedStudents = students.filter((student) => student.status === "blocked")
+    .length;
+
   return (
     <div className="mx-auto max-w-7xl">
       <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
         <div>
           <Badge className="border-white/15 bg-white/10 text-white">
-            Student CRM
+            People workflow
           </Badge>
           <h2 className="mt-5 text-3xl font-semibold tracking-normal text-white sm:text-4xl">
             Students
           </h2>
           <p className="mt-3 max-w-2xl text-base leading-7 text-slate-400">
-            Manage student records, lead sources, contact context, and CRM
-            notes for this workspace.
+            Capture leads, keep active student records clean, and connect people
+            into courses, cohorts, enrollments, and finance workflows.
           </p>
         </div>
         <Button onClick={() => setFormOpen(true)} size="lg" type="button">
@@ -210,17 +218,34 @@ export function StudentsPageClient() {
       </div>
 
       <Card className="mt-8 border-white/10 bg-[#101214] p-5 text-white shadow-2xl shadow-black/10 sm:p-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="grid gap-5 lg:grid-cols-[1.1fr_1.4fr] lg:items-center">
           <div>
-            <p className="text-sm font-medium text-slate-400">
-              Current workspace
-            </p>
+            <p className="text-sm font-medium text-slate-400">Current workspace</p>
             <p className="mt-1 text-xl font-semibold">
               {tenant?.name ?? "Loading workspace..."}
             </p>
+            <p className="mt-3 text-sm leading-6 text-slate-400">
+              People to programs to batches. Start with a clean student record,
+              then enroll them into the right learning workflow.
+            </p>
           </div>
-          <div className="rounded-full border border-white/10 bg-white/10 px-4 py-2 text-sm text-white">
-            {students.length} {students.length === 1 ? "student" : "students"}
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-lg border border-white/10 bg-white/10 p-4">
+              <p className="text-2xl font-semibold">{students.length}</p>
+              <p className="mt-1 text-sm text-slate-400">Total records</p>
+            </div>
+            <div className="rounded-lg border border-emerald-400/20 bg-emerald-400/10 p-4">
+              <p className="text-2xl font-semibold text-emerald-200">
+                {activeStudents}
+              </p>
+              <p className="mt-1 text-sm text-emerald-100/80">Active students</p>
+            </div>
+            <div className="rounded-lg border border-sky-400/20 bg-sky-400/10 p-4">
+              <p className="text-2xl font-semibold text-sky-200">
+                {leadStudents}
+              </p>
+              <p className="mt-1 text-sm text-sky-100/80">Leads to follow up</p>
+            </div>
           </div>
         </div>
       </Card>
@@ -263,47 +288,68 @@ export function StudentsPageClient() {
           title="No students added yet"
         />
       ) : (
-        <TableShell className="mt-6 border-white/10 bg-[#101214] text-white shadow-2xl shadow-black/10">
-          <div className="hidden grid-cols-[1.2fr_1fr_0.8fr_0.7fr_0.8fr_0.7fr] gap-4 border-b border-white/10 px-5 py-4 text-xs font-semibold text-slate-400 lg:grid">
-            <span>Name</span>
-            <span>Email</span>
-            <span>Phone</span>
-            <span>Status</span>
-            <span>Source</span>
-            <span>Created</span>
-          </div>
-          <div className="divide-y divide-white/10">
-            {students.map((student) => (
-              <Link
-                className="grid gap-4 px-5 py-5 transition hover:bg-white/10 lg:grid-cols-[1.2fr_1fr_0.8fr_0.7fr_0.8fr_0.7fr] lg:items-center"
-                href={`/app/students/${student.id}`}
-                key={student.id}
-              >
-                <div>
-                  <p className="font-semibold text-white">
-                    {student.full_name}
-                  </p>
-                  <p className="mt-1 text-sm text-slate-400 lg:hidden">
+        <section className="mt-6">
+          <SectionHeader
+            actions={
+              blockedStudents > 0 ? (
+                <Badge tone="danger">{blockedStudents} blocked</Badge>
+              ) : (
+                <Badge className="border-white/15 bg-white/10 text-white">
+                  Ready for enrollment
+                </Badge>
+              )
+            }
+            className="mb-4"
+            description={
+              <span className="text-slate-400">
+                Review contact readiness, lead source, and status before moving
+                students into courses and cohorts.
+              </span>
+            }
+            title={<span className="text-white">Student directory</span>}
+          />
+          <TableShell className="border-white/10 bg-[#101214] text-white shadow-2xl shadow-black/10">
+            <div className="hidden grid-cols-[1.2fr_1fr_0.8fr_0.7fr_0.8fr_0.7fr] gap-4 border-b border-white/10 px-5 py-4 text-xs font-semibold text-slate-400 lg:grid">
+              <span>Name</span>
+              <span>Email</span>
+              <span>Phone</span>
+              <span>Status</span>
+              <span>Source</span>
+              <span>Created</span>
+            </div>
+            <div className="divide-y divide-white/10">
+              {students.map((student) => (
+                <Link
+                  className="grid gap-4 px-5 py-5 transition hover:bg-white/10 lg:grid-cols-[1.2fr_1fr_0.8fr_0.7fr_0.8fr_0.7fr] lg:items-center"
+                  href={`/app/students/${student.id}`}
+                  key={student.id}
+                >
+                  <div>
+                    <p className="font-semibold text-white">
+                      {student.full_name}
+                    </p>
+                    <p className="mt-1 text-sm text-slate-400 lg:hidden">
+                      {student.email || "No email"}
+                    </p>
+                  </div>
+                  <p className="hidden truncate text-sm text-slate-400 lg:block">
                     {student.email || "No email"}
                   </p>
-                </div>
-                <p className="hidden truncate text-sm text-slate-400 lg:block">
-                  {student.email || "No email"}
-                </p>
-                <p className="text-sm text-slate-400">
-                  {student.phone || "No phone"}
-                </p>
-                <StudentStatusBadge status={student.status} />
-                <p className="text-sm text-slate-400">
-                  {student.source || "Direct"}
-                </p>
-                <p className="text-sm text-slate-400">
-                  {formatDate(student.created_at)}
-                </p>
-              </Link>
-            ))}
-          </div>
-        </TableShell>
+                  <p className="text-sm text-slate-400">
+                    {student.phone || "No phone"}
+                  </p>
+                  <StudentStatusBadge status={student.status} />
+                  <p className="text-sm text-slate-400">
+                    {student.source || "Direct"}
+                  </p>
+                  <p className="text-sm text-slate-400">
+                    {formatDate(student.created_at)}
+                  </p>
+                </Link>
+              ))}
+            </div>
+          </TableShell>
+        </section>
       )}
 
       {formOpen ? (

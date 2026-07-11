@@ -10,6 +10,7 @@ import { Card } from "@/src/components/ui/Card";
 import { EmptyState } from "@/src/components/ui/EmptyState";
 import { FeedbackAlert } from "@/src/components/ui/FeedbackAlert";
 import { FormField } from "@/src/components/ui/FormField";
+import { SectionHeader } from "@/src/components/ui/SectionHeader";
 import { Skeleton } from "@/src/components/ui/Skeleton";
 import {
   createCourse,
@@ -157,20 +158,23 @@ export function CoursesPageClient() {
   }
 
   const canManage = canManageCourses(currentRole);
+  const publishedCourses = courses.filter((course) => course.status === "published")
+    .length;
+  const draftCourses = courses.filter((course) => course.status === "draft").length;
 
   return (
     <div className="mx-auto max-w-7xl">
       <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
         <div>
           <Badge className="border-white/15 bg-white/10 text-white">
-            Course engine
+            Program workflow
           </Badge>
           <h2 className="mt-5 text-3xl font-semibold tracking-normal text-white sm:text-4xl">
             Courses
           </h2>
           <p className="mt-3 max-w-2xl text-base leading-7 text-slate-400">
-            Build and organize premium course products for your current
-            workspace.
+            Shape the learning products your academy sells, teaches, and groups
+            into cohorts for delivery.
           </p>
         </div>
         {canManage ? (
@@ -181,17 +185,34 @@ export function CoursesPageClient() {
       </div>
 
       <Card className="mt-8 border-white/10 bg-[#101214] p-5 text-white shadow-2xl shadow-black/10 sm:p-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="grid gap-5 lg:grid-cols-[1.1fr_1.4fr] lg:items-center">
           <div>
-            <p className="text-sm font-medium text-slate-400">
-              Current workspace
-            </p>
+            <p className="text-sm font-medium text-slate-400">Current workspace</p>
             <p className="mt-1 text-xl font-semibold">
               {tenant?.name ?? "Loading workspace..."}
             </p>
+            <p className="mt-3 text-sm leading-6 text-slate-400">
+              Programs sit between student demand and cohort delivery. Keep
+              drafts clean, then publish when the course is ready to run.
+            </p>
           </div>
-          <div className="rounded-full border border-white/10 bg-[#101214] px-4 py-2 text-sm text-slate-300">
-            {courses.length} {courses.length === 1 ? "course" : "courses"}
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-lg border border-white/10 bg-white/10 p-4">
+              <p className="text-2xl font-semibold">{courses.length}</p>
+              <p className="mt-1 text-sm text-slate-400">Total courses</p>
+            </div>
+            <div className="rounded-lg border border-emerald-400/20 bg-emerald-400/10 p-4">
+              <p className="text-2xl font-semibold text-emerald-200">
+                {publishedCourses}
+              </p>
+              <p className="mt-1 text-sm text-emerald-100/80">Published</p>
+            </div>
+            <div className="rounded-lg border border-amber-400/20 bg-amber-400/10 p-4">
+              <p className="text-2xl font-semibold text-amber-200">
+                {draftCourses}
+              </p>
+              <p className="mt-1 text-sm text-amber-100/80">Drafts</p>
+            </div>
           </div>
         </div>
       </Card>
@@ -232,33 +253,54 @@ export function CoursesPageClient() {
           title="No courses created yet"
         />
       ) : (
-        <section className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {courses.map((course) => (
-            <Link href={`/app/courses/${course.id}`} key={course.id}>
-              <Card className="h-full border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/10 transition hover:-translate-y-1 hover:bg-[#15181b]">
-                <div className="flex h-full min-h-60 flex-col justify-between">
-                  <div>
-                    <div className="flex items-start justify-between gap-4">
-                      <StatusBadge status={course.status} />
-                      <span className="text-xs text-slate-500">
-                        {formatDate(course.created_at)}
-                      </span>
+        <section className="mt-6">
+          <SectionHeader
+            actions={
+              draftCourses > 0 ? (
+                <Badge tone="warning">{draftCourses} drafts</Badge>
+              ) : (
+                <Badge className="border-white/15 bg-white/10 text-white">
+                  Catalog ready
+                </Badge>
+              )
+            }
+            className="mb-4"
+            description={
+              <span className="text-slate-400">
+                Review published programs and drafts before linking them to
+                batches, sessions, assignments, and enrollments.
+              </span>
+            }
+            title={<span className="text-white">Course catalog</span>}
+          />
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {courses.map((course) => (
+              <Link href={`/app/courses/${course.id}`} key={course.id}>
+                <Card className="h-full border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/10 transition hover:-translate-y-1 hover:bg-[#15181b]">
+                  <div className="flex h-full min-h-60 flex-col justify-between">
+                    <div>
+                      <div className="flex items-start justify-between gap-4">
+                        <StatusBadge status={course.status} />
+                        <span className="text-xs text-slate-500">
+                          {formatDate(course.created_at)}
+                        </span>
+                      </div>
+                      <h3 className="mt-6 text-2xl font-semibold leading-tight">
+                        {course.title}
+                      </h3>
+                      <p className="mt-4 line-clamp-3 text-sm leading-6 text-slate-400">
+                        {course.description || "No description added yet."}
+                      </p>
                     </div>
-                    <h3 className="mt-6 text-2xl font-semibold leading-tight">
-                      {course.title}
-                    </h3>
-                    <p className="mt-4 line-clamp-3 text-sm leading-6 text-slate-400">
-                      {course.description || "No description added yet."}
-                    </p>
+                    <div className="mt-8 flex items-center justify-between border-t border-white/10 pt-5 text-sm">
+                      <span className="text-slate-500">/{course.slug}</span>
+                      <span className="font-semibold text-white">Open</span>
+                    </div>
                   </div>
-                  <div className="mt-8 flex items-center justify-between border-t border-white/10 pt-5 text-sm">
-                    <span className="text-slate-500">/{course.slug}</span>
-                    <span className="font-semibold text-white">Open</span>
-                  </div>
-                </div>
-              </Card>
-            </Link>
-          ))}
+                </Card>
+              </Link>
+            ))}
+          </div>
         </section>
       )}
 

@@ -10,6 +10,7 @@ import { Card } from "@/src/components/ui/Card";
 import { EmptyState } from "@/src/components/ui/EmptyState";
 import { FeedbackAlert } from "@/src/components/ui/FeedbackAlert";
 import { FormField } from "@/src/components/ui/FormField";
+import { SectionHeader } from "@/src/components/ui/SectionHeader";
 import { Skeleton } from "@/src/components/ui/Skeleton";
 import { getCoursesForTenant, type Course } from "@/src/lib/courses";
 import {
@@ -87,6 +88,13 @@ export function CohortsPageClient() {
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const canDelete = canDeleteRecords(currentRole);
   const canManageCohorts = canManageCourses(currentRole);
+  const scheduledCohorts = cohorts.filter(
+    (cohort) => cohort.start_date || cohort.end_date,
+  ).length;
+  const totalCohortMembers = cohorts.reduce(
+    (total, cohort) => total + cohort.memberCount,
+    0,
+  );
 
   async function loadCohorts(currentTenant: Tenant) {
     const [tenantCohorts, tenantCourses] = await Promise.all([
@@ -266,14 +274,14 @@ export function CohortsPageClient() {
       <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
         <div>
           <Badge className="border-white/15 bg-white/10 text-white">
-            Batch management
+            Batch workflow
           </Badge>
           <h2 className="mt-5 text-3xl font-semibold tracking-normal text-white sm:text-4xl">
             Cohorts
           </h2>
           <p className="mt-3 max-w-2xl text-base leading-7 text-slate-400">
-            Group students into course batches with clear dates, linked course
-            context, and member visibility.
+            Turn courses into teachable batches with dates, linked course
+            context, and clear student membership.
           </p>
         </div>
         {canManageCohorts ? (
@@ -284,17 +292,34 @@ export function CohortsPageClient() {
       </div>
 
       <Card className="mt-8 border-white/10 bg-[#101214] p-5 text-white shadow-2xl shadow-black/10 sm:p-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="grid gap-5 lg:grid-cols-[1.1fr_1.4fr] lg:items-center">
           <div>
-            <p className="text-sm font-medium text-slate-400">
-              Current workspace
-            </p>
+            <p className="text-sm font-medium text-slate-400">Current workspace</p>
             <p className="mt-1 text-xl font-semibold">
               {tenant?.name ?? "Loading workspace..."}
             </p>
+            <p className="mt-3 text-sm leading-6 text-slate-400">
+              Batches connect a course to a delivery window and student group.
+              Create courses first, then organize cohorts around them.
+            </p>
           </div>
-          <div className="rounded-full border border-teal-400/30 bg-teal-400/10 px-4 py-2 text-sm font-semibold text-teal-300">
-            {cohorts.length} {cohorts.length === 1 ? "cohort" : "cohorts"}
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-lg border border-white/10 bg-white/10 p-4">
+              <p className="text-2xl font-semibold">{cohorts.length}</p>
+              <p className="mt-1 text-sm text-slate-400">Total cohorts</p>
+            </div>
+            <div className="rounded-lg border border-teal-400/20 bg-teal-400/10 p-4">
+              <p className="text-2xl font-semibold text-teal-200">
+                {totalCohortMembers}
+              </p>
+              <p className="mt-1 text-sm text-teal-100/80">Members grouped</p>
+            </div>
+            <div className="rounded-lg border border-sky-400/20 bg-sky-400/10 p-4">
+              <p className="text-2xl font-semibold text-sky-200">
+                {scheduledCohorts}
+              </p>
+              <p className="mt-1 text-sm text-sky-100/80">With dates</p>
+            </div>
           </div>
         </div>
       </Card>
@@ -310,6 +335,15 @@ export function CohortsPageClient() {
       {success ? (
         <div className="mt-6">
           <FeedbackAlert tone="success">{success}</FeedbackAlert>
+        </div>
+      ) : null}
+
+      {!loading && courses.length === 0 ? (
+        <div className="mt-6">
+          <FeedbackAlert tone="warning">
+            Create a course before creating a cohort. Cohorts must stay linked
+            to a course so students can be grouped into a clear program.
+          </FeedbackAlert>
         </div>
       ) : null}
 
@@ -345,70 +379,87 @@ export function CohortsPageClient() {
           title="No cohorts created yet"
         />
       ) : (
-        <section className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {cohorts.map((cohort) => (
-            <Card
-              className="flex min-h-72 flex-col justify-between border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/10 transition hover:bg-[#15181b]"
-              key={cohort.id}
-            >
-              <div>
-                <div className="flex items-start justify-between gap-4">
-                  <Badge className="border-teal-400/30 bg-teal-400/10 text-teal-300">
-                    {cohort.memberCount}{" "}
-                    {cohort.memberCount === 1 ? "student" : "students"}
-                  </Badge>
-                  <span className="text-xs text-slate-500">
-                    {formatDate(cohort.created_at)}
-                  </span>
+        <section className="mt-6">
+          <SectionHeader
+            actions={
+              <Badge className="border-white/15 bg-white/10 text-white">
+                {courses.length} linked {courses.length === 1 ? "course" : "courses"}
+              </Badge>
+            }
+            className="mb-4"
+            description={
+              <span className="text-slate-400">
+                Keep batches connected to courses, delivery dates, and student
+                groups so owner operations stay easy to scan.
+              </span>
+            }
+            title={<span className="text-white">Batch board</span>}
+          />
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {cohorts.map((cohort) => (
+              <Card
+                className="flex min-h-72 flex-col justify-between border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/10 transition hover:bg-[#15181b]"
+                key={cohort.id}
+              >
+                <div>
+                  <div className="flex items-start justify-between gap-4">
+                    <Badge className="border-teal-400/30 bg-teal-400/10 text-teal-300">
+                      {cohort.memberCount}{" "}
+                      {cohort.memberCount === 1 ? "student" : "students"}
+                    </Badge>
+                    <span className="text-xs text-slate-500">
+                      {formatDate(cohort.created_at)}
+                    </span>
+                  </div>
+                  <h3 className="mt-6 text-2xl font-semibold leading-tight">
+                    {cohort.name}
+                  </h3>
+                  <p className="mt-3 text-sm font-medium text-teal-300">
+                    {cohort.course?.title ?? "Course unavailable"}
+                  </p>
+                  <p className="mt-4 line-clamp-3 text-sm leading-6 text-slate-400">
+                    {cohort.description || "No description added yet."}
+                  </p>
                 </div>
-                <h3 className="mt-6 text-2xl font-semibold leading-tight">
-                  {cohort.name}
-                </h3>
-                <p className="mt-3 text-sm font-medium text-teal-300">
-                  {cohort.course?.title ?? "Course unavailable"}
-                </p>
-                <p className="mt-4 line-clamp-3 text-sm leading-6 text-slate-400">
-                  {cohort.description || "No description added yet."}
-                </p>
-              </div>
-              <div className="mt-8 border-t border-white/10 pt-5">
-                <p className="text-sm text-slate-400">
-                  {formatDate(cohort.start_date)} - {formatDate(cohort.end_date)}
-                </p>
-                <div className="mt-5 flex flex-wrap gap-2">
-                  <Link
-                    className="inline-flex h-10 items-center justify-center rounded-full bg-teal-400 px-4 text-sm font-semibold text-black transition hover:bg-teal-300"
-                    href={`/app/cohorts/${cohort.id}`}
-                  >
-                    Open
-                  </Link>
-                  {canManageCohorts ? (
-                    <Button
-                      className="border-white/10"
-                      onClick={() => openEditForm(cohort)}
-                      size="sm"
-                      type="button"
-                      variant="secondary"
+                <div className="mt-8 border-t border-white/10 pt-5">
+                  <p className="text-sm text-slate-400">
+                    {formatDate(cohort.start_date)} - {formatDate(cohort.end_date)}
+                  </p>
+                  <div className="mt-5 flex flex-wrap gap-2">
+                    <Link
+                      className="inline-flex h-10 items-center justify-center rounded-full bg-teal-400 px-4 text-sm font-semibold text-black transition hover:bg-teal-300"
+                      href={`/app/cohorts/${cohort.id}`}
                     >
-                      Edit
-                    </Button>
-                  ) : null}
-                  {canDelete ? (
-                    <Button
-                      className="text-red-300! hover:bg-red-500/10! hover:text-red-200!"
-                      disabled={saving}
-                      onClick={() => handleDelete(cohort)}
-                      size="sm"
-                      type="button"
-                      variant="ghost"
-                    >
-                      Delete
-                    </Button>
-                  ) : null}
+                      Open
+                    </Link>
+                    {canManageCohorts ? (
+                      <Button
+                        className="border-white/10"
+                        onClick={() => openEditForm(cohort)}
+                        size="sm"
+                        type="button"
+                        variant="secondary"
+                      >
+                        Edit
+                      </Button>
+                    ) : null}
+                    {canDelete ? (
+                      <Button
+                        className="text-red-300! hover:bg-red-500/10! hover:text-red-200!"
+                        disabled={saving}
+                        onClick={() => handleDelete(cohort)}
+                        size="sm"
+                        type="button"
+                        variant="ghost"
+                      >
+                        Delete
+                      </Button>
+                    ) : null}
+                  </div>
                 </div>
-              </div>
-            </Card>
-          ))}
+              </Card>
+            ))}
+          </div>
         </section>
       )}
 
