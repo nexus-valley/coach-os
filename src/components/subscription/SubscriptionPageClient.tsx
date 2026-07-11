@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 
@@ -926,6 +927,17 @@ function RazorpayTestCheckoutPanel({
             Test mode only. No live payment is enabled. Activation happens only
             after verified server-side payment confirmation. Browser success is
             not activation.
+          </p>
+          <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-400">
+            Test payments follow the draft beta payment policy. Refund and
+            cancellation terms are covered there while public checkout remains
+            unavailable.{" "}
+            <Link
+              className="font-semibold text-sky-200 underline-offset-4 transition hover:text-white hover:underline"
+              href="/payment-policy"
+            >
+              View payment policy
+            </Link>
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -2011,6 +2023,18 @@ export function SubscriptionPageClient() {
             <p className="mt-2 text-sm text-slate-400">
               Compare available plan limits. Plan changes are handled by the
               platform owner while gateway billing is not connected.
+            </p>
+            <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-500">
+              Payment and checkout policies are being prepared for beta launch.
+              Prices may be subject to applicable taxes, and paid plan
+              activation happens only after verified server-side payment
+              confirmation.{" "}
+              <Link
+                className="font-semibold text-sky-300 underline-offset-4 transition hover:text-white hover:underline"
+                href="/payment-policy"
+              >
+                Review the draft payment policy
+              </Link>
             </p>
           </div>
           <p className="rounded-full border border-white/10 bg-white/10 px-4 py-2 text-sm text-slate-300">
