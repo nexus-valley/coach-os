@@ -1,4 +1,7 @@
+import Link from "next/link";
+
 import { Button } from "@/src/components/ui/Button";
+import { Badge } from "@/src/components/ui/Badge";
 import { Card } from "@/src/components/ui/Card";
 import { SectionHeader } from "@/src/components/ui/SectionHeader";
 import { StatCard } from "@/src/components/ui/StatCard";
@@ -13,6 +16,10 @@ function formatCurrency(value: number) {
   }).format(value);
 }
 
+function formatPercent(value: number | null) {
+  return value === null ? "N/A" : `${value}%`;
+}
+
 export function OwnerDashboard({
   metrics,
   tenant,
@@ -20,32 +27,249 @@ export function OwnerDashboard({
   metrics: DashboardMetrics;
   tenant: Tenant | null;
 }) {
+  const attentionItems = [
+    {
+      description: "Pending payments need owner review.",
+      href: "/app/finance",
+      label: "Pending payments",
+      tone: "warning" as const,
+      value: metrics.pendingPayments,
+    },
+    {
+      description: "Homework submissions are waiting for review.",
+      href: "/app/assignments",
+      label: "Assignment reviews",
+      tone: "warning" as const,
+      value: metrics.assignments.pendingReviews,
+    },
+    {
+      description: "Published assignments are past due.",
+      href: "/app/assignments",
+      label: "Overdue assignments",
+      tone: "danger" as const,
+      value: metrics.assignments.overdueAssignments,
+    },
+    {
+      description: "Marked absences may need academic follow-up.",
+      href: "/app/sessions",
+      label: "Attendance alerts",
+      tone: "warning" as const,
+      value: metrics.attendance.lowAttendanceAlerts,
+    },
+    {
+      description: "Unread workspace conversations need a response.",
+      href: "/app/messages",
+      label: "Unread conversations",
+      tone: "info" as const,
+      value: metrics.conversations.unreadThreads,
+    },
+    {
+      description: "Automation runs failed and should be checked.",
+      href: "/app/automations",
+      label: "Automation failures",
+      tone: "danger" as const,
+      value: metrics.failedAutomationRuns,
+    },
+    {
+      description: "Due reminders can unblock follow-ups.",
+      href: "/app/reminders",
+      label: "Reminders due",
+      tone: "warning" as const,
+      value: metrics.pendingRemindersDue,
+    },
+    {
+      description: "Temporary permission exceptions are active.",
+      href: "/app/permissions",
+      label: "Extra permissions",
+      tone: "info" as const,
+      value: metrics.delegatedPermissions,
+    },
+  ].filter((item) => item.value > 0);
+
+  const quickActions = [
+    {
+      description: "Add or review student records.",
+      href: "/app/students",
+      label: "Manage students",
+    },
+    {
+      description: "Update published and draft courses.",
+      href: "/app/courses",
+      label: "Review courses",
+    },
+    {
+      description: "Check fee plans, invoices, and payment status.",
+      href: "/app/finance",
+      label: "Open finance",
+    },
+    {
+      description: "Review academy documents and uploads.",
+      href: "/app/documents",
+      label: "Manage documents",
+    },
+    {
+      description: "Review plan, usage, and billing readiness.",
+      href: "/app/subscription",
+      label: "Subscription health",
+    },
+    {
+      description: "Review staff operations and team metadata.",
+      href: "/app/team-operations",
+      label: "Team operations",
+    },
+  ];
+
   return (
     <Card className="mb-8 mt-8 border-[#D8E8F0] bg-white p-6 shadow-sm shadow-[#0B2A3D]/5">
       <div className="grid gap-6 lg:grid-cols-[1fr_auto] lg:items-center">
         <SectionHeader
-          description="Revenue, usage, security, automation health, and operating signals for workspace ownership."
+          description="A focused operating view for revenue, learning delivery, student growth, risk signals, and the next owner actions."
           eyebrow="Owner Dashboard"
           title={`Executive view for ${tenant?.name ?? "this workspace"}`}
         />
         <div className="flex flex-wrap gap-3">
-          <Button href="/app/operations" size="sm" variant="secondary">
-            Operations
+          <Button href="/app/students" size="sm" variant="secondary">
+            Students
+          </Button>
+          <Button href="/app/finance" size="sm" variant="secondary">
+            Finance
           </Button>
           <Button href="/app/subscription" size="sm" variant="secondary">
             Subscription
           </Button>
-          <Button href="/app/permissions" size="sm" variant="secondary">
-            Permissions
-          </Button>
         </div>
       </div>
+
       <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Revenue" value={formatCurrency(metrics.totalRevenue)} />
-        <StatCard label="Students" value={metrics.totalStudents} />
-        <StatCard label="Automation Failures" value={metrics.failedAutomationRuns} />
-        <StatCard label="Extra Permissions" value={metrics.delegatedPermissions} />
+        <StatCard
+          description="Completed payment revenue recorded in the workspace."
+          label="Revenue"
+          value={formatCurrency(metrics.totalRevenue)}
+        />
+        <StatCard
+          description={`${metrics.totalEnrollments.toLocaleString()} enrollments across active learning programs.`}
+          label="Students"
+          value={metrics.totalStudents.toLocaleString()}
+        />
+        <StatCard
+          description="Published courses, or drafts if none are published."
+          label="Courses"
+          value={metrics.activeCourses.toLocaleString()}
+        />
+        <StatCard
+          description="Pending payment records that may need follow-up."
+          label="Payments due"
+          status={
+            metrics.pendingPayments > 0 ? (
+              <Badge tone="warning">Review</Badge>
+            ) : (
+              <Badge tone="success">Clear</Badge>
+            )
+          }
+          value={metrics.pendingPayments.toLocaleString()}
+        />
       </div>
+
+      <div className="mt-6 grid gap-5 xl:grid-cols-[1.05fr_0.95fr]">
+        <Card className="border-[#D8E8F0] bg-[#F7FCFF] p-5 shadow-none">
+          <SectionHeader
+            actions={
+              attentionItems.length > 0 ? (
+                <Badge tone="warning">{attentionItems.length} signals</Badge>
+              ) : (
+                <Badge tone="success">Clear</Badge>
+              )
+            }
+            description="The strongest owner-facing signals already available from workspace activity."
+            title="Attention needed"
+          />
+
+          {attentionItems.length > 0 ? (
+            <div className="mt-5 grid gap-3">
+              {attentionItems.slice(0, 5).map((item) => (
+                <Link
+                  className="group rounded-lg border border-[#D8E8F0] bg-white p-4 transition hover:-translate-y-0.5 hover:border-[#2ECBEA]/60 hover:shadow-sm hover:shadow-[#0B2A3D]/8"
+                  href={item.href}
+                  key={item.label}
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="font-semibold text-[#0B1F33]">{item.label}</p>
+                      <p className="mt-1 text-sm leading-6 text-[#5D7185]">
+                        {item.description}
+                      </p>
+                    </div>
+                    <Badge tone={item.tone}>{item.value}</Badge>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <div className="mt-5 rounded-lg border border-[#D8E8F0] bg-white p-5">
+              <Badge tone="success">No urgent owner signals</Badge>
+              <p className="mt-3 text-sm leading-6 text-[#5D7185]">
+                Payments, reviews, attendance alerts, reminders, conversations,
+                permissions, and automation failures are clear based on the
+                current dashboard data.
+              </p>
+            </div>
+          )}
+        </Card>
+
+        <Card className="border-[#D8E8F0] bg-white p-5 shadow-sm shadow-[#0B2A3D]/5">
+          <SectionHeader
+            description="A compact view of business and delivery momentum."
+            title="Business and learning health"
+          />
+          <div className="mt-5 grid gap-3 sm:grid-cols-2">
+            <div className="rounded-lg border border-[#D8E8F0] bg-[#F7FCFF] p-4">
+              <p className="text-2xl font-semibold text-[#0B1F33]">
+                {metrics.paymentStatusSummary.completed.toLocaleString()}
+              </p>
+              <p className="mt-1 text-sm text-[#5D7185]">Completed payments</p>
+            </div>
+            <div className="rounded-lg border border-[#D8E8F0] bg-[#F7FCFF] p-4">
+              <p className="text-2xl font-semibold text-[#0B1F33]">
+                {formatPercent(metrics.attendance.attendancePercent)}
+              </p>
+              <p className="mt-1 text-sm text-[#5D7185]">Attendance rate</p>
+            </div>
+            <div className="rounded-lg border border-[#D8E8F0] bg-[#F7FCFF] p-4">
+              <p className="text-2xl font-semibold text-[#0B1F33]">
+                {metrics.assignments.totalAssignments.toLocaleString()}
+              </p>
+              <p className="mt-1 text-sm text-[#5D7185]">Assignments tracked</p>
+            </div>
+            <div className="rounded-lg border border-[#D8E8F0] bg-[#F7FCFF] p-4">
+              <p className="text-2xl font-semibold text-[#0B1F33]">
+                {metrics.activeAutomations.toLocaleString()}
+              </p>
+              <p className="mt-1 text-sm text-[#5D7185]">Active automations</p>
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      <Card className="mt-6 border-[#D8E8F0] bg-white p-5 shadow-sm shadow-[#0B2A3D]/5">
+        <SectionHeader
+          description="Common owner actions, grouped so the dashboard points to the next workspace task."
+          title="What to do next"
+        />
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {quickActions.map((action) => (
+            <Link
+              className="rounded-lg border border-[#D8E8F0] bg-[#F7FCFF] p-4 transition hover:-translate-y-0.5 hover:border-[#2ECBEA]/60 hover:bg-white hover:shadow-sm hover:shadow-[#0B2A3D]/8"
+              href={action.href}
+              key={action.href}
+            >
+              <p className="font-semibold text-[#0B1F33]">{action.label}</p>
+              <p className="mt-1 text-sm leading-6 text-[#5D7185]">
+                {action.description}
+              </p>
+            </Link>
+          ))}
+        </div>
+      </Card>
     </Card>
   );
 }
