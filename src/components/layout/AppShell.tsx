@@ -63,6 +63,58 @@ const navItems = [
   { href: "/app/settings", label: "Settings" },
 ];
 
+const navGroups = [
+  {
+    label: "Overview",
+    items: ["Dashboard", "Assistant", "Notifications", "Activity", "Reports"],
+  },
+  {
+    label: "Learning",
+    items: [
+      "Courses",
+      "Cohorts",
+      "Sessions",
+      "Assignments",
+      "Enrollments",
+      "Documents",
+      "Portal",
+    ],
+  },
+  {
+    label: "People",
+    items: ["Students", "Messages", "CRM", "Team Operations"],
+  },
+  {
+    label: "Operations",
+    items: [
+      "Operations",
+      "Mobile Readiness",
+      "Reminders",
+      "Automations",
+      "Workflows",
+      "Approvals",
+      "Marketing",
+    ],
+  },
+  {
+    label: "Finance",
+    items: ["Finance", "Subscription"],
+  },
+  {
+    label: "Platform",
+    items: [
+      "Permissions",
+      "Compliance",
+      "Backup & Recovery",
+      "Public Site",
+      "Features",
+      "Settings",
+    ],
+  },
+];
+
+const mobilePrimaryLabels = ["Dashboard", "Students", "Courses", "Finance"];
+
 function NavIcon({ label }: { label: string }) {
   const commonProps = {
     className: "h-4 w-4",
@@ -209,6 +261,13 @@ function NavIcon({ label }: { label: string }) {
         <path d="M19 6a8 8 0 0 1 0 12" />
       </>
     ),
+    More: (
+      <>
+        <circle cx="5" cy="12" r="1.5" />
+        <circle cx="12" cy="12" r="1.5" />
+        <circle cx="19" cy="12" r="1.5" />
+      </>
+    ),
     "Mobile Readiness": (
       <>
         <rect height="18" rx="3" width="12" x="6" y="3" />
@@ -336,6 +395,50 @@ function NavIcon({ label }: { label: string }) {
   return <svg {...commonProps}>{paths[label] ?? paths.Dashboard}</svg>;
 }
 
+function getGroupedNavItems(items: typeof navItems) {
+  const usedLabels = new Set<string>();
+  const groups = navGroups
+    .map((group) => {
+      const groupItems = group.items
+        .map((label) => items.find((item) => item.label === label))
+        .filter((item): item is (typeof navItems)[number] => Boolean(item));
+
+      groupItems.forEach((item) => usedLabels.add(item.label));
+
+      return {
+        ...group,
+        items: groupItems,
+      };
+    })
+    .filter((group) => group.items.length > 0);
+  const ungroupedItems = items.filter((item) => !usedLabels.has(item.label));
+
+  if (ungroupedItems.length > 0) {
+    groups.push({
+      label: "More",
+      items: ungroupedItems,
+    });
+  }
+
+  return groups;
+}
+
+function getMobilePrimaryNavItems(items: typeof navItems) {
+  const primaryItems = mobilePrimaryLabels
+    .map((label) => items.find((item) => item.label === label))
+    .filter((item): item is (typeof navItems)[number] => Boolean(item));
+  const targetCount = Math.min(4, items.length);
+
+  if (primaryItems.length >= targetCount) {
+    return primaryItems.slice(0, targetCount);
+  }
+
+  const primaryLabels = new Set(primaryItems.map((item) => item.label));
+  const fallbackItems = items.filter((item) => !primaryLabels.has(item.label));
+
+  return [...primaryItems, ...fallbackItems].slice(0, targetCount);
+}
+
 export function AppShell({ activeItem = "Dashboard", children }: AppShellProps) {
   const [brandColor, setBrandColor] = useState(defaultTenantBrandColor);
   const [currentRole, setCurrentRole] = useState<MemberRole | null>(null);
@@ -344,6 +447,7 @@ export function AppShell({ activeItem = "Dashboard", children }: AppShellProps) 
   );
   const [routeAccessLoaded, setRouteAccessLoaded] = useState(false);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
   const [workspaceName, setWorkspaceName] = useState("CoachFort");
 
   useEffect(() => {
@@ -411,6 +515,17 @@ export function AppShell({ activeItem = "Dashboard", children }: AppShellProps) 
       isFeatureEnabled(featureAccess, featureKey)
     );
   });
+  const groupedNavItems = getGroupedNavItems(visibleNavItems);
+  const mobilePrimaryNavItems = getMobilePrimaryNavItems(visibleNavItems);
+  const mobilePrimaryLabelsSet = new Set(
+    mobilePrimaryNavItems.map((item) => item.label),
+  );
+  const mobileOverflowNavItems = visibleNavItems.filter(
+    (item) => !mobilePrimaryLabelsSet.has(item.label),
+  );
+  const mobileOverflowActive = mobileOverflowNavItems.some(
+    (item) => item.label === activeItem,
+  );
   const activeFeatureKey = navFeatureByLabel[activeItem];
   const activeFeatureStatus = activeFeatureKey
     ? featureAccess?.[activeFeatureKey]?.status
@@ -475,75 +590,93 @@ export function AppShell({ activeItem = "Dashboard", children }: AppShellProps) 
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top_right,rgba(46,203,234,0.2),transparent_32rem),linear-gradient(135deg,rgba(243,250,253,0.95),rgba(255,255,255,0.72))]" />
 
       <div className="relative flex h-screen overflow-hidden">
-        <aside className="coachos-sidebar hidden h-screen w-72 shrink-0 overflow-y-auto border-r border-[#2ECBEA]/20 bg-[linear-gradient(180deg,#0B2A3D_0%,#145DA0_100%)] px-4 py-5 text-white shadow-2xl shadow-[#0B2A3D]/20 lg:block">
-          <Link className="flex items-center gap-3 px-2" href="/app">
+        <aside className="coachos-sidebar hidden h-screen w-72 shrink-0 overflow-y-auto border-r border-[#2ECBEA]/15 bg-[#0B2A3D] px-4 py-5 text-white shadow-lg shadow-[#0B2A3D]/10 lg:block">
+          <Link
+            className="flex items-center gap-3 rounded-xl px-2 py-2 transition hover:bg-white/5"
+            href="/app"
+          >
             {logoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 alt={`${workspaceName} logo`}
-                className="h-14 w-14 rounded-2xl object-cover"
+                className="h-12 w-12 rounded-xl object-cover"
                 src={logoUrl}
               />
             ) : (
-              <CoachFortBrandAsset className="h-14 w-14" variant="appIcon" />
+              <CoachFortBrandAsset className="h-12 w-12" variant="appIcon" />
             )}
-            <div>
-              <p className="text-base font-semibold">CoachFort</p>
-              <p className="text-xs text-cyan-100/80">by Nexus Valley</p>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-white">
+                {workspaceName}
+              </p>
+              <p className="text-xs text-cyan-100/70">CoachFort workspace</p>
             </div>
           </Link>
+          <div className="mt-4 rounded-xl border border-white/10 bg-white/5 px-3 py-2">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-cyan-100/55">
+              Navigation
+            </p>
+            <p className="mt-1 text-xs text-cyan-50/70">
+              Modules are grouped by daily workflow.
+            </p>
+          </div>
 
-          <nav className="mt-10 space-y-1">
-            {visibleNavItems.map((item) => {
-              const active = item.label === activeItem;
-              const className = [
-                "flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-medium transition",
-                active
-                  ? "text-[#0B2A3D] shadow-lg shadow-cyan-950/20"
-                  : "text-cyan-50/75 hover:bg-white/10 hover:text-white",
-              ].join(" ");
-              const activeStyle = active
-                ? ({ backgroundColor: "#EAF7FC" } satisfies CSSProperties)
-                : undefined;
-              const content = (
-                <>
-                  <span
-                    className={[
-                      "flex h-8 w-8 items-center justify-center rounded-xl text-[10px] font-bold",
+          <nav aria-label="Workspace navigation" className="mt-6 space-y-6 pb-6">
+            {groupedNavItems.map((group) => (
+              <div key={group.label}>
+                <p className="px-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-100/45">
+                  {group.label}
+                </p>
+                <div className="mt-2 space-y-1">
+                  {group.items.map((item) => {
+                    const active = item.label === activeItem;
+                    const className = [
+                      "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition",
                       active
-                        ? "bg-[#0B2A3D] text-[#2ECBEA]"
-                        : "bg-white/10 text-cyan-50/80",
-                    ].join(" ")}
-                  >
-                    <NavIcon label={item.label} />
-                  </span>
-                  {item.label}
-                </>
-              );
+                        ? "text-[#0B2A3D] shadow-sm shadow-cyan-950/15"
+                        : "text-cyan-50/74 hover:bg-white/8 hover:text-white",
+                    ].join(" ");
+                    const activeStyle = active
+                      ? ({ backgroundColor: "#EAF7FC" } satisfies CSSProperties)
+                      : undefined;
 
-              return (
-                <Link
-                  className={className}
-                  href={item.href}
-                  key={item.label}
-                  style={activeStyle}
-                >
-                  {content}
-                </Link>
-              );
-            })}
+                    return (
+                      <Link
+                        aria-current={active ? "page" : undefined}
+                        className={className}
+                        href={item.href}
+                        key={item.label}
+                        style={activeStyle}
+                      >
+                        <span
+                          className={[
+                            "flex h-8 w-8 items-center justify-center rounded-lg text-[10px] font-bold",
+                            active
+                              ? "bg-[#0B2A3D] text-[#2ECBEA]"
+                              : "bg-white/8 text-cyan-50/75",
+                          ].join(" ")}
+                        >
+                          <NavIcon label={item.label} />
+                        </span>
+                        <span className="truncate">{item.label}</span>
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
           </nav>
         </aside>
 
         <div className="flex h-screen min-w-0 flex-1 flex-col overflow-y-auto pb-24 lg:pb-0">
-          <header className="sticky top-0 z-20 border-b border-[#D8E8F0] bg-white/80 text-[#0B2A3D] shadow-sm shadow-[#0B2A3D]/5 backdrop-blur-xl">
-            <div className="flex h-20 items-center justify-between px-5 sm:px-6 lg:px-8">
+          <header className="sticky top-0 z-20 border-b border-[#D8E8F0] bg-white/90 text-[#0B2A3D] shadow-sm shadow-[#0B2A3D]/5 backdrop-blur-xl">
+            <div className="flex h-18 min-h-18 items-center justify-between px-5 py-3 sm:px-6 lg:px-8">
               <div className="flex items-center gap-3">
                 {logoUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
                     alt={`${workspaceName} logo`}
-                    className="h-10 w-10 rounded-2xl object-cover lg:hidden"
+                    className="h-10 w-10 rounded-xl object-cover lg:hidden"
                     src={logoUrl}
                   />
                 ) : (
@@ -554,7 +687,7 @@ export function AppShell({ activeItem = "Dashboard", children }: AppShellProps) 
                 )}
                 <div>
                   <p className="text-xs font-semibold text-[#5D7185]">
-                    powered by CoachFort
+                    Workspace
                   </p>
                   <h1 className="mt-1 max-w-[14rem] truncate text-xl font-semibold text-[#0B2A3D] sm:max-w-[22rem]">
                     {workspaceName}
@@ -564,7 +697,7 @@ export function AppShell({ activeItem = "Dashboard", children }: AppShellProps) 
               <div className="flex items-center gap-3">
                 <NotificationBell />
                 <div
-                  className="hidden items-center gap-3 rounded-full border border-[#9ADDEA] bg-[#EAF8FC] px-4 py-2 text-sm font-semibold text-[#0B2A3D] shadow-sm shadow-[#0B2A3D]/5 sm:flex"
+                  className="hidden items-center gap-3 rounded-lg border border-[#9ADDEA] bg-[#EAF8FC] px-3 py-2 text-sm font-semibold text-[#0B2A3D] shadow-sm shadow-[#0B2A3D]/5 sm:flex"
                 >
                   <span className="h-2 w-2 rounded-full bg-[#14B8C6]" />
                   Workspace ready
@@ -578,9 +711,80 @@ export function AppShell({ activeItem = "Dashboard", children }: AppShellProps) 
           </main>
         </div>
 
-        <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-[#D8E8F0] bg-white/95 px-3 py-3 shadow-2xl shadow-[#0B2A3D]/10 backdrop-blur-xl lg:hidden">
-          <div className="grid grid-cols-5 gap-1">
-            {visibleNavItems.slice(0, 5).map((item) => {
+        {mobileMoreOpen ? (
+          <div className="fixed inset-0 z-30 bg-[#0B1F33]/30 backdrop-blur-[2px] lg:hidden">
+            <button
+              aria-label="Close navigation menu"
+              className="absolute inset-0 h-full w-full cursor-default"
+              onClick={() => setMobileMoreOpen(false)}
+              type="button"
+            />
+            <section
+              aria-label="More workspace navigation"
+              className="absolute inset-x-3 bottom-24 max-h-[68vh] overflow-hidden rounded-xl border border-[#D8E8F0] bg-white text-[#0B2A3D] shadow-2xl shadow-[#0B2A3D]/20"
+              id="mobile-more-navigation"
+            >
+              <div className="flex items-center justify-between border-b border-[#D8E8F0] px-4 py-3">
+                <div>
+                  <p className="text-sm font-semibold">More modules</p>
+                  <p className="text-xs text-[#66788F]">
+                    Available for your current role and workspace.
+                  </p>
+                </div>
+                <button
+                  className="rounded-lg border border-[#D8E8F0] px-3 py-2 text-xs font-semibold text-[#425B76] transition hover:bg-[#F3FAFD] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2ECBEA]"
+                  onClick={() => setMobileMoreOpen(false)}
+                  type="button"
+                >
+                  Close
+                </button>
+              </div>
+              <div className="max-h-[52vh] overflow-y-auto p-3">
+                <div className="grid gap-2">
+                  {mobileOverflowNavItems.map((item) => {
+                    const active = item.label === activeItem;
+
+                    return (
+                      <Link
+                        aria-current={active ? "page" : undefined}
+                        className={[
+                          "flex items-center gap-3 rounded-lg border px-3 py-3 text-sm font-semibold transition",
+                          active
+                            ? "border-[#9ADDEA] bg-[#EAF8FC] text-[#0B2A3D]"
+                            : "border-transparent text-[#425B76] hover:border-[#D8E8F0] hover:bg-[#F6FBFE] hover:text-[#0B2A3D]",
+                        ].join(" ")}
+                        href={item.href}
+                        key={item.label}
+                        onClick={() => setMobileMoreOpen(false)}
+                      >
+                        <span
+                          className={[
+                            "flex h-9 w-9 items-center justify-center rounded-lg",
+                            active
+                              ? "bg-[#0B2A3D] text-[#2ECBEA]"
+                              : "bg-[#EAF7FC] text-[#145DA0]",
+                          ].join(" ")}
+                        >
+                          <NavIcon label={item.label} />
+                        </span>
+                        <span>{item.label}</span>
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+            </section>
+          </div>
+        ) : null}
+
+        <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-[#D8E8F0] bg-white/95 px-3 py-3 shadow-2xl shadow-[#0B2A3D]/10 backdrop-blur-xl lg:hidden">
+          <div
+            className={[
+              "grid gap-1",
+              mobileOverflowNavItems.length > 0 ? "grid-cols-5" : "grid-cols-4",
+            ].join(" ")}
+          >
+            {mobilePrimaryNavItems.map((item) => {
               const active = item.label === activeItem;
               const activeStyle = active
                 ? ({ backgroundColor: "#EAF7FC" } satisfies CSSProperties)
@@ -588,8 +792,9 @@ export function AppShell({ activeItem = "Dashboard", children }: AppShellProps) 
 
               return (
                 <Link
+                  aria-current={active ? "page" : undefined}
                   className={[
-                    "flex flex-col items-center justify-center gap-1 rounded-2xl px-2 py-2 text-[11px] font-medium",
+                    "flex flex-col items-center justify-center gap-1 rounded-xl px-2 py-2 text-[11px] font-medium",
                     active
                       ? "text-[#06202A] shadow-lg shadow-[#145DA0]/20"
                       : "text-[#5D7185] hover:bg-[#EAF7FC] hover:text-[#0B2A3D]",
@@ -605,6 +810,25 @@ export function AppShell({ activeItem = "Dashboard", children }: AppShellProps) 
                 </Link>
               );
             })}
+            {mobileOverflowNavItems.length > 0 ? (
+              <button
+                aria-controls="mobile-more-navigation"
+                aria-expanded={mobileMoreOpen}
+                className={[
+                  "flex flex-col items-center justify-center gap-1 rounded-xl px-2 py-2 text-[11px] font-medium transition",
+                  mobileMoreOpen || mobileOverflowActive
+                    ? "bg-[#EAF7FC] text-[#06202A] shadow-lg shadow-[#145DA0]/20"
+                    : "text-[#5D7185] hover:bg-[#EAF7FC] hover:text-[#0B2A3D]",
+                ].join(" ")}
+                onClick={() => setMobileMoreOpen((open) => !open)}
+                type="button"
+              >
+                <span className="text-[10px] font-bold">
+                  <NavIcon label="More" />
+                </span>
+                <span>More</span>
+              </button>
+            ) : null}
           </div>
         </nav>
       </div>
