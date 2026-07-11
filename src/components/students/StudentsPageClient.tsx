@@ -9,6 +9,9 @@ import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
 import { EmptyState } from "@/src/components/ui/EmptyState";
 import { FeedbackAlert } from "@/src/components/ui/FeedbackAlert";
+import { FormField } from "@/src/components/ui/FormField";
+import { Skeleton } from "@/src/components/ui/Skeleton";
+import { TableShell } from "@/src/components/ui/TableShell";
 import {
   createStudent,
   getStudentsForTenant,
@@ -243,10 +246,12 @@ export function StudentsPageClient() {
         <section className="mt-6 grid gap-4">
           {[0, 1, 2].map((item) => (
             <Card
-              className="h-24 animate-pulse border-white/10 bg-[#101214]"
+              className="border-white/10 bg-[#101214] p-5"
               key={item}
             >
               <span className="sr-only">Loading student</span>
+              <Skeleton className="h-5 w-44 bg-white/10" />
+              <Skeleton className="mt-4 h-4 w-full max-w-md bg-white/10" />
             </Card>
           ))}
         </section>
@@ -258,7 +263,7 @@ export function StudentsPageClient() {
           title="No students added yet"
         />
       ) : (
-        <Card className="mt-6 overflow-hidden border-white/10 bg-[#101214] text-white shadow-2xl shadow-black/10">
+        <TableShell className="mt-6 border-white/10 bg-[#101214] text-white shadow-2xl shadow-black/10">
           <div className="hidden grid-cols-[1.2fr_1fr_0.8fr_0.7fr_0.8fr_0.7fr] gap-4 border-b border-white/10 px-5 py-4 text-xs font-semibold text-slate-400 lg:grid">
             <span>Name</span>
             <span>Email</span>
@@ -298,7 +303,7 @@ export function StudentsPageClient() {
               </Link>
             ))}
           </div>
-        </Card>
+        </TableShell>
       )}
 
       {formOpen ? (
@@ -356,9 +361,15 @@ export function StudentFormFields({
 }) {
   return (
     <>
-      <label className="block">
-        <span className="text-sm font-medium text-slate-300">Full name</span>
+      <FormField
+        error={errors.fullName}
+        htmlFor="student-full-name"
+        label="Full name"
+        required
+        tone="dark"
+      >
         <input
+          id="student-full-name"
           className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition placeholder:text-slate-400 focus:border-teal-400/40 focus:bg-white/15 focus:ring-4 focus:ring-teal-400/10"
           onChange={(event) =>
             setForm((current) => ({ ...current, fullName: event.target.value }))
@@ -368,15 +379,17 @@ export function StudentFormFields({
           type="text"
           value={form.fullName}
         />
-        {errors.fullName ? (
-          <p className="mt-2 text-xs text-red-300">{errors.fullName}</p>
-        ) : null}
-      </label>
+      </FormField>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <label className="block">
-          <span className="text-sm font-medium text-slate-300">Email</span>
+        <FormField
+          error={errors.email}
+          htmlFor="student-email"
+          label="Email"
+          tone="dark"
+        >
           <input
+            id="student-email"
             className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition placeholder:text-slate-400 focus:border-teal-400/40 focus:bg-white/15 focus:ring-4 focus:ring-teal-400/10"
             onChange={(event) =>
               setForm((current) => ({ ...current, email: event.target.value }))
@@ -385,13 +398,10 @@ export function StudentFormFields({
             type="email"
             value={form.email}
           />
-          {errors.email ? (
-            <p className="mt-2 text-xs text-red-300">{errors.email}</p>
-          ) : null}
-        </label>
-        <label className="block">
-          <span className="text-sm font-medium text-slate-300">Phone</span>
+        </FormField>
+        <FormField htmlFor="student-phone" label="Phone" tone="dark">
           <input
+            id="student-phone"
             className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition placeholder:text-slate-400 focus:border-teal-400/40 focus:bg-white/15 focus:ring-4 focus:ring-teal-400/10"
             onChange={(event) =>
               setForm((current) => ({ ...current, phone: event.target.value }))
@@ -400,13 +410,13 @@ export function StudentFormFields({
             type="tel"
             value={form.phone}
           />
-        </label>
+        </FormField>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <label className="block">
-          <span className="text-sm font-medium text-slate-300">Status</span>
+        <FormField htmlFor="student-status" label="Status" tone="dark">
           <select
+            id="student-status"
             className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition focus:border-teal-400/40 focus:bg-white/15 focus:ring-4 focus:ring-teal-400/10"
             onChange={(event) =>
               setForm((current) => ({
@@ -422,10 +432,10 @@ export function StudentFormFields({
               </option>
             ))}
           </select>
-        </label>
-        <label className="block">
-          <span className="text-sm font-medium text-slate-300">Source</span>
+        </FormField>
+        <FormField htmlFor="student-source" label="Source" tone="dark">
           <input
+            id="student-source"
             className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition placeholder:text-slate-400 focus:border-teal-400/40 focus:bg-white/15 focus:ring-4 focus:ring-teal-400/10"
             onChange={(event) =>
               setForm((current) => ({ ...current, source: event.target.value }))
@@ -434,12 +444,12 @@ export function StudentFormFields({
             type="text"
             value={form.source}
           />
-        </label>
+        </FormField>
       </div>
 
-      <label className="block">
-        <span className="text-sm font-medium text-slate-300">Notes</span>
+      <FormField htmlFor="student-notes" label="Notes" tone="dark">
         <textarea
+          id="student-notes"
           className="mt-2 min-h-28 w-full resize-none rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm leading-6 text-white outline-none transition placeholder:text-slate-400 focus:border-teal-400/40 focus:bg-white/15 focus:ring-4 focus:ring-teal-400/10"
           onChange={(event) =>
             setForm((current) => ({ ...current, notes: event.target.value }))
@@ -447,7 +457,7 @@ export function StudentFormFields({
           placeholder="Add CRM context, goals, or support notes."
           value={form.notes}
         />
-      </label>
+      </FormField>
     </>
   );
 }

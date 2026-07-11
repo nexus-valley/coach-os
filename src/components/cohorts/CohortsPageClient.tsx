@@ -9,6 +9,8 @@ import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
 import { EmptyState } from "@/src/components/ui/EmptyState";
 import { FeedbackAlert } from "@/src/components/ui/FeedbackAlert";
+import { FormField } from "@/src/components/ui/FormField";
+import { Skeleton } from "@/src/components/ui/Skeleton";
 import { getCoursesForTenant, type Course } from "@/src/lib/courses";
 import {
   createCohort,
@@ -315,10 +317,15 @@ export function CohortsPageClient() {
         <section className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {[0, 1, 2].map((item) => (
             <Card
-              className="h-64 animate-pulse border-white/10 bg-[#101214]"
+              className="border-white/10 bg-[#101214] p-6"
               key={item}
             >
               <span className="sr-only">Loading cohort</span>
+              <Skeleton className="h-6 w-28 bg-white/10" />
+              <Skeleton className="mt-8 h-8 w-3/4 bg-white/10" />
+              <Skeleton className="mt-5 h-4 w-2/3 bg-white/10" />
+              <Skeleton className="mt-4 h-4 w-full bg-white/10" />
+              <Skeleton className="mt-10 h-10 w-full bg-white/10" />
             </Card>
           ))}
         </section>
@@ -427,11 +434,14 @@ export function CohortsPageClient() {
             </div>
 
             <form className="mt-7 space-y-5" onSubmit={handleSubmit}>
-              <label className="block">
-                <span className="text-sm font-medium text-slate-300">
-                  Cohort name
-                </span>
+              <FormField
+                htmlFor="cohort-name"
+                label="Cohort name"
+                required
+                tone="dark"
+              >
                 <input
+                  id="cohort-name"
                   className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition placeholder:text-slate-400 focus:border-teal-400/40 focus:bg-white/15 focus:ring-4 focus:ring-teal-400/10"
                   onChange={(event) =>
                     setForm((current) => ({
@@ -444,13 +454,16 @@ export function CohortsPageClient() {
                   type="text"
                   value={form.name}
                 />
-              </label>
+              </FormField>
 
-              <label className="block">
-                <span className="text-sm font-medium text-slate-300">
-                  Linked course
-                </span>
+              <FormField
+                htmlFor="cohort-course"
+                label="Linked course"
+                required
+                tone="dark"
+              >
                 <select
+                  id="cohort-course"
                   className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition focus:border-teal-400/40 focus:bg-white/15 focus:ring-4 focus:ring-teal-400/10"
                   onChange={(event) =>
                     setForm((current) => ({
@@ -474,14 +487,16 @@ export function CohortsPageClient() {
                     </option>
                   ))}
                 </select>
-              </label>
+              </FormField>
 
               <div className="grid gap-4 sm:grid-cols-2">
-                <label className="block">
-                  <span className="text-sm font-medium text-slate-300">
-                    Start date
-                  </span>
+                <FormField
+                  htmlFor="cohort-start-date"
+                  label="Start date"
+                  tone="dark"
+                >
                   <input
+                    id="cohort-start-date"
                     className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition focus:border-teal-400/40 focus:bg-white/15 focus:ring-4 focus:ring-teal-400/10"
                     onChange={(event) =>
                       setForm((current) => ({
@@ -492,12 +507,14 @@ export function CohortsPageClient() {
                     type="date"
                     value={form.startDate}
                   />
-                </label>
-                <label className="block">
-                  <span className="text-sm font-medium text-slate-300">
-                    End date
-                  </span>
+                </FormField>
+                <FormField
+                  htmlFor="cohort-end-date"
+                  label="End date"
+                  tone="dark"
+                >
                   <input
+                    id="cohort-end-date"
                     className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition focus:border-teal-400/40 focus:bg-white/15 focus:ring-4 focus:ring-teal-400/10"
                     onChange={(event) =>
                       setForm((current) => ({
@@ -508,14 +525,16 @@ export function CohortsPageClient() {
                     type="date"
                     value={form.endDate}
                   />
-                </label>
+                </FormField>
               </div>
 
-              <label className="block">
-                <span className="text-sm font-medium text-slate-300">
-                  Description
-                </span>
+              <FormField
+                htmlFor="cohort-description"
+                label="Description"
+                tone="dark"
+              >
                 <textarea
+                  id="cohort-description"
                   className="mt-2 min-h-28 w-full resize-none rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm leading-6 text-white outline-none transition placeholder:text-slate-400 focus:border-teal-400/40 focus:bg-white/15 focus:ring-4 focus:ring-teal-400/10"
                   onChange={(event) =>
                     setForm((current) => ({
@@ -526,12 +545,12 @@ export function CohortsPageClient() {
                   placeholder="Audience, delivery cadence, or batch notes."
                   value={form.description}
                 />
-              </label>
+              </FormField>
 
               {courses.length === 0 ? (
-                <p className="rounded-2xl border border-amber-400/30 bg-amber-400/10 p-4 text-sm leading-6 text-amber-300">
+                <FeedbackAlert className="border-amber-400/30 bg-amber-400/10 text-amber-300" tone="warning">
                   Create a course before creating a cohort.
-                </p>
+                </FeedbackAlert>
               ) : null}
 
               <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end">

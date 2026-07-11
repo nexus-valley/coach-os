@@ -8,6 +8,7 @@ type FormFieldProps = {
   htmlFor?: string;
   label: ReactNode;
   required?: boolean;
+  tone?: "dark" | "light";
 };
 
 export function FormField({
@@ -18,22 +19,36 @@ export function FormField({
   htmlFor,
   label,
   required = false,
+  tone = "light",
 }: FormFieldProps) {
+  const labelClass =
+    tone === "dark"
+      ? "block text-sm font-medium text-slate-300"
+      : "block text-sm font-semibold text-[#0B2A3D]";
+  const descriptionClass =
+    tone === "dark"
+      ? "text-xs leading-5 text-slate-400"
+      : "text-xs leading-5 text-[#66788F]";
+  const errorClass =
+    tone === "dark"
+      ? "text-xs font-medium leading-5 text-red-300"
+      : "text-xs font-medium leading-5 text-[#B91C1C]";
+
   return (
     <div className={["space-y-2", className].filter(Boolean).join(" ")}>
       <label
-        className="block text-sm font-semibold text-[#0B2A3D]"
+        className={labelClass}
         htmlFor={htmlFor}
       >
         {label}
         {required ? <span className="ml-1 text-[#B91C1C]">*</span> : null}
       </label>
       {description ? (
-        <p className="text-xs leading-5 text-[#66788F]">{description}</p>
+        <p className={descriptionClass}>{description}</p>
       ) : null}
       {children}
       {error ? (
-        <p className="text-xs font-medium leading-5 text-[#B91C1C]">{error}</p>
+        <p className={errorClass}>{error}</p>
       ) : null}
     </div>
   );

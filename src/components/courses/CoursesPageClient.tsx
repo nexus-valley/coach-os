@@ -9,6 +9,8 @@ import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
 import { EmptyState } from "@/src/components/ui/EmptyState";
 import { FeedbackAlert } from "@/src/components/ui/FeedbackAlert";
+import { FormField } from "@/src/components/ui/FormField";
+import { Skeleton } from "@/src/components/ui/Skeleton";
 import {
   createCourse,
   getCoursesForTenant,
@@ -206,10 +208,15 @@ export function CoursesPageClient() {
         <section className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {[0, 1, 2].map((item) => (
             <Card
-              className="h-60 animate-pulse border-white/10 bg-[#101214]"
+              className="border-white/10 bg-[#101214] p-6"
               key={item}
             >
               <span className="sr-only">Loading course</span>
+              <Skeleton className="h-6 w-24 bg-white/10" />
+              <Skeleton className="mt-8 h-8 w-3/4 bg-white/10" />
+              <Skeleton className="mt-5 h-4 w-full bg-white/10" />
+              <Skeleton className="mt-3 h-4 w-5/6 bg-white/10" />
+              <Skeleton className="mt-10 h-10 w-full bg-white/10" />
             </Card>
           ))}
         </section>
@@ -275,11 +282,15 @@ export function CoursesPageClient() {
             </div>
 
             <form className="mt-7 space-y-5" onSubmit={handleCreateCourse}>
-              <label className="block">
-                <span className="text-sm font-medium text-slate-300">
-                  Course title
-                </span>
+              <FormField
+                error={formError}
+                htmlFor="course-title"
+                label="Course title"
+                required
+                tone="dark"
+              >
                 <input
+                  id="course-title"
                   className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition placeholder:text-slate-400 focus:border-teal-400/40 focus:bg-white/15 focus:ring-4 focus:ring-teal-400/10"
                   onChange={(event) => setTitle(event.target.value)}
                   placeholder="Signature coaching program"
@@ -287,25 +298,23 @@ export function CoursesPageClient() {
                   type="text"
                   value={title}
                 />
-                {formError ? (
-                  <p className="mt-2 text-xs text-red-300">{formError}</p>
-                ) : null}
-              </label>
+              </FormField>
 
-              <label className="block">
-                <span className="text-sm font-medium text-slate-300">
-                  Description
-                </span>
+              <FormField
+                htmlFor="course-description"
+                label="Description"
+                tone="dark"
+              >
                 <textarea
+                  id="course-description"
                   className="mt-2 min-h-32 w-full resize-none rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm leading-6 text-white outline-none transition placeholder:text-slate-400 focus:border-teal-400/40 focus:bg-white/15 focus:ring-4 focus:ring-teal-400/10"
                   onChange={(event) => setDescription(event.target.value)}
                   placeholder="Describe the promise, audience, and outcome."
                   value={description}
                 />
-              </label>
+              </FormField>
 
-              <div>
-                <p className="text-sm font-medium text-slate-300">Status</p>
+              <FormField label="Status" tone="dark">
                 <div className="mt-2 grid grid-cols-2 gap-2 rounded-2xl border border-white/10 bg-white/10 p-1">
                   {(["draft", "published"] as const).map((item) => (
                     <button
@@ -323,7 +332,7 @@ export function CoursesPageClient() {
                     </button>
                   ))}
                 </div>
-              </div>
+              </FormField>
 
               <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end">
                 <Button
