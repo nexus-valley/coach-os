@@ -8,6 +8,8 @@ import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
 import { EmptyState } from "@/src/components/ui/EmptyState";
 import { FeedbackAlert } from "@/src/components/ui/FeedbackAlert";
+import { PageHeader } from "@/src/components/ui/PageHeader";
+import { StatCard } from "@/src/components/ui/StatCard";
 import {
   applyFinanceAdjustment,
   cancelFinancePayment,
@@ -383,23 +385,16 @@ export function FinanceCenterPage() {
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 text-[#0B2A3D]">
-      <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
-        <div>
-          <Badge className="border-white/15 bg-white/10 text-white">
-            Tenant finance
-          </Badge>
-          <h1 className="mt-5 text-3xl font-semibold tracking-normal text-white sm:text-4xl">
-            Finance Center
-          </h1>
-          <p className="mt-3 max-w-3xl text-sm leading-6 text-cyan-50/80">
-            Manage institute fee plans, invoices, dues, manual payments,
-            receipts, discounts, and finance activity for this tenant only.
-          </p>
-        </div>
-        <Button disabled={saving} onClick={loadFinance} type="button" variant="secondary">
-          Refresh
-        </Button>
-      </div>
+      <PageHeader
+        actions={
+          <Button disabled={saving} onClick={loadFinance} type="button" variant="secondary">
+            Refresh
+          </Button>
+        }
+        description="Manage institute fee plans, invoices, dues, manual payments, receipts, discounts, and finance activity for this tenant only."
+        eyebrow="Tenant finance"
+        title="Finance Center"
+      />
 
       <FeedbackAlert tone="warning">
         Online payment gateway is not enabled yet. Payments are manually
@@ -423,12 +418,11 @@ export function FinanceCenterPage() {
           ["Outstanding", dashboard?.total_outstanding ?? 0],
           ["Overdue", dashboard?.overdue_amount ?? 0],
         ].map(([label, value]) => (
-          <Card className="p-5" key={label}>
-            <p className="text-xs font-semibold uppercase text-[#66788F]">{label}</p>
-            <p className="mt-3 text-2xl font-semibold">
-              {formatFinanceCurrency(Number(value))}
-            </p>
-          </Card>
+          <StatCard
+            key={label}
+            label={label}
+            value={formatFinanceCurrency(Number(value))}
+          />
         ))}
       </div>
 

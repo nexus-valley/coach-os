@@ -1,6 +1,7 @@
-import { Badge } from "@/src/components/ui/Badge";
 import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
+import { SectionHeader } from "@/src/components/ui/SectionHeader";
+import { StatCard } from "@/src/components/ui/StatCard";
 import type { DashboardMetrics } from "@/src/lib/dashboard";
 import type { Tenant } from "@/src/lib/tenant";
 
@@ -20,18 +21,13 @@ export function OwnerDashboard({
   tenant: Tenant | null;
 }) {
   return (
-    <Card className="mb-8 border-[#D8E8F0] bg-white p-6">
+    <Card className="mb-8 mt-8 border-[#D8E8F0] bg-white p-6 shadow-sm shadow-[#0B2A3D]/5">
       <div className="grid gap-6 lg:grid-cols-[1fr_auto] lg:items-center">
-        <div>
-          <Badge tone="admin">Owner Dashboard</Badge>
-          <h2 className="mt-4 text-2xl font-semibold">
-            Executive view for {tenant?.name ?? "this workspace"}
-          </h2>
-          <p className="mt-2 text-sm leading-6 text-[#425B76]">
-            Revenue, usage, security, automation health, and operating signals
-            for workspace ownership.
-          </p>
-        </div>
+        <SectionHeader
+          description="Revenue, usage, security, automation health, and operating signals for workspace ownership."
+          eyebrow="Owner Dashboard"
+          title={`Executive view for ${tenant?.name ?? "this workspace"}`}
+        />
         <div className="flex flex-wrap gap-3">
           <Button href="/app/operations" size="sm" variant="secondary">
             Operations
@@ -45,28 +41,10 @@ export function OwnerDashboard({
         </div>
       </div>
       <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-2xl bg-[#F6FBFE] p-4">
-          <p className="text-sm text-[#425B76]">Revenue</p>
-          <p className="mt-2 text-2xl font-semibold">
-            {formatCurrency(metrics.totalRevenue)}
-          </p>
-        </div>
-        <div className="rounded-2xl bg-[#F6FBFE] p-4">
-          <p className="text-sm text-[#425B76]">Students</p>
-          <p className="mt-2 text-2xl font-semibold">{metrics.totalStudents}</p>
-        </div>
-        <div className="rounded-2xl bg-[#F6FBFE] p-4">
-          <p className="text-sm text-[#425B76]">Automation Failures</p>
-          <p className="mt-2 text-2xl font-semibold">
-            {metrics.failedAutomationRuns}
-          </p>
-        </div>
-        <div className="rounded-2xl bg-[#F6FBFE] p-4">
-          <p className="text-sm text-[#425B76]">Extra Permissions</p>
-          <p className="mt-2 text-2xl font-semibold">
-            {metrics.delegatedPermissions}
-          </p>
-        </div>
+        <StatCard label="Revenue" value={formatCurrency(metrics.totalRevenue)} />
+        <StatCard label="Students" value={metrics.totalStudents} />
+        <StatCard label="Automation Failures" value={metrics.failedAutomationRuns} />
+        <StatCard label="Extra Permissions" value={metrics.delegatedPermissions} />
       </div>
     </Card>
   );

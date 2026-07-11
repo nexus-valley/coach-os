@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Badge } from "@/src/components/ui/Badge";
 import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
+import { PageHeader } from "@/src/components/ui/PageHeader";
 import { AccessDeniedCard } from "@/src/components/security/AccessDeniedCard";
 import {
   getBillingSummary,
@@ -1619,21 +1620,12 @@ export function SubscriptionPageClient() {
 
   return (
     <div className="mx-auto max-w-7xl">
-      <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
-        <div>
-          <Badge className="border-white/15 bg-white/10 text-white">
-            Subscription
-          </Badge>
-          <h2 className="mt-5 text-3xl font-semibold tracking-normal text-white sm:text-4xl">
-            Plans & limits
-          </h2>
-          <p className="mt-3 max-w-2xl text-base leading-7 text-slate-400">
-            Track workspace usage against the current SaaS plan. Payment gateway
-            billing is intentionally not connected in this foundation module.
-          </p>
-        </div>
-        <StatusBadge status={subscription.subscription_status} />
-      </div>
+      <PageHeader
+        actions={<StatusBadge status={subscription.subscription_status} />}
+        description="Track workspace usage against the current SaaS plan. Payment gateway billing is intentionally not connected in this foundation module."
+        eyebrow="Subscription"
+        title="Plans & limits"
+      />
 
       <Card className="mt-6 border-teal-400/30 bg-teal-400/10 p-5 text-teal-50">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">

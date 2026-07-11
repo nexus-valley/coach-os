@@ -7,6 +7,9 @@ import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
 import { EmptyState } from "@/src/components/ui/EmptyState";
 import { FeedbackAlert } from "@/src/components/ui/FeedbackAlert";
+import { PageHeader } from "@/src/components/ui/PageHeader";
+import { Skeleton } from "@/src/components/ui/Skeleton";
+import { StatCard } from "@/src/components/ui/StatCard";
 import type { CohortWithCourse } from "@/src/lib/cohorts";
 import { getCohortsForTenant } from "@/src/lib/cohorts";
 import type { Course } from "@/src/lib/courses";
@@ -493,11 +496,13 @@ export function DocumentCenterPage() {
   if (loading) {
     return (
       <div className="space-y-4">
-        <div className="h-9 w-64 animate-pulse rounded-lg bg-[#D8E8F0]" />
+        <Skeleton className="h-9 w-64" />
         <div className="grid gap-4 md:grid-cols-4">
           {[0, 1, 2, 3].map((item) => (
-            <Card className="h-28 animate-pulse bg-white p-5" key={item}>
+            <Card className="h-28 bg-white p-5" key={item}>
               <span className="sr-only">Loading document summary</span>
+              <Skeleton className="h-5 w-24" />
+              <Skeleton className="mt-5 h-8 w-16" />
             </Card>
           ))}
         </div>
@@ -508,13 +513,11 @@ export function DocumentCenterPage() {
   if (!canManage) {
     return (
       <Card className="p-8">
-        <Badge tone="danger">Restricted</Badge>
-        <h1 className="mt-4 text-3xl font-semibold">Documents</h1>
-        <p className="mt-3 max-w-2xl text-sm leading-6 text-[#5D7185]">
-          The Document Center is restricted to owners and admins in this
-          foundation module. Student-facing documents are available through the
-          student portal only when explicitly marked visible.
-        </p>
+        <PageHeader
+          eyebrow="Restricted"
+          title="Documents"
+          description="The Document Center is restricted to owners and admins in this foundation module. Student-facing documents are available through the student portal only when explicitly marked visible."
+        />
       </Card>
     );
   }
@@ -523,22 +526,16 @@ export function DocumentCenterPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
-        <div>
-          <Badge tone="light">Metadata-only foundation</Badge>
-          <h1 className="mt-3 text-3xl font-semibold tracking-normal">
-            Document Center
-          </h1>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-[#5D7185]">
-            Manage document metadata, private files, linked entities, and
-            role-based visibility. Uploaded files are stored in private storage
-            and opened through short-lived signed URLs after authorization.
-          </p>
-        </div>
-        <Button onClick={() => resetForm()} type="button">
-          New document
-        </Button>
-      </div>
+      <PageHeader
+        actions={
+          <Button onClick={() => resetForm()} type="button">
+            New document
+          </Button>
+        }
+        description="Manage document metadata, private files, linked entities, and role-based visibility. Uploaded files are stored in private storage and opened through short-lived signed URLs after authorization."
+        eyebrow="Metadata-only foundation"
+        title="Document Center"
+      />
 
       {actionError ? <FeedbackAlert tone="error">{actionError}</FeedbackAlert> : null}
       {success ? <FeedbackAlert tone="success">{success}</FeedbackAlert> : null}
@@ -554,12 +551,7 @@ export function DocumentCenterPage() {
           ["Metadata-only", summary?.metadata_only_documents ?? 0],
           ["Archived", summary?.archived_documents ?? 0],
         ].map(([label, value]) => (
-          <Card className="p-5" key={label}>
-            <p className="text-xs font-semibold uppercase text-[#66788F]">
-              {label}
-            </p>
-            <p className="mt-3 text-2xl font-semibold">{value}</p>
-          </Card>
+          <StatCard key={label} label={label} value={value} />
         ))}
       </div>
 

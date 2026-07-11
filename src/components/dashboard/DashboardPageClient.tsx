@@ -7,6 +7,10 @@ import { Badge } from "@/src/components/ui/Badge";
 import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
 import { FeedbackAlert } from "@/src/components/ui/FeedbackAlert";
+import { PageHeader } from "@/src/components/ui/PageHeader";
+import { SectionHeader } from "@/src/components/ui/SectionHeader";
+import { Skeleton } from "@/src/components/ui/Skeleton";
+import { StatCard } from "@/src/components/ui/StatCard";
 import { AdminDashboard } from "@/src/components/dashboard/AdminDashboard";
 import { OwnerDashboard } from "@/src/components/dashboard/OwnerDashboard";
 import { StaffDashboard } from "@/src/components/dashboard/StaffDashboard";
@@ -59,29 +63,6 @@ function formatDate(value: string) {
 
 function getErrorMessage(caught: unknown, fallback: string) {
   return caught instanceof Error ? caught.message : fallback;
-}
-
-function MetricCard({
-  detail,
-  label,
-  value,
-}: {
-  detail: string;
-  label: string;
-  value: string;
-}) {
-  return (
-    <Card className="border-[#D8E8F0] bg-white p-6 text-[#0B1F33] shadow-2xl shadow-[#0B2A3D]/10">
-      <div className="flex items-start justify-between gap-4">
-        <p className="text-sm font-medium text-[#425B76]">{label}</p>
-        <span className="h-2.5 w-2.5 rounded-full bg-[#14B8C6] shadow-lg shadow-[#14B8C6]/30" />
-      </div>
-      <p className="mt-4 text-4xl font-semibold tracking-normal text-[#0B1F33]">
-        {value}
-      </p>
-      <p className="mt-3 text-sm text-[#66788F]">{detail}</p>
-    </Card>
-  );
 }
 
 function UsageMiniCard({
@@ -290,8 +271,16 @@ export function DashboardPageClient() {
   if (loading) {
     return (
       <div className="mx-auto max-w-7xl">
-        <Card className="h-72 animate-pulse border-[#D8E8F0] bg-white">
+        <Card className="border-[#D8E8F0] bg-white p-6">
           <span className="sr-only">Loading dashboard</span>
+          <Skeleton className="h-7 w-40" />
+          <Skeleton className="mt-5 h-10 w-full max-w-md" />
+          <Skeleton className="mt-4 h-5 w-full max-w-2xl" />
+          <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            {[0, 1, 2, 3].map((item) => (
+              <Skeleton className="h-28" key={item} />
+            ))}
+          </div>
         </Card>
       </div>
     );
@@ -371,23 +360,16 @@ export function DashboardPageClient() {
 
   return (
     <div className="mx-auto max-w-7xl">
-      <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
-        <div>
-          <Badge className="border-[#14B8C6]/30 bg-[#14B8C6]/10 text-[#0E7490]">
-            Dashboard analytics
-          </Badge>
-          <h2 className="mt-5 text-3xl font-semibold tracking-normal text-[#0B1F33] sm:text-4xl">
-            Dashboard
-          </h2>
-          <p className="mt-3 max-w-2xl text-base leading-7 text-[#425B76]">
-            Real-time workspace analytics for students, courses, enrollments,
-            and payments.
-          </p>
-        </div>
-        <div className="rounded-full border border-[#14B8C6]/30 bg-[#14B8C6]/10 px-4 py-2 text-sm font-medium text-[#0E7490]">
-          Workspace: {tenant?.name ?? "Current workspace"}
-        </div>
-      </div>
+      <PageHeader
+        actions={
+          <div className="rounded-full border border-[#14B8C6]/30 bg-[#14B8C6]/10 px-4 py-2 text-sm font-medium text-[#0E7490]">
+            Workspace: {tenant?.name ?? "Current workspace"}
+          </div>
+        }
+        description="Real-time workspace analytics for students, courses, enrollments, payments, and operational health."
+        eyebrow="Dashboard analytics"
+        title="Dashboard"
+      />
 
       {currentRole === "owner" ? (
         <OwnerDashboard metrics={metrics} tenant={tenant} />
@@ -399,18 +381,13 @@ export function DashboardPageClient() {
         <TrainerDashboard metrics={metrics} />
       ) : null}
 
-      <Card className="mt-8 border-[#D8E8F0] bg-white p-6 text-[#0B1F33] shadow-2xl shadow-[#0B2A3D]/10">
+      <Card className="mt-8 border-[#D8E8F0] bg-white p-6 text-[#0B1F33] shadow-sm shadow-[#0B2A3D]/5">
         <div className="grid gap-5 lg:grid-cols-[1fr_auto] lg:items-center">
-          <div>
-            <Badge className="border-[#D8E8F0] bg-[#F6FBFE] text-[#425B76]">
-              Workspace overview
-            </Badge>
-            <h3 className="mt-4 text-xl font-semibold">Manage core records</h3>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-[#425B76]">
-              Review live workspace data through the hardened module flows for
-              students, courses, finance, reports, and operations.
-            </p>
-          </div>
+          <SectionHeader
+            description="Review live workspace data through the hardened module flows for students, courses, finance, reports, and operations."
+            eyebrow="Workspace overview"
+            title="Manage core records"
+          />
           <div className="flex flex-col gap-3 sm:flex-row lg:justify-end">
             <Button href="/app/students" type="button" variant="secondary">
               View Students
@@ -446,21 +423,13 @@ export function DashboardPageClient() {
       ) : null}
 
       {canViewUsage && usage ? (
-        <Card className="mt-8 border-[#D8E8F0] bg-white p-6 text-[#0B1F33] shadow-2xl shadow-[#0B2A3D]/10">
+        <Card className="mt-8 border-[#D8E8F0] bg-white p-6 text-[#0B1F33] shadow-sm shadow-[#0B2A3D]/5">
           <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
-            <div>
-              <Badge className="border-[#9ADDEA] bg-[#EAF8FC] text-[#0B6F87]">
-                Workspace usage
-              </Badge>
-              <h3 className="mt-4 text-xl font-semibold">
-                {getPlanDisplayName(plan)} plan limits
-              </h3>
-              <p className="mt-2 max-w-3xl text-sm leading-6 text-[#425B76]">
-                Usage is refreshed from tenant-scoped counts and cached for
-                billing readiness. Upgrade prompts are available to owner/admin
-                users when limits are reached.
-              </p>
-            </div>
+            <SectionHeader
+              description="Usage is refreshed from tenant-scoped counts and cached for billing readiness. Upgrade prompts are available to owner/admin users when limits are reached."
+              eyebrow="Workspace usage"
+              title={`${getPlanDisplayName(plan)} plan limits`}
+            />
             <div className="rounded-2xl border border-[#D8E8F0] bg-[#F6FBFE] px-4 py-3 text-sm font-semibold text-[#425B76]">
               {trialStatus?.active
                 ? `Trial: ${trialStatus.daysRemaining} days left`
@@ -852,11 +821,14 @@ export function DashboardPageClient() {
 
       <section className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
         {metricCards.map((metric) => (
-          <MetricCard
-            detail={metric.detail}
+          <StatCard
+            description={metric.detail}
             key={metric.label}
             label={metric.label}
             value={metric.value}
+            status={
+              <span className="h-2.5 w-2.5 rounded-full bg-[#14B8C6] shadow-lg shadow-[#14B8C6]/30" />
+            }
           />
         ))}
       </section>
