@@ -7,6 +7,10 @@
   --coachos-border: #d8e8f0;
   --coachos-muted: #425b76;
   --coachos-navy: #0b2a3d;
+  --coachos-ring: #2ecbea;
+  --coachos-shadow: 0 12px 30px rgba(11, 42, 61, 0.08);
+  --coachos-surface: #ffffff;
+  --coachos-surface-muted: #f7fcff;
   --foreground: #0b1f33;
 }
 
@@ -29,6 +33,11 @@ body {
   color: var(--foreground);
 }
 
+::selection {
+  background: rgba(46, 203, 234, 0.28);
+  color: #0b1f33;
+}
+
 html {
   scroll-behavior: smooth;
 }
@@ -45,6 +54,22 @@ html {
 
 .coachos-spin {
   animation: coachosSpin 1.4s linear infinite;
+}
+
+.coachos-focus-ring {
+  outline: 2px solid var(--coachos-ring);
+  outline-offset: 2px;
+}
+
+.coachos-premium-shadow {
+  box-shadow: var(--coachos-shadow);
+}
+
+.coachos-premium-text {
+  background: linear-gradient(90deg, #0b2a3d, #145da0 52%, #0e7490);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
 @keyframes coachosFloat {

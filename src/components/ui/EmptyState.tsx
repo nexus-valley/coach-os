@@ -1,40 +1,72 @@
+import type { ReactNode } from "react";
+
 import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
 
+type EmptyStateAction = {
+  disabled?: boolean;
+  label: string;
+  onClick: () => void;
+};
+
 type EmptyStateProps = {
-  action?: {
-    disabled?: boolean;
-    label: string;
-    onClick: () => void;
-  };
+  action?: EmptyStateAction | ReactNode;
   description: string;
-  icon: string;
+  eyebrow?: string;
+  icon?: ReactNode;
+  secondaryAction?: ReactNode;
   title: string;
 };
+
+function isActionConfig(action: EmptyStateProps["action"]): action is EmptyStateAction {
+  return Boolean(
+    action &&
+      typeof action === "object" &&
+      "label" in action &&
+      "onClick" in action,
+  );
+}
 
 export function EmptyState({
   action,
   description,
+  eyebrow,
   icon,
+  secondaryAction,
   title,
 }: EmptyStateProps) {
   return (
-    <Card className="mt-6 border-[#D8E8F0] bg-white p-8 text-[#0B2A3D] shadow-2xl shadow-[#0B2A3D]/10">
+    <Card className="mt-6 border-[#D8E8F0] bg-white p-8 text-[#0B2A3D] shadow-sm shadow-[#0B2A3D]/5">
       <div className="mx-auto max-w-2xl text-center">
-        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#2ECBEA] text-sm font-bold text-[#0B1F33] shadow-lg shadow-[#2ECBEA]/25">
-          {icon}
-        </div>
-        <h3 className="mt-6 text-2xl font-semibold">{title}</h3>
+        {icon ? (
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg border border-[#9ADDEA] bg-[#EAF8FC] text-sm font-bold text-[#0B2A3D] shadow-sm shadow-[#2ECBEA]/15">
+            {icon}
+          </div>
+        ) : null}
+        {eyebrow ? (
+          <p className="mt-5 text-xs font-semibold uppercase tracking-[0.18em] text-[#0E7490]">
+            {eyebrow}
+          </p>
+        ) : null}
+        <h3 className={["text-2xl font-semibold", icon || eyebrow ? "mt-4" : ""].join(" ")}>
+          {title}
+        </h3>
         <p className="mt-3 text-sm leading-6 text-[#5D7185]">{description}</p>
         {action ? (
-          <Button
-            className="mt-7"
-            disabled={action.disabled}
-            onClick={action.onClick}
-            type="button"
-          >
-            {action.label}
-          </Button>
+          <div className="mt-7 flex flex-col items-center justify-center gap-3 sm:flex-row">
+            {isActionConfig(action) ? (
+              <Button
+                disabled={action.disabled}
+                onClick={action.onClick}
+                type="button"
+              >
+                {action.label}
+              </Button>
+            ) : (
+              action
+            )}
+            {secondaryAction}
+          </div>
         ) : null}
       </div>
     </Card>
