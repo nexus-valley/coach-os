@@ -242,6 +242,7 @@ export const portalNavFeatureByLabel: Record<string, FeatureKey | undefined> = {
   Announcements: "messages",
   Assignments: "assignments",
   Certificates: "certificates",
+  Community: "messages",
   Courses: "courses",
   Documents: "documents",
   Messages: "messages",
