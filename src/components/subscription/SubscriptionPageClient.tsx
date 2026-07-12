@@ -13,6 +13,11 @@ import {
   getBillingSummary,
   type BillingProfile,
 } from "@/src/lib/billing";
+import {
+  getBillingProfileMissingFieldLabels,
+  getTenantBillingProfileCompletion,
+  type TenantBillingProfileCompletion,
+} from "@/src/lib/billingProfile";
 import type {
   InvoiceWithItems,
   PaymentTransaction,
@@ -411,6 +416,84 @@ function UsageCard({
             ? `${Math.max(0, limit - used).toLocaleString()} remaining on this plan.`
             : "Usage is at or above this plan limit."}
       </p>
+    </Card>
+  );
+}
+
+function BillingProfileReadinessCard({
+  completion,
+  error,
+}: {
+  completion: TenantBillingProfileCompletion | null;
+  error: string | null;
+}) {
+  const score = completion?.completion_score ?? 0;
+  const complete = completion?.is_complete === true;
+  const missingLabels = getBillingProfileMissingFieldLabels(
+    completion?.missing_fields ?? [],
+  );
+
+  return (
+    <Card className="mt-6 border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/10">
+      <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
+        <div>
+          <Badge
+            className={
+              complete
+                ? "border-teal-400/30 bg-teal-400/10 text-teal-300"
+                : "border-amber-400/30 bg-amber-400/10 text-amber-200"
+            }
+          >
+            Billing profile
+          </Badge>
+          <h3 className="mt-4 text-2xl font-semibold">
+            Invoice and receipt readiness
+          </h3>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
+            Complete your legal, tax, and billing contact details before payment
+            support and invoice workflows go live. This does not start checkout,
+            create a Razorpay order, or change your plan.
+          </p>
+        </div>
+        <Button href="/app/billing-profile" type="button" variant="secondary">
+          Open billing profile
+        </Button>
+      </div>
+
+      <div className="mt-6 grid gap-4 md:grid-cols-[0.8fr_1.2fr]">
+        <div className="rounded-3xl border border-white/10 bg-[#15181b] p-5">
+          <p className="text-sm text-slate-500">Readiness score</p>
+          <p className="mt-2 text-3xl font-semibold">{score}%</p>
+          <p className="mt-2 text-sm leading-6 text-slate-400">
+            {complete
+              ? "Required billing profile fields are ready."
+              : "Some billing profile fields are still missing."}
+          </p>
+        </div>
+        <div className="rounded-3xl border border-white/10 bg-[#15181b] p-5">
+          <p className="text-sm font-semibold text-white">Missing fields</p>
+          {error ? (
+            <p className="mt-3 text-sm leading-6 text-amber-100">
+              Billing profile readiness is currently unavailable: {error}
+            </p>
+          ) : missingLabels.length === 0 ? (
+            <p className="mt-3 text-sm leading-6 text-slate-400">
+              No required readiness fields are missing.
+            </p>
+          ) : (
+            <div className="mt-4 flex flex-wrap gap-2">
+              {missingLabels.map((label) => (
+                <Badge
+                  className="border-amber-400/30 bg-amber-400/10 text-amber-200"
+                  key={label}
+                >
+                  {label}
+                </Badge>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
     </Card>
   );
 }
@@ -1389,6 +1472,10 @@ export function SubscriptionPageClient() {
   const [billingSummary, setBillingSummary] = useState<BillingSummary | null>(
     null,
   );
+  const [billingProfileCompletion, setBillingProfileCompletion] =
+    useState<TenantBillingProfileCompletion | null>(null);
+  const [billingProfileCompletionError, setBillingProfileCompletionError] =
+    useState<string | null>(null);
   const [canonicalEntitlementError, setCanonicalEntitlementError] =
     useState<string | null>(null);
   const [canonicalEntitlementState, setCanonicalEntitlementState] =
@@ -1474,6 +1561,7 @@ export function SubscriptionPageClient() {
           currentUsage,
           currentBillingSummary,
           canonicalEntitlementResult,
+          billingProfileCompletionResult,
           requestablePlanResult,
           upgradeRequestResult,
         ] = await Promise.all([
@@ -1487,6 +1575,15 @@ export function SubscriptionPageClient() {
               error: getErrorMessage(
                 caught,
                 "Unable to load canonical entitlement summary.",
+              ),
+            })),
+          getTenantBillingProfileCompletion(currentTenant.id)
+            .then((data) => ({ data, error: null }))
+            .catch((caught: unknown) => ({
+              data: null,
+              error: getErrorMessage(
+                caught,
+                "Unable to load billing profile readiness.",
               ),
             })),
           getTenantRequestablePlanCatalog(currentTenant.id)
@@ -1516,6 +1613,8 @@ export function SubscriptionPageClient() {
 
         setSubscription(currentSubscription);
         setBillingSummary(currentBillingSummary);
+        setBillingProfileCompletion(billingProfileCompletionResult.data);
+        setBillingProfileCompletionError(billingProfileCompletionResult.error);
         setCanonicalEntitlementError(canonicalEntitlementResult.error);
         setCanonicalEntitlementState(canonicalEntitlementResult.data);
         setRequestablePlanError(requestablePlanResult.error);
@@ -1643,6 +1742,11 @@ export function SubscriptionPageClient() {
           </Button>
         </div>
       </Card>
+
+      <BillingProfileReadinessCard
+        completion={billingProfileCompletion}
+        error={billingProfileCompletionError}
+      />
 
       <CanonicalEntitlementSummary
         entitlement={canonicalEntitlementState}
