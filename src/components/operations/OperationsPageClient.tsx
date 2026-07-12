@@ -9,6 +9,7 @@ import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
 import { EmptyState } from "@/src/components/ui/EmptyState";
 import { FeedbackAlert } from "@/src/components/ui/FeedbackAlert";
+import { SectionHeader } from "@/src/components/ui/SectionHeader";
 import {
   getOperationsConsoleData,
   type OperationsAlert,
@@ -358,20 +359,48 @@ export function OperationsPageClient() {
         </div>
       </div>
 
-      <section className="mt-8">
-        <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
-          <div>
-            <h3 className="text-xl font-semibold text-[#0B1F33]">
-              Workspace Health
-            </h3>
-            <p className="mt-2 text-sm text-[#66788F]">
-              Setup readiness and operational confidence checks.
-            </p>
+      <Card className="mt-8 border-[#D8E8F0] bg-white p-5 shadow-sm">
+        <SectionHeader
+          actions={
+            <Badge tone={data.health.readinessPercent >= 80 ? "success" : "warning"}>
+              {data.health.readinessPercent}% ready
+            </Badge>
+          }
+          description="A read-only owner view of setup health, usage pressure, communication signals, and safe shortcuts. Operational actions still live in their original modules."
+          title="Advanced operations overview"
+        />
+        <div className="mt-5 grid gap-3 md:grid-cols-4">
+          <div className="rounded-lg border border-[#D8E8F0] bg-[#F7FCFF] p-4">
+            <p className="text-2xl font-semibold">{data.alerts.length}</p>
+            <p className="mt-1 text-sm text-[#5D7185]">Active alerts</p>
           </div>
-          <Badge tone={data.health.readinessPercent >= 80 ? "success" : "warning"}>
-            {data.health.readinessPercent}% ready
-          </Badge>
+          <div className="rounded-lg border border-[#D8E8F0] bg-[#F7FCFF] p-4">
+            <p className="text-2xl font-semibold">{data.metrics.length}</p>
+            <p className="mt-1 text-sm text-[#5D7185]">Usage signals</p>
+          </div>
+          <div className="rounded-lg border border-[#D8E8F0] bg-[#F7FCFF] p-4">
+            <p className="text-2xl font-semibold">
+              {data.securitySignals.length}
+            </p>
+            <p className="mt-1 text-sm text-[#5D7185]">Security signals</p>
+          </div>
+          <div className="rounded-lg border border-[#D8E8F0] bg-[#F7FCFF] p-4">
+            <p className="text-2xl font-semibold">{quickLinks.length}</p>
+            <p className="mt-1 text-sm text-[#5D7185]">Safe shortcuts</p>
+          </div>
         </div>
+      </Card>
+
+      <section className="mt-8">
+        <SectionHeader
+          actions={
+            <Badge tone={data.health.readinessPercent >= 80 ? "success" : "warning"}>
+              {data.health.readinessPercent}% ready
+            </Badge>
+          }
+          description="Setup readiness and operational confidence checks."
+          title="Workspace health"
+        />
         <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {data.health.cards.map((card) => (
             <HealthCard card={card} key={card.key} />
@@ -380,7 +409,10 @@ export function OperationsPageClient() {
       </section>
 
       <section className="mt-10">
-        <h3 className="text-xl font-semibold text-[#0B1F33]">Usage Overview</h3>
+        <SectionHeader
+          description="Plan, communication, and activity indicators from existing operations data."
+          title="Usage overview"
+        />
         <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {data.metrics.map((metric) => (
             <MetricCard key={metric.key} metric={metric} />
@@ -456,9 +488,10 @@ export function OperationsPageClient() {
       </section>
 
       <section className="mt-10">
-        <h3 className="text-xl font-semibold text-[#0B1F33]">
-          Alerts & Warnings
-        </h3>
+        <SectionHeader
+          description="Items that may need owner/admin review before they become support issues."
+          title="Alerts and warnings"
+        />
         <div className="mt-5">
           <AlertList alerts={data.alerts} />
         </div>

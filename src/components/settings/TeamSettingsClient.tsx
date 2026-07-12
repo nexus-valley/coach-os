@@ -817,6 +817,52 @@ export function TeamSettingsClient() {
         </div>
       ) : null}
 
+      <Card className="mt-8 border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/10">
+        <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-start">
+          <div>
+            <Badge className="border-white/15 bg-white/10 text-white">
+              Workspace setup
+            </Badge>
+            <h3 className="mt-4 text-2xl font-semibold">
+              Owner control center
+            </h3>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
+              Review identity, team access, invitations, and trainer coverage
+              from one owner-facing settings workspace. Changes still use the
+              existing save, invite, role, and assignment controls below.
+            </p>
+          </div>
+          <div className="grid gap-3 text-sm sm:grid-cols-2 lg:min-w-[28rem]">
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+              <p className="text-slate-400">Visible members</p>
+              <p className="mt-2 text-2xl font-semibold">{members.length}</p>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+              <p className="text-slate-400">Pending invites</p>
+              <p className="mt-2 text-2xl font-semibold">
+                {
+                  invitations.filter(
+                    (invitation) => invitation.status === "pending",
+                  ).length
+                }
+              </p>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+              <p className="text-slate-400">Trainers</p>
+              <p className="mt-2 text-2xl font-semibold">
+                {members.filter((member) => member.role === "trainer").length}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+              <p className="text-slate-400">Editable mode</p>
+              <p className="mt-2 text-lg font-semibold">
+                {canManage ? "Owner/admin" : "Read only"}
+              </p>
+            </div>
+          </div>
+        </div>
+      </Card>
+
       <section className="mt-8 grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
         <Card className="border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/10">
           <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">

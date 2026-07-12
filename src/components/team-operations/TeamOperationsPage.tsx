@@ -7,6 +7,7 @@ import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
 import { EmptyState } from "@/src/components/ui/EmptyState";
 import { FeedbackAlert } from "@/src/components/ui/FeedbackAlert";
+import { SectionHeader } from "@/src/components/ui/SectionHeader";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 import { getCurrentMemberRole, type MemberRole } from "@/src/lib/team";
 import {
@@ -405,6 +406,38 @@ export function TeamOperationsPage() {
       {actionError ? <FeedbackAlert>{actionError}</FeedbackAlert> : null}
       {success ? <FeedbackAlert tone="success">{success}</FeedbackAlert> : null}
 
+      <Card className="p-5">
+        <SectionHeader
+          actions={<Badge tone="light">{filteredMembers.length} shown</Badge>}
+          description="Keep staff, trainer, and admin operating details readable without changing login roles or workspace permissions."
+          title="Team operations workflow"
+        />
+        <div className="mt-5 grid gap-3 md:grid-cols-3">
+          <div className="rounded-lg border border-[#D8E8F0] bg-[#F7FCFF] p-4">
+            <p className="text-2xl font-semibold">
+              {dashboard.summary.active_members}
+            </p>
+            <p className="mt-1 text-sm text-[#5D7185]">Active team members</p>
+          </div>
+          <div className="rounded-lg border border-[#D8E8F0] bg-[#F7FCFF] p-4">
+            <p className="text-2xl font-semibold">
+              {dashboard.summary.trainer_count}
+            </p>
+            <p className="mt-1 text-sm text-[#5D7185]">Trainer profiles</p>
+          </div>
+          <div className="rounded-lg border border-[#D8E8F0] bg-[#F7FCFF] p-4">
+            <p className="text-2xl font-semibold">
+              {dashboard.summary.onboarding_members}
+            </p>
+            <p className="mt-1 text-sm text-[#5D7185]">Onboarding now</p>
+          </div>
+        </div>
+      </Card>
+
+      <SectionHeader
+        description="Owner-level team status using existing operational profile data."
+        title="Team coverage"
+      />
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-7">
         {[
           ["Total", dashboard.summary.total_members],
@@ -425,7 +458,11 @@ export function TeamOperationsPage() {
       </div>
 
       <Card className="p-5">
-        <div className="grid gap-3 lg:grid-cols-[1fr_180px_220px_220px]">
+        <SectionHeader
+          description="Search and filter operational profiles before reviewing workload, employment details, or private notes."
+          title="Find team members"
+        />
+        <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_180px_220px_220px]">
           <input
             className="h-11 rounded-2xl border border-[#D8E8F0] px-4 text-sm outline-none transition focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
             onChange={(event) => setSearch(event.target.value)}
