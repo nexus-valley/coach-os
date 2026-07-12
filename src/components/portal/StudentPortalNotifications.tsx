@@ -2,6 +2,9 @@
 
 import { Badge } from "@/src/components/ui/Badge";
 import { Card } from "@/src/components/ui/Card";
+import { PageHeader } from "@/src/components/ui/PageHeader";
+import { SectionHeader } from "@/src/components/ui/SectionHeader";
+import { StatCard } from "@/src/components/ui/StatCard";
 import type { StudentPortalContext } from "@/src/lib/studentPortalAuth";
 import {
   formatPortalDateTime,
@@ -17,10 +20,32 @@ export function StudentPortalNotifications({ context }: { context: StudentPortal
   if (loading) return <PortalLoadingCard label="Loading notifications" />;
   if (error || !overview) return <PortalError message={error || "Unable to load notifications."} />;
 
+  const warningNotifications = overview.notifications.filter(
+    (notification) => notification.severity === "warning",
+  ).length;
+  const criticalNotifications = overview.notifications.filter(
+    (notification) => notification.severity === "critical",
+  ).length;
+
   return (
-    <div>
-      <h1 className="text-3xl font-semibold tracking-normal">Notifications</h1>
-      <div className="mt-6 space-y-4">
+    <div className="space-y-6">
+      <PageHeader
+        description="Read updates and alerts shared with your student portal."
+        eyebrow="Updates"
+        title="Notifications"
+      />
+
+      <section className="grid gap-4 md:grid-cols-3">
+        <StatCard label="Total" value={overview.notifications.length} />
+        <StatCard label="Warnings" value={warningNotifications} />
+        <StatCard label="Critical" value={criticalNotifications} />
+      </section>
+
+      <SectionHeader
+        description="Recent student-facing updates from your institute."
+        title="Latest updates"
+      />
+      <div className="space-y-4">
         {overview.notifications.length === 0 ? (
           <PortalEmptyState>No notifications yet.</PortalEmptyState>
         ) : (

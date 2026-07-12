@@ -10,6 +10,9 @@ import {
 import { Badge } from "@/src/components/ui/Badge";
 import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
+import { PageHeader } from "@/src/components/ui/PageHeader";
+import { SectionHeader } from "@/src/components/ui/SectionHeader";
+import { StatCard } from "@/src/components/ui/StatCard";
 import {
   formatDocumentDate,
   formatDocumentFileSize,
@@ -102,22 +105,38 @@ export function StudentPortalDocuments({
   if (loading) return <PortalLoadingCard label="Loading documents" />;
   if (error) return <PortalError message={error} />;
 
+  const uploadedDocuments = documents.filter(
+    (document) => document.upload_status === "uploaded",
+  ).length;
+  const referenceDocuments = documents.filter(
+    (document) => document.external_url,
+  ).length;
+
   return (
-    <div>
-      <h1 className="text-3xl font-semibold tracking-normal">Documents</h1>
-      <p className="mt-2 text-sm text-[#425B76]">
-        Your institute can share student, course, cohort, and session document
-        references here. Uploads and online document submission are not enabled
-        yet.
-      </p>
+    <div className="space-y-6">
+      <PageHeader
+        description="Find documents, references, and resources shared for your student profile, courses, cohorts, or sessions."
+        eyebrow="Resources"
+        title="Documents"
+      />
+
+      <section className="grid gap-4 md:grid-cols-3">
+        <StatCard label="Shared resources" value={documents.length} />
+        <StatCard label="Files" value={uploadedDocuments} />
+        <StatCard label="Reference links" value={referenceDocuments} />
+      </section>
 
       {documents.length === 0 ? (
-        <div className="mt-6">
+        <div>
           <PortalEmptyState>No documents have been shared with you yet.</PortalEmptyState>
         </div>
       ) : (
-        <div className="mt-6 grid gap-5 lg:grid-cols-[minmax(0,0.95fr)_minmax(360px,1.05fr)]">
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,0.95fr)_minmax(360px,1.05fr)]">
           <div className="space-y-3">
+            <SectionHeader
+              description="Select a resource to see details and available links."
+              title="Shared resources"
+            />
             {documents.map((document) => (
               <button
                 className={[
@@ -154,6 +173,15 @@ export function StudentPortalDocuments({
           <Card className="border-[#D8E8F0] bg-white p-5">
             {selectedDocument ? (
               <>
+                <SectionHeader
+                  actions={
+                    <Badge tone={typeTone(selectedDocument.document_type)}>
+                      {formatDocumentLabel(selectedDocument.document_type)}
+                    </Badge>
+                  }
+                  description="Review the document details before opening a reference or file."
+                  title="Resource details"
+                />
                 <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
                   <div>
                     <h2 className="text-xl font-semibold">
@@ -163,9 +191,6 @@ export function StudentPortalDocuments({
                       {selectedDocument.description ?? "No description provided."}
                     </p>
                   </div>
-                  <Badge tone={typeTone(selectedDocument.document_type)}>
-                    {formatDocumentLabel(selectedDocument.document_type)}
-                  </Badge>
                 </div>
 
                 <div className="mt-5 grid gap-3 sm:grid-cols-2">

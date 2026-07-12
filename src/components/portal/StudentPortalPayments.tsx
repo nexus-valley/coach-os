@@ -5,6 +5,9 @@ import { useEffect, useState } from "react";
 import { Badge } from "@/src/components/ui/Badge";
 import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
+import { PageHeader } from "@/src/components/ui/PageHeader";
+import { SectionHeader } from "@/src/components/ui/SectionHeader";
+import { StatCard } from "@/src/components/ui/StatCard";
 import type { StudentPortalContext } from "@/src/lib/studentPortalAuth";
 import {
   formatPortalCurrency,
@@ -20,6 +23,17 @@ import {
   getStudentFinanceSummary,
   type FinanceStudentSummary,
 } from "@/src/lib/finance";
+
+function FeedbackCopy() {
+  return (
+    <Card className="border-[#D8E8F0] bg-[#F7FCFF] p-4">
+      <p className="text-sm leading-6 text-[#425B76]">
+        Online payment is not enabled yet. Your institute records payments
+        manually, and receipts appear here after they are issued.
+      </p>
+    </Card>
+  );
+}
 
 export function StudentPortalPayments({ context }: { context: StudentPortalContext }) {
   const { error, loading, overview } = usePortalSection(context);
@@ -72,37 +86,27 @@ export function StudentPortalPayments({ context }: { context: StudentPortalConte
     (financeSummary?.receipts.length ?? 0);
 
   return (
-    <div>
-      <h1 className="text-3xl font-semibold tracking-normal">Payments</h1>
-      <p className="mt-2 text-sm text-[#425B76]">
-        Online payment is not enabled yet. Your institute records payments
-        manually and receipts appear here after they are issued.
-      </p>
+    <div className="space-y-6">
+      <PageHeader
+        description="Review fees, invoices, manual payments, and receipts shared by your institute."
+        eyebrow="Fees and receipts"
+        metadata={<Badge tone="warning">Online payment disabled</Badge>}
+        title="Payments"
+      />
 
-      <div className="mt-6 grid gap-4 md:grid-cols-3">
-        <Card className="border-[#D8E8F0] bg-white p-5">
-          <p className="text-xs font-semibold uppercase text-[#66788F]">
-            Outstanding
-          </p>
-          <p className="mt-3 text-2xl font-semibold">
-            {formatFinanceCurrency(financeSummary?.outstanding_amount ?? 0)}
-          </p>
-        </Card>
-        <Card className="border-[#D8E8F0] bg-white p-5">
-          <p className="text-xs font-semibold uppercase text-[#66788F]">Paid</p>
-          <p className="mt-3 text-2xl font-semibold">
-            {formatFinanceCurrency(financeSummary?.paid_amount ?? 0)}
-          </p>
-        </Card>
-        <Card className="border-[#D8E8F0] bg-white p-5">
-          <p className="text-xs font-semibold uppercase text-[#66788F]">
-            Receipts
-          </p>
-          <p className="mt-3 text-2xl font-semibold">
-            {financeSummary?.receipts.length ?? 0}
-          </p>
-        </Card>
-      </div>
+      <FeedbackCopy />
+
+      <section className="grid gap-4 md:grid-cols-3">
+        <StatCard
+          label="Outstanding"
+          value={formatFinanceCurrency(financeSummary?.outstanding_amount ?? 0)}
+        />
+        <StatCard
+          label="Paid"
+          value={formatFinanceCurrency(financeSummary?.paid_amount ?? 0)}
+        />
+        <StatCard label="Receipts" value={financeSummary?.receipts.length ?? 0} />
+      </section>
 
       {financeError ? (
         <PortalError message={financeError} />
@@ -112,7 +116,11 @@ export function StudentPortalPayments({ context }: { context: StudentPortalConte
         </div>
       ) : null}
 
-      <div className="mt-6 space-y-4">
+      <SectionHeader
+        description="Your institute records payments manually during beta. Online checkout remains unavailable here."
+        title="Payment records"
+      />
+      <div className="space-y-4">
         {!financeLoading && financeRows === 0 && paymentRows.length === 0 ? (
           <PortalEmptyState>No payment records visible yet.</PortalEmptyState>
         ) : (

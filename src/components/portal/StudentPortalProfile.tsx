@@ -2,6 +2,8 @@
 
 import { Badge } from "@/src/components/ui/Badge";
 import { Card } from "@/src/components/ui/Card";
+import { PageHeader } from "@/src/components/ui/PageHeader";
+import { SectionHeader } from "@/src/components/ui/SectionHeader";
 import type { StudentPortalContext } from "@/src/lib/studentPortalAuth";
 import {
   formatPortalDate,
@@ -26,9 +28,19 @@ export function StudentPortalProfile({ context }: { context: StudentPortalContex
   ];
 
   return (
-    <div>
-      <h1 className="text-3xl font-semibold tracking-normal">Profile</h1>
-      <Card className="mt-6 border-[#D8E8F0] bg-white p-6">
+    <div className="space-y-6">
+      <PageHeader
+        description="These details are maintained by your institute and linked to your student portal login."
+        eyebrow="My details"
+        metadata={<Badge tone="success">Linked account</Badge>}
+        title="Profile"
+      />
+
+      <Card className="border-[#D8E8F0] bg-white p-6">
+        <SectionHeader
+          description="Contact your institute if any profile detail needs correction."
+          title="Student profile"
+        />
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 className="text-2xl font-semibold">{overview.student.full_name}</h2>

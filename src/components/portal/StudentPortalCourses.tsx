@@ -2,6 +2,9 @@
 
 import { Badge } from "@/src/components/ui/Badge";
 import { Card } from "@/src/components/ui/Card";
+import { PageHeader } from "@/src/components/ui/PageHeader";
+import { SectionHeader } from "@/src/components/ui/SectionHeader";
+import { StatCard } from "@/src/components/ui/StatCard";
 import type { StudentPortalContext } from "@/src/lib/studentPortalAuth";
 import {
   PortalEmptyState,
@@ -16,10 +19,36 @@ export function StudentPortalCourses({ context }: { context: StudentPortalContex
   if (loading) return <PortalLoadingCard label="Loading courses" />;
   if (error || !overview) return <PortalError message={error || "Unable to load courses."} />;
 
+  const completedCourses = overview.courses.filter((course) => course.isCompleted).length;
+  const averageProgress =
+    overview.courses.length === 0
+      ? 0
+      : Math.round(
+          overview.courses.reduce(
+            (total, course) => total + course.progressPercentage,
+            0,
+          ) / overview.courses.length,
+        );
+
   return (
-    <div>
-      <h1 className="text-3xl font-semibold tracking-normal">My Courses</h1>
-      <div className="mt-6 grid gap-5 lg:grid-cols-2">
+    <div className="space-y-6">
+      <PageHeader
+        description="Continue enrolled courses, review lesson progress, and see what your institute has assigned to you."
+        eyebrow="Learning"
+        title="My courses"
+      />
+
+      <section className="grid gap-4 md:grid-cols-3">
+        <StatCard label="Enrolled" value={overview.courses.length} />
+        <StatCard label="Completed" value={completedCourses} />
+        <StatCard label="Average progress" value={`${averageProgress}%`} />
+      </section>
+
+      <SectionHeader
+        description="Course progress is based on the lessons currently tracked for your enrollments."
+        title="Continue learning"
+      />
+      <div className="grid gap-5 lg:grid-cols-2">
         {overview.courses.length === 0 ? (
           <PortalEmptyState>No enrolled courses yet.</PortalEmptyState>
         ) : (
@@ -42,9 +71,12 @@ export function StudentPortalCourses({ context }: { context: StudentPortalContex
                   style={{ width: `${course.progressPercentage}%` }}
                 />
               </div>
-              <p className="mt-3 text-sm font-medium text-[#425B76]">
-                {course.completedLessonsCount}/{course.lessonCount} lessons complete
-              </p>
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm font-medium text-[#425B76]">
+                <span>
+                  {course.completedLessonsCount}/{course.lessonCount} lessons complete
+                </span>
+                <span>{course.progressPercentage}%</span>
+              </div>
             </Card>
           ))
         )}

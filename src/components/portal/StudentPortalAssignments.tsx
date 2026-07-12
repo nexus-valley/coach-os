@@ -2,6 +2,9 @@
 
 import { Badge } from "@/src/components/ui/Badge";
 import { Card } from "@/src/components/ui/Card";
+import { PageHeader } from "@/src/components/ui/PageHeader";
+import { SectionHeader } from "@/src/components/ui/SectionHeader";
+import { StatCard } from "@/src/components/ui/StatCard";
 import type { StudentPortalContext } from "@/src/lib/studentPortalAuth";
 import {
   formatPortalDateTime,
@@ -17,10 +20,32 @@ export function StudentPortalAssignments({ context }: { context: StudentPortalCo
   if (loading) return <PortalLoadingCard label="Loading assignments" />;
   if (error || !overview) return <PortalError message={error || "Unable to load assignments."} />;
 
+  const pendingAssignments = overview.assignments.filter(
+    (item) => !item.submission || item.submission.status === "pending",
+  ).length;
+  const reviewedAssignments = overview.assignments.filter(
+    (item) => item.submission?.status === "reviewed",
+  ).length;
+
   return (
-    <div>
-      <h1 className="text-3xl font-semibold tracking-normal">Assignments</h1>
-      <div className="mt-6 space-y-4">
+    <div className="space-y-6">
+      <PageHeader
+        description="Review homework, due dates, feedback, and scores shared by your institute."
+        eyebrow="Due work"
+        title="Assignments"
+      />
+
+      <section className="grid gap-4 md:grid-cols-3">
+        <StatCard label="Total" value={overview.assignments.length} />
+        <StatCard label="Pending" value={pendingAssignments} />
+        <StatCard label="Reviewed" value={reviewedAssignments} />
+      </section>
+
+      <SectionHeader
+        description="Assignments are shown only when they are published for your enrolled course or cohort."
+        title="Your assignment list"
+      />
+      <div className="space-y-4">
         {overview.assignments.length === 0 ? (
           <PortalEmptyState>No published assignments yet.</PortalEmptyState>
         ) : (
