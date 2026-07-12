@@ -8,6 +8,7 @@ import { Card } from "@/src/components/ui/Card";
 import { EmptyState } from "@/src/components/ui/EmptyState";
 import { FeedbackAlert } from "@/src/components/ui/FeedbackAlert";
 import { PageHeader } from "@/src/components/ui/PageHeader";
+import { SectionHeader } from "@/src/components/ui/SectionHeader";
 import { Skeleton } from "@/src/components/ui/Skeleton";
 import { StatCard } from "@/src/components/ui/StatCard";
 import type { CohortWithCourse } from "@/src/lib/cohorts";
@@ -523,6 +524,9 @@ export function DocumentCenterPage() {
   }
 
   const summary = dashboard?.summary;
+  const uploadedDocuments =
+    dashboard?.documents.filter((document) => document.upload_status === "uploaded")
+      .length ?? 0;
 
   return (
     <div className="space-y-6">
@@ -540,6 +544,35 @@ export function DocumentCenterPage() {
       {actionError ? <FeedbackAlert tone="error">{actionError}</FeedbackAlert> : null}
       {success ? <FeedbackAlert tone="success">{success}</FeedbackAlert> : null}
 
+      <Card className="p-5">
+        <SectionHeader
+          description="Keep academy records organized before they become uploads, student-visible resources, internal files, or compliance evidence."
+          title="Document workflow"
+        />
+        <div className="mt-5 grid gap-3 md:grid-cols-3">
+          <div className="rounded-lg border border-[#D8E8F0] bg-[#F7FCFF] p-4">
+            <p className="text-2xl font-semibold">
+              {summary?.total_documents ?? 0}
+            </p>
+            <p className="mt-1 text-sm text-[#5D7185]">Metadata records</p>
+          </div>
+          <div className="rounded-lg border border-[#D8E8F0] bg-[#F7FCFF] p-4">
+            <p className="text-2xl font-semibold">{uploadedDocuments}</p>
+            <p className="mt-1 text-sm text-[#5D7185]">Uploaded files</p>
+          </div>
+          <div className="rounded-lg border border-[#D8E8F0] bg-[#F7FCFF] p-4">
+            <p className="text-2xl font-semibold">
+              {summary?.student_visible_documents ?? 0}
+            </p>
+            <p className="mt-1 text-sm text-[#5D7185]">Student-visible records</p>
+          </div>
+        </div>
+      </Card>
+
+      <SectionHeader
+        description="A quick owner view of document coverage by purpose and visibility."
+        title="Document readiness"
+      />
       <div className="grid gap-4 md:grid-cols-4">
         {[
           ["Total", summary?.total_documents ?? 0],
@@ -557,6 +590,15 @@ export function DocumentCenterPage() {
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.05fr)_minmax(460px,0.95fr)]">
         <div className="space-y-4">
+          <SectionHeader
+            actions={
+              <Badge tone="light">
+                {filteredDocuments.length} shown
+              </Badge>
+            }
+            description="Search and filter the owner document library without changing access rules."
+            title="Find and review documents"
+          />
           <Card className="p-5">
             <div className="grid gap-3 md:grid-cols-3">
               <label className="text-sm font-semibold">
@@ -665,13 +707,10 @@ export function DocumentCenterPage() {
 
         <div className="space-y-4">
           <Card className="p-5">
-            <h2 className="text-xl font-semibold">
-              {editingId ? "Edit document" : "Create document"}
-            </h2>
-            <p className="mt-1 text-sm text-[#5D7185]">
-              Store document metadata and references only. Do not paste private
-              file contents into notes or metadata.
-            </p>
+            <SectionHeader
+              description="Store document metadata and references only. Do not paste private file contents into notes or metadata."
+              title={editingId ? "Edit document" : "Create document"}
+            />
             <form className="mt-5 space-y-4" onSubmit={handleSubmit}>
               <div className="grid gap-3 md:grid-cols-2">
                 <label className="text-sm font-semibold">

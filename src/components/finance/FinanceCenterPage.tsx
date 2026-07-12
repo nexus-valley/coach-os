@@ -9,6 +9,7 @@ import { Card } from "@/src/components/ui/Card";
 import { EmptyState } from "@/src/components/ui/EmptyState";
 import { FeedbackAlert } from "@/src/components/ui/FeedbackAlert";
 import { PageHeader } from "@/src/components/ui/PageHeader";
+import { SectionHeader } from "@/src/components/ui/SectionHeader";
 import { StatCard } from "@/src/components/ui/StatCard";
 import {
   applyFinanceAdjustment,
@@ -411,6 +412,35 @@ export function FinanceCenterPage() {
         </FeedbackAlert>
       ) : null}
 
+      <Card className="p-5">
+        <SectionHeader
+          description="Use Finance as the owner workspace for fee structures, invoice follow-up, manual receipts, and payment activity while online payment gateway remains disabled."
+          title="Finance workflow"
+        />
+        <div className="mt-5 grid gap-3 md:grid-cols-4">
+          <div className="rounded-lg border border-[#D8E8F0] bg-[#F7FCFF] p-4">
+            <p className="text-2xl font-semibold">{data?.feePlans.length ?? 0}</p>
+            <p className="mt-1 text-sm text-[#5D7185]">Fee plans</p>
+          </div>
+          <div className="rounded-lg border border-[#D8E8F0] bg-[#F7FCFF] p-4">
+            <p className="text-2xl font-semibold">{data?.invoices.length ?? 0}</p>
+            <p className="mt-1 text-sm text-[#5D7185]">Invoices</p>
+          </div>
+          <div className="rounded-lg border border-[#D8E8F0] bg-[#F7FCFF] p-4">
+            <p className="text-2xl font-semibold">{openInvoices.length}</p>
+            <p className="mt-1 text-sm text-[#5D7185]">Open balances</p>
+          </div>
+          <div className="rounded-lg border border-[#D8E8F0] bg-[#F7FCFF] p-4">
+            <p className="text-2xl font-semibold">{data?.payments.length ?? 0}</p>
+            <p className="mt-1 text-sm text-[#5D7185]">Manual payments</p>
+          </div>
+        </div>
+      </Card>
+
+      <SectionHeader
+        description="Owner-level financial health based on existing invoice and payment records."
+        title="Financial health"
+      />
       <div className="grid gap-4 md:grid-cols-4">
         {[
           ["Total invoiced", dashboard?.total_invoiced ?? 0],
@@ -429,7 +459,10 @@ export function FinanceCenterPage() {
       <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
         <div className="space-y-6">
           <Card className="p-5">
-            <h2 className="text-lg font-semibold">Numbering Settings</h2>
+            <SectionHeader
+              description="Keep invoice and receipt numbering predictable for owner review."
+              title="Numbering settings"
+            />
             <form className="mt-4 grid gap-3" onSubmit={handleSaveSettings}>
               <input
                 className="rounded-2xl border border-[#D8E8F0] px-4 py-3 text-sm"
@@ -473,7 +506,10 @@ export function FinanceCenterPage() {
           </Card>
 
           <Card className="p-5">
-            <h2 className="text-lg font-semibold">Create Fee Plan</h2>
+            <SectionHeader
+              description="Create reusable fee structures before invoices are raised."
+              title="Create fee plan"
+            />
             <form className="mt-4 grid gap-3" onSubmit={handleCreateFeePlan}>
               <input
                 className="rounded-2xl border border-[#D8E8F0] px-4 py-3 text-sm"
@@ -540,7 +576,10 @@ export function FinanceCenterPage() {
         </div>
 
         <Card className="p-5">
-          <h2 className="text-lg font-semibold">Create Invoice</h2>
+          <SectionHeader
+            description="Raise a student invoice from existing students, courses, and fee plans."
+            title="Create invoice"
+          />
           <form className="mt-4 grid gap-3 md:grid-cols-2" onSubmit={handleCreateInvoice}>
             <select
               className="rounded-2xl border border-[#D8E8F0] px-4 py-3 text-sm md:col-span-2"
@@ -862,7 +901,11 @@ export function FinanceCenterPage() {
       <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
         <Card className="overflow-hidden">
           <div className="border-b border-[#D8E8F0] p-5">
-            <h2 className="text-lg font-semibold">Invoices</h2>
+            <SectionHeader
+              actions={<Badge tone="light">{data?.invoices.length ?? 0} total</Badge>}
+              description="Review invoice status and owner follow-up before voiding or recording payments."
+              title="Invoices"
+            />
           </div>
           {data?.invoices.length ? (
             <div className="divide-y divide-[#D8E8F0]">
@@ -934,7 +977,11 @@ export function FinanceCenterPage() {
 
         <div className="space-y-6">
           <Card className="p-5">
-            <h2 className="text-lg font-semibold">Fee Plans</h2>
+            <SectionHeader
+              actions={<Badge tone="light">{data?.feePlans.length ?? 0} plans</Badge>}
+              description="Reusable billing structures for future invoices."
+              title="Fee plans"
+            />
             <div className="mt-4 space-y-3">
               {data?.feePlans.length ? (
                 data.feePlans.slice(0, 8).map((plan) => (
@@ -984,7 +1031,11 @@ export function FinanceCenterPage() {
           </Card>
 
           <Card className="p-5">
-            <h2 className="text-lg font-semibold">Recent Payments</h2>
+            <SectionHeader
+              actions={<Badge tone="light">{data?.payments.length ?? 0} recorded</Badge>}
+              description="Manual payment records only. Online gateway collection remains disabled."
+              title="Recent payments"
+            />
             <div className="mt-4 space-y-3">
               {data?.payments.length ? (
                 data.payments.slice(0, 8).map((payment) => (
@@ -1038,7 +1089,11 @@ export function FinanceCenterPage() {
       </div>
 
       <Card className="p-5">
-        <h2 className="text-lg font-semibold">Finance Activity</h2>
+        <SectionHeader
+          actions={<Badge tone="light">{data?.activities.length ?? 0} events</Badge>}
+          description="Recent owner/admin finance actions for audit and support review."
+          title="Finance activity"
+        />
         <div className="mt-4 grid gap-3 md:grid-cols-2">
           {data?.activities.length ? (
             data.activities.slice(0, 12).map((activity) => (
