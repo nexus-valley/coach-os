@@ -1,3 +1,8 @@
+import {
+  buildOtpEmail,
+  type CoachFortEmailTemplate,
+} from "@/src/lib/server/emailTemplates";
+
 type SendOtpEmailInput = {
   email: string;
   expiresInMinutes: number;
@@ -5,38 +10,26 @@ type SendOtpEmailInput = {
   purpose: "password_reset" | "signup_email_verification";
 };
 
-function getSubject(purpose: SendOtpEmailInput["purpose"]) {
-  if (purpose === "password_reset") {
-    return "Your CoachFort password reset code";
-  }
+type SendTransactionalEmailInput = {
+  email: string;
+  logContext: Record<string, unknown>;
+  template: CoachFortEmailTemplate;
+};
 
-  return "Your CoachFort verification code";
-}
-
-function getBody(input: SendOtpEmailInput) {
-  const action =
-    input.purpose === "password_reset"
-      ? "reset your CoachFort password"
-      : "verify your CoachFort signup email";
-
-  return [
-    `Use this code to ${action}: ${input.otp}`,
-    "",
-    `This code expires in ${input.expiresInMinutes} minutes.`,
-    "If you did not request this, you can ignore this email.",
-  ].join("\n");
-}
-
-export async function sendOtpEmail(input: SendOtpEmailInput) {
+async function sendTransactionalEmail(input: SendTransactionalEmailInput) {
   const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.COACHFORT_EMAIL_FROM;
+  const replyTo = process.env.COACHFORT_EMAIL_REPLY_TO;
 
   if (!apiKey || !from) {
     if (process.env.NODE_ENV !== "production") {
-      console.info("[CoachFort auth] OTP email provider is not configured.", {
-        emailDomain: input.email.split("@")[1]?.toLowerCase() ?? null,
-        purpose: input.purpose,
-      });
+      console.info(
+        "[CoachFort email] Transactional email provider is not configured.",
+        {
+          emailDomain: input.email.split("@")[1]?.toLowerCase() ?? null,
+          ...input.logContext,
+        },
+      );
     }
 
     return {
@@ -48,8 +41,10 @@ export async function sendOtpEmail(input: SendOtpEmailInput) {
   const response = await fetch("https://api.resend.com/emails", {
     body: JSON.stringify({
       from,
-      subject: getSubject(input.purpose),
-      text: getBody(input),
+      html: input.template.html,
+      reply_to: replyTo || undefined,
+      subject: input.template.subject,
+      text: input.template.text,
       to: input.email,
     }),
     headers: {
@@ -67,4 +62,15 @@ export async function sendOtpEmail(input: SendOtpEmailInput) {
     delivered: true,
     provider: "resend",
   };
+}
+
+export async function sendOtpEmail(input: SendOtpEmailInput) {
+  return sendTransactionalEmail({
+    email: input.email,
+    logContext: {
+      purpose: input.purpose,
+      template: "otp",
+    },
+    template: buildOtpEmail(input),
+  });
 }
