@@ -7,6 +7,8 @@ import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
 import { EmptyState } from "@/src/components/ui/EmptyState";
 import { FeedbackAlert } from "@/src/components/ui/FeedbackAlert";
+import { PageHeader } from "@/src/components/ui/PageHeader";
+import { SectionHeader } from "@/src/components/ui/SectionHeader";
 import {
   closeChatThread,
   formatChatDate,
@@ -194,16 +196,31 @@ export function ThreadDetailClient({ threadId }: ThreadDetailClientProps) {
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
-      <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-start">
-        <div>
+      <PageHeader
+        actions={
+          <>
           <Button href="/app/messages" size="sm" variant="secondary">
             Back to messages
           </Button>
-          <h1 className="mt-5 text-3xl font-semibold tracking-normal text-[#0B1F33] sm:text-4xl">
-            {thread.title || "Student chat"}
-          </h1>
-          <p className="mt-3 text-base leading-7 text-[#425B76]">{subtitle}</p>
-          <div className="mt-4 flex flex-wrap gap-2">
+          <Button onClick={loadThread} type="button" variant="secondary">
+            Refresh
+          </Button>
+          {thread.status === "active" ? (
+            <Button
+              disabled={mutating === "close"}
+              onClick={handleCloseThread}
+              type="button"
+              variant="outline"
+            >
+              {mutating === "close" ? "Closing..." : "Close chat"}
+            </Button>
+          ) : null}
+          </>
+        }
+        description={subtitle}
+        eyebrow="Student message thread"
+        metadata={
+          <>
             <Badge tone={threadTone(thread.thread_type)}>
               {formatChatType(thread.thread_type)}
             </Badge>
@@ -213,24 +230,10 @@ export function ThreadDetailClient({ threadId }: ThreadDetailClientProps) {
             ) : (
               <Badge tone="warning">Read only</Badge>
             )}
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-3">
-          <Button onClick={loadThread} type="button" variant="secondary">
-            Refresh
-          </Button>
-          {thread.status === "active" ? (
-            <Button
-              disabled={mutating === "close"}
-              onClick={handleCloseThread}
-              type="button"
-              variant="secondary"
-            >
-              {mutating === "close" ? "Closing..." : "Close Chat"}
-            </Button>
-          ) : null}
-        </div>
-      </div>
+          </>
+        }
+        title={thread.title || "Student chat"}
+      />
 
       {actionError ? <FeedbackAlert>{actionError}</FeedbackAlert> : null}
       {success ? <FeedbackAlert tone="success">{success}</FeedbackAlert> : null}
@@ -265,6 +268,10 @@ export function ThreadDetailClient({ threadId }: ThreadDetailClientProps) {
       </Card>
 
       <Card className="p-5">
+        <SectionHeader
+          description="Messages stay tenant-scoped and student-facing through the existing academy chat RPCs."
+          title="Conversation"
+        />
         {messages.length === 0 ? (
           <EmptyState
             description="No messages have been sent in this chat yet."

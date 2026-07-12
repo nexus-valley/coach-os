@@ -239,6 +239,7 @@ export const navFeatureByLabel: Record<string, FeatureKey | undefined> = {
 };
 
 export const portalNavFeatureByLabel: Record<string, FeatureKey | undefined> = {
+  Announcements: "messages",
   Assignments: "assignments",
   Certificates: "certificates",
   Courses: "courses",

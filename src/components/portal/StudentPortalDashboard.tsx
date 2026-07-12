@@ -8,6 +8,11 @@ import { Card } from "@/src/components/ui/Card";
 import { PageHeader } from "@/src/components/ui/PageHeader";
 import { SectionHeader } from "@/src/components/ui/SectionHeader";
 import { StatCard } from "@/src/components/ui/StatCard";
+import {
+  formatAnnouncementDate,
+  getStudentAnnouncements,
+  type StudentAnnouncement,
+} from "@/src/lib/announcements";
 import type { StudentPortalContext } from "@/src/lib/studentPortalAuth";
 import {
   getTenantSettings,
@@ -24,6 +29,7 @@ import {
 
 export function StudentPortalDashboard({ context }: { context: StudentPortalContext }) {
   const { error, loading, overview } = usePortalSection(context);
+  const [announcements, setAnnouncements] = useState<StudentAnnouncement[]>([]);
   const [settings, setSettings] = useState<TenantSettings | null>(null);
 
   useEffect(() => {
@@ -45,6 +51,26 @@ export function StudentPortalDashboard({ context }: { context: StudentPortalCont
       active = false;
     };
   }, [context.tenant.id]);
+
+  useEffect(() => {
+    let active = true;
+
+    getStudentAnnouncements()
+      .then((nextAnnouncements) => {
+        if (active) {
+          setAnnouncements(nextAnnouncements.slice(0, 3));
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setAnnouncements([]);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   if (loading) {
     return <PortalLoadingCard label="Loading student dashboard" />;
@@ -150,6 +176,42 @@ export function StudentPortalDashboard({ context }: { context: StudentPortalCont
       <section className="grid gap-6 xl:grid-cols-2">
         <Card className="border-[#D8E8F0] bg-white p-6">
           <SectionHeader
+            actions={
+              <Button href="/portal/announcements" size="sm" variant="secondary">
+                View announcements
+              </Button>
+            }
+            title="Latest announcements"
+          />
+          <div className="mt-4 space-y-3">
+            {announcements.length === 0 ? (
+              <PortalEmptyState>
+                No academy announcements have been published yet.
+              </PortalEmptyState>
+            ) : (
+              announcements.map((announcement) => (
+                <div
+                  className="rounded-2xl border border-[#D8E8F0] bg-[#F6FBFE] p-4"
+                  key={announcement.id}
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge tone="info">Academy update</Badge>
+                    <span className="text-xs font-medium text-[#66788F]">
+                      {formatAnnouncementDate(announcement.published_at)}
+                    </span>
+                  </div>
+                  <p className="mt-3 font-semibold">{announcement.title}</p>
+                  <p className="mt-1 line-clamp-2 text-sm leading-6 text-[#425B76]">
+                    {announcement.body}
+                  </p>
+                </div>
+              ))
+            )}
+          </div>
+        </Card>
+
+        <Card className="border-[#D8E8F0] bg-white p-6">
+          <SectionHeader
             actions={<Button href="/portal/sessions" size="sm" variant="secondary">View schedule</Button>}
             title="Upcoming sessions"
           />
@@ -171,7 +233,9 @@ export function StudentPortalDashboard({ context }: { context: StudentPortalCont
             )}
           </div>
         </Card>
+      </section>
 
+      <section className="grid gap-6 xl:grid-cols-2">
         <Card className="border-[#D8E8F0] bg-white p-6">
           <SectionHeader
             actions={<Button href="/portal/assignments" size="sm" variant="secondary">View assignments</Button>}

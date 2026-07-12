@@ -30,6 +30,7 @@ type StudentPortalLayoutProps = {
 
 const portalNavItems = [
   { href: "/portal", label: "Overview" },
+  { href: "/portal/announcements", label: "Announcements" },
   { href: "/portal/courses", label: "Courses" },
   { href: "/portal/sessions", label: "Sessions" },
   { href: "/portal/assignments", label: "Assignments" },

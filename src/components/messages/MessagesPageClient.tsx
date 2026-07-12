@@ -21,6 +21,9 @@ import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
 import { EmptyState } from "@/src/components/ui/EmptyState";
 import { FeedbackAlert } from "@/src/components/ui/FeedbackAlert";
+import { PageHeader } from "@/src/components/ui/PageHeader";
+import { SectionHeader } from "@/src/components/ui/SectionHeader";
+import { StatCard } from "@/src/components/ui/StatCard";
 
 type ChatFormState = {
   initialMessage: string;
@@ -201,31 +204,32 @@ export function MessagesPageClient() {
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
-      <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
-        <div>
-          <Badge className="border-[#14B8C6]/30 bg-[#14B8C6]/10 text-[#0E7490]">
-            Academy-student chat
-          </Badge>
-          <h1 className="mt-5 text-3xl font-semibold tracking-normal text-[#0B1F33] sm:text-4xl">
-            Messages
-          </h1>
-          <p className="mt-3 max-w-3xl text-base leading-7 text-[#425B76]">
-            Manage student support requests and direct academy-student
-            conversations inside CoachFort. No WhatsApp, email, SMS, or push
-            provider is connected in this module.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-3">
+      <PageHeader
+        actions={
+          <>
           <Button onClick={loadMessages} type="button" variant="secondary">
             Refresh
           </Button>
+          <Button href="/app/announcements" type="button" variant="secondary">
+            Announcements
+          </Button>
           {canStartChat ? (
             <Button onClick={() => setFormOpen(true)} type="button">
-              New Student Chat
+              New student chat
             </Button>
           ) : null}
-        </div>
-      </div>
+          </>
+        }
+        description="Manage student support requests and direct academy-student conversations inside CoachFort. Broadcast providers are not connected in this MVP."
+        eyebrow="Academy-student chat"
+        metadata={
+          <>
+            <Badge tone="info">Student messages</Badge>
+            <Badge tone="outline">No group chat</Badge>
+          </>
+        }
+        title="Messages"
+      />
 
       {actionError ? <FeedbackAlert>{actionError}</FeedbackAlert> : null}
       {success ? <FeedbackAlert tone="success">{success}</FeedbackAlert> : null}
@@ -238,17 +242,16 @@ export function MessagesPageClient() {
           ["Support", stats.support],
           ["Announcements", stats.announcements],
         ].map(([label, value]) => (
-          <Card className="p-5" key={label}>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#66788F]">
-              {label}
-            </p>
-            <p className="mt-3 text-3xl font-semibold text-[#0B1F33]">{value}</p>
-          </Card>
+          <StatCard key={label} label={label} value={value} />
         ))}
       </div>
 
       <Card className="p-5">
-        <div className="grid gap-3 lg:grid-cols-[1fr_260px]">
+        <SectionHeader
+          description="Find student support threads, direct chats, and existing announcement-style chat threads."
+          title="Find student messages"
+        />
+        <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_260px]">
           <input
             className="h-11 rounded-2xl border border-[#D8E8F0] px-4 text-sm outline-none transition focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
             onChange={(event) => setSearch(event.target.value)}

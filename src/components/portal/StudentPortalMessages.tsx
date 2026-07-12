@@ -6,6 +6,8 @@ import { Badge } from "@/src/components/ui/Badge";
 import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
 import { FeedbackAlert } from "@/src/components/ui/FeedbackAlert";
+import { PageHeader } from "@/src/components/ui/PageHeader";
+import { SectionHeader } from "@/src/components/ui/SectionHeader";
 import {
   createStudentSupportThread,
   formatChatDate,
@@ -247,33 +249,39 @@ export function StudentPortalMessages({ context }: StudentPortalMessagesProps) {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-        <div>
-          <h1 className="text-3xl font-semibold tracking-normal">Messages</h1>
-          <p className="mt-2 text-sm text-[#425B76]">
-            Chat with your academy and view student-facing announcements.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-3">
+      <div className="space-y-6">
+      <PageHeader
+        actions={
+          <>
           <Button onClick={loadThreads} type="button" variant="secondary">
             Refresh
           </Button>
           <Button onClick={() => setSupportOpen(true)} type="button">
-            New Support Request
+            New support request
           </Button>
-        </div>
-      </div>
+          </>
+        }
+        description="Message your academy, ask for support, and keep replies in one student-safe inbox."
+        eyebrow="Student communication"
+        metadata={
+          <>
+            <Badge tone="info">{sortedThreads.length} threads</Badge>
+            <Badge tone="outline">No student-to-student chat</Badge>
+          </>
+        }
+        title="Messages"
+      />
 
       {actionError ? <FeedbackAlert>{actionError}</FeedbackAlert> : null}
       {success ? <FeedbackAlert tone="success">{success}</FeedbackAlert> : null}
 
       <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
         <Card className="p-4">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="text-lg font-semibold">Your Threads</h2>
-            <Badge tone="light">{sortedThreads.length}</Badge>
-          </div>
+          <SectionHeader
+            actions={<Badge tone="light">{sortedThreads.length}</Badge>}
+            description="Support requests and academy replies are listed here."
+            title="Your threads"
+          />
           <div className="mt-4 space-y-3">
             {sortedThreads.length === 0 ? (
               <PortalEmptyState>
