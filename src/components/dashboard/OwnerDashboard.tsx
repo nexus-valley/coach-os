@@ -88,6 +88,11 @@ export function OwnerDashboard({
 
   const quickActions = [
     {
+      description: "Complete legal, tax, and invoice contact readiness.",
+      href: "/app/billing-profile",
+      label: "Billing profile",
+    },
+    {
       description: "Add or review student records.",
       href: "/app/students",
       label: "Manage students",
@@ -116,6 +121,56 @@ export function OwnerDashboard({
       description: "Review staff operations and team metadata.",
       href: "/app/team-operations",
       label: "Team operations",
+    },
+  ];
+  const launchChecklist = [
+    {
+      description:
+        "Add the legal, tax, billing contact, and invoice details CoachFort will need before payment support goes live.",
+      href: "/app/billing-profile",
+      label: "Complete billing profile",
+      status: "Open",
+      tone: "info" as const,
+    },
+    {
+      description:
+        "Invite admins, staff, or trainers and confirm every role has the right workspace access.",
+      href: "/app/settings",
+      label: "Invite your team",
+      status: "Open",
+      tone: "info" as const,
+    },
+    {
+      description:
+        "Create the first student records so courses, cohorts, payments, and portal access have real context.",
+      href: "/app/students",
+      label: "Add students",
+      status: metrics.totalStudents > 0 ? "Started" : "Start",
+      tone: metrics.totalStudents > 0 ? ("success" as const) : ("warning" as const),
+    },
+    {
+      description:
+        "Publish a course and organize batches so learning delivery is ready for student portal use.",
+      href: "/app/courses",
+      label: "Create courses and cohorts",
+      status: metrics.activeCourses > 0 ? "Started" : "Start",
+      tone: metrics.activeCourses > 0 ? ("success" as const) : ("warning" as const),
+    },
+    {
+      description:
+        "Upload academy resources, policies, or learning material when the document center is ready.",
+      href: "/app/documents",
+      label: "Prepare documents",
+      status: "Open",
+      tone: "info" as const,
+    },
+    {
+      description:
+        "Use announcements for official updates and community for controlled academy discussion.",
+      href: "/app/announcements",
+      label: "Publish communication",
+      status: "Open",
+      tone: "info" as const,
     },
   ];
 
@@ -249,6 +304,30 @@ export function OwnerDashboard({
           </div>
         </Card>
       </div>
+
+      <Card className="mt-6 border-[#D8E8F0] bg-[#F7FCFF] p-5 shadow-none">
+        <SectionHeader
+          description="A launch-readiness guide for owners. These links use existing workspace pages and do not create tasks or change data by themselves."
+          title="Academy launch checklist"
+        />
+        <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {launchChecklist.map((item) => (
+            <Link
+              className="rounded-lg border border-[#D8E8F0] bg-white p-4 transition hover:-translate-y-0.5 hover:border-[#2ECBEA]/60 hover:shadow-sm hover:shadow-[#0B2A3D]/8"
+              href={item.href}
+              key={item.label}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <p className="font-semibold text-[#0B1F33]">{item.label}</p>
+                <Badge tone={item.tone}>{item.status}</Badge>
+              </div>
+              <p className="mt-2 text-sm leading-6 text-[#5D7185]">
+                {item.description}
+              </p>
+            </Link>
+          ))}
+        </div>
+      </Card>
 
       <Card className="mt-6 border-[#D8E8F0] bg-white p-5 shadow-sm shadow-[#0B2A3D]/5">
         <SectionHeader

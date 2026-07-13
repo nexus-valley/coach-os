@@ -26,6 +26,13 @@ export type TeamInvitation = {
   updated_at: string;
 };
 
+export type TeamInvitationEmailResult = {
+  delivered: boolean;
+  email: string;
+  invitationId: string;
+  provider: "none" | "resend";
+};
+
 export type TeamInvitationPreview = Pick<
   TeamInvitation,
   "accepted_at" | "created_at" | "email" | "expires_at" | "id" | "revoked_at" | "role" | "status" | "tenant_id"
@@ -129,6 +136,45 @@ export function buildInvitationLink(token: string, baseUrl?: string) {
     (typeof window !== "undefined" ? window.location.origin : "");
 
   return origin ? `${origin}/invite/${token}` : `/invite/${token}`;
+}
+
+export async function sendTeamInvitationEmail(invitationId: string) {
+  const supabase = getSupabaseClient();
+  const {
+    data: { session },
+    error,
+  } = await supabase.auth.getSession();
+
+  if (error) {
+    throw error;
+  }
+
+  if (!session?.access_token) {
+    throw new Error("Sign in again to send the invitation email.");
+  }
+
+  const response = await fetch("/api/team-invitations/send-email", {
+    body: JSON.stringify({ invitationId }),
+    headers: {
+      Authorization: `Bearer ${session.access_token}`,
+      "Content-Type": "application/json",
+    },
+    method: "POST",
+  });
+  const payload = (await response.json().catch(() => null)) as
+    | Partial<TeamInvitationEmailResult & { message: string }>
+    | null;
+
+  if (!response.ok) {
+    throw new Error(payload?.message ?? "Unable to send invitation email.");
+  }
+
+  return {
+    delivered: payload?.delivered === true,
+    email: String(payload?.email ?? ""),
+    invitationId: String(payload?.invitationId ?? invitationId),
+    provider: payload?.provider === "resend" ? "resend" : "none",
+  } satisfies TeamInvitationEmailResult;
 }
 
 export async function createTeamInvitation(params: {

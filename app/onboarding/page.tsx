@@ -17,8 +17,9 @@ export default function OnboardingPage() {
             </h1>
             <p className="mt-6 max-w-xl text-lg leading-8 text-zinc-400">
               Every coach, academy, or team starts as its own secure tenant.
-              This module creates the foundation for permissions and future
-              workspace data.
+              After workspace creation, CoachFort will guide you through
+              billing readiness, team invites, students, courses, documents,
+              announcements, and community setup.
             </p>
           </section>
 
@@ -30,8 +31,9 @@ export default function OnboardingPage() {
               Set up your tenant
             </h2>
             <p className="mt-3 text-sm leading-6 text-zinc-500">
-              You can expand this into team settings, billing, and branded
-              portals in later modules.
+              This creates the secure workspace only. It does not start
+              checkout, change a plan, send invites, or publish student-facing
+              content.
             </p>
             <OnboardingForm />
           </section>

@@ -45,6 +45,7 @@ import {
   listTeamInvitations,
   resendTeamInvitation,
   revokeTeamInvitation,
+  sendTeamInvitationEmail,
   type InvitationRole,
   type TeamInvitation,
 } from "@/src/lib/teamInvitations";
@@ -178,6 +179,28 @@ function formatDate(value: string) {
 
 function getErrorMessage(caught: unknown, fallback: string) {
   return caught instanceof Error ? caught.message : fallback;
+}
+
+async function buildInviteDeliveryMessage(params: {
+  invitation: TeamInvitation;
+  verb: "created" | "refreshed";
+}) {
+  const inviteLink = buildInvitationLink(params.invitation.token);
+
+  try {
+    const emailResult = await sendTeamInvitationEmail(params.invitation.id);
+
+    if (emailResult.delivered) {
+      return `Invitation email sent to ${params.invitation.email}. Copy link: ${inviteLink}`;
+    }
+
+    return `Invitation ${params.verb} for ${params.invitation.email}. Email provider is not configured, so copy this secure link: ${inviteLink}`;
+  } catch (caught) {
+    return `Invitation ${params.verb} for ${params.invitation.email}, but the email was not sent: ${getErrorMessage(
+      caught,
+      "Unable to send invitation email.",
+    )} Copy link: ${inviteLink}`;
+  }
 }
 
 function createBrandingForm(settings: TenantSettings): BrandingFormState {
@@ -478,11 +501,13 @@ export function TeamSettingsClient() {
         tenantId: tenant.id,
       });
 
-      const inviteLink = buildInvitationLink(invitation.token);
       setInviteEmail("");
       setInviteRole("staff");
       setInviteMessage(
-        `Invitation ready for ${invitation.email}. Copy link: ${inviteLink}`,
+        await buildInviteDeliveryMessage({
+          invitation,
+          verb: "created",
+        }),
       );
       await refreshInvitations();
     } catch (caught) {
@@ -515,7 +540,10 @@ export function TeamSettingsClient() {
     try {
       const refreshedInvitation = await resendTeamInvitation(invitation.id);
       setInviteMessage(
-        `Invitation refreshed for ${refreshedInvitation.email}. Copy the new secure link.`,
+        await buildInviteDeliveryMessage({
+          invitation: refreshedInvitation,
+          verb: "refreshed",
+        }),
       );
       await refreshInvitations();
     } catch (caught) {
@@ -1287,8 +1315,9 @@ export function TeamSettingsClient() {
                   Invite team members
                 </h3>
                 <p className="mt-2 text-sm leading-6 text-slate-400">
-                  Email sending will be connected later. For now, copy and
-                  share this secure invite link.
+                  CoachFort sends one invitation email when email is
+                  configured. The secure invite link remains available for
+                  manual sharing.
                 </p>
               </div>
               <Badge>{invitations.length} invites</Badge>
@@ -1333,7 +1362,9 @@ export function TeamSettingsClient() {
                   disabled={mutatingInvitationId === "new"}
                   type="submit"
                 >
-                  {mutatingInvitationId === "new" ? "Creating..." : "Send Invite"}
+                  {mutatingInvitationId === "new"
+                    ? "Creating..."
+                    : "Create and email invite"}
                 </Button>
               </div>
             </form>

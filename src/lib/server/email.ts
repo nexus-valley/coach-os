@@ -12,11 +12,14 @@ type SendOtpEmailInput = {
 
 type SendTransactionalEmailInput = {
   email: string;
+  failureMessage?: string;
   logContext: Record<string, unknown>;
   template: CoachFortEmailTemplate;
 };
 
-async function sendTransactionalEmail(input: SendTransactionalEmailInput) {
+export async function sendCoachFortTransactionalEmail(
+  input: SendTransactionalEmailInput,
+) {
   const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.COACHFORT_EMAIL_FROM;
   const replyTo = process.env.COACHFORT_EMAIL_REPLY_TO;
@@ -55,7 +58,7 @@ async function sendTransactionalEmail(input: SendTransactionalEmailInput) {
   });
 
   if (!response.ok) {
-    throw new Error("Unable to send verification email.");
+    throw new Error(input.failureMessage ?? "Unable to send email.");
   }
 
   return {
@@ -65,8 +68,9 @@ async function sendTransactionalEmail(input: SendTransactionalEmailInput) {
 }
 
 export async function sendOtpEmail(input: SendOtpEmailInput) {
-  return sendTransactionalEmail({
+  return sendCoachFortTransactionalEmail({
     email: input.email,
+    failureMessage: "Unable to send verification email.",
     logContext: {
       purpose: input.purpose,
       template: "otp",
