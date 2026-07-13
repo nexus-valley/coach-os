@@ -15,10 +15,10 @@ export const metadata: Metadata = {
 const sections = [
   {
     body: [
-      "CoachFort is currently offered as a controlled early-access product for selected coaching centres, academies, trainers, and education businesses.",
+      "CoachFort is currently under maintenance and testing. Users may explore the platform, but should not use it for live academy operations yet.",
       "These terms are provided for product transparency and should be reviewed before broad public launch. They are not a substitute for legal advice.",
     ],
-    title: "Early-access status",
+    title: "Testing status",
   },
   {
     body: [

@@ -10,14 +10,14 @@ import { Card } from "@/src/components/ui/Card";
 export const metadata: Metadata = {
   title: "Support | CoachFort",
   description:
-    "Contact CoachFort support for controlled beta onboarding, login, invites, billing readiness, and payment policy questions.",
+    "Contact CoachFort support for testing, onboarding, login, invites, billing readiness, and payment policy questions.",
 };
 
 const supportTopics = [
   {
     description:
-      "Public signup is controlled during early access. Use an invitation link from your academy or contact CoachFort through your onboarding channel.",
-    title: "Early access and onboarding",
+      "Public signup is enabled for testing and product exploration. Please do not use CoachFort for live academy operations yet.",
+    title: "Testing and onboarding",
   },
   {
     description:
@@ -54,9 +54,9 @@ export default function SupportPage() {
             Support and contact
           </h1>
           <p className="mt-5 max-w-3xl text-base leading-8 text-[#425B76] sm:text-lg">
-            CoachFort is in controlled early access. Support is focused on
-            onboarding, account access, workspace setup, billing readiness, and
-            payment policy questions for selected academies.
+            CoachFort is currently under maintenance and testing. Support is
+            focused on account access, workspace setup, billing readiness, and
+            payment policy questions while users explore the platform.
           </p>
           <div className="mt-7 flex flex-col gap-3 sm:flex-row">
             <Button href="mailto:support@coachfort.com" size="lg">
@@ -89,8 +89,8 @@ export default function SupportPage() {
                 Onboarding channel
               </p>
               <p className="mt-2">
-                If you are already in a CoachFort early-access discussion, use
-                that onboarding channel for faster context.
+                If you are already in a CoachFort testing or onboarding
+                discussion, use that channel for faster context.
               </p>
             </div>
           </div>
@@ -130,7 +130,7 @@ export default function SupportPage() {
               Payment Policy
             </Link>
             <Link className="text-[#145DA0] hover:text-[#0F4C81]" href="/signup">
-              Early access signup
+              Sign up
             </Link>
           </div>
           <p className="mt-4 text-sm leading-7 text-[#425B76]">

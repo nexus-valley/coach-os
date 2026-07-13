@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 import { AuthInput } from "@/src/components/auth/AuthInput";
 import { GoogleOAuthButton } from "@/src/components/auth/GoogleOAuthButton";
 import {
-  earlyAccessMessage,
+  maintenanceTestingMessage,
 } from "@/src/components/marketing/EarlyAccessNotice";
 import { Button } from "@/src/components/ui/Button";
 import { requestAuthOtp, verifyAuthOtp } from "@/src/lib/authOtp";
@@ -26,9 +26,6 @@ export function SignupForm() {
   const searchParams = useSearchParams();
   const nextPath = getSafeNextPath(searchParams.get("next"));
   const isInviteSignup = nextPath?.startsWith("/invite/") ?? false;
-  // Temporary early-access launch guard: pause open public signup while
-  // preserving invitation-based signup needed by team invite acceptance.
-  const publicSignupPaused = !isInviteSignup;
   const [cooldown, setCooldown] = useState(0);
   const [email, setEmail] = useState("");
   const [error, setError] = useState("");
@@ -52,13 +49,6 @@ export function SignupForm() {
     event.preventDefault();
     setError("");
     setMessage("");
-
-    if (publicSignupPaused) {
-      setMessage(
-        "Public signup is paused during controlled early access. Contact CoachFort support or use an invitation link from your academy.",
-      );
-      return;
-    }
 
     setLoading(true);
 
@@ -125,24 +115,17 @@ export function SignupForm() {
   return (
     <form className="space-y-5" onSubmit={handleSubmit}>
       <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm leading-6 text-amber-950">
-        <p className="font-semibold">Early access</p>
-        <p className="mt-1">{earlyAccessMessage}</p>
-        {publicSignupPaused ? (
-          <a
-            className="mt-3 inline-flex font-semibold text-[#145DA0] underline-offset-4 hover:underline"
-            href="/support"
-          >
-            Contact us for early access
-          </a>
-        ) : (
+        <p className="font-semibold">Maintenance and testing</p>
+        <p className="mt-1">{maintenanceTestingMessage}</p>
+        {isInviteSignup ? (
           <p className="mt-3 font-semibold text-amber-900">
             This invite signup flow remains available for invited workspace users.
           </p>
-        )}
+        ) : null}
       </div>
 
       <GoogleOAuthButton
-        disabled={loading || publicSignupPaused}
+        disabled={loading}
         onError={setError}
         redirectPath={nextPath ?? undefined}
       />
@@ -158,7 +141,6 @@ export function SignupForm() {
       <AuthInput
         autoComplete="name"
         label="Full name"
-        disabled={publicSignupPaused}
         onChange={(event) => setFullName(event.target.value)}
         placeholder="Your name"
         required
@@ -168,7 +150,6 @@ export function SignupForm() {
       <AuthInput
         autoComplete="email"
         label="Email"
-        disabled={publicSignupPaused}
         onChange={(event) => setEmail(event.target.value)}
         placeholder="you@academy.com"
         required
@@ -179,7 +160,6 @@ export function SignupForm() {
         autoComplete="new-password"
         label="Password"
         minLength={6}
-        disabled={publicSignupPaused}
         onChange={(event) => setPassword(event.target.value)}
         placeholder="Create a secure password"
         required
@@ -240,13 +220,11 @@ export function SignupForm() {
 
       <Button
         className="w-full"
-        disabled={loading || publicSignupPaused}
+        disabled={loading}
         size="lg"
         type="submit"
       >
-        {publicSignupPaused
-          ? "Public signup paused"
-          : loading
+        {loading
           ? step === "details"
             ? "Sending code..."
             : "Verifying..."

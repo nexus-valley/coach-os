@@ -17,6 +17,28 @@ const valuePills = [
   "Admin Controls",
 ];
 
+const pricingPlans = [
+  {
+    description: "For small academies getting started",
+    monthly: "₹1,499 / month",
+    name: "Starter",
+    yearly: "₹14,990 / year",
+  },
+  {
+    description:
+      "For growing academies with more students, team members, and operations",
+    monthly: "₹5,999 / month",
+    name: "Growth",
+    yearly: "₹59,990 / year",
+  },
+  {
+    description: "For larger academies and advanced needs",
+    monthly: "Custom pricing",
+    name: "Premium",
+    yearly: "Contact CoachFort support",
+  },
+];
+
 const features = [
   {
     bullets: ["Structured sections", "Lesson resources", "Progress tracking"],
@@ -134,7 +156,7 @@ function HeroVisual() {
                 CoachFort command center
               </p>
               <p className="mt-1 text-xs font-medium text-[#66788F]">
-                Early-access operating snapshot
+                Testing workspace snapshot
               </p>
             </div>
             <span className="rounded-full border border-[#9ADDEA] bg-[#EAF8FC] px-3 py-1 text-xs font-semibold text-[#0B6F87]">
@@ -258,7 +280,7 @@ export default function Home() {
             </p>
             <div className="mt-9 flex flex-col gap-3 sm:flex-row sm:items-center">
               <Button href="/signup" size="lg">
-                Early access signup
+                Sign up and explore
               </Button>
               <Button href="/demo" size="lg" variant="secondary">
                 Try Live Demo
@@ -271,8 +293,8 @@ export default function Home() {
               </a>
             </div>
             <p className="mt-5 text-sm font-medium text-[#66788F]">
-              Controlled early access &bull; Invite-based onboarding &bull;
-              Demo workspace ready
+              Public signup enabled for testing &bull; Demo workspace ready
+              &bull; Do not use for live academy operations yet
             </p>
           </div>
 
@@ -412,6 +434,62 @@ export default function Home() {
               </div>
             </Card>
           ))}
+        </div>
+      </section>
+
+      <section
+        className="border-y border-[#D8E8F0] bg-white px-5 py-20 sm:px-6 lg:px-8"
+        id="pricing"
+      >
+        <div className="mx-auto max-w-7xl">
+          <div className="max-w-3xl">
+            <Badge>Pricing</Badge>
+            <h2 className="mt-5 text-3xl font-semibold tracking-normal text-[#0B1F33] sm:text-4xl">
+              Clear plans for testing and subscription discussions.
+            </h2>
+            <p className="mt-4 leading-7 text-[#425B76]">
+              Pick the plan that matches your academy stage. Online checkout is
+              not active yet. During testing, subscription activation is handled
+              through CoachFort support.
+            </p>
+          </div>
+          <div className="mt-10 grid gap-5 lg:grid-cols-3">
+            {pricingPlans.map((plan) => (
+              <Card className="flex h-full flex-col p-6 sm:p-7" key={plan.name}>
+                <div>
+                  <h3 className="text-2xl font-semibold text-[#0B1F33]">
+                    {plan.name}
+                  </h3>
+                  <p className="mt-3 min-h-14 text-sm leading-6 text-[#425B76]">
+                    {plan.description}
+                  </p>
+                </div>
+                <div className="mt-6 rounded-2xl border border-[#D8E8F0] bg-[#F7FCFF] p-5">
+                  <p className="text-2xl font-semibold text-[#0B1F33]">
+                    {plan.monthly}
+                  </p>
+                  <p className="mt-2 text-sm font-semibold text-[#145DA0]">
+                    {plan.yearly}
+                  </p>
+                </div>
+                <div className="mt-auto flex flex-col gap-3 pt-6">
+                  <Button href="/support" size="lg">
+                    Contact support
+                  </Button>
+                  <Button href="/payment-policy" size="lg" variant="secondary">
+                    Payment policy
+                  </Button>
+                </div>
+              </Card>
+            ))}
+          </div>
+          <Card className="mt-6 border-[#F5D48C] bg-[#FFF8E7] p-5">
+            <p className="text-sm font-semibold leading-6 text-[#6F4B00]">
+              Online checkout is not active yet. During testing, subscription
+              activation is handled through CoachFort support. No Razorpay
+              checkout or payment order is started from this page.
+            </p>
+          </Card>
         </div>
       </section>
 
@@ -565,7 +643,8 @@ export default function Home() {
               </h2>
               <p className="mt-4 max-w-2xl leading-7 text-cyan-50/80">
                 Start with the live demo and experience how CoachFort simplifies
-                coaching operations.
+                coaching operations, or create a test workspace to explore the
+                product.
               </p>
             </div>
             <div className="flex flex-col gap-3 sm:flex-row">
@@ -578,11 +657,11 @@ export default function Home() {
               </Button>
               <Button
                 className="border-white/25 bg-white/10 text-white hover:bg-white/15"
-                href="/support"
+                href="/signup"
                 size="lg"
                 variant="secondary"
               >
-                Contact Support
+                Sign Up
               </Button>
             </div>
           </div>

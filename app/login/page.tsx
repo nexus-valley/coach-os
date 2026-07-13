@@ -6,7 +6,7 @@ export default function LoginPage() {
     <AuthCard
       eyebrow="Secure access"
       footerHref="/signup"
-      footerLabel="Early access signup"
+      footerLabel="Create an account"
       footerText="New to CoachFort?"
       title="Login to CoachFort"
     >
