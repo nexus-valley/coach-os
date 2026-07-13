@@ -16,21 +16,21 @@ export function MarketingHeader() {
           </Link>
 
           <nav className="hidden items-center gap-6 text-sm font-medium text-zinc-600 xl:flex">
-            <a className="transition hover:text-zinc-950" href="#platform">
+            <Link className="transition hover:text-zinc-950" href="/#platform">
               Platform
-            </a>
-            <a className="transition hover:text-zinc-950" href="#features">
+            </Link>
+            <Link className="transition hover:text-zinc-950" href="/#features">
               Features
-            </a>
-            <a className="transition hover:text-zinc-950" href="#why-coachfort">
+            </Link>
+            <Link className="transition hover:text-zinc-950" href="/#why-coachfort">
               Why CoachFort
-            </a>
-            <a className="transition hover:text-zinc-950" href="#about">
+            </Link>
+            <Link className="transition hover:text-zinc-950" href="/#about">
               About Us
-            </a>
-            <a className="transition hover:text-zinc-950" href="#contact">
-              Contact
-            </a>
+            </Link>
+            <Link className="transition hover:text-zinc-950" href="/support">
+              Support
+            </Link>
           </nav>
 
           <div className="hidden items-center gap-2 md:flex">
@@ -43,8 +43,8 @@ export function MarketingHeader() {
             <Button href="/demo" size="sm" variant="secondary">
               Try Demo
             </Button>
-            <Button href="#contact" size="sm" variant="secondary">
-              Contact
+            <Button href="/support" size="sm" variant="secondary">
+              Support
             </Button>
           </div>
         </div>
@@ -68,12 +68,12 @@ export function MarketingHeader() {
           >
             Demo
           </Link>
-          <a
+          <Link
             className="rounded-full border border-[#D8E8F0] bg-white px-2 py-2 text-[#0B2A3D] transition hover:bg-[#F3FAFD]"
-            href="#contact"
+            href="/support"
           >
-            Contact
-          </a>
+            Support
+          </Link>
         </div>
       </div>
     </header>

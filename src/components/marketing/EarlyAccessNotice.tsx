@@ -1,8 +1,8 @@
 import { Button } from "@/src/components/ui/Button";
 
-export const earlyAccessContactHref = "https://wa.me/917338841434";
+export const earlyAccessContactHref = "/support";
 export const earlyAccessMessage =
-  "CoachFort is currently in early access. We\u2019re onboarding selected coaching centres and academies in phases while we complete our production launch checks.";
+  "CoachFort is currently in controlled early access for selected coaching centres and academies in India and overseas while we complete production launch checks.";
 
 type EarlyAccessNoticeProps = {
   className?: string;
@@ -35,7 +35,7 @@ export function EarlyAccessNotice({
         >
           {earlyAccessMessage}
         </p>
-        <Button href={earlyAccessContactHref} size="sm" variant="secondary">
+        <Button href="/support" size="sm" variant="secondary">
           Contact us for early access
         </Button>
       </div>

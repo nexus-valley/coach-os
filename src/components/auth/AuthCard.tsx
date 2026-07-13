@@ -41,7 +41,7 @@ export function AuthCard({
             </h1>
             <p className="mt-6 text-lg leading-8 text-zinc-400">
               Sign in or continue from an invitation to access courses,
-              cohorts, CRM, manual finance tracking, WhatsApp-ready workflows,
+              cohorts, CRM, manual finance tracking, communication workflows,
               and analytics.
             </p>
           </div>

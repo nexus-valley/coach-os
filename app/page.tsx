@@ -6,14 +6,12 @@ import { MarketingHeader } from "@/src/components/layout/MarketingHeader";
 import { EarlyAccessNotice } from "@/src/components/marketing/EarlyAccessNotice";
 import { Fragment } from "react";
 
-const whatsappUrl = "https://wa.me/917338841434";
-
 const valuePills = [
   "Student CRM",
   "Course Delivery",
-  "Live Cohorts",
+  "Cohorts & Batches",
   "Certificates",
-  "WhatsApp-ready Workflows",
+  "Manual Follow-ups",
   "Manual Payments",
   "Analytics",
   "Admin Controls",
@@ -32,7 +30,7 @@ const features = [
     description:
       "Organize students into batches, connect cohorts to courses, and track members with start and end dates.",
     icon: "LC",
-    title: "Live Cohorts",
+    title: "Cohorts & Batches",
   },
   {
     bullets: ["Contact records", "Notes", "Follow-ups"],
@@ -51,9 +49,9 @@ const features = [
   {
     bullets: ["Templates", "Reminders", "Manual sharing"],
     description:
-      "Prepare reminders, receipts, and certificates with WhatsApp-ready templates for manual sharing and follow-up workflows.",
+      "Prepare reminders, receipts, and certificates for manual sharing and follow-up workflows across your preferred channels.",
     icon: "WA",
-    title: "WhatsApp-ready Communication",
+    title: "Manual Follow-up Workflows",
   },
   {
     bullets: ["Engagement base", "Learner touchpoints", "Future-ready"],
@@ -103,8 +101,8 @@ const faqs = [
   },
   {
     answer:
-      "CoachFort includes WhatsApp-ready manual sharing flows and automation rule foundations. It does not send messages automatically through the WhatsApp Business API yet.",
-    question: "Does it support WhatsApp automation?",
+      "CoachFort includes manual sharing flows and automation rule foundations. It does not send WhatsApp, SMS, or bulk email broadcasts automatically yet.",
+    question: "Does it send automated messages?",
   },
   {
     answer:
@@ -147,7 +145,7 @@ function HeroVisual() {
           <div className="grid gap-3 py-5 sm:grid-cols-3">
             {[
               ["Students", "2,480", "+18%"],
-              ["Revenue", "Rs 8.4L", "This month"],
+              ["Fee records", "840K", "Sample total"],
               ["Completion", "91%", "On track"],
             ].map(([label, value, note]) => (
               <div
@@ -200,11 +198,11 @@ function HeroVisual() {
             <div className="space-y-3">
               <div className="rounded-2xl border border-[#D8E8F0] bg-white p-4 shadow-sm shadow-[#0B2A3D]/5">
                 <p className="text-sm font-semibold text-[#0B1F33]">
-                  WhatsApp-ready follow-ups
+                  Manual follow-ups
                 </p>
                 <p className="mt-2 text-xs leading-5 text-[#66788F]">
-                  Payment follow-up and completion reminders are ready for
-                  manual WhatsApp sharing.
+                  Payment follow-up and completion reminders are prepared for
+                  manual sharing through your preferred support channel.
                 </p>
               </div>
               <div className="rounded-2xl border border-[#D8E8F0] bg-white p-4 shadow-sm shadow-[#0B2A3D]/5">
@@ -255,8 +253,8 @@ export default function Home() {
             </h1>
             <p className="mt-6 max-w-2xl text-lg leading-8 text-[#425B76] sm:text-xl">
               Manage students, courses, cohorts, payments, certificates,
-              WhatsApp workflows, analytics, and operations from a single
-              premium workspace.
+              follow-up workflows, analytics, and operations from a single
+              premium workspace for India and overseas academies.
             </p>
             <div className="mt-9 flex flex-col gap-3 sm:flex-row sm:items-center">
               <Button href="/signup" size="lg">
@@ -273,8 +271,8 @@ export default function Home() {
               </a>
             </div>
             <p className="mt-5 text-sm font-medium text-[#66788F]">
-              Invite-based onboarding &bull; Google sign-in &bull; Demo
-              workspace ready
+              Controlled early access &bull; Invite-based onboarding &bull;
+              Demo workspace ready
             </p>
           </div>
 
@@ -307,14 +305,15 @@ export default function Home() {
           </h2>
           <p className="mt-4 leading-7 text-[#425B76]">
             CoachFort is designed around the daily operating rhythm of online
-            coaches and small academies, not generic project management.
+            coaches and academies in India and overseas, not generic project
+            management.
           </p>
         </div>
         <div className="grid gap-4 sm:grid-cols-2 lg:col-span-2">
           {[
             ["Everything in one platform", "CRM, courses, payments, certificates, reports, reminders, and admin workflows stay connected."],
             ["Built for coaching businesses", "Cohorts, student profiles, course access, and receipts match real coaching operations."],
-            ["WhatsApp-first workflows", "Share reminders, receipts, and certificates through ready-to-use WhatsApp templates."],
+            ["Channel-ready follow-ups", "Prepare reminders, receipts, and certificates for manual sharing through your preferred support channel."],
             ["Premium operations dashboard", "Track revenue, enrollments, student growth, payment status, and workspace progress clearly."],
           ].map(([title, text]) => (
             <Card className="group p-6 transition hover:-translate-y-1" key={title}>
@@ -432,7 +431,7 @@ export default function Home() {
             <Button href="/demo" size="lg">
               Try Demo
             </Button>
-            <Button href="#contact" size="lg" variant="secondary">
+            <Button href="/support" size="lg" variant="secondary">
               Contact Us
             </Button>
           </div>
@@ -457,8 +456,8 @@ export default function Home() {
             </p>
             <p>
               From managing students and courses to tracking payments and
-              preparing WhatsApp reminders, CoachFort brings everything into one
-              simple platform.
+              preparing follow-up workflows, CoachFort brings everything into
+              one simple platform.
             </p>
             <p>
               We focus on practical, real-world workflows so coaches can spend
@@ -528,6 +527,17 @@ export default function Home() {
                 </address>
                 <div className="mt-6">
                   <p className="text-sm font-semibold text-[#66788F]">
+                    Support email
+                  </p>
+                  <a
+                    className="mt-2 inline-block text-lg font-semibold text-[#145DA0] transition hover:text-[#0F4C81]"
+                    href="mailto:support@coachfort.com"
+                  >
+                    support@coachfort.com
+                  </a>
+                </div>
+                <div className="mt-6">
+                  <p className="text-sm font-semibold text-[#66788F]">
                     Mobile / WhatsApp
                   </p>
                   <a
@@ -538,8 +548,8 @@ export default function Home() {
                   </a>
                 </div>
               </div>
-              <Button href={whatsappUrl} size="lg">
-                Chat on WhatsApp
+              <Button href="/support" size="lg">
+                Get Support
               </Button>
             </div>
           </Card>
@@ -568,11 +578,11 @@ export default function Home() {
               </Button>
               <Button
                 className="border-white/25 bg-white/10 text-white hover:bg-white/15"
-                href={whatsappUrl}
+                href="/support"
                 size="lg"
                 variant="secondary"
               >
-                Chat on WhatsApp
+                Contact Support
               </Button>
             </div>
           </div>

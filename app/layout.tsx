@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 
 const title = "CoachFort | Coaching Centre Management Platform";
 const description =
-  "CoachFort helps coaching centres, academies, training institutes, and education businesses manage students, courses, sessions, assignments, manual fee tracking, documents, and WhatsApp-ready workflows.";
+  "CoachFort helps coaching centres, academies, training institutes, and education businesses manage students, courses, sessions, assignments, manual fee tracking, documents, and follow-up workflows.";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://coachfort.com"),

@@ -7,7 +7,6 @@ import { useEffect, useState } from "react";
 import { AuthInput } from "@/src/components/auth/AuthInput";
 import { GoogleOAuthButton } from "@/src/components/auth/GoogleOAuthButton";
 import {
-  earlyAccessContactHref,
   earlyAccessMessage,
 } from "@/src/components/marketing/EarlyAccessNotice";
 import { Button } from "@/src/components/ui/Button";
@@ -55,7 +54,9 @@ export function SignupForm() {
     setMessage("");
 
     if (publicSignupPaused) {
-      setMessage("Public signup is paused during early access. Contact us for early access.");
+      setMessage(
+        "Public signup is paused during controlled early access. Contact CoachFort support or use an invitation link from your academy.",
+      );
       return;
     }
 
@@ -129,13 +130,13 @@ export function SignupForm() {
         {publicSignupPaused ? (
           <a
             className="mt-3 inline-flex font-semibold text-[#145DA0] underline-offset-4 hover:underline"
-            href={earlyAccessContactHref}
+            href="/support"
           >
             Contact us for early access
           </a>
         ) : (
           <p className="mt-3 font-semibold text-amber-900">
-            This invite signup flow remains available for invited users.
+            This invite signup flow remains available for invited workspace users.
           </p>
         )}
       </div>
