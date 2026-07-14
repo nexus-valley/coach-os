@@ -30,7 +30,7 @@ export function StudentPortalAssignments({ context }: { context: StudentPortalCo
   return (
     <div className="space-y-6">
       <PageHeader
-        description="Review homework, due dates, feedback, and scores shared by your institute."
+        description="Review homework, due dates, feedback, and scores shared by your coach."
         eyebrow="Due work"
         title="Assignments"
       />
@@ -42,7 +42,7 @@ export function StudentPortalAssignments({ context }: { context: StudentPortalCo
       </section>
 
       <SectionHeader
-        description="Assignments are shown only when they are published for your enrolled course or cohort."
+        description="Assignments are shown only when they are published for your enrolled program or cohort."
         title="Your assignment list"
       />
       <div className="space-y-4">

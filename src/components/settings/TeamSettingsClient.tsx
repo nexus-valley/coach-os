@@ -117,7 +117,7 @@ const roleDefinitions: {
   },
   {
     description:
-      "Can manage operating modules like courses, students, cohorts, enrollments, and payments.",
+      "Can manage operating modules like programs, students, cohorts, enrollments, and payments.",
     role: "admin",
     title: "Admin",
   },
@@ -129,7 +129,7 @@ const roleDefinitions: {
   },
   {
     description:
-      "Training-focused access for assigned course, cohort, and student workflows without billing or workspace settings.",
+      "Training-focused access for assigned program, cohort, and student workflows without billing or workspace settings.",
     role: "trainer",
     title: "Trainer",
   },
@@ -642,7 +642,7 @@ export function TeamSettingsClient() {
     const courseId = selectedCourseByTrainer[member.user_id];
 
     if (!courseId) {
-      setActionError("Select a course to assign.");
+      setActionError("Select a program to assign.");
       return;
     }
 
@@ -657,7 +657,7 @@ export function TeamSettingsClient() {
       });
       await loadTrainerAssignments(tenant, members);
     } catch (caught) {
-      setActionError(getErrorMessage(caught, "Unable to assign course."));
+      setActionError(getErrorMessage(caught, "Unable to assign program."));
     } finally {
       setMutatingMemberId("");
     }
@@ -711,7 +711,7 @@ export function TeamSettingsClient() {
       });
       await loadTrainerAssignments(tenant, members);
     } catch (caught) {
-      setActionError(getErrorMessage(caught, "Unable to remove course."));
+      setActionError(getErrorMessage(caught, "Unable to remove program."));
     } finally {
       setMutatingMemberId("");
     }
@@ -921,14 +921,14 @@ export function TeamSettingsClient() {
           <form className="mt-7 grid gap-5" onSubmit={handleBrandingSubmit}>
             <div className="grid gap-5 md:grid-cols-2">
               <label className="block text-sm font-medium text-slate-300">
-                Institute / Academy Name
+                Coaching Brand Name
                 <input
                   className="mt-2 h-11 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition placeholder:text-slate-500 disabled:cursor-not-allowed disabled:bg-slate-900 disabled:text-slate-500 focus:border-teal-400/50 focus:ring-4 focus:ring-teal-400/10"
                   disabled={!canManageBranding || brandingSaving}
                   onChange={(event) =>
                     handleBrandingChange("workspaceDisplayName", event)
                   }
-                  placeholder="Nexus Valley Academy"
+                  placeholder="Nexus Valley Coaching"
                   required
                   value={brandingForm.workspaceDisplayName}
                 />
@@ -1035,7 +1035,7 @@ export function TeamSettingsClient() {
                   onChange={(event) =>
                     handleBrandingChange("certificateIssuerName", event)
                   }
-                  placeholder="Academy Director"
+                  placeholder="Program Director"
                   value={brandingForm.certificateIssuerName}
                 />
               </label>
@@ -1333,7 +1333,7 @@ export function TeamSettingsClient() {
                   className="mt-2 h-11 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-teal-400/50 focus:ring-4 focus:ring-teal-400/10"
                   disabled={mutatingInvitationId === "new"}
                   onChange={(event) => setInviteEmail(event.target.value)}
-                  placeholder="trainer@academy.com"
+                  placeholder="trainer@coachbrand.com"
                   required
                   type="email"
                   value={inviteEmail}
@@ -1458,10 +1458,10 @@ export function TeamSettingsClient() {
                   Trainer assignments
                 </Badge>
                 <h3 className="mt-4 text-2xl font-semibold">
-                  Course and cohort visibility
+                  Program and cohort visibility
                 </h3>
                 <p className="mt-2 text-sm leading-6 text-slate-400">
-                  Trainers only see the courses, cohorts, students, and
+                  Trainers only see the programs, cohorts, students, and
                   enrollments assigned here.
                 </p>
               </div>
@@ -1475,7 +1475,7 @@ export function TeamSettingsClient() {
               {members.filter((member) => member.role === "trainer").length ===
               0 ? (
                 <div className="rounded-3xl border border-white/10 bg-white/5 p-6 text-sm text-slate-400">
-                  Change a team member role to Trainer to assign course and
+                  Change a team member role to Trainer to assign program and
                   cohort visibility.
                 </div>
               ) : (
@@ -1511,7 +1511,7 @@ export function TeamSettingsClient() {
                         <div className="mt-5 grid gap-5 xl:grid-cols-2">
                           <div>
                             <p className="text-sm font-semibold text-slate-300">
-                              Assign Courses
+                              Assign Programs
                             </p>
                             <div className="mt-3 flex gap-2">
                               <select
@@ -1527,7 +1527,7 @@ export function TeamSettingsClient() {
                                 }
                               >
                                 <option className="text-slate-950" value="">
-                                  Select course
+                                  Select program
                                 </option>
                                 {courses.map((course) => (
                                   <option
@@ -1551,7 +1551,7 @@ export function TeamSettingsClient() {
                             <div className="mt-3 flex flex-wrap gap-2">
                               {assignedCourses.length === 0 ? (
                                 <span className="text-sm text-slate-500">
-                                  No course assignments.
+                                  No program assignments.
                                 </span>
                               ) : (
                                 assignedCourses.map((assignment) => (
@@ -1559,7 +1559,7 @@ export function TeamSettingsClient() {
                                     className="inline-flex items-center gap-2 rounded-full border border-teal-400/30 bg-teal-400/10 px-3 py-1 text-xs font-semibold text-teal-200"
                                     key={assignment.id}
                                   >
-                                    {assignment.course?.title ?? "Course"}
+                                    {assignment.course?.title ?? "Program"}
                                     <button
                                       className="text-teal-100 hover:text-white"
                                       onClick={() =>

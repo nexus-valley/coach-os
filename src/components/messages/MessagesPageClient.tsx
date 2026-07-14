@@ -220,8 +220,8 @@ export function MessagesPageClient() {
           ) : null}
           </>
         }
-        description="Manage student support requests and direct academy-student conversations inside CoachFort. Broadcast providers are not connected in this MVP."
-        eyebrow="Academy-student chat"
+        description="Manage student support requests and direct coach-student conversations inside CoachFort. Broadcast providers are not connected in this MVP."
+        eyebrow="Coach-student support"
         metadata={
           <>
             <Badge tone="info">Student messages</Badge>

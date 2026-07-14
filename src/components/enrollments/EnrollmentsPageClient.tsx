@@ -133,7 +133,7 @@ export function EnrollmentsPageClient() {
             Enrollments
           </h2>
           <p className="mt-3 max-w-2xl text-base leading-7 text-slate-400">
-            See which students are connected to which courses across this
+            See which students are connected to which programs across this
             workspace.
           </p>
         </div>
@@ -157,7 +157,7 @@ export function EnrollmentsPageClient() {
             <input
               className="mt-2 h-11 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition placeholder:text-slate-400 focus:border-white/30 focus:ring-4 focus:ring-white/10"
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Student or course"
+              placeholder="Student or program"
               type="search"
               value={search}
             />
@@ -203,7 +203,7 @@ export function EnrollmentsPageClient() {
       ) : filteredEnrollments.length === 0 ? (
         <EmptyState
           action={{ label: "Open Students", onClick: () => router.push("/app/students") }}
-          description="Enroll a student from their profile to create the first course connection."
+          description="Enroll a student from their profile to create the first program connection."
           icon="EN"
           title="No enrollments found"
         />
@@ -218,7 +218,7 @@ export function EnrollmentsPageClient() {
                 ].join(" ")}
               >
                 <span>Student</span>
-                <span>Course</span>
+                <span>Program</span>
                 <span>Status</span>
                 <span>Enrolled</span>
               </div>
@@ -250,7 +250,7 @@ export function EnrollmentsPageClient() {
                       className="min-w-0 truncate font-semibold transition hover:text-white"
                       href={`/app/courses/${enrollment.course_id}`}
                     >
-                      {enrollment.course?.title ?? "Course unavailable"}
+                      {enrollment.course?.title ?? "Program unavailable"}
                     </Link>
                     <div>
                       <EnrollmentStatusBadge status={enrollment.status} />

@@ -61,7 +61,7 @@ function messageBubbleClass(message: AcademyChatMessage) {
 function senderLabel(message: AcademyChatMessage) {
   if (message.sender_type === "student") return "You";
   if (message.sender_type === "system") return "System";
-  return "Academy";
+  return "Coach team";
 }
 
 function canStudentReply(thread: AcademyChatThread | null) {
@@ -261,7 +261,7 @@ export function StudentPortalMessages({ context }: StudentPortalMessagesProps) {
           </Button>
           </>
         }
-        description="Message your academy, ask for support, and keep replies in one student-safe inbox."
+        description="Message your coach, ask for support, and keep replies in one student-safe inbox."
         eyebrow="Student communication"
         metadata={
           <>
@@ -279,14 +279,14 @@ export function StudentPortalMessages({ context }: StudentPortalMessagesProps) {
         <Card className="p-4">
           <SectionHeader
             actions={<Badge tone="light">{sortedThreads.length}</Badge>}
-            description="Support requests and academy replies are listed here."
+            description="Support requests and coach replies are listed here."
             title="Your threads"
           />
           <div className="mt-4 space-y-3">
             {sortedThreads.length === 0 ? (
               <PortalEmptyState>
                 No messages yet. Start a support request when you need help
-                from your academy.
+                from your coach.
               </PortalEmptyState>
             ) : (
               sortedThreads.map((thread) => {
@@ -435,7 +435,7 @@ export function StudentPortalMessages({ context }: StudentPortalMessagesProps) {
               <div>
                 <Badge tone="warning">Support request</Badge>
                 <h2 className="mt-3 text-2xl font-semibold">
-                  Contact your academy
+                  Contact your coach
                 </h2>
               </div>
               <Button
@@ -458,7 +458,7 @@ export function StudentPortalMessages({ context }: StudentPortalMessagesProps) {
                       title: event.target.value,
                     }))
                   }
-                  placeholder="Example: Doubt about tomorrow's session"
+                  placeholder="Example: Doubt about tomorrow's live class"
                   required
                   value={supportForm.title}
                 />

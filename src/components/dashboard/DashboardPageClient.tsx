@@ -126,7 +126,7 @@ function SessionPreviewList({
               <p className="mt-1 text-sm text-[#425B76]">
                 {session.cohortName ??
                   session.courseTitle ??
-                  "General session"}
+                  "General live class"}
               </p>
             </div>
             <Badge tone={session.status === "completed" ? "success" : "warning"}>
@@ -303,12 +303,12 @@ export function DashboardPageClient() {
       value: String(metrics.totalStudents),
     },
     {
-      detail: "Published courses, or drafts if none are published",
-      label: "Active Courses",
+      detail: "Published programs, or drafts if none are published",
+      label: "Active Programs",
       value: String(metrics.activeCourses),
     },
     {
-      detail: "Student-course connections",
+      detail: "Student-program connections",
       label: "Enrollments",
       value: String(metrics.totalEnrollments),
     },
@@ -366,7 +366,7 @@ export function DashboardPageClient() {
             Workspace: {tenant?.name ?? "Current workspace"}
           </div>
         }
-        description="Real-time workspace analytics for students, courses, enrollments, payments, and operational health."
+        description="Real-time workspace analytics for students, programs, enrollments, payments, and operational health."
         eyebrow="Dashboard analytics"
         title="Dashboard"
       />
@@ -384,7 +384,7 @@ export function DashboardPageClient() {
       <Card className="mt-8 border-[#D8E8F0] bg-white p-6 text-[#0B1F33] shadow-sm shadow-[#0B2A3D]/5">
         <div className="grid gap-5 lg:grid-cols-[1fr_auto] lg:items-center">
           <SectionHeader
-            description="Review live workspace data through the hardened module flows for students, courses, finance, reports, and operations."
+            description="Review live workspace data through the hardened module flows for students, programs, sales, analytics, and operations."
             eyebrow="Workspace overview"
             title="Manage core records"
           />
@@ -393,7 +393,7 @@ export function DashboardPageClient() {
               View Students
             </Button>
             <Button href="/app/courses" type="button" variant="secondary">
-              View Courses
+              View Programs
             </Button>
           </div>
         </div>
@@ -466,11 +466,11 @@ export function DashboardPageClient() {
           Add Student
         </Button>
         <Button href="/app/courses" size="lg" variant="secondary">
-          Create Course
+          Create Program
         </Button>
         {canAccessPayments(currentRole) ? (
           <Button href="/app/finance" size="lg" variant="secondary">
-            Open Finance
+            Open Sales
           </Button>
         ) : null}
       </section>
@@ -484,12 +484,12 @@ export function DashboardPageClient() {
                 Attendance Snapshot
               </h3>
               <p className="mt-2 text-sm leading-6 text-[#425B76]">
-                Foundation metrics from marked sessions. Present and late count
+                Foundation metrics from marked live classes. Present and late count
                 as attended.
               </p>
             </div>
             <Button href="/app/sessions" size="sm" variant="secondary">
-              View Sessions
+              View Live Classes
             </Button>
           </div>
           <div className="mt-6 grid gap-4 sm:grid-cols-3">
@@ -544,20 +544,20 @@ export function DashboardPageClient() {
               </div>
             </div>
             <div>
-              <h3 className="text-xl font-semibold">Upcoming Sessions</h3>
+              <h3 className="text-xl font-semibold">Upcoming Live Classes</h3>
               <div className="mt-4">
                 <SessionPreviewList
-                  emptyText="No upcoming sessions scheduled."
+                  emptyText="No upcoming live classes scheduled."
                   sessions={metrics.attendance.upcomingSessions}
                   showJoin
                 />
               </div>
             </div>
             <div>
-              <h3 className="text-xl font-semibold">Recent Sessions</h3>
+              <h3 className="text-xl font-semibold">Recent Live Classes</h3>
               <div className="mt-4">
                 <SessionPreviewList
-                  emptyText="No recent sessions available."
+                  emptyText="No recent live classes available."
                   sessions={metrics.attendance.recentSessions}
                 />
               </div>
@@ -777,7 +777,7 @@ export function DashboardPageClient() {
               <Badge tone="light">Notifications</Badge>
               <h3 className="mt-4 text-xl font-semibold">Recent Updates</h3>
               <p className="mt-2 text-sm leading-6 text-[#425B76]">
-                Latest in-app communication across sessions, attendance,
+                Latest in-app communication across live classes, attendance,
                 billing, invitations, and system events.
               </p>
             </div>
@@ -897,13 +897,13 @@ export function DashboardPageClient() {
         <Card className="border-[#D8E8F0] bg-white p-6 text-[#0B1F33] shadow-2xl shadow-[#0B2A3D]/10">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <h3 className="text-xl font-semibold">Course Revenue Overview</h3>
+              <h3 className="text-xl font-semibold">Program Revenue Overview</h3>
               <p className="mt-2 text-sm leading-6 text-[#425B76]">
-                Completed payments grouped by course.
+                Completed payments grouped by program.
               </p>
             </div>
             <Badge className="border-[#D8E8F0] bg-[#F6FBFE] text-[#425B76]">
-              {metrics.courseRevenue.length} courses
+              {metrics.courseRevenue.length} programs
             </Badge>
           </div>
 
@@ -913,7 +913,7 @@ export function DashboardPageClient() {
                 No completed revenue yet
               </p>
               <p className="mt-2 text-sm leading-6 text-[#425B76]">
-                Completed student payments will appear here by course.
+                Completed student payments will appear here by program.
               </p>
             </div>
           ) : (

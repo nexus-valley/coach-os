@@ -170,8 +170,8 @@ export function StudentPortalCommunity({
   return (
     <div className="space-y-6">
       <PageHeader
-        description={`Join moderated discussions shared by ${context.tenant.name}. Students can comment on published academy posts.`}
-        eyebrow="Academy community"
+        description={`Join moderated discussions shared by ${context.tenant.name}. Students can comment on published coach posts.`}
+        eyebrow="Coach community"
         metadata={<Badge tone="light">{posts.length} published posts</Badge>}
         title="Community"
       />
@@ -181,7 +181,7 @@ export function StudentPortalCommunity({
 
       {posts.length === 0 ? (
         <PortalEmptyState>
-          No community posts have been published for your academy yet.
+          No community posts have been published for your workspace yet.
         </PortalEmptyState>
       ) : (
         <section className="grid gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
@@ -229,7 +229,7 @@ export function StudentPortalCommunity({
                     <Badge tone="info">
                       {getCommunityPostTypeLabel(selectedPost.post_type)}
                     </Badge>
-                    <Badge tone="light">Academy discussion</Badge>
+                    <Badge tone="light">Coach discussion</Badge>
                   </div>
                   <h2 className="mt-4 text-2xl font-semibold text-[#0B1F33]">
                     {selectedPost.title}
@@ -244,7 +244,7 @@ export function StudentPortalCommunity({
                   onSubmit={handleCommentSubmit}
                 >
                   <FormField
-                    description="Your comment is visible to your academy community after it is posted."
+                    description="Your comment is visible to your coach community after it is posted."
                     label="Add a comment"
                   >
                     <textarea

@@ -30,7 +30,7 @@ export function StudentPortalProfile({ context }: { context: StudentPortalContex
   return (
     <div className="space-y-6">
       <PageHeader
-        description="These details are maintained by your institute and linked to your student portal login."
+        description="These details are maintained by your coach and linked to your student portal login."
         eyebrow="My details"
         metadata={<Badge tone="success">Linked account</Badge>}
         title="Profile"
@@ -38,14 +38,14 @@ export function StudentPortalProfile({ context }: { context: StudentPortalContex
 
       <Card className="border-[#D8E8F0] bg-white p-6">
         <SectionHeader
-          description="Contact your institute if any profile detail needs correction."
+          description="Contact your coach if any profile detail needs correction."
           title="Student profile"
         />
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 className="text-2xl font-semibold">{overview.student.full_name}</h2>
             <p className="mt-2 text-sm text-[#425B76]">
-              Student profile details maintained by your institute.
+              Student profile details maintained by your coach.
             </p>
           </div>
           <Badge tone="success">Linked</Badge>

@@ -10,11 +10,11 @@ export default function StudentPortalLoginPage() {
         <section className="hidden lg:block">
           <CoachFortBrandAsset className="h-20 w-72" variant="fullLogo" />
           <h1 className="mt-10 text-5xl font-semibold leading-tight tracking-normal">
-            Student access for your institute portal.
+            Student access for your coach&apos;s learning portal.
           </h1>
           <p className="mt-6 max-w-xl text-lg leading-8 text-[#425B76]">
-            View your courses, sessions, homework, attendance, certificates,
-            payments, and institute updates in a focused student experience.
+            View your programs, live classes, materials, payments,
+            announcements, and support messages in a focused student experience.
           </p>
         </section>
         <section className="mx-auto w-full max-w-xl">

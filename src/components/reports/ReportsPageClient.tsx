@@ -44,7 +44,7 @@ const reportTabs: { description: string; label: string; value: ReportCategory }[
     value: "assignments",
   },
   {
-    description: "Course, cohort, and session health",
+    description: "Program, cohort, and live class health",
     label: "Programs",
     value: "courses",
   },
@@ -281,7 +281,7 @@ export function ReportsPageClient() {
           </div>
 
           <label className="block">
-            <span className="text-sm font-medium text-[#425B76]">Course</span>
+            <span className="text-sm font-medium text-[#425B76]">Program</span>
             <select
               className="mt-2 h-11 w-full rounded-xl border border-[#D8E8F0] bg-white px-3 text-sm text-[#0B1F33] outline-none focus:border-[#2ECBEA]"
               onChange={(event) =>
@@ -292,7 +292,7 @@ export function ReportsPageClient() {
               }
               value={filters.courseId ?? ""}
             >
-              <option value="">All courses</option>
+              <option value="">All programs</option>
               {reportsData?.filters.courses.map((course) => (
                 <option key={course.id} value={course.id}>
                   {course.label}
@@ -375,7 +375,7 @@ export function ReportsPageClient() {
         </div>
         <p className="mt-4 text-sm text-[#66788F]">
           Generated {reportsData ? formatDateTime(reportsData.generatedAt) : "after loading"}.
-          Trainer users see assigned-course, assigned-cohort, and scoped-student
+          Trainer users see assigned-program, assigned-cohort, and scoped-student
           analytics only.
         </p>
       </Card>

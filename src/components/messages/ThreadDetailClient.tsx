@@ -43,7 +43,7 @@ function statusTone(status: AcademyChatThread["status"]) {
 function senderLabel(message: AcademyChatMessage) {
   if (message.sender_type === "student") return "Student";
   if (message.sender_type === "system") return "System";
-  return "Academy";
+  return "Coach team";
 }
 
 function messageBubbleClass(message: AcademyChatMessage) {
@@ -269,7 +269,7 @@ export function ThreadDetailClient({ threadId }: ThreadDetailClientProps) {
 
       <Card className="p-5">
         <SectionHeader
-          description="Messages stay tenant-scoped and student-facing through the existing academy chat RPCs."
+          description="Messages stay tenant-scoped and student-facing through the existing support chat RPCs."
           title="Conversation"
         />
         {messages.length === 0 ? (
@@ -329,7 +329,7 @@ export function ThreadDetailClient({ threadId }: ThreadDetailClientProps) {
           <form className="space-y-4" onSubmit={handleSendMessage}>
             <label className="block">
               <span className="text-sm font-medium text-[#425B76]">
-                Reply as academy
+                Reply as coach team
               </span>
               <textarea
                 className="mt-2 min-h-32 w-full resize-none rounded-2xl border border-[#D8E8F0] bg-white px-4 py-3 text-sm leading-6 text-[#0B1F33] outline-none transition focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"

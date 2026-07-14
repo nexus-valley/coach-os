@@ -160,7 +160,7 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
         setEnrollments(currentCourse ? courseEnrollments : []);
 
         if (!currentCourse) {
-          setError("Course not found in this workspace.");
+          setError("Program not found in this workspace.");
         }
       } catch (caught) {
         if (!active) {
@@ -168,7 +168,7 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
         }
 
         setError(
-          getErrorMessage(caught, "Unable to load this course right now."),
+          getErrorMessage(caught, "Unable to load this program right now."),
         );
       } finally {
         if (active) {
@@ -360,7 +360,7 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
     return (
       <div className="mx-auto max-w-7xl">
         <Card className="h-72 animate-pulse border-white/10 bg-[#101214]">
-          <span className="sr-only">Loading course</span>
+          <span className="sr-only">Loading program</span>
         </Card>
       </div>
     );
@@ -370,15 +370,15 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
     return (
       <div className="mx-auto max-w-7xl">
         <Card className="border-white/10 bg-[#101214] p-8 text-white shadow-2xl shadow-black/20">
-          <p className="text-sm font-semibold text-slate-500">Course detail</p>
+          <p className="text-sm font-semibold text-slate-500">Program detail</p>
           <h2 className="mt-3 text-2xl font-semibold">
-            {error || "Course not found."}
+            {error || "Program not found."}
           </h2>
           <Link
             className="mt-6 inline-flex h-11 items-center justify-center rounded-full bg-teal-400 px-5 text-sm font-semibold text-black"
             href="/app/courses"
           >
-            Back to courses
+            Back to programs
           </Link>
         </Card>
       </div>
@@ -391,7 +391,7 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
         className="text-sm font-semibold text-slate-400 transition hover:text-white"
         href="/app/courses"
       >
-        Back to courses
+        Back to programs
       </Link>
 
       <section className="mt-6 grid gap-6 xl:grid-cols-[1fr_0.42fr]">
@@ -399,7 +399,7 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
           <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <Badge className="border-white/15 bg-white/10 text-white">
-                Course overview
+                Program overview
               </Badge>
               <h2 className="mt-5 text-4xl font-semibold leading-tight tracking-normal">
                 {course.title}
@@ -442,7 +442,7 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
               (total, section) => total + section.lessons.length,
               0,
             )}{" "}
-            lessons created across this course.
+            lessons created across this program.
           </p>
         </Card>
       </section>
@@ -458,13 +458,13 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
           <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-start">
             <div>
               <Badge className="border-white/15 bg-white/10 text-white">
-                Course structure
+                Program structure
               </Badge>
               <h3 className="mt-4 text-2xl font-semibold">
                 Sections and lessons
               </h3>
               <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-400">
-                Organize the course into ordered sections and lesson assets.
+                Organize the program into ordered sections and lesson assets.
               </p>
             </div>
             <Button
@@ -485,7 +485,7 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
                 No sections yet
               </h4>
               <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-slate-400">
-                Add your first section to start building the course structure.
+                Add your first section to start building the program structure.
                 Lessons can be added inside each section.
               </p>
             </div>
@@ -634,10 +634,10 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
                 Enrolled Students
               </Badge>
               <h3 className="mt-4 text-2xl font-semibold">
-                Course enrollment roster
+                Program enrollment roster
               </h3>
               <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-400">
-                View students connected to this course. Enrollment changes are
+                View students connected to this program. Enrollment changes are
                 managed from student profiles and the enrollment overview.
               </p>
             </div>
@@ -695,7 +695,7 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
         {[
           {
             detail:
-              "Use the course structure above to prepare the learning path before launch.",
+              "Use the program structure above to prepare the learning path before launch.",
             title: "Lessons",
           },
           {
@@ -909,7 +909,7 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
             <p className="mt-3 text-sm leading-6 text-slate-500">
               {deleteTarget.kind === "section"
                 ? "This will also remove the lessons inside this section through the database cascade."
-                : "This lesson will be removed from the course structure."}
+                : "This lesson will be removed from the program structure."}
             </p>
             <div className="mt-7 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
               <Button

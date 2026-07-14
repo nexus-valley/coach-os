@@ -50,7 +50,7 @@ export function StudentPortalCourses({ context }: { context: StudentPortalContex
       />
       <div className="grid gap-5 lg:grid-cols-2">
         {overview.courses.length === 0 ? (
-          <PortalEmptyState>No enrolled courses yet.</PortalEmptyState>
+          <PortalEmptyState>No enrolled programs yet.</PortalEmptyState>
         ) : (
           overview.courses.map((course) => (
             <Card className="border-[#D8E8F0] bg-white p-6" key={course.course.id}>

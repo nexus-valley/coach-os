@@ -209,7 +209,7 @@ export function StudentsPageClient() {
           </h2>
           <p className="mt-3 max-w-2xl text-base leading-7 text-slate-400">
             Capture leads, keep active student records clean, and connect people
-            into courses, cohorts, enrollments, and finance workflows.
+            into programs, cohorts, enrollments, and sales workflows.
           </p>
         </div>
         <Button onClick={() => setFormOpen(true)} size="lg" type="button">
@@ -303,7 +303,7 @@ export function StudentsPageClient() {
             description={
               <span className="text-slate-400">
                 Review contact readiness, lead source, and status before moving
-                students into courses and cohorts.
+                students into programs and cohorts.
               </span>
             }
             title={<span className="text-white">Student directory</span>}

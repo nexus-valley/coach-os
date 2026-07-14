@@ -87,7 +87,7 @@ export function StudentPortalDocuments({
       setSelectedDocument(detail.document);
       await recordDocumentView(documentId);
     } catch (caught) {
-      setError(getErrorMessage(caught, "Unable to open document."));
+      setError(getErrorMessage(caught, "Unable to open material."));
     }
   }
 
@@ -98,7 +98,7 @@ export function StudentPortalDocuments({
       const result = await getDocumentDownloadUrl(documentId);
       window.open(result.signedUrl, "_blank", "noopener,noreferrer");
     } catch (caught) {
-      setError(getErrorMessage(caught, "Unable to open document file."));
+      setError(getErrorMessage(caught, "Unable to open material file."));
     }
   }
 
@@ -252,7 +252,7 @@ export function StudentPortalDocuments({
                 )}
               </>
             ) : (
-              <PortalEmptyState>Select a document to view details.</PortalEmptyState>
+              <PortalEmptyState>Select a material to view details.</PortalEmptyState>
             )}
           </Card>
         </div>

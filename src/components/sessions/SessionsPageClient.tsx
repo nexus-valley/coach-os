@@ -325,7 +325,7 @@ export function SessionsPageClient() {
             Live Classes
           </h2>
           <p className="mt-3 max-w-2xl text-base leading-7 text-[#425B76]">
-            Schedule coaching sessions, mark attendance, and keep delivery
+            Schedule live classes, mark attendance, and keep delivery
             organized for your students.
           </p>
         </div>

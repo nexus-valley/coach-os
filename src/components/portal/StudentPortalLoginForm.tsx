@@ -82,7 +82,7 @@ export function StudentPortalLoginForm() {
         autoComplete="email"
         label="Student email"
         onChange={(event) => setEmail(event.target.value)}
-        placeholder="student@academy.com"
+        placeholder="student@coachbrand.com"
         required
         type="email"
         value={email}

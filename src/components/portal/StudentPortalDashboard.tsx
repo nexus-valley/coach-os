@@ -120,7 +120,7 @@ export function StudentPortalDashboard({ context }: { context: StudentPortalCont
               </>
             ) : (
               <p className="mt-3 text-sm text-[#425B76]">
-                No upcoming sessions are scheduled yet.
+                No upcoming live classes are scheduled yet.
               </p>
             )}
           </div>
@@ -186,7 +186,7 @@ export function StudentPortalDashboard({ context }: { context: StudentPortalCont
           <div className="mt-4 space-y-3">
             {announcements.length === 0 ? (
               <PortalEmptyState>
-                No academy announcements have been published yet.
+                No coach announcements have been published yet.
               </PortalEmptyState>
             ) : (
               announcements.map((announcement) => (
@@ -195,7 +195,7 @@ export function StudentPortalDashboard({ context }: { context: StudentPortalCont
                   key={announcement.id}
                 >
                   <div className="flex flex-wrap items-center gap-2">
-                    <Badge tone="info">Academy update</Badge>
+                    <Badge tone="info">Coach update</Badge>
                     <span className="text-xs font-medium text-[#66788F]">
                       {formatAnnouncementDate(announcement.published_at)}
                     </span>

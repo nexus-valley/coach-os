@@ -42,7 +42,7 @@ export function StudentPortalNotifications({ context }: { context: StudentPortal
       </section>
 
       <SectionHeader
-        description="Recent student-facing updates from your institute."
+        description="Recent student-facing updates from your coach."
         title="Latest updates"
       />
       <div className="space-y-4">

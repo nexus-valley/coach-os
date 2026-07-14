@@ -50,7 +50,7 @@ export function OwnerDashboard({
       value: metrics.assignments.overdueAssignments,
     },
     {
-      description: "Marked absences may need academic follow-up.",
+      description: "Marked absences may need coach follow-up.",
       href: "/app/sessions",
       label: "Attendance alerts",
       tone: "warning" as const,
@@ -207,7 +207,7 @@ export function OwnerDashboard({
           value={metrics.totalStudents.toLocaleString()}
         />
         <StatCard
-          description="Published courses, or drafts if none are published."
+          description="Published programs, or drafts if none are published."
           label="Programs"
           value={metrics.activeCourses.toLocaleString()}
         />

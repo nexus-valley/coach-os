@@ -59,7 +59,7 @@ export function StudentPortalPayments({ context }: { context: StudentPortalConte
           setFinanceError(
             caught instanceof Error
               ? caught.message
-              : "Unable to load finance records.",
+              : "Unable to load payment records.",
           );
         }
       } finally {
@@ -112,7 +112,7 @@ export function StudentPortalPayments({ context }: { context: StudentPortalConte
         <PortalError message={financeError} />
       ) : financeLoading ? (
         <div className="mt-6">
-          <PortalLoadingCard label="Loading finance records" />
+          <PortalLoadingCard label="Loading payment records" />
         </div>
       ) : null}
 

@@ -70,13 +70,13 @@ export function StudentPortalAnnouncements({
     <div className="space-y-6">
       <PageHeader
         description={`Read official updates shared by ${context.tenant.name}. Announcements are read-only for students.`}
-        eyebrow="Academy updates"
+        eyebrow="Coach updates"
         metadata={<Badge tone="light">{announcements.length} published</Badge>}
         title="Announcements"
       />
 
       <SectionHeader
-        description="Published academy notices, schedule updates, and student-facing information."
+        description="Published coach notices, schedule updates, and student-facing information."
         title="Latest announcements"
       />
 
@@ -93,7 +93,7 @@ export function StudentPortalAnnouncements({
             >
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0">
-                  <Badge tone="info">Academy announcement</Badge>
+                  <Badge tone="info">Coach announcement</Badge>
                   <h2 className="mt-3 text-xl font-semibold text-[#0B1F33]">
                     {announcement.title}
                   </h2>

@@ -384,7 +384,7 @@ export function CommunityPageClient() {
             ) : null}
           </>
         }
-        description="Create controlled academy discussion posts for students. Students can read published posts and comment under them."
+        description="Create controlled coaching-community posts for students. Students can read published posts and comment under them."
         eyebrow="Student communication"
         metadata={
           <>
@@ -539,7 +539,7 @@ export function CommunityPageClient() {
             <SectionHeader
               description={
                 selectedPost
-                  ? "Review student and academy comments for the selected post."
+                  ? "Review student and coach-team comments for the selected post."
                   : "Select a post to review its comments."
               }
               title="Comments"
@@ -557,7 +557,7 @@ export function CommunityPageClient() {
                 {canCreate && selectedPost.status !== "archived" && selectedPost.status !== "hidden" ? (
                   <form className="space-y-3" onSubmit={handleCommentSubmit}>
                     <FormField
-                      description="Reply as the academy team. Plain text only."
+                      description="Reply as the coach team. Plain text only."
                       label="Team comment"
                     >
                       <textarea

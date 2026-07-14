@@ -233,7 +233,7 @@ export function CoursesPageClient() {
               className="border-white/10 bg-[#101214] p-6"
               key={item}
             >
-              <span className="sr-only">Loading course</span>
+              <span className="sr-only">Loading program</span>
               <Skeleton className="h-6 w-24 bg-white/10" />
               <Skeleton className="mt-8 h-8 w-3/4 bg-white/10" />
               <Skeleton className="mt-5 h-4 w-full bg-white/10" />
@@ -269,7 +269,7 @@ export function CoursesPageClient() {
             description={
               <span className="text-slate-400">
                 Review published programs and drafts before linking them to
-                batches, sessions, assignments, and enrollments.
+                batches, live classes, assignments, and enrollments.
               </span>
             }
             title={<span className="text-white">Program catalog</span>}

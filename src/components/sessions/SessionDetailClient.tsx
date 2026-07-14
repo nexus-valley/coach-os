@@ -222,7 +222,7 @@ export function SessionDetailClient({ sessionId }: SessionDetailClientProps) {
           });
 
           if (!currentSession) {
-            setError("Session not found in this workspace.");
+            setError("Live class not found in this workspace.");
             return;
           }
 
@@ -233,7 +233,7 @@ export function SessionDetailClient({ sessionId }: SessionDetailClientProps) {
           return;
         }
 
-        setError(getErrorMessage(caught, "Unable to load session."));
+        setError(getErrorMessage(caught, "Unable to load live class."));
       } finally {
         if (active) {
           setLoading(false);
@@ -300,7 +300,7 @@ export function SessionDetailClient({ sessionId }: SessionDetailClientProps) {
     }
 
     if (!canManageEffective) {
-      setActionError("You do not have permission to manage this session.");
+      setActionError("You do not have permission to manage this live class.");
       return;
     }
 
@@ -311,15 +311,15 @@ export function SessionDetailClient({ sessionId }: SessionDetailClientProps) {
     try {
       if (nextStatus === "completed") {
         await completeSession({ sessionId, tenantId: tenant.id });
-        setSuccess("Session completed.");
+        setSuccess("Live class completed.");
       } else {
         await cancelSession({ sessionId, tenantId: tenant.id });
-        setSuccess("Session canceled.");
+        setSuccess("Live class canceled.");
       }
 
       await refresh();
     } catch (caught) {
-      setActionError(getErrorMessage(caught, "Unable to update session."));
+      setActionError(getErrorMessage(caught, "Unable to update live class."));
     } finally {
       setMutating("");
     }
@@ -344,7 +344,7 @@ export function SessionDetailClient({ sessionId }: SessionDetailClientProps) {
     return (
       <div className="mx-auto max-w-7xl">
         <Card className="h-72 animate-pulse border-[#D8E8F0] bg-white">
-          <span className="sr-only">Loading session</span>
+          <span className="sr-only">Loading live class</span>
         </Card>
       </div>
     );
@@ -352,7 +352,7 @@ export function SessionDetailClient({ sessionId }: SessionDetailClientProps) {
 
   if (!currentRole || !canAccess) {
     return (
-      <AccessDeniedCard description="You do not have permission to access attendance sessions." />
+      <AccessDeniedCard description="You do not have permission to access live class attendance." />
     );
   }
 
@@ -360,12 +360,12 @@ export function SessionDetailClient({ sessionId }: SessionDetailClientProps) {
     return (
       <div className="mx-auto max-w-7xl">
         <Card className="border-[#D8E8F0] bg-white p-8 shadow-2xl shadow-[#0B2A3D]/10">
-          <p className="text-sm font-semibold text-[#66788F]">Session detail</p>
+          <p className="text-sm font-semibold text-[#66788F]">Live class detail</p>
           <h2 className="mt-3 text-2xl font-semibold text-[#0B1F33]">
-            {error || "Session not found."}
+            {error || "Live class not found."}
           </h2>
           <Button className="mt-6" href="/app/sessions">
-            Back to sessions
+            Back to live classes
           </Button>
         </Card>
       </div>
@@ -378,7 +378,7 @@ export function SessionDetailClient({ sessionId }: SessionDetailClientProps) {
         className="text-sm font-semibold text-[#425B76] transition hover:text-[#0B1F33]"
         href="/app/sessions"
       >
-        Back to sessions
+        Back to live classes
       </Link>
 
       <section className="mt-6 grid gap-6 xl:grid-cols-[1fr_0.38fr]">
@@ -400,7 +400,7 @@ export function SessionDetailClient({ sessionId }: SessionDetailClientProps) {
               <p className="mt-3 text-sm font-semibold text-[#0E7490]">
                 {session.cohort?.name ??
                   session.course?.title ??
-                  "General session"}
+                  "General live class"}
               </p>
             </div>
             {canMark ? (
@@ -429,7 +429,7 @@ export function SessionDetailClient({ sessionId }: SessionDetailClientProps) {
           </div>
 
           <p className="mt-7 max-w-3xl text-sm leading-6 text-[#425B76]">
-            {session.description || "No session notes added yet."}
+            {session.description || "No live class notes added yet."}
           </p>
 
           <div className="mt-8 grid gap-4 border-t border-[#D8E8F0] pt-6 sm:grid-cols-2">
@@ -551,7 +551,7 @@ export function SessionDetailClient({ sessionId }: SessionDetailClientProps) {
               Student roster
             </h3>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-[#425B76]">
-              Mark attendance for students from the linked cohort or course
+              Mark attendance for students from the linked cohort or program
               enrollment list.
             </p>
           </div>
@@ -573,9 +573,9 @@ export function SessionDetailClient({ sessionId }: SessionDetailClientProps) {
 
         {roster.length === 0 ? (
           <EmptyState
-            description="Add students to the linked cohort or enroll them in the linked course before marking attendance."
+            description="Add students to the linked cohort or enroll them in the linked program before marking attendance."
             icon="AT"
-            title="No students available for this session"
+            title="No students available for this live class"
           />
         ) : (
           <div className="mt-8 divide-y divide-[#D8E8F0] overflow-hidden rounded-3xl border border-[#D8E8F0]">

@@ -306,7 +306,7 @@ export function AnnouncementsPageClient() {
             ) : null}
           </>
         }
-        description="Create plain-text academy announcements for all students. Students see only published, non-expired announcements."
+        description="Create plain-text workspace announcements for all students. Students see only published, non-expired announcements."
         eyebrow="Student communication"
         metadata={
           <>
@@ -314,7 +314,7 @@ export function AnnouncementsPageClient() {
             <Badge tone="outline">No comments or reactions</Badge>
           </>
         }
-        title="Academy announcements"
+        title="Workspace announcements"
       />
 
       {actionError ? <FeedbackAlert>{actionError}</FeedbackAlert> : null}
@@ -322,7 +322,7 @@ export function AnnouncementsPageClient() {
 
       {!loading && !canManage ? (
         <FeedbackAlert tone="warning">
-          Only owner, admin, or staff users can manage academy announcements.
+          Only owner, admin, or staff users can manage workspace announcements.
           Announcement access is enforced again by the server.
         </FeedbackAlert>
       ) : null}

@@ -407,7 +407,7 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
       await refreshEnrollments();
     } catch (caught) {
       setActionError(
-        getErrorMessage(caught, "Unable to load available courses."),
+        getErrorMessage(caught, "Unable to load available programs."),
       );
     }
   }
@@ -450,7 +450,7 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
     event.preventDefault();
 
     if (!tenant || !selectedCourseId) {
-      setActionError("Select a course before enrolling this student.");
+      setActionError("Select a program before enrolling this student.");
       return;
     }
 
@@ -696,7 +696,7 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
           </p>
           <div className="mt-7 flex flex-col gap-3">
             <Button onClick={openEnrollmentPanel} type="button">
-              Enroll in Course
+              Enroll in Program
             </Button>
             <Button
               className="border-slate-700! bg-white/10! text-white! hover:bg-white/15!"
@@ -712,7 +712,7 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
               type="button"
               variant="secondary"
             >
-              Open Finance Center
+              Open Sales
             </Button>
             <Button
               onClick={openWhatsAppFollowUp}
@@ -762,14 +762,14 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
               <Badge className="border-white/15 bg-white/10 text-white">
                 Enrollments
               </Badge>
-              <h3 className="mt-4 text-2xl font-semibold">Enrolled courses</h3>
+              <h3 className="mt-4 text-2xl font-semibold">Enrolled programs</h3>
               <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-400">
-                Connect this student to course products. Payments and cohorts
+                Connect this student to program products. Payments and cohorts
                 are tracked in their own focused sections.
               </p>
             </div>
             <Button onClick={openEnrollmentPanel} type="button">
-              Enroll in Course
+              Enroll in Program
             </Button>
           </div>
 
@@ -782,7 +782,7 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
                 No enrollments yet
               </h4>
               <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-slate-400">
-                Enroll this student into a course to start tracking learning
+                Enroll this student into a program to start tracking learning
                 access and completion status.
               </p>
             </div>
@@ -795,7 +795,7 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
                 >
                   <div>
                     <p className="font-semibold">
-                      {enrollment.course?.title ?? "Course unavailable"}
+                      {enrollment.course?.title ?? "Program unavailable"}
                     </p>
                     <p className="mt-1 text-sm text-slate-400">
                       Enrolled {formatDate(enrollment.enrolled_at)}
@@ -855,7 +855,7 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
               </Badge>
               <h3 className="mt-4 text-2xl font-semibold">Student batches</h3>
               <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-400">
-                Place this student into live batches without changing course
+                Place this student into live batches without changing program
                 enrollment or payment records.
               </p>
             </div>
@@ -871,7 +871,7 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
               </div>
               <h4 className="mt-5 text-xl font-semibold">No cohorts yet</h4>
               <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-slate-400">
-                Add this student to a cohort once a course batch is ready.
+                Add this student to a cohort once a program batch is ready.
               </p>
             </div>
           ) : (
@@ -886,7 +886,7 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
                       {membership.cohort?.name ?? "Cohort unavailable"}
                     </p>
                     <p className="mt-1 text-sm text-slate-400">
-                      {membership.cohort?.course?.title ?? "Course unavailable"}
+                      {membership.cohort?.course?.title ?? "Program unavailable"}
                     </p>
                   </div>
                   <p className="text-sm text-slate-400">
@@ -919,12 +919,12 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
               </h3>
               <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-400">
                 New fee plans, invoices, manual payments, and receipts are
-                managed in Finance Center. Existing payment-link records remain
+                managed in Sales. Existing payment-link records remain
                 visible here for historical reference only.
               </p>
             </div>
             <Button onClick={openPaymentLinkPanel} type="button">
-              Open Finance Center
+              Open Sales
             </Button>
           </div>
 
@@ -937,7 +937,7 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
                 No legacy payment links
               </h4>
               <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-slate-400">
-                Use Finance Center for new invoices, payments, and receipts.
+                Use Sales for new invoices, payments, and receipts.
                 Payment gateway links remain on hold until provider integration
                 is approved.
               </p>
@@ -955,7 +955,7 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
                         )}
                       </p>
                       <p className="mt-1 text-sm text-slate-400">
-                        {link.course?.title ?? "No course linked"}
+                        {link.course?.title ?? "No program linked"}
                       </p>
                       <p className="mt-3 wrap-break-word rounded-2xl border border-white/10 bg-white/5 p-3 text-xs text-slate-300">
                         {link.payment_url ?? "No payment URL"}
@@ -1013,11 +1013,11 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
               <h3 className="mt-4 text-2xl font-semibold">Student payments</h3>
               <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-400">
                 Historical legacy payment records are shown here. New invoices,
-                payments, and receipts are managed in Finance Center.
+                payments, and receipts are managed in Sales.
               </p>
             </div>
             <Button onClick={openPaymentPanel} type="button">
-              Open Finance Center
+              Open Sales
             </Button>
           </div>
 
@@ -1029,7 +1029,7 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
               <h4 className="mt-5 text-xl font-semibold">No payments yet</h4>
               <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-slate-400">
                 Add a payment once this student has an enrollment connected to a
-                course.
+                program.
               </p>
             </div>
           ) : (
@@ -1044,7 +1044,7 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
                       {formatCurrency(payment.amount)}
                     </p>
                     <p className="mt-1 text-sm text-slate-400">
-                      {payment.course?.title ?? "Course unavailable"}
+                      {payment.course?.title ?? "Program unavailable"}
                     </p>
                   </div>
                   <p className="text-sm font-semibold text-white">
@@ -1081,11 +1081,11 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
       {enrollOpen ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 px-4 py-4 backdrop-blur-sm sm:items-center">
           <Card className="w-full max-w-xl border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/40 sm:p-8">
-            <h3 className="text-2xl font-semibold">Enroll in Course</h3>
+            <h3 className="text-2xl font-semibold">Enroll in Program</h3>
             <form className="mt-7 space-y-5" onSubmit={handleCreateEnrollment}>
               <label className="block">
                 <span className="text-sm font-medium text-slate-300">
-                  Course
+                  Program
                 </span>
                 <select
                   className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition focus:border-teal-400/40 focus:bg-white/15 focus:ring-4 focus:ring-teal-400/10"
@@ -1094,7 +1094,7 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
                   value={selectedCourseId}
                 >
                   <option className="text-slate-950" value="">
-                    Select a course
+                    Select a program
                   </option>
                   {availableCourses.map((course) => (
                     <option
@@ -1109,15 +1109,15 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
               </label>
               {courses.length === 0 ? (
                 <p className="rounded-2xl border border-amber-400/30 bg-amber-400/10 p-4 text-sm leading-6 text-amber-300">
-                  Create a course before enrolling this student.
+                  Create a program before enrolling this student.
                 </p>
               ) : availableCourses.length === 0 ? (
                 <p className="rounded-2xl border border-teal-400/30 bg-teal-400/10 p-4 text-sm leading-6 text-teal-300">
-                  This student is already enrolled in every available course.
+                  This student is already enrolled in every available program.
                 </p>
               ) : (
                 <p className="rounded-2xl border border-white/10 bg-white/10 p-4 text-sm leading-6 text-slate-400">
-                  Enrollment status starts as active. Courses already connected
+                  Enrollment status starts as active. Programs already connected
                   to this student are hidden from the selector.
                 </p>
               )}
@@ -1168,7 +1168,7 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
                       key={cohort.id}
                       value={cohort.id}
                     >
-                      {cohort.name} - {cohort.course?.title ?? "No course"}
+                      {cohort.name} - {cohort.course?.title ?? "No program"}
                     </option>
                   ))}
                 </select>
@@ -1323,7 +1323,7 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
             </h3>
             <p className="mt-3 text-sm leading-6 text-slate-400">
               This removes {student.full_name} from{" "}
-              {deleteEnrollmentTarget.course?.title ?? "this course"}.
+              {deleteEnrollmentTarget.course?.title ?? "this program"}.
             </p>
             <div className="mt-7 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
               <Button

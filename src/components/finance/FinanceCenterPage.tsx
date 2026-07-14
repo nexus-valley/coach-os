@@ -153,7 +153,7 @@ function studentName(students: Student[], studentId: string) {
 
 function courseTitle(courses: Course[], courseId: string | null) {
   if (!courseId) return "General";
-  return courses.find((course) => course.id === courseId)?.title ?? "Course";
+  return courses.find((course) => course.id === courseId)?.title ?? "Program";
 }
 
 export function FinanceCenterPage() {
@@ -205,7 +205,7 @@ export function FinanceCenterPage() {
       } = await supabase.auth.getUser();
 
       if (userError) throw userError;
-      if (!user) throw new Error("You must be logged in to view finance.");
+      if (!user) throw new Error("You must be logged in to view sales.");
 
       const tenant = await getCurrentTenant();
       if (!tenant) throw new Error("No workspace found for this user.");
@@ -407,7 +407,7 @@ export function FinanceCenterPage() {
       {success ? <FeedbackAlert tone="success">{success}</FeedbackAlert> : null}
       {!hasFinanceSchema ? (
         <FeedbackAlert tone="warning">
-          Sales migration has not been applied yet, or no finance records
+          Sales migration has not been applied yet, or no sales records
           exist. The page is ready and will populate after SQL review/execution.
         </FeedbackAlert>
       ) : null}
@@ -970,7 +970,7 @@ export function FinanceCenterPage() {
             <EmptyState
               description="Create invoices for enrolled students and track balances here."
               icon="INR"
-              title="No finance invoices yet"
+              title="No sales invoices yet"
             />
           )}
         </Card>
@@ -1108,7 +1108,7 @@ export function FinanceCenterPage() {
               </div>
             ))
           ) : (
-            <p className="text-sm text-[#66788F]">No finance activity yet.</p>
+            <p className="text-sm text-[#66788F]">No sales activity yet.</p>
           )}
         </div>
       </Card>
