@@ -95,6 +95,18 @@ function commentStatusTone(status: TeamCommunityComment["status"]) {
   return status === "hidden" ? "danger" : "success";
 }
 
+function getPostAuthorLabel(post: TeamCommunityPost) {
+  if (post.author_type === "student") {
+    return post.author_name || "Community member";
+  }
+
+  return post.author_name || "Coach team";
+}
+
+function getPostAuthorBadge(post: TeamCommunityPost) {
+  return post.author_type === "student" ? "Student post" : "Team post";
+}
+
 export function CommunityPageClient() {
   const initialLoadStarted = useRef(false);
   const [actionError, setActionError] = useState("");
@@ -221,6 +233,11 @@ export function CommunityPageClient() {
   }
 
   function openEditForm(post: TeamCommunityPost) {
+    if (post.author_type === "student") {
+      setActionError("Student-authored posts can be moderated but not edited by the team.");
+      return;
+    }
+
     setActionError("");
     setSuccess("");
     setEditing(post);
@@ -384,7 +401,7 @@ export function CommunityPageClient() {
             ) : null}
           </>
         }
-        description="Create controlled coaching-community posts for students. Students can read published posts and comment under them."
+        description="Moderate a private coaching community where students can start discussions and comment under published posts."
         eyebrow="Student communication"
         metadata={
           <>
@@ -416,7 +433,7 @@ export function CommunityPageClient() {
       <Card className="p-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <SectionHeader
-            description="Draft posts can be prepared by team users. Owner, admin, and staff users publish or moderate them."
+            description="Review team updates and student discussions. Student-authored posts can be hidden or archived by moderators."
             title="Community board"
           />
           <select
@@ -474,7 +491,32 @@ export function CommunityPageClient() {
                     <Badge tone="light">
                       {getCommunityPostTypeLabel(post.post_type)}
                     </Badge>
+                    <Badge tone={post.author_type === "student" ? "premium" : "info"}>
+                      {getPostAuthorBadge(post)}
+                    </Badge>
                     <Badge tone="outline">{post.comment_count} comments</Badge>
+                  </div>
+                  <div className="mt-4 flex items-center gap-3">
+                    <div
+                      className={[
+                        "flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-xs font-bold",
+                        post.author_type === "student"
+                          ? "bg-[#EAF8FC] text-[#0B2A3D]"
+                          : "bg-[#0B1F33] text-white",
+                      ].join(" ")}
+                    >
+                      {getPostAuthorLabel(post).slice(0, 2).toUpperCase()}
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-[#0B1F33]">
+                        {getPostAuthorLabel(post)}
+                      </p>
+                      <p className="text-xs font-medium text-[#64748B]">
+                        {post.author_type === "student"
+                          ? "Community member discussion"
+                          : "Coach-team post"}
+                      </p>
+                    </div>
                   </div>
                   <h2 className="mt-4 text-2xl font-semibold text-[#0B1F33]">
                     {post.title}
@@ -482,13 +524,15 @@ export function CommunityPageClient() {
                   <p className="mt-3 line-clamp-4 whitespace-pre-wrap text-sm leading-6 text-[#425B76]">
                     {post.body}
                   </p>
-                  <div className="mt-5 grid gap-3 border-t border-[#D8E8F0] pt-4 text-xs font-medium text-[#66788F] sm:grid-cols-2">
+                  <div className="mt-5 grid gap-3 border-t border-[#D8E8F0] pt-4 text-xs font-medium text-[#64748B] sm:grid-cols-2">
                     <p>Created {formatCommunityDate(post.created_at)}</p>
                     <p>Published {formatCommunityDate(post.published_at)}</p>
                   </div>
                 </button>
                 <div className="mt-5 flex flex-wrap gap-3">
-                  {post.status !== "archived" && post.status !== "hidden" ? (
+                  {post.author_type === "team" &&
+                  post.status !== "archived" &&
+                  post.status !== "hidden" ? (
                     <Button
                       onClick={() => openEditForm(post)}
                       size="sm"
@@ -547,10 +591,18 @@ export function CommunityPageClient() {
             {selectedPost ? (
               <div className="mt-5 space-y-4">
                 <div className="rounded-2xl border border-[#D8E8F0] bg-[#F6FBFE] p-4">
-                  <p className="text-sm font-semibold text-[#0B1F33]">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge tone={selectedPost.author_type === "student" ? "premium" : "info"}>
+                      {getPostAuthorBadge(selectedPost)}
+                    </Badge>
+                    <span className="text-xs font-semibold text-[#64748B]">
+                      {getPostAuthorLabel(selectedPost)}
+                    </span>
+                  </div>
+                  <p className="mt-3 text-sm font-semibold text-[#0B1F33]">
                     {selectedPost.title}
                   </p>
-                  <p className="mt-1 text-xs font-medium text-[#66788F]">
+                  <p className="mt-1 text-xs font-medium text-[#64748B]">
                     {selectedPost.comment_count} visible or moderated comments
                   </p>
                 </div>
@@ -599,7 +651,7 @@ export function CommunityPageClient() {
                           <Badge tone={commentStatusTone(comment.status)}>
                             {comment.status}
                           </Badge>
-                          <span className="text-xs font-medium text-[#66788F]">
+                          <span className="text-xs font-medium text-[#64748B]">
                             {formatCommunityDate(comment.created_at)}
                           </span>
                         </div>
@@ -646,8 +698,8 @@ export function CommunityPageClient() {
                   {editing ? "Update post" : "Create post"}
                 </h2>
                 <p className="mt-2 text-sm leading-6 text-[#425B76]">
-                  Posts stay private to the team until an owner, admin, or staff
-                  user publishes them.
+                  Team posts stay private until an owner, admin, or staff user
+                  publishes them. Student posts are moderated from the board.
                 </p>
               </div>
               <Button

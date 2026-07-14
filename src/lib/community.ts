@@ -6,6 +6,8 @@ export type CommunityAuthorType = "student" | "team";
 export type CommunityCommentStatus = "hidden" | "published";
 
 export type StudentCommunityPost = {
+  author_name: string;
+  author_type: CommunityAuthorType;
   body: string;
   comment_count: number;
   created_at: string;
@@ -30,6 +32,9 @@ export type StudentCommunityComment = {
 export type TeamCommunityPost = StudentCommunityPost & {
   archived_at: string | null;
   audience_type: "all_students";
+  created_by_student_id: string | null;
+  created_by_user_id: string | null;
+  hidden_by_user_id: string | null;
   hidden_at: string | null;
   status: CommunityPostStatus;
 };
@@ -64,6 +69,10 @@ function normalizeCommentCount(value: unknown) {
 
 function normalizeStudentPost(row: CommunityPostRow): StudentCommunityPost {
   return {
+    author_name: String(
+      row.author_name ?? (row.author_type === "student" ? "Student" : "Coach team"),
+    ),
+    author_type: (row.author_type ?? "team") as CommunityAuthorType,
     body: String(row.body ?? ""),
     comment_count: normalizeCommentCount(row.comment_count),
     created_at: String(row.created_at ?? ""),
@@ -83,6 +92,11 @@ function normalizeTeamPost(row: CommunityPostRow): TeamCommunityPost {
     ...studentPost,
     archived_at: row.archived_at ?? null,
     audience_type: "all_students",
+    created_by_student_id: row.created_by_student_id
+      ? String(row.created_by_student_id)
+      : null,
+    created_by_user_id: row.created_by_user_id ? String(row.created_by_user_id) : null,
+    hidden_by_user_id: row.hidden_by_user_id ? String(row.hidden_by_user_id) : null,
     hidden_at: row.hidden_at ?? null,
     status: (row.status ?? "draft") as CommunityPostStatus,
   };
@@ -128,6 +142,14 @@ function normalizeMutationPost(data: unknown) {
   }
 
   return normalizeTeamPost((data ?? {}) as CommunityPostRow);
+}
+
+function normalizeStudentMutationPost(data: unknown) {
+  if (Array.isArray(data)) {
+    return normalizeStudentPost((data[0] ?? {}) as CommunityPostRow);
+  }
+
+  return normalizeStudentPost((data ?? {}) as CommunityPostRow);
 }
 
 export function formatCommunityDate(value: string | null | undefined) {
@@ -185,6 +207,25 @@ export async function createStudentCommunityComment(postId: string, body: string
   assertRpcSuccess(error);
 
   return String(data ?? "");
+}
+
+export async function createStudentCommunityPost(
+  tenantId: string,
+  title: string,
+  body: string,
+  postType: CommunityPostType = "discussion",
+) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.rpc("create_student_community_post", {
+    p_body: body,
+    p_post_type: postType,
+    p_tenant_id: tenantId,
+    p_title: title,
+  });
+
+  assertRpcSuccess(error);
+
+  return normalizeStudentMutationPost(data);
 }
 
 export async function getTeamCommunityPosts(tenantId: string) {
