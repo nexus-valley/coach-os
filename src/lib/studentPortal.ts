@@ -227,6 +227,11 @@ const courseSelect =
 const enrollmentSelect =
   "id,tenant_id,student_id,course_id,status,enrolled_at,completed_at,created_by,created_at,updated_at";
 
+const studentVisibleEnrollmentStatuses = [
+  "active",
+  "completed",
+] satisfies EnrollmentStatus[];
+
 const progressSelect =
   "id,tenant_id,student_id,course_id,lesson_id,status,completed_at,created_at,updated_at";
 
@@ -449,6 +454,7 @@ export async function getStudentPortalCourses(params: StudentPortalRequest) {
     .select(enrollmentSelect)
     .eq("tenant_id", params.tenantId)
     .eq("student_id", params.studentId)
+    .in("status", studentVisibleEnrollmentStatuses)
     .order("enrolled_at", { ascending: false });
 
   if (enrollmentsError) {
