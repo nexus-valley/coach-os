@@ -6,7 +6,7 @@ import { AppShell } from "@/src/components/layout/AppShell";
 export default function FinanceRoute() {
   return (
     <RouteGuard mode="app">
-      <AppShell activeItem="Finance">
+      <AppShell activeItem="Sales">
         <FeatureGate featureKey="finance">
           <FinanceCenterPage />
         </FeatureGate>

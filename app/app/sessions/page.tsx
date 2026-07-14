@@ -5,7 +5,7 @@ import { SessionsPageClient } from "@/src/components/sessions/SessionsPageClient
 export default function SessionsPage() {
   return (
     <RouteGuard mode="app">
-      <AppShell activeItem="Sessions">
+      <AppShell activeItem="Live Classes">
         <SessionsPageClient />
       </AppShell>
     </RouteGuard>

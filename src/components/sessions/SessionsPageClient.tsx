@@ -214,7 +214,7 @@ export function SessionsPageClient() {
           return;
         }
 
-        setError(getErrorMessage(caught, "Unable to load sessions."));
+        setError(getErrorMessage(caught, "Unable to load live classes."));
       } finally {
         if (active) {
           setLoading(false);
@@ -279,7 +279,7 @@ export function SessionsPageClient() {
       });
 
       if (!allowed) {
-        throw new Error("You do not have permission to create this session.");
+        throw new Error("You do not have permission to create this live class.");
       }
 
       await createSession({
@@ -302,9 +302,9 @@ export function SessionsPageClient() {
       setFormOpen(false);
       setForm(emptyForm);
       await refreshSessions();
-      setSuccess("Session created.");
+      setSuccess("Live class created.");
     } catch (caught) {
-      setError(getErrorMessage(caught, "Unable to create session."));
+      setError(getErrorMessage(caught, "Unable to create live class."));
     } finally {
       setSaving(false);
     }
@@ -312,7 +312,7 @@ export function SessionsPageClient() {
 
   if (!loading && currentRole && !canAccess) {
     return (
-      <AccessDeniedCard description="You do not have permission to access attendance sessions." />
+      <AccessDeniedCard description="You do not have permission to access live class scheduling." />
     );
   }
 
@@ -320,18 +320,18 @@ export function SessionsPageClient() {
     <div className="mx-auto max-w-7xl">
       <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
         <div>
-          <Badge tone="light">Attendance operations</Badge>
+          <Badge tone="light">Live class operations</Badge>
           <h2 className="mt-5 text-3xl font-semibold tracking-normal text-[#0B1F33] sm:text-4xl">
-            Sessions
+            Live Classes
           </h2>
           <p className="mt-3 max-w-2xl text-base leading-7 text-[#425B76]">
-            Schedule cohort classes, mark attendance, and prepare attendance
-            analytics for coaching operations.
+            Schedule coaching sessions, mark attendance, and keep delivery
+            organized for your students.
           </p>
         </div>
         {canManage ? (
           <Button onClick={openCreateForm} size="lg" type="button">
-            Create Session
+            Create Live Class
           </Button>
         ) : null}
       </div>
@@ -347,7 +347,8 @@ export function SessionsPageClient() {
             </p>
           </div>
           <div className="rounded-full border border-[#9ADDEA] bg-[#EAF8FC] px-4 py-2 text-sm font-semibold text-[#0B6F87]">
-            {sessions.length} {sessions.length === 1 ? "session" : "sessions"}
+            {sessions.length}{" "}
+            {sessions.length === 1 ? "live class" : "live classes"}
           </div>
           <label className="block">
             <span className="text-sm font-medium text-[#425B76]">Status</span>
@@ -358,7 +359,7 @@ export function SessionsPageClient() {
               }
               value={statusFilter}
             >
-              <option value="all">All sessions</option>
+              <option value="all">All live classes</option>
               <option value="scheduled">Scheduled</option>
               <option value="completed">Completed</option>
               <option value="canceled">Canceled</option>
@@ -388,7 +389,7 @@ export function SessionsPageClient() {
               className="h-64 animate-pulse border-[#D8E8F0] bg-white"
               key={item}
             >
-              <span className="sr-only">Loading sessions</span>
+              <span className="sr-only">Loading live classes</span>
             </Card>
           ))}
         </section>
@@ -398,14 +399,14 @@ export function SessionsPageClient() {
             canManage
               ? {
                   disabled: courses.length === 0 && cohorts.length === 0,
-                  label: "Create Session",
+                  label: "Create Live Class",
                   onClick: openCreateForm,
                 }
               : undefined
           }
-          description="Schedule a class for a course or cohort to start marking attendance."
+          description="Schedule a live class for a program or group to start managing attendance."
           icon="SE"
-          title="No sessions found"
+          title="No live classes found"
         />
       ) : (
         <section className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -441,10 +442,10 @@ export function SessionsPageClient() {
                   <p className="mt-3 text-sm font-semibold text-[#0E7490]">
                     {session.cohort?.name ??
                       session.course?.title ??
-                      "General session"}
+                      "General live class"}
                   </p>
                   <p className="mt-4 line-clamp-3 text-sm leading-6 text-[#425B76]">
-                    {session.description || "No session notes added yet."}
+                    {session.description || "No live class notes added yet."}
                   </p>
                   {session.meeting_provider || session.meeting_url ? (
                     <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -503,7 +504,7 @@ export function SessionsPageClient() {
                   Attendance setup
                 </p>
                 <h3 className="mt-2 text-2xl font-semibold text-[#0B1F33]">
-                  Create Session
+                  Create Live Class
                 </h3>
               </div>
               <button
@@ -518,7 +519,7 @@ export function SessionsPageClient() {
             <form className="mt-7 space-y-5" onSubmit={handleCreateSession}>
               <label className="block">
                 <span className="text-sm font-medium text-[#425B76]">
-                  Session title
+                  Live class title
                 </span>
                 <input
                   className="mt-2 h-12 w-full rounded-2xl border border-[#D8E8F0] bg-white px-4 text-sm text-[#0B1F33] outline-none transition placeholder:text-[#66788F] focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
@@ -538,7 +539,7 @@ export function SessionsPageClient() {
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="block">
                   <span className="text-sm font-medium text-[#425B76]">
-                    Course
+                    Program
                   </span>
                   <select
                     className="mt-2 h-12 w-full rounded-2xl border border-[#D8E8F0] bg-white px-4 text-sm text-[#0B1F33] outline-none transition focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
@@ -550,7 +551,7 @@ export function SessionsPageClient() {
                     }
                     value={form.courseId}
                   >
-                    <option value="">Select course</option>
+                    <option value="">Select program</option>
                     {courses.map((course) => (
                       <option key={course.id} value={course.id}>
                         {course.title}
@@ -797,7 +798,7 @@ export function SessionsPageClient() {
                   Cancel
                 </Button>
                 <Button disabled={saving} type="submit">
-                  {saving ? "Creating..." : "Create Session"}
+                  {saving ? "Creating..." : "Create Live Class"}
                 </Button>
               </div>
             </form>

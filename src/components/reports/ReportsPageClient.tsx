@@ -45,7 +45,7 @@ const reportTabs: { description: string; label: string; value: ReportCategory }[
   },
   {
     description: "Course, cohort, and session health",
-    label: "Courses",
+    label: "Programs",
     value: "courses",
   },
   { description: "Revenue and payment backlog", label: "Payments", value: "payments" },
@@ -230,14 +230,14 @@ export function ReportsPageClient() {
       <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
         <div>
           <Badge className="border-[#145DA0]/20 bg-[#145DA0]/10 text-[#145DA0]">
-            Reports & Analytics
+            Analytics
           </Badge>
           <h2 className="mt-5 text-3xl font-semibold tracking-normal text-[#0B1F33] sm:text-4xl">
-            Reports center
+            Analytics
           </h2>
           <p className="mt-3 max-w-2xl text-base leading-7 text-[#425B76]">
-            Student, attendance, assignment, payment, trainer, and communication
-            analytics for the current workspace.
+            Student, live class, program, payment, trainer, and communication
+            insights for the current workspace.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -464,9 +464,9 @@ export function ReportsPageClient() {
         </section>
       ) : (
         <EmptyState
-          description="Reports will appear once workspace data is available."
+          description="Analytics will appear once workspace data is available."
           icon="RP"
-          title="No reports available"
+          title="No analytics available"
         />
       )}
     </div>

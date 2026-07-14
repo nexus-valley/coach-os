@@ -6,7 +6,7 @@ import { AppShell } from "@/src/components/layout/AppShell";
 export default function AnnouncementsPage() {
   return (
     <RouteGuard mode="app">
-      <AppShell activeItem="Messages">
+      <AppShell activeItem="Announcements">
         <FeatureGate featureKey="messages">
           <AnnouncementsPageClient />
         </FeatureGate>

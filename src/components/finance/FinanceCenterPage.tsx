@@ -236,7 +236,7 @@ export function FinanceCenterPage() {
         receiptPrefix: financeData.settings?.receipt_prefix ?? "RCPT-",
       });
     } catch (caught) {
-      setActionError(getErrorMessage(caught, "Unable to load Finance Center."));
+      setActionError(getErrorMessage(caught, "Unable to load Sales."));
     } finally {
       setLoading(false);
     }
@@ -258,7 +258,7 @@ export function FinanceCenterPage() {
       setSuccess(message);
       await loadFinance();
     } catch (caught) {
-      setActionError(getErrorMessage(caught, "Finance action failed."));
+      setActionError(getErrorMessage(caught, "Sales action failed."));
     } finally {
       setSaving(false);
     }
@@ -276,7 +276,7 @@ export function FinanceCenterPage() {
           receiptPrefix: settingsForm.receiptPrefix,
           tenantId,
         }),
-      "Finance settings saved.",
+      "Sales settings saved.",
     );
   }
 
@@ -368,7 +368,7 @@ export function FinanceCenterPage() {
   if (loading) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
-        <span className="sr-only">Loading Finance Center</span>
+        <span className="sr-only">Loading Sales</span>
         <div className="h-10 w-10 animate-spin rounded-full border-4 border-[#9ADDEA] border-t-[#145DA0]" />
       </div>
     );
@@ -377,7 +377,7 @@ export function FinanceCenterPage() {
   if (!canAccess) {
     return (
       <div className="mx-auto max-w-7xl">
-        <AccessDeniedCard description="Tenant finance is restricted to owners and admins. Staff and trainers cannot view student dues, invoices, or receipts in this module." />
+        <AccessDeniedCard description="Sales is restricted to owners and admins. Staff and trainers cannot view student dues, invoices, or receipts in this module." />
       </div>
     );
   }
@@ -392,9 +392,9 @@ export function FinanceCenterPage() {
             Refresh
           </Button>
         }
-        description="Manage institute fee plans, invoices, dues, manual payments, receipts, discounts, and finance activity for this tenant only."
-        eyebrow="Tenant finance"
-        title="Finance Center"
+        description="Manage program pricing, invoices, dues, manual payments, receipts, discounts, and sales activity for this workspace only."
+        eyebrow="Sales"
+        title="Sales"
       />
 
       <FeedbackAlert tone="warning">
@@ -407,15 +407,15 @@ export function FinanceCenterPage() {
       {success ? <FeedbackAlert tone="success">{success}</FeedbackAlert> : null}
       {!hasFinanceSchema ? (
         <FeedbackAlert tone="warning">
-          Finance migration has not been applied yet, or no finance records
+          Sales migration has not been applied yet, or no finance records
           exist. The page is ready and will populate after SQL review/execution.
         </FeedbackAlert>
       ) : null}
 
       <Card className="p-5">
         <SectionHeader
-          description="Use Finance as the owner workspace for fee structures, invoice follow-up, manual receipts, and payment activity while online payment gateway remains disabled."
-          title="Finance workflow"
+          description="Use Sales as the owner workspace for program pricing, invoice follow-up, manual receipts, and payment activity while online payment gateway remains disabled."
+          title="Sales workflow"
         />
         <div className="mt-5 grid gap-3 md:grid-cols-4">
           <div className="rounded-lg border border-[#D8E8F0] bg-[#F7FCFF] p-4">
@@ -438,8 +438,8 @@ export function FinanceCenterPage() {
       </Card>
 
       <SectionHeader
-        description="Owner-level financial health based on existing invoice and payment records."
-        title="Financial health"
+        description="Owner-level sales health based on existing invoice and payment records."
+        title="Sales health"
       />
       <div className="grid gap-4 md:grid-cols-4">
         {[
@@ -577,7 +577,7 @@ export function FinanceCenterPage() {
 
         <Card className="p-5">
           <SectionHeader
-            description="Raise a student invoice from existing students, courses, and fee plans."
+            description="Raise a student invoice from existing students, programs, and fee plans."
             title="Create invoice"
           />
           <form className="mt-4 grid gap-3 md:grid-cols-2" onSubmit={handleCreateInvoice}>
@@ -952,7 +952,7 @@ export function FinanceCenterPage() {
                       }
                       onClick={() =>
                         void runAction(
-                          () => voidFinanceInvoice(invoice.id, "Voided from Finance Center"),
+                          () => voidFinanceInvoice(invoice.id, "Voided from Sales"),
                           "Invoice voided.",
                         )
                       }
@@ -1066,7 +1066,7 @@ export function FinanceCenterPage() {
                             () =>
                               cancelFinancePayment(
                                 payment.id,
-                                "Cancelled from Finance Center",
+                                "Cancelled from Sales",
                               ),
                             "Payment cancelled and invoice balance reversed.",
                           )
@@ -1091,8 +1091,8 @@ export function FinanceCenterPage() {
       <Card className="p-5">
         <SectionHeader
           actions={<Badge tone="light">{data?.activities.length ?? 0} events</Badge>}
-          description="Recent owner/admin finance actions for audit and support review."
-          title="Finance activity"
+          description="Recent owner/admin sales actions for audit and support review."
+          title="Sales activity"
         />
         <div className="mt-4 grid gap-3 md:grid-cols-2">
           {data?.activities.length ? (

@@ -15,7 +15,7 @@ export default async function CourseDetailPage({
 
   return (
     <RouteGuard mode="app">
-      <AppShell activeItem="Courses">
+      <AppShell activeItem="Programs">
         <CourseDetailClient courseId={courseId} />
       </AppShell>
     </RouteGuard>

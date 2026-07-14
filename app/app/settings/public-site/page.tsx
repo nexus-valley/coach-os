@@ -6,7 +6,7 @@ import { PublicSiteSettingsPage } from "@/src/components/public-site-settings/Pu
 export default function PublicSiteSettingsRoute() {
   return (
     <RouteGuard mode="app">
-      <AppShell activeItem="Public Site">
+      <AppShell activeItem="Branding">
         <FeatureGate featureKey="website_builder">
           <PublicSiteSettingsPage />
         </FeatureGate>

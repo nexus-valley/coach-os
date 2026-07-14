@@ -5,7 +5,7 @@ import { AppShell } from "@/src/components/layout/AppShell";
 export default function CoursesPage() {
   return (
     <RouteGuard mode="app">
-      <AppShell activeItem="Courses">
+      <AppShell activeItem="Programs">
         <CoursesPageClient />
       </AppShell>
     </RouteGuard>

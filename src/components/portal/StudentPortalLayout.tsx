@@ -29,18 +29,14 @@ type StudentPortalLayoutProps = {
 };
 
 const portalNavItems = [
-  { href: "/portal", label: "Overview" },
-  { href: "/portal/announcements", label: "Announcements" },
+  { href: "/portal", label: "Home" },
+  { href: "/portal/courses", label: "My Programs" },
+  { href: "/portal/sessions", label: "Live Classes" },
+  { href: "/portal/documents", label: "Materials" },
   { href: "/portal/community", label: "Community" },
-  { href: "/portal/courses", label: "Courses" },
-  { href: "/portal/sessions", label: "Sessions" },
-  { href: "/portal/assignments", label: "Assignments" },
-  { href: "/portal/certificates", label: "Certificates" },
-  { href: "/portal/payments", label: "Payments" },
-  { href: "/portal/messages", label: "Messages" },
-  { href: "/portal/documents", label: "Documents" },
-  { href: "/portal/notifications", label: "Notifications" },
-  { href: "/portal/assistant", label: "Assistant" },
+  { href: "/portal/announcements", label: "Announcements" },
+  { href: "/portal/payments", label: "Payments & Invoices" },
+  { href: "/portal/messages", label: "Support" },
   { href: "/portal/profile", label: "Profile" },
 ];
 

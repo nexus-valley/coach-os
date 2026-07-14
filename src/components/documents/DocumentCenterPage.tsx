@@ -259,7 +259,7 @@ export function DocumentCenterPage() {
       } = await supabase.auth.getUser();
 
       if (userError) throw userError;
-      if (!user) throw new Error("You must be logged in to view documents.");
+      if (!user) throw new Error("You must be logged in to view materials.");
 
       const tenant = await getCurrentTenant();
       if (!tenant) throw new Error("No tenant workspace is selected.");
@@ -516,8 +516,8 @@ export function DocumentCenterPage() {
       <Card className="p-8">
         <PageHeader
           eyebrow="Restricted"
-          title="Documents"
-          description="The Document Center is restricted to owners and admins in this foundation module. Student-facing documents are available through the student portal only when explicitly marked visible."
+          title="Content Library"
+          description="The Content Library is restricted to owners and admins in this foundation module. Student-facing materials are available through the student portal only when explicitly marked visible."
         />
       </Card>
     );
@@ -533,12 +533,12 @@ export function DocumentCenterPage() {
       <PageHeader
         actions={
           <Button onClick={() => resetForm()} type="button">
-            New document
+            New content item
           </Button>
         }
-        description="Manage document metadata, private files, linked entities, and role-based visibility. Uploaded files are stored in private storage and opened through short-lived signed URLs after authorization."
-        eyebrow="Metadata-only foundation"
-        title="Document Center"
+        description="Manage learning materials, private files, linked entities, and role-based visibility. Uploaded files are stored in private storage and opened through short-lived signed URLs after authorization."
+        eyebrow="Content foundation"
+        title="Content Library"
       />
 
       {actionError ? <FeedbackAlert tone="error">{actionError}</FeedbackAlert> : null}
@@ -546,8 +546,8 @@ export function DocumentCenterPage() {
 
       <Card className="p-5">
         <SectionHeader
-          description="Keep academy records organized before they become uploads, student-visible resources, internal files, or compliance evidence."
-          title="Document workflow"
+          description="Keep learning resources organized before they become uploads, student-visible materials, internal files, or compliance evidence."
+          title="Content workflow"
         />
         <div className="mt-5 grid gap-3 md:grid-cols-3">
           <div className="rounded-lg border border-[#D8E8F0] bg-[#F7FCFF] p-4">
@@ -564,20 +564,20 @@ export function DocumentCenterPage() {
             <p className="text-2xl font-semibold">
               {summary?.student_visible_documents ?? 0}
             </p>
-            <p className="mt-1 text-sm text-[#5D7185]">Student-visible records</p>
+            <p className="mt-1 text-sm text-[#5D7185]">Student-visible materials</p>
           </div>
         </div>
       </Card>
 
       <SectionHeader
-        description="A quick owner view of document coverage by purpose and visibility."
-        title="Document readiness"
+        description="A quick owner view of content coverage by purpose and visibility."
+        title="Content readiness"
       />
       <div className="grid gap-4 md:grid-cols-4">
         {[
           ["Total", summary?.total_documents ?? 0],
-          ["Student docs", summary?.student_documents ?? 0],
-          ["Course docs", summary?.course_documents ?? 0],
+          ["Student materials", summary?.student_documents ?? 0],
+          ["Program materials", summary?.course_documents ?? 0],
           ["Visible to students", summary?.student_visible_documents ?? 0],
           ["Internal", summary?.internal_documents ?? 0],
           ["Compliance", summary?.compliance_documents ?? 0],
@@ -596,8 +596,8 @@ export function DocumentCenterPage() {
                 {filteredDocuments.length} shown
               </Badge>
             }
-            description="Search and filter the owner document library without changing access rules."
-            title="Find and review documents"
+            description="Search and filter the owner content library without changing access rules."
+            title="Find and review materials"
           />
           <Card className="p-5">
             <div className="grid gap-3 md:grid-cols-3">
@@ -646,9 +646,9 @@ export function DocumentCenterPage() {
 
           {filteredDocuments.length === 0 ? (
             <EmptyState
-              description="Create metadata records for student, course, cohort, session, internal, and compliance documents."
+              description="Create metadata records for student, program, live class, internal, and compliance materials."
               icon="DOC"
-              title="No documents found"
+              title="No materials found"
             />
           ) : (
             <div className="space-y-3">
@@ -708,8 +708,8 @@ export function DocumentCenterPage() {
         <div className="space-y-4">
           <Card className="p-5">
             <SectionHeader
-              description="Store document metadata and references only. Do not paste private file contents into notes or metadata."
-              title={editingId ? "Edit document" : "Create document"}
+              description="Store content metadata and references only. Do not paste private file contents into notes or metadata."
+              title={editingId ? "Edit content item" : "Create content item"}
             />
             <form className="mt-5 space-y-4" onSubmit={handleSubmit}>
               <div className="grid gap-3 md:grid-cols-2">
@@ -1042,7 +1042,7 @@ export function DocumentCenterPage() {
 
               <div className="flex flex-wrap gap-3">
                 <Button type="submit">
-                  {editingId ? "Update document" : "Create document"}
+                  {editingId ? "Update content item" : "Create content item"}
                 </Button>
                 {editingId ? (
                   <Button onClick={() => resetForm()} type="button" variant="secondary">

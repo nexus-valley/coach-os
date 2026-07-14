@@ -5,7 +5,7 @@ import { AppShell } from "@/src/components/layout/AppShell";
 export default function SettingsBrandingPage() {
   return (
     <RouteGuard mode="app">
-      <AppShell activeItem="Settings">
+      <AppShell activeItem="Branding">
         <BrandingSettingsPage />
       </AppShell>
     </RouteGuard>

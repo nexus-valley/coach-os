@@ -6,7 +6,7 @@ import { ReportsPageClient } from "@/src/components/reports/ReportsPageClient";
 export default function ReportsPage() {
   return (
     <RouteGuard mode="app">
-      <AppShell activeItem="Reports">
+      <AppShell activeItem="Analytics">
         <FeatureGate featureKey="reports">
           <ReportsPageClient />
         </FeatureGate>

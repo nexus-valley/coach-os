@@ -6,7 +6,7 @@ import { AppShell } from "@/src/components/layout/AppShell";
 export default function DocumentsRoute() {
   return (
     <RouteGuard mode="app">
-      <AppShell activeItem="Documents">
+      <AppShell activeItem="Content Library">
         <FeatureGate featureKey="documents">
           <DocumentCenterPage />
         </FeatureGate>

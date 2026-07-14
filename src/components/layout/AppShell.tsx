@@ -30,92 +30,54 @@ type AppShellProps = {
 };
 
 const navItems = [
-  { href: "/app", label: "Dashboard" },
-  { href: "/app/assistant", label: "Assistant" },
-  { href: "/app/messages", label: "Messages" },
-  { href: "/app/notifications", label: "Notifications" },
-  { href: "/app/operations", label: "Operations" },
-  { href: "/app/team-operations", label: "Team Operations" },
-  { href: "/app/documents", label: "Documents" },
-  { href: "/app/mobile-readiness", label: "Mobile Readiness" },
-  { href: "/app/permissions", label: "Permissions" },
-  { href: "/app/courses", label: "Courses" },
-  { href: "/app/cohorts", label: "Cohorts" },
-  { href: "/app/sessions", label: "Sessions" },
-  { href: "/app/assignments", label: "Assignments" },
+  { href: "/app", label: "Home" },
+  { href: "/app/courses", label: "Programs" },
+  { href: "/app/sessions", label: "Live Classes" },
   { href: "/app/students", label: "Students" },
-  { href: "/app/student-portal", label: "Portal" },
   { href: "/app/enrollments", label: "Enrollments" },
-  { href: "/app/finance", label: "Finance" },
-  { href: "/app/reminders", label: "Reminders" },
-  { href: "/app/automations", label: "Automations" },
-  { href: "/app/workflows", label: "Workflows" },
-  { href: "/app/approvals", label: "Approvals" },
-  { href: "/app/crm", label: "CRM" },
-  { href: "/app/marketing", label: "Marketing" },
-  { href: "/app/reports", label: "Reports" },
-  { href: "/app/activity", label: "Activity" },
-  { href: "/app/compliance", label: "Compliance" },
-  { href: "/app/backup", label: "Backup & Recovery" },
-  { href: "/app/settings/public-site", label: "Public Site" },
-  { href: "/app/subscription", label: "Subscription" },
-  { href: "/app/settings/features", label: "Features" },
+  { href: "/app/documents", label: "Content Library" },
+  { href: "/app/finance", label: "Sales" },
+  { href: "/app/community", label: "Community" },
+  { href: "/app/announcements", label: "Announcements" },
+  { href: "/app/reports", label: "Analytics" },
+  { href: "/app/settings/branding", label: "Branding" },
   { href: "/app/settings", label: "Settings" },
 ];
 
 const navGroups = [
   {
-    label: "Overview",
-    items: ["Dashboard", "Assistant", "Notifications", "Activity", "Reports"],
+    label: "Command",
+    items: ["Home", "Analytics"],
   },
   {
     label: "Learning",
-    items: [
-      "Courses",
-      "Cohorts",
-      "Sessions",
-      "Assignments",
-      "Enrollments",
-      "Documents",
-      "Portal",
-    ],
+    items: ["Programs", "Live Classes", "Enrollments", "Content Library"],
   },
   {
-    label: "People",
-    items: ["Students", "Messages", "CRM", "Team Operations"],
+    label: "Audience",
+    items: ["Students", "Community", "Announcements"],
   },
   {
-    label: "Operations",
-    items: [
-      "Operations",
-      "Mobile Readiness",
-      "Reminders",
-      "Automations",
-      "Workflows",
-      "Approvals",
-      "Marketing",
-    ],
-  },
-  {
-    label: "Finance",
-    items: ["Finance", "Subscription"],
-  },
-  {
-    label: "Platform",
-    items: [
-      "Permissions",
-      "Compliance",
-      "Backup & Recovery",
-      "Public Site",
-      "Features",
-      "Settings",
-    ],
+    label: "Business",
+    items: ["Sales", "Branding", "Settings"],
   },
 ];
 
-const mobilePrimaryLabels = ["Dashboard", "Students", "Courses", "Finance"];
+const mobilePrimaryLabels = ["Home", "Students", "Programs", "Sales"];
 
 function NavIcon({ label }: { label: string }) {
+  const iconLabelByAlias: Record<string, string> = {
+    Analytics: "Reports",
+    Announcements: "Messages",
+    Branding: "Public Site",
+    Community: "Messages",
+    "Content Library": "Documents",
+    Home: "Dashboard",
+    "Live Classes": "Sessions",
+    Programs: "Courses",
+    Sales: "Finance",
+  };
+  const iconLabel = iconLabelByAlias[label] ?? label;
   const commonProps = {
     className: "h-4 w-4",
     fill: "none",
@@ -392,7 +354,7 @@ function NavIcon({ label }: { label: string }) {
     ),
   };
 
-  return <svg {...commonProps}>{paths[label] ?? paths.Dashboard}</svg>;
+  return <svg {...commonProps}>{paths[iconLabel] ?? paths.Dashboard}</svg>;
 }
 
 function getGroupedNavItems(items: typeof navItems) {
@@ -439,7 +401,7 @@ function getMobilePrimaryNavItems(items: typeof navItems) {
   return [...primaryItems, ...fallbackItems].slice(0, targetCount);
 }
 
-export function AppShell({ activeItem = "Dashboard", children }: AppShellProps) {
+export function AppShell({ activeItem = "Home", children }: AppShellProps) {
   const [brandColor, setBrandColor] = useState(defaultTenantBrandColor);
   const [currentRole, setCurrentRole] = useState<MemberRole | null>(null);
   const [featureAccess, setFeatureAccess] = useState<FeatureAccessMap | null>(

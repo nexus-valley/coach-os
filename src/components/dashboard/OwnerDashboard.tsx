@@ -98,24 +98,24 @@ export function OwnerDashboard({
       label: "Manage students",
     },
     {
-      description: "Update published and draft courses.",
+      description: "Update published and draft programs.",
       href: "/app/courses",
-      label: "Review courses",
+      label: "Review programs",
     },
     {
       description: "Check fee plans, invoices, and payment status.",
       href: "/app/finance",
-      label: "Open finance",
+      label: "Open sales",
     },
     {
-      description: "Review academy documents and uploads.",
+      description: "Review coaching materials and uploads.",
       href: "/app/documents",
-      label: "Manage documents",
+      label: "Manage content",
     },
     {
       description: "Review plan, usage, and billing readiness.",
       href: "/app/subscription",
-      label: "Subscription health",
+      label: "CoachFort billing",
     },
     {
       description: "Review staff operations and team metadata.",
@@ -142,7 +142,7 @@ export function OwnerDashboard({
     },
     {
       description:
-        "Create the first student records so courses, cohorts, payments, and portal access have real context.",
+        "Create the first student records so programs, payments, and portal access have real context.",
       href: "/app/students",
       label: "Add students",
       status: metrics.totalStudents > 0 ? "Started" : "Start",
@@ -150,23 +150,23 @@ export function OwnerDashboard({
     },
     {
       description:
-        "Publish a course and organize batches so learning delivery is ready for student portal use.",
+        "Publish a program so learning delivery is ready for student portal use.",
       href: "/app/courses",
-      label: "Create courses and cohorts",
+      label: "Create programs",
       status: metrics.activeCourses > 0 ? "Started" : "Start",
       tone: metrics.activeCourses > 0 ? ("success" as const) : ("warning" as const),
     },
     {
       description:
-        "Upload academy resources, policies, or learning material when the document center is ready.",
+        "Upload resources, policies, or learning material when the content library is ready.",
       href: "/app/documents",
-      label: "Prepare documents",
+      label: "Prepare materials",
       status: "Open",
       tone: "info" as const,
     },
     {
       description:
-        "Use announcements for official updates and community for controlled academy discussion.",
+        "Use announcements for official updates and community for controlled student discussion.",
       href: "/app/announcements",
       label: "Publish communication",
       status: "Open",
@@ -178,19 +178,19 @@ export function OwnerDashboard({
     <Card className="mb-8 mt-8 border-[#D8E8F0] bg-white p-6 shadow-sm shadow-[#0B2A3D]/5">
       <div className="grid gap-6 lg:grid-cols-[1fr_auto] lg:items-center">
         <SectionHeader
-          description="A focused operating view for revenue, learning delivery, student growth, risk signals, and the next owner actions."
-          eyebrow="Owner Dashboard"
-          title={`Executive view for ${tenant?.name ?? "this workspace"}`}
+          description="A focused operating view for sales, program delivery, student growth, risk signals, and the next owner actions."
+          eyebrow="Command Center"
+          title={`Home for ${tenant?.name ?? "this workspace"}`}
         />
         <div className="flex flex-wrap gap-3">
           <Button href="/app/students" size="sm" variant="secondary">
             Students
           </Button>
           <Button href="/app/finance" size="sm" variant="secondary">
-            Finance
+            Sales
           </Button>
           <Button href="/app/subscription" size="sm" variant="secondary">
-            Subscription
+            CoachFort Billing
           </Button>
         </div>
       </div>
@@ -208,7 +208,7 @@ export function OwnerDashboard({
         />
         <StatCard
           description="Published courses, or drafts if none are published."
-          label="Courses"
+          label="Programs"
           value={metrics.activeCourses.toLocaleString()}
         />
         <StatCard
@@ -308,7 +308,7 @@ export function OwnerDashboard({
       <Card className="mt-6 border-[#D8E8F0] bg-[#F7FCFF] p-5 shadow-none">
         <SectionHeader
           description="A launch-readiness guide for owners. These links use existing workspace pages and do not create tasks or change data by themselves."
-          title="Academy launch checklist"
+          title="Coaching launch checklist"
         />
         <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {launchChecklist.map((item) => (

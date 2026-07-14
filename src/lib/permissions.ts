@@ -111,22 +111,40 @@ const rolePermissions: Record<MemberRole, Permission[]> = {
 const navAccess: Record<string, (role: MemberRole | null | undefined) => boolean> =
   {
     Activity: canAccessActivity,
+    Analytics: canAccessReports,
+    Announcements: canAccessMessages,
     Approvals: canAccessApprovals,
+    Assignments: canAccessPrograms,
     Assistant: canAccessAssistant,
     "Backup & Recovery": canAccessBackup,
+    Certificates: canAccessStudents,
+    Cohorts: canAccessPrograms,
+    Branding: canAccessSettings,
     Compliance: canAccessCompliance,
+    Community: canAccessMessages,
+    "Content Library": canAccessDocuments,
     CRM: canAccessCrm,
     Documents: canAccessDocuments,
+    Enrollments: canAccessStudents,
     Finance: canAccessFinance,
     Features: canAccessSettings,
+    Home: canAccessHome,
+    "Live Classes": canAccessAttendance,
     Marketing: canAccessMarketing,
+    Messages: canAccessMessages,
     "Mobile Readiness": canAccessMobileReadiness,
+    Notifications: canAccessMessages,
     Operations: canAccessOperations,
     Permissions: canAccessPermissions,
+    Portal: canAccessStudents,
+    Programs: canAccessPrograms,
+    Reminders: canAccessMessages,
     Sessions: canAccessAttendance,
     Automations: canManageAutomations,
     "Public Site": canAccessSettings,
+    Sales: canAccessFinance,
     Settings: canAccessSettings,
+    Students: canAccessStudents,
     Subscription: canAccessSubscription,
     "Team Operations": canAccessTeamOperations,
     Workflows: canAccessWorkflows,
@@ -175,6 +193,26 @@ export function canAccessCompliance(role: MemberRole | null | undefined) {
 
 export function canAccessCrm(role: MemberRole | null | undefined) {
   return hasPermission(role, "access_crm");
+}
+
+export function canAccessHome() {
+  return true;
+}
+
+export function canAccessPrograms() {
+  return true;
+}
+
+export function canAccessStudents() {
+  return true;
+}
+
+export function canAccessMessages() {
+  return true;
+}
+
+export function canAccessReports() {
+  return true;
 }
 
 export function canAccessDocuments(role: MemberRole | null | undefined) {

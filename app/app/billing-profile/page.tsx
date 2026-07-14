@@ -5,7 +5,7 @@ import { AppShell } from "@/src/components/layout/AppShell";
 export default function BillingProfilePage() {
   return (
     <RouteGuard mode="app">
-      <AppShell activeItem="Subscription">
+      <AppShell activeItem="Settings">
         <BillingProfilePageClient />
       </AppShell>
     </RouteGuard>

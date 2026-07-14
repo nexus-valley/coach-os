@@ -15,7 +15,7 @@ export default async function SessionDetailPage({
 
   return (
     <RouteGuard mode="app">
-      <AppShell activeItem="Sessions">
+      <AppShell activeItem="Live Classes">
         <SessionDetailClient sessionId={sessionId} />
       </AppShell>
     </RouteGuard>

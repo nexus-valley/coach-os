@@ -100,7 +100,7 @@ export function CoursesPageClient() {
         setError(
           caught instanceof Error
             ? caught.message
-            : "Unable to load courses right now.",
+            : "Unable to load programs right now.",
         );
       } finally {
         if (active) {
@@ -125,7 +125,7 @@ export function CoursesPageClient() {
     }
 
     if (!title.trim()) {
-      setFormError("Course title is required.");
+      setFormError("Program title is required.");
       return;
     }
 
@@ -150,7 +150,7 @@ export function CoursesPageClient() {
       setError(
         caught instanceof Error
           ? caught.message
-          : "Unable to create course. Please try again.",
+          : "Unable to create program. Please try again.",
       );
     } finally {
       setSaving(false);
@@ -170,16 +170,16 @@ export function CoursesPageClient() {
             Program workflow
           </Badge>
           <h2 className="mt-5 text-3xl font-semibold tracking-normal text-white sm:text-4xl">
-            Courses
+            Programs
           </h2>
           <p className="mt-3 max-w-2xl text-base leading-7 text-slate-400">
-            Shape the learning products your academy sells, teaches, and groups
-            into cohorts for delivery.
+            Shape the learning products your coaching brand sells, teaches, and
+            connects to enrollments.
           </p>
         </div>
         {canManage ? (
           <Button onClick={() => setFormOpen(true)} size="lg" type="button">
-            Create Course
+            Create Program
           </Button>
         ) : null}
       </div>
@@ -192,14 +192,15 @@ export function CoursesPageClient() {
               {tenant?.name ?? "Loading workspace..."}
             </p>
             <p className="mt-3 text-sm leading-6 text-slate-400">
-              Programs sit between student demand and cohort delivery. Keep
-              drafts clean, then publish when the course is ready to run.
+              Programs sit between student demand, payment, access, and
+              delivery. Keep drafts clean, then publish when the program is
+              ready to run.
             </p>
           </div>
           <div className="grid gap-3 sm:grid-cols-3">
             <div className="rounded-lg border border-white/10 bg-white/10 p-4">
               <p className="text-2xl font-semibold">{courses.length}</p>
-              <p className="mt-1 text-sm text-slate-400">Total courses</p>
+              <p className="mt-1 text-sm text-slate-400">Total programs</p>
             </div>
             <div className="rounded-lg border border-emerald-400/20 bg-emerald-400/10 p-4">
               <p className="text-2xl font-semibold text-emerald-200">
@@ -245,12 +246,12 @@ export function CoursesPageClient() {
         <EmptyState
           action={
             canManage
-              ? { label: "Create Course", onClick: () => setFormOpen(true) }
+              ? { label: "Create Program", onClick: () => setFormOpen(true) }
               : undefined
           }
-          description="Create your first draft course to start shaping the learning experience, sections, lessons, and enrollments."
+          description="Create your first draft program to start shaping the learning experience, sections, lessons, and enrollments."
           icon="CU"
-          title="No courses created yet"
+          title="No programs created yet"
         />
       ) : (
         <section className="mt-6">
@@ -271,7 +272,7 @@ export function CoursesPageClient() {
                 batches, sessions, assignments, and enrollments.
               </span>
             }
-            title={<span className="text-white">Course catalog</span>}
+            title={<span className="text-white">Program catalog</span>}
           />
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {courses.map((course) => (
@@ -310,9 +311,9 @@ export function CoursesPageClient() {
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-sm font-semibold text-slate-500">
-                  New course
+                  New program
                 </p>
-                <h3 className="mt-2 text-2xl font-semibold">Create Course</h3>
+                <h3 className="mt-2 text-2xl font-semibold">Create Program</h3>
               </div>
               <button
                 className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 text-sm font-semibold text-slate-500 transition hover:bg-white/10 hover:text-white"
@@ -327,7 +328,7 @@ export function CoursesPageClient() {
               <FormField
                 error={formError}
                 htmlFor="course-title"
-                label="Course title"
+                label="Program title"
                 required
                 tone="dark"
               >
@@ -386,7 +387,7 @@ export function CoursesPageClient() {
                   Cancel
                 </Button>
                 <Button disabled={saving} type="submit">
-                  {saving ? "Creating..." : "Create Course"}
+                  {saving ? "Creating..." : "Create Program"}
                 </Button>
               </div>
             </form>
