@@ -28,7 +28,7 @@ function FeedbackCopy() {
   return (
     <Card className="border-[#D8E8F0] bg-[#F7FCFF] p-4">
       <p className="text-sm leading-6 text-[#425B76]">
-        Online payment is not enabled yet. Your institute records payments
+        Online payment is not enabled yet. Your coach records payments
         manually, and receipts appear here after they are issued.
       </p>
     </Card>
@@ -76,8 +76,8 @@ export function StudentPortalPayments({ context }: { context: StudentPortalConte
     };
   }, [context.student.id]);
 
-  if (loading) return <PortalLoadingCard label="Loading payments" />;
-  if (error || !overview) return <PortalError message={error || "Unable to load payments."} />;
+  if (loading) return <PortalLoadingCard label="Loading payments and invoices" />;
+  if (error || !overview) return <PortalError message={error || "Unable to load payments and invoices."} />;
 
   const paymentRows = [...overview.payments.payments, ...overview.payments.paymentLinks];
   const financeRows =
@@ -88,10 +88,10 @@ export function StudentPortalPayments({ context }: { context: StudentPortalConte
   return (
     <div className="space-y-6">
       <PageHeader
-        description="Review fees, invoices, manual payments, and receipts shared by your institute."
+        description="Review invoices, manual payments, and receipts shared by your coach."
         eyebrow="Fees and receipts"
         metadata={<Badge tone="warning">Online payment disabled</Badge>}
-        title="Payments"
+        title="Payments & Invoices"
       />
 
       <FeedbackCopy />
@@ -117,8 +117,8 @@ export function StudentPortalPayments({ context }: { context: StudentPortalConte
       ) : null}
 
       <SectionHeader
-        description="Your institute records payments manually during beta. Online checkout remains unavailable here."
-        title="Payment records"
+        description="Your coach records payments manually during beta. Online checkout remains unavailable here."
+        title="Payment and invoice records"
       />
       <div className="space-y-4">
         {!financeLoading && financeRows === 0 && paymentRows.length === 0 ? (

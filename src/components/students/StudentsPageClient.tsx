@@ -353,15 +353,15 @@ export function StudentsPageClient() {
       )}
 
       {formOpen ? (
-        <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-black/70 px-4 py-4 backdrop-blur-sm sm:items-center">
-          <Card className="w-full max-w-2xl border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/40 sm:p-8">
+        <div className="fixed inset-0 z-50 flex min-h-full items-end justify-center overflow-y-auto bg-[#0B1F33]/70 px-4 py-4 backdrop-blur-sm sm:items-center">
+          <Card className="max-h-[calc(100dvh-2rem)] w-full max-w-2xl overflow-y-auto rounded-xl border-[#CBD5E1] bg-white p-5 text-[#0B1F33] shadow-2xl shadow-slate-950/25 sm:p-6">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-sm font-semibold text-slate-400">New CRM record</p>
+                <p className="text-sm font-semibold text-[#475569]">New student record</p>
                 <h3 className="mt-2 text-2xl font-semibold">Add Student</h3>
               </div>
               <button
-                className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 text-sm font-semibold text-slate-400 transition hover:bg-white/10 hover:text-white"
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-[#CBD5E1] text-sm font-semibold text-[#475569] transition hover:bg-[#F8FAFC] hover:text-[#0B1F33]"
                 onClick={() => setFormOpen(false)}
                 type="button"
               >
@@ -374,10 +374,10 @@ export function StudentsPageClient() {
                 errors={formErrors}
                 form={form}
                 setForm={setForm}
+                tone="light"
               />
               <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end">
                 <Button
-                  className="border-slate-700! bg-white/10! text-white! hover:bg-white/15!"
                   onClick={() => setFormOpen(false)}
                   type="button"
                   variant="secondary"
@@ -400,11 +400,23 @@ export function StudentFormFields({
   errors = {},
   form,
   setForm,
+  tone = "dark",
 }: {
   errors?: StudentFormErrors;
   form: StudentFormState;
   setForm: React.Dispatch<React.SetStateAction<StudentFormState>>;
+  tone?: "dark" | "light";
 }) {
+  const fieldTone = tone === "dark" ? "dark" : "light";
+  const controlClass =
+    tone === "dark"
+      ? "mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition placeholder:text-slate-400 focus:border-teal-400/40 focus:bg-white/15 focus:ring-4 focus:ring-teal-400/10"
+      : "mt-2 h-12 w-full rounded-xl border border-[#CBD5E1] bg-white px-4 text-sm text-[#0B1F33] outline-none transition placeholder:text-[#64748B] focus:border-[#145DA0]/60 focus:ring-4 focus:ring-[#145DA0]/10";
+  const textAreaClass =
+    tone === "dark"
+      ? "mt-2 min-h-28 w-full resize-none rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm leading-6 text-white outline-none transition placeholder:text-slate-400 focus:border-teal-400/40 focus:bg-white/15 focus:ring-4 focus:ring-teal-400/10"
+      : "mt-2 min-h-28 w-full resize-none rounded-xl border border-[#CBD5E1] bg-white px-4 py-3 text-sm leading-6 text-[#0B1F33] outline-none transition placeholder:text-[#64748B] focus:border-[#145DA0]/60 focus:ring-4 focus:ring-[#145DA0]/10";
+
   return (
     <>
       <FormField
@@ -412,11 +424,11 @@ export function StudentFormFields({
         htmlFor="student-full-name"
         label="Full name"
         required
-        tone="dark"
+        tone={fieldTone}
       >
         <input
           id="student-full-name"
-          className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition placeholder:text-slate-400 focus:border-teal-400/40 focus:bg-white/15 focus:ring-4 focus:ring-teal-400/10"
+          className={controlClass}
           onChange={(event) =>
             setForm((current) => ({ ...current, fullName: event.target.value }))
           }
@@ -432,11 +444,11 @@ export function StudentFormFields({
           error={errors.email}
           htmlFor="student-email"
           label="Email"
-          tone="dark"
+          tone={fieldTone}
         >
           <input
             id="student-email"
-            className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition placeholder:text-slate-400 focus:border-teal-400/40 focus:bg-white/15 focus:ring-4 focus:ring-teal-400/10"
+            className={controlClass}
             onChange={(event) =>
               setForm((current) => ({ ...current, email: event.target.value }))
             }
@@ -445,10 +457,10 @@ export function StudentFormFields({
             value={form.email}
           />
         </FormField>
-        <FormField htmlFor="student-phone" label="Phone" tone="dark">
+        <FormField htmlFor="student-phone" label="Phone" tone={fieldTone}>
           <input
             id="student-phone"
-            className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition placeholder:text-slate-400 focus:border-teal-400/40 focus:bg-white/15 focus:ring-4 focus:ring-teal-400/10"
+            className={controlClass}
             onChange={(event) =>
               setForm((current) => ({ ...current, phone: event.target.value }))
             }
@@ -460,10 +472,10 @@ export function StudentFormFields({
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <FormField htmlFor="student-status" label="Status" tone="dark">
+        <FormField htmlFor="student-status" label="Status" tone={fieldTone}>
           <select
             id="student-status"
-            className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition focus:border-teal-400/40 focus:bg-white/15 focus:ring-4 focus:ring-teal-400/10"
+            className={controlClass}
             onChange={(event) =>
               setForm((current) => ({
                 ...current,
@@ -479,10 +491,10 @@ export function StudentFormFields({
             ))}
           </select>
         </FormField>
-        <FormField htmlFor="student-source" label="Source" tone="dark">
+        <FormField htmlFor="student-source" label="Source" tone={fieldTone}>
           <input
             id="student-source"
-            className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition placeholder:text-slate-400 focus:border-teal-400/40 focus:bg-white/15 focus:ring-4 focus:ring-teal-400/10"
+            className={controlClass}
             onChange={(event) =>
               setForm((current) => ({ ...current, source: event.target.value }))
             }
@@ -493,10 +505,10 @@ export function StudentFormFields({
         </FormField>
       </div>
 
-      <FormField htmlFor="student-notes" label="Notes" tone="dark">
+      <FormField htmlFor="student-notes" label="Notes" tone={fieldTone}>
         <textarea
           id="student-notes"
-          className="mt-2 min-h-28 w-full resize-none rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm leading-6 text-white outline-none transition placeholder:text-slate-400 focus:border-teal-400/40 focus:bg-white/15 focus:ring-4 focus:ring-teal-400/10"
+          className={textAreaClass}
           onChange={(event) =>
             setForm((current) => ({ ...current, notes: event.target.value }))
           }

@@ -90,7 +90,7 @@ export function StudentPortalDashboard({ context }: { context: StudentPortalCont
         actions={
           <>
             <Button href="/portal/courses" size="sm" variant="secondary">
-              Courses
+              My Programs
             </Button>
             <Button href="/portal/assignments" size="sm">
               Assignments
@@ -110,7 +110,7 @@ export function StudentPortalDashboard({ context }: { context: StudentPortalCont
         />
         <div className="mt-5 grid gap-4 lg:grid-cols-2">
           <div className="rounded-2xl border border-[#D8E8F0] bg-[#F7FCFF] p-4">
-            <Badge tone="admin">Next session</Badge>
+            <Badge tone="admin">Next live class</Badge>
             {nextSession ? (
               <>
                 <h2 className="mt-3 text-lg font-semibold">{nextSession.title}</h2>
@@ -145,11 +145,11 @@ export function StudentPortalDashboard({ context }: { context: StudentPortalCont
       </Card>
 
       <SectionHeader
-        description="A quick view of your learning progress, attendance, certificates, and payment records."
+        description="A quick view of your program progress, live class attendance, certificates, and payment records."
         title="Learning snapshot"
       />
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
-        <StatCard label="Courses" value={overview.summary.enrolledCourses} />
+        <StatCard label="Programs" value={overview.summary.enrolledCourses} />
         <StatCard
           label="Attendance"
           value={
@@ -166,9 +166,9 @@ export function StudentPortalDashboard({ context }: { context: StudentPortalCont
           label="Certificates"
           value={overview.summary.completedCertificates}
         />
-        <StatCard label="Paid Payments" value={overview.summary.paidPayments} />
+        <StatCard label="Paid invoices" value={overview.summary.paidPayments} />
         <StatCard
-          label="Pending Payments"
+          label="Pending payments"
           value={overview.summary.pendingPayments}
         />
       </section>
@@ -213,11 +213,11 @@ export function StudentPortalDashboard({ context }: { context: StudentPortalCont
         <Card className="border-[#D8E8F0] bg-white p-6">
           <SectionHeader
             actions={<Button href="/portal/sessions" size="sm" variant="secondary">View schedule</Button>}
-            title="Upcoming sessions"
+            title="Upcoming live classes"
           />
           <div className="mt-4 space-y-3">
             {overview.sessions.upcoming.length === 0 ? (
-              <PortalEmptyState>No upcoming sessions scheduled.</PortalEmptyState>
+                <PortalEmptyState>No upcoming live classes scheduled.</PortalEmptyState>
             ) : (
               overview.sessions.upcoming.slice(0, 4).map((session) => (
                 <div

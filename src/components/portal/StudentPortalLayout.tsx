@@ -120,8 +120,8 @@ export function StudentPortalLayout({
         <h2 className="mt-4 text-2xl font-semibold text-[#0B2A3D]">
           This module is not enabled for your student portal.
         </h2>
-        <p className="mt-3 text-sm leading-6 text-[#5D7185]">
-          Your institute has not enabled this portal area. Other available
+        <p className="mt-3 text-sm leading-6 text-[#334155]">
+          Your coach has not enabled this portal area. Other available
           portal sections remain accessible from the navigation.
         </p>
       </div>
@@ -132,7 +132,7 @@ export function StudentPortalLayout({
 
   return (
     <div
-      className="min-h-screen bg-[#F3FAFD] text-[#0B1F33]"
+      className="min-h-screen bg-[#F8FAFC] text-[#0B1F33]"
       style={{ "--portal-brand": brandColor } as React.CSSProperties}
     >
       <header className="sticky top-0 z-30 border-b border-[#D8E8F0] bg-white/90 backdrop-blur-xl">
@@ -154,11 +154,11 @@ export function StudentPortalLayout({
                   {branding.displayName}
                 </p>
                 {branding.showPoweredBy ? (
-                  <p className="text-xs font-medium text-[#5D7185]">
+                  <p className="text-xs font-medium text-[#475569]">
                     powered by CoachFort
                   </p>
                 ) : (
-                  <p className="text-xs font-medium text-[#5D7185]">
+                  <p className="text-xs font-medium text-[#475569]">
                     {branding.brandTagline || "Student Portal"}
                   </p>
                 )}
@@ -169,7 +169,7 @@ export function StudentPortalLayout({
                 <p className="text-sm font-semibold">
                   {context.student.full_name}
                 </p>
-                <p className="text-xs text-[#66788F]">Student Portal</p>
+                <p className="text-xs text-[#475569]">Student Portal</p>
               </div>
               <Button onClick={handleLogout} size="sm" type="button" variant="secondary">
                 Logout
@@ -188,7 +188,7 @@ export function StudentPortalLayout({
                     "whitespace-nowrap rounded-full border px-4 py-2 text-sm font-semibold transition",
                     active
                       ? "border-transparent text-white shadow-md shadow-[#145DA0]/15"
-                      : "border-[#D8E8F0] bg-white text-[#425B76] hover:border-[#2ECBEA]/60 hover:text-[#0B2A3D]",
+                      : "border-[#CBD5E1] bg-white text-[#334155] hover:border-[#145DA0]/45 hover:text-[#0B2A3D]",
                   ].join(" ")}
                   href={item.href}
                   key={item.href}

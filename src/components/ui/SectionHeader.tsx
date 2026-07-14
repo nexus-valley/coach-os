@@ -34,7 +34,7 @@ export function SectionHeader({
           {title}
         </h2>
         {description ? (
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-[#5D7185]">
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-[#334155]">
             {description}
           </p>
         ) : null}

@@ -36,7 +36,7 @@ export function EmptyState({
   title,
 }: EmptyStateProps) {
   return (
-    <Card className="mt-6 border-[#D8E8F0] bg-white p-8 text-[#0B2A3D] shadow-sm shadow-[#0B2A3D]/5">
+    <Card className="mt-6 border-[#CBD5E1] bg-white p-8 text-[#0B2A3D] shadow-sm shadow-slate-950/5">
       <div className="mx-auto max-w-2xl text-center">
         {icon ? (
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg border border-[#9ADDEA] bg-[#EAF8FC] text-sm font-bold text-[#0B2A3D] shadow-sm shadow-[#2ECBEA]/15">
@@ -51,7 +51,7 @@ export function EmptyState({
         <h3 className={["text-2xl font-semibold", icon || eyebrow ? "mt-4" : ""].join(" ")}>
           {title}
         </h3>
-        <p className="mt-3 text-sm leading-6 text-[#5D7185]">{description}</p>
+        <p className="mt-3 text-sm leading-6 text-[#334155]">{description}</p>
         {action ? (
           <div className="mt-7 flex flex-col items-center justify-center gap-3 sm:flex-row">
             {isActionConfig(action) ? (

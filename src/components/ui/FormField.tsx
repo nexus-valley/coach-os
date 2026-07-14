@@ -23,12 +23,12 @@ export function FormField({
 }: FormFieldProps) {
   const labelClass =
     tone === "dark"
-      ? "block text-sm font-medium text-slate-300"
+      ? "block text-sm font-semibold text-slate-200"
       : "block text-sm font-semibold text-[#0B2A3D]";
   const descriptionClass =
     tone === "dark"
-      ? "text-xs leading-5 text-slate-400"
-      : "text-xs leading-5 text-[#66788F]";
+      ? "text-xs leading-5 text-slate-300"
+      : "text-xs leading-5 text-[#475569]";
   const errorClass =
     tone === "dark"
       ? "text-xs font-medium leading-5 text-red-300"

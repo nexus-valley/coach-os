@@ -23,7 +23,7 @@ export function FeedbackAlert({
   return (
     <div
       className={[
-        "rounded-lg border p-4 text-sm leading-6",
+    "rounded-lg border p-4 text-sm font-medium leading-6",
         onRetry ? "flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between" : "",
         toneClasses[tone],
         className,

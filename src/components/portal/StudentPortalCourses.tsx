@@ -16,8 +16,8 @@ import {
 export function StudentPortalCourses({ context }: { context: StudentPortalContext }) {
   const { error, loading, overview } = usePortalSection(context);
 
-  if (loading) return <PortalLoadingCard label="Loading courses" />;
-  if (error || !overview) return <PortalError message={error || "Unable to load courses."} />;
+  if (loading) return <PortalLoadingCard label="Loading programs" />;
+  if (error || !overview) return <PortalError message={error || "Unable to load programs."} />;
 
   const completedCourses = overview.courses.filter((course) => course.isCompleted).length;
   const averageProgress =
@@ -33,9 +33,9 @@ export function StudentPortalCourses({ context }: { context: StudentPortalContex
   return (
     <div className="space-y-6">
       <PageHeader
-        description="Continue enrolled courses, review lesson progress, and see what your institute has assigned to you."
+        description="Continue enrolled programs, review lesson progress, and see what your coach has assigned to you."
         eyebrow="Learning"
-        title="My courses"
+        title="My Programs"
       />
 
       <section className="grid gap-4 md:grid-cols-3">
@@ -45,7 +45,7 @@ export function StudentPortalCourses({ context }: { context: StudentPortalContex
       </section>
 
       <SectionHeader
-        description="Course progress is based on the lessons currently tracked for your enrollments."
+        description="Program progress is based on the lessons currently tracked for your enrollments."
         title="Continue learning"
       />
       <div className="grid gap-5 lg:grid-cols-2">
@@ -58,7 +58,7 @@ export function StudentPortalCourses({ context }: { context: StudentPortalContex
                 <div>
                   <h2 className="text-xl font-semibold">{course.course.title}</h2>
                   <p className="mt-2 text-sm leading-6 text-[#425B76]">
-                    {course.course.description || "Course details will appear here."}
+                    {course.course.description || "Program details will appear here."}
                   </p>
                 </div>
                 <Badge tone={course.isCompleted ? "success" : "admin"}>

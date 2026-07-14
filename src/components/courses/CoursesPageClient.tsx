@@ -306,17 +306,17 @@ export function CoursesPageClient() {
       )}
 
       {formOpen ? (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 px-4 py-4 backdrop-blur-sm sm:items-center">
-          <Card className="w-full max-w-xl border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/40 sm:p-8">
+        <div className="fixed inset-0 z-50 flex min-h-full items-end justify-center overflow-y-auto bg-[#0B1F33]/70 px-4 py-4 backdrop-blur-sm sm:items-center">
+          <Card className="max-h-[calc(100dvh-2rem)] w-full max-w-xl overflow-y-auto rounded-xl border-[#CBD5E1] bg-white p-5 text-[#0B1F33] shadow-2xl shadow-slate-950/25 sm:p-6">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-sm font-semibold text-slate-500">
+                <p className="text-sm font-semibold text-[#475569]">
                   New program
                 </p>
                 <h3 className="mt-2 text-2xl font-semibold">Create Program</h3>
               </div>
               <button
-                className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 text-sm font-semibold text-slate-500 transition hover:bg-white/10 hover:text-white"
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-[#CBD5E1] text-sm font-semibold text-[#475569] transition hover:bg-[#F8FAFC] hover:text-[#0B1F33]"
                 onClick={() => setFormOpen(false)}
                 type="button"
               >
@@ -330,11 +330,10 @@ export function CoursesPageClient() {
                 htmlFor="course-title"
                 label="Program title"
                 required
-                tone="dark"
               >
                 <input
                   id="course-title"
-                  className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition placeholder:text-slate-400 focus:border-teal-400/40 focus:bg-white/15 focus:ring-4 focus:ring-teal-400/10"
+                  className="mt-2 h-12 w-full rounded-xl border border-[#CBD5E1] bg-white px-4 text-sm text-[#0B1F33] outline-none transition placeholder:text-[#64748B] focus:border-[#145DA0]/60 focus:ring-4 focus:ring-[#145DA0]/10"
                   onChange={(event) => setTitle(event.target.value)}
                   placeholder="Signature coaching program"
                   required
@@ -346,26 +345,25 @@ export function CoursesPageClient() {
               <FormField
                 htmlFor="course-description"
                 label="Description"
-                tone="dark"
               >
                 <textarea
                   id="course-description"
-                  className="mt-2 min-h-32 w-full resize-none rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm leading-6 text-white outline-none transition placeholder:text-slate-400 focus:border-teal-400/40 focus:bg-white/15 focus:ring-4 focus:ring-teal-400/10"
+                  className="mt-2 min-h-32 w-full resize-none rounded-xl border border-[#CBD5E1] bg-white px-4 py-3 text-sm leading-6 text-[#0B1F33] outline-none transition placeholder:text-[#64748B] focus:border-[#145DA0]/60 focus:ring-4 focus:ring-[#145DA0]/10"
                   onChange={(event) => setDescription(event.target.value)}
                   placeholder="Describe the promise, audience, and outcome."
                   value={description}
                 />
               </FormField>
 
-              <FormField label="Status" tone="dark">
-                <div className="mt-2 grid grid-cols-2 gap-2 rounded-2xl border border-white/10 bg-white/10 p-1">
+              <FormField label="Status">
+                <div className="mt-2 grid grid-cols-2 gap-2 rounded-xl border border-[#CBD5E1] bg-[#F8FAFC] p-1">
                   {(["draft", "published"] as const).map((item) => (
                     <button
                       className={[
-                        "h-11 rounded-xl text-sm font-semibold transition",
+                        "h-11 rounded-lg text-sm font-semibold transition",
                         status === item
-                          ? "bg-teal-400 text-black shadow-lg shadow-teal-950/30"
-                          : "text-slate-400 hover:bg-white/10 hover:text-white",
+                          ? "bg-[#145DA0] text-white shadow-sm shadow-[#145DA0]/20"
+                          : "text-[#475569] hover:bg-white hover:text-[#0B1F33]",
                       ].join(" ")}
                       key={item}
                       onClick={() => setStatus(item)}
@@ -379,7 +377,6 @@ export function CoursesPageClient() {
 
               <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end">
                 <Button
-                  className="border-white/10"
                   onClick={() => setFormOpen(false)}
                   type="button"
                   variant="secondary"

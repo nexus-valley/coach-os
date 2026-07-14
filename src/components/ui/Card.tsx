@@ -7,15 +7,15 @@ type CardProps = {
 } & React.HTMLAttributes<HTMLDivElement>;
 
 const variantClasses = {
-  dark: "border-white/10 bg-[#101214] text-white shadow-lg shadow-black/15",
+  dark: "border-[#1E293B] bg-[#0F172A] text-white shadow-lg shadow-slate-950/15",
   default:
-    "border-[#D8E8F0] bg-white text-[#0B1F33] shadow-sm shadow-[#0B2A3D]/5",
+    "border-[#CBD5E1] bg-white text-[#0B1F33] shadow-sm shadow-slate-950/5",
   elevated:
-    "border-[#D8E8F0] bg-white text-[#0B1F33] shadow-lg shadow-[#0B2A3D]/10",
+    "border-[#CBD5E1] bg-white text-[#0B1F33] shadow-lg shadow-slate-950/10",
   glass:
-    "border-white/40 bg-white/75 text-[#0B1F33] shadow-sm shadow-[#0B2A3D]/5 backdrop-blur-xl",
+    "border-[#CBD5E1] bg-white/90 text-[#0B1F33] shadow-sm shadow-slate-950/5 backdrop-blur-xl",
   subtle:
-    "border-[#D8E8F0] bg-[#F7FCFF] text-[#0B1F33] shadow-none",
+    "border-[#CBD5E1] bg-[#F9FBFD] text-[#0B1F33] shadow-none",
 };
 
 const paddingClasses = {
@@ -40,7 +40,7 @@ export function Card({
         variantClasses[variant],
         paddingClasses[padding],
         interactive
-          ? "transition duration-200 hover:-translate-y-0.5 hover:border-[#2ECBEA]/55 hover:shadow-md hover:shadow-[#0B2A3D]/8"
+          ? "transition duration-200 hover:-translate-y-0.5 hover:border-[#145DA0]/45 hover:shadow-md hover:shadow-slate-950/10"
           : "",
         className,
       ]

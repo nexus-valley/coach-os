@@ -19,9 +19,9 @@ export function TableShell({
   title,
 }: TableShellProps) {
   return (
-    <Card className={["overflow-hidden", className].filter(Boolean).join(" ")}>
+    <Card className={["overflow-hidden bg-white", className].filter(Boolean).join(" ")}>
       {title || description || actions ? (
-        <div className="border-b border-[#D8E8F0] p-5">
+        <div className="border-b border-[#CBD5E1] p-5">
           <SectionHeader actions={actions} description={description} title={title} />
         </div>
       ) : null}

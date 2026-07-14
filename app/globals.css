@@ -88,9 +88,7 @@ html {
 }
 
 .coachos-light {
-  background:
-    radial-gradient(circle at top right, rgba(46, 203, 234, 0.2), transparent 28rem),
-    linear-gradient(135deg, #f3fafd 0%, #ffffff 48%, #eaf7fc 100%);
+  background: #f8fafc;
 }
 
 .coachos-light .coachos-content {
@@ -129,7 +127,7 @@ html {
 .coachos-light .coachos-content [class~="text-slate-500"],
 .coachos-light .coachos-content [class~="text-zinc-500"],
 .coachos-light .coachos-content [class~="text-gray-500"] {
-  color: #66788f !important;
+  color: #475569 !important;
 }
 
 .coachos-light .coachos-content [class~="text-teal-300"],

@@ -18,8 +18,8 @@ import {
 export function StudentPortalSessions({ context }: { context: StudentPortalContext }) {
   const { error, loading, overview } = usePortalSection(context);
 
-  if (loading) return <PortalLoadingCard label="Loading sessions" />;
-  if (error || !overview) return <PortalError message={error || "Unable to load sessions."} />;
+  if (loading) return <PortalLoadingCard label="Loading live classes" />;
+  if (error || !overview) return <PortalError message={error || "Unable to load live classes."} />;
 
   const upcomingSessions = overview.sessions.upcoming;
   const recentSessions = overview.sessions.recent;
@@ -47,7 +47,7 @@ export function StudentPortalSessions({ context }: { context: StudentPortalConte
           </div>
           {session.meeting_url ? (
             <Button href={session.meeting_url} size="sm" variant="secondary">
-              Join session
+              Join class
             </Button>
           ) : null}
         </div>
@@ -58,9 +58,9 @@ export function StudentPortalSessions({ context }: { context: StudentPortalConte
   return (
     <div className="space-y-6">
       <PageHeader
-        description="Track upcoming sessions, recent classes, and joining links shared by your institute."
+        description="Track upcoming live classes, recent classes, and joining links shared by your coach."
         eyebrow="Schedule"
-        title="Sessions"
+        title="Live Classes"
       />
 
       <section className="grid gap-4 md:grid-cols-2">
@@ -70,12 +70,12 @@ export function StudentPortalSessions({ context }: { context: StudentPortalConte
 
       <section>
         <SectionHeader
-          description="Scheduled classes and study sessions that are still ahead."
+          description="Scheduled live classes that are still ahead."
           title="Upcoming schedule"
         />
         <div className="mt-4 space-y-4">
           {upcomingSessions.length === 0 ? (
-            <PortalEmptyState>No upcoming sessions scheduled.</PortalEmptyState>
+            <PortalEmptyState>No upcoming live classes scheduled.</PortalEmptyState>
           ) : (
             upcomingSessions.map(renderSession)
           )}
@@ -84,12 +84,12 @@ export function StudentPortalSessions({ context }: { context: StudentPortalConte
 
       <section>
         <SectionHeader
-          description="Recently completed or past sessions remain visible for reference."
-          title="Recent sessions"
+          description="Recently completed or past live classes remain visible for reference."
+          title="Recent classes"
         />
         <div className="mt-4 space-y-4">
           {recentSessions.length === 0 ? (
-            <PortalEmptyState>No recent sessions available yet.</PortalEmptyState>
+            <PortalEmptyState>No recent live classes available yet.</PortalEmptyState>
           ) : (
             recentSessions.map(renderSession)
           )}

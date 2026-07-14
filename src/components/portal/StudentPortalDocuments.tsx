@@ -63,7 +63,7 @@ export function StudentPortalDocuments({
         }
       } catch (caught) {
         if (active) {
-          setError(getErrorMessage(caught, "Unable to load documents."));
+          setError(getErrorMessage(caught, "Unable to load materials."));
         }
       } finally {
         if (active) {
@@ -102,7 +102,7 @@ export function StudentPortalDocuments({
     }
   }
 
-  if (loading) return <PortalLoadingCard label="Loading documents" />;
+  if (loading) return <PortalLoadingCard label="Loading materials" />;
   if (error) return <PortalError message={error} />;
 
   const uploadedDocuments = documents.filter(
@@ -115,9 +115,9 @@ export function StudentPortalDocuments({
   return (
     <div className="space-y-6">
       <PageHeader
-        description="Find documents, references, and resources shared for your student profile, courses, cohorts, or sessions."
+        description="Find materials, references, and resources shared for your profile, programs, cohorts, or live classes."
         eyebrow="Resources"
-        title="Documents"
+        title="Materials"
       />
 
       <section className="grid gap-4 md:grid-cols-3">
@@ -128,7 +128,7 @@ export function StudentPortalDocuments({
 
       {documents.length === 0 ? (
         <div>
-          <PortalEmptyState>No documents have been shared with you yet.</PortalEmptyState>
+          <PortalEmptyState>No materials have been shared with you yet.</PortalEmptyState>
         </div>
       ) : (
         <div className="grid gap-5 lg:grid-cols-[minmax(0,0.95fr)_minmax(360px,1.05fr)]">
@@ -155,7 +155,7 @@ export function StudentPortalDocuments({
                       {document.title}
                     </p>
                     <p className="mt-1 text-sm text-[#425B76]">
-                      {document.category ?? "Shared document"}
+                      {document.category ?? "Shared material"}
                     </p>
                   </div>
                   <Badge tone={typeTone(document.document_type)}>
@@ -179,7 +179,7 @@ export function StudentPortalDocuments({
                       {formatDocumentLabel(selectedDocument.document_type)}
                     </Badge>
                   }
-                  description="Review the document details before opening a reference or file."
+                  description="Review the material details before opening a reference or file."
                   title="Resource details"
                 />
                 <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
@@ -215,7 +215,7 @@ export function StudentPortalDocuments({
                 {selectedDocument.external_url ? (
                   <div className="mt-5 rounded-2xl border border-[#D8E8F0] p-4">
                     <p className="text-sm text-[#425B76]">
-                      This is a document reference link shared by your institute.
+                      This is a material reference link shared by your coach.
                     </p>
                     <Button
                       className="mt-4"

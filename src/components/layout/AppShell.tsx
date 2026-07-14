@@ -549,7 +549,7 @@ export function AppShell({ activeItem = "Home", children }: AppShellProps) {
       className="coachos-light h-screen overflow-hidden text-[#0B2A3D]"
       style={shellStyle}
     >
-      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top_right,rgba(46,203,234,0.2),transparent_32rem),linear-gradient(135deg,rgba(243,250,253,0.95),rgba(255,255,255,0.72))]" />
+      <div className="pointer-events-none fixed inset-0 bg-[#F8FAFC]" />
 
       <div className="relative flex h-screen overflow-hidden">
         <aside className="coachos-sidebar hidden h-screen w-72 shrink-0 overflow-y-auto border-r border-[#2ECBEA]/15 bg-[#0B2A3D] px-4 py-5 text-white shadow-lg shadow-[#0B2A3D]/10 lg:block">
@@ -571,14 +571,14 @@ export function AppShell({ activeItem = "Home", children }: AppShellProps) {
               <p className="truncate text-sm font-semibold text-white">
                 {workspaceName}
               </p>
-              <p className="text-xs text-cyan-100/70">CoachFort workspace</p>
+              <p className="text-xs font-medium text-cyan-50/85">CoachFort workspace</p>
             </div>
           </Link>
-          <div className="mt-4 rounded-xl border border-white/10 bg-white/5 px-3 py-2">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-cyan-100/55">
+          <div className="mt-4 rounded-xl border border-white/15 bg-white/10 px-3 py-2">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-cyan-50/85">
               Navigation
             </p>
-            <p className="mt-1 text-xs text-cyan-50/70">
+            <p className="mt-1 text-xs font-medium text-cyan-50/80">
               Modules are grouped by daily workflow.
             </p>
           </div>
@@ -586,7 +586,7 @@ export function AppShell({ activeItem = "Home", children }: AppShellProps) {
           <nav aria-label="Workspace navigation" className="mt-6 space-y-6 pb-6">
             {groupedNavItems.map((group) => (
               <div key={group.label}>
-                <p className="px-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-100/45">
+                <p className="px-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-50/80">
                   {group.label}
                 </p>
                 <div className="mt-2 space-y-1">
@@ -596,7 +596,7 @@ export function AppShell({ activeItem = "Home", children }: AppShellProps) {
                       "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition",
                       active
                         ? "text-[#0B2A3D] shadow-sm shadow-cyan-950/15"
-                        : "text-cyan-50/74 hover:bg-white/8 hover:text-white",
+                        : "text-cyan-50/90 hover:bg-white/10 hover:text-white",
                     ].join(" ");
                     const activeStyle = active
                       ? ({ backgroundColor: "#EAF7FC" } satisfies CSSProperties)
@@ -615,7 +615,7 @@ export function AppShell({ activeItem = "Home", children }: AppShellProps) {
                             "flex h-8 w-8 items-center justify-center rounded-lg text-[10px] font-bold",
                             active
                               ? "bg-[#0B2A3D] text-[#2ECBEA]"
-                              : "bg-white/8 text-cyan-50/75",
+                              : "bg-white/10 text-cyan-50/90",
                           ].join(" ")}
                         >
                           <NavIcon label={item.label} />
@@ -648,7 +648,7 @@ export function AppShell({ activeItem = "Home", children }: AppShellProps) {
                   />
                 )}
                 <div>
-                  <p className="text-xs font-semibold text-[#5D7185]">
+                  <p className="text-xs font-semibold text-[#475569]">
                     Workspace
                   </p>
                   <h1 className="mt-1 max-w-[14rem] truncate text-xl font-semibold text-[#0B2A3D] sm:max-w-[22rem]">
@@ -689,7 +689,7 @@ export function AppShell({ activeItem = "Home", children }: AppShellProps) {
               <div className="flex items-center justify-between border-b border-[#D8E8F0] px-4 py-3">
                 <div>
                   <p className="text-sm font-semibold">More modules</p>
-                  <p className="text-xs text-[#66788F]">
+                  <p className="text-xs text-[#475569]">
                     Available for your current role and workspace.
                   </p>
                 </div>
@@ -780,7 +780,7 @@ export function AppShell({ activeItem = "Home", children }: AppShellProps) {
                   "flex flex-col items-center justify-center gap-1 rounded-xl px-2 py-2 text-[11px] font-medium transition",
                   mobileMoreOpen || mobileOverflowActive
                     ? "bg-[#EAF7FC] text-[#06202A] shadow-lg shadow-[#145DA0]/20"
-                    : "text-[#5D7185] hover:bg-[#EAF7FC] hover:text-[#0B2A3D]",
+                    : "text-[#475569] hover:bg-[#EAF7FC] hover:text-[#0B2A3D]",
                 ].join(" ")}
                 onClick={() => setMobileMoreOpen((open) => !open)}
                 type="button"
