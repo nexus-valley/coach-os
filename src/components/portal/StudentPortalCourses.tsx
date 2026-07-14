@@ -2,6 +2,7 @@
 
 import { Badge } from "@/src/components/ui/Badge";
 import { Card } from "@/src/components/ui/Card";
+import { formatEnrollmentStatus } from "@/src/components/enrollments/EnrollmentStatusBadge";
 import { PageHeader } from "@/src/components/ui/PageHeader";
 import { SectionHeader } from "@/src/components/ui/SectionHeader";
 import { StatCard } from "@/src/components/ui/StatCard";
@@ -33,7 +34,7 @@ export function StudentPortalCourses({ context }: { context: StudentPortalContex
   return (
     <div className="space-y-6">
       <PageHeader
-        description="Continue enrolled programs, review lesson progress, and see what your coach has assigned to you."
+        description="Continue the programs assigned by your coach or team, review lesson progress, and see your current enrollment status."
         eyebrow="Learning"
         title="My Programs"
       />
@@ -45,12 +46,14 @@ export function StudentPortalCourses({ context }: { context: StudentPortalContex
       </section>
 
       <SectionHeader
-        description="Program progress is based on the lessons currently tracked for your enrollments."
+        description="Programs shown here are assigned by your coach or team. Enrollment status is shown for reference."
         title="Continue learning"
       />
       <div className="grid gap-5 lg:grid-cols-2">
         {overview.courses.length === 0 ? (
-          <PortalEmptyState>No enrolled programs yet.</PortalEmptyState>
+          <PortalEmptyState>
+            No programs have been assigned to you yet.
+          </PortalEmptyState>
         ) : (
           overview.courses.map((course) => (
             <Card className="border-[#D8E8F0] bg-white p-6" key={course.course.id}>
@@ -62,7 +65,7 @@ export function StudentPortalCourses({ context }: { context: StudentPortalContex
                   </p>
                 </div>
                 <Badge tone={course.isCompleted ? "success" : "admin"}>
-                  {course.enrollment.status}
+                  {formatEnrollmentStatus(course.enrollment.status)}
                 </Badge>
               </div>
               <div className="mt-5 h-2 overflow-hidden rounded-full bg-[#EAF7FC]">

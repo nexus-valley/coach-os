@@ -145,7 +145,7 @@ export function StudentPortalDashboard({ context }: { context: StudentPortalCont
       </Card>
 
       <SectionHeader
-        description="A quick view of your program progress, live class attendance, certificates, and payment records."
+        description="A quick view of the programs assigned to you, live class attendance, certificates, and payment records."
         title="Learning snapshot"
       />
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">

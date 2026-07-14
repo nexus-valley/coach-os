@@ -192,9 +192,8 @@ export function CoursesPageClient() {
               {tenant?.name ?? "Loading workspace..."}
             </p>
             <p className="mt-3 text-sm leading-6 text-slate-400">
-              Programs sit between student demand, payment, access, and
-              delivery. Keep drafts clean, then publish when the program is
-              ready to run.
+              Start by creating a program, then add students and enroll them
+              from each student profile when the learning path is ready.
             </p>
           </div>
           <div className="grid gap-3 sm:grid-cols-3">
@@ -249,7 +248,7 @@ export function CoursesPageClient() {
               ? { label: "Create Program", onClick: () => setFormOpen(true) }
               : undefined
           }
-          description="Create your first draft program to start shaping the learning experience, sections, lessons, and enrollments."
+          description="Create a program first, then add students and enroll them from each student profile."
           icon="CU"
           title="No programs created yet"
         />

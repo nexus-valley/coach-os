@@ -208,8 +208,8 @@ export function StudentsPageClient() {
             Students
           </h2>
           <p className="mt-3 max-w-2xl text-base leading-7 text-slate-400">
-            Capture leads, keep active student records clean, and connect people
-            into programs, cohorts, enrollments, and sales workflows.
+            Add students, keep their contact details organized, and enroll them
+            into the right programs when they are ready to learn.
           </p>
         </div>
         <Button onClick={() => setFormOpen(true)} size="lg" type="button">
@@ -225,8 +225,8 @@ export function StudentsPageClient() {
               {tenant?.name ?? "Loading workspace..."}
             </p>
             <p className="mt-3 text-sm leading-6 text-slate-400">
-              People to programs to batches. Start with a clean student record,
-              then enroll them into the right learning workflow.
+              Start with a clean student record, then enroll the student into
+              one or more programs from their profile.
             </p>
           </div>
           <div className="grid gap-3 sm:grid-cols-3">
@@ -283,7 +283,7 @@ export function StudentsPageClient() {
       ) : students.length === 0 ? (
         <EmptyState
           action={{ label: "Add Student", onClick: () => setFormOpen(true) }}
-          description="Add your first student or lead to begin building the CRM layer. Enrollment and payment history will connect automatically."
+          description="Add a student first, then open their profile to enroll them into one or more programs."
           icon="SD"
           title="No students added yet"
         />
@@ -302,8 +302,8 @@ export function StudentsPageClient() {
             className="mb-4"
             description={
               <span className="text-slate-400">
-                Review contact readiness, lead source, and status before moving
-                students into programs and cohorts.
+                Review contact readiness, lead source, and status before
+                enrolling students into programs.
               </span>
             }
             title={<span className="text-white">Student directory</span>}
@@ -512,7 +512,7 @@ export function StudentFormFields({
           onChange={(event) =>
             setForm((current) => ({ ...current, notes: event.target.value }))
           }
-          placeholder="Add CRM context, goals, or support notes."
+          placeholder="Add goals, context, or support notes."
           value={form.notes}
         />
       </FormField>

@@ -171,7 +171,7 @@ export async function createEnrollment(input: CreateEnrollmentInput) {
 
   if (error) {
     if (error.code === "23505") {
-      throw new Error("This student is already enrolled in that course.");
+      throw new Error("This student is already enrolled in that program.");
     }
 
     throw error;

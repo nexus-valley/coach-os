@@ -637,12 +637,20 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
                 Program enrollment roster
               </h3>
               <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-400">
-                View students connected to this program. Enrollment changes are
-                managed from student profiles and the enrollment overview.
+                Enrollments are managed from each student profile. Open a
+                student profile to add this program or adjust enrollment status.
               </p>
             </div>
-            <div className="rounded-full border border-white/10 bg-[#101214] px-4 py-2 text-sm text-slate-300">
-              {enrollments.length} enrolled
+            <div className="flex flex-wrap items-center gap-2">
+              <Button href="/app/students" size="sm" variant="secondary">
+                View Students
+              </Button>
+              <Button href="/app/enrollments" size="sm" variant="secondary">
+                Enrollment Overview
+              </Button>
+              <div className="rounded-full border border-white/10 bg-[#101214] px-4 py-2 text-sm text-slate-300">
+                {enrollments.length} enrolled
+              </div>
             </div>
           </div>
 
@@ -655,9 +663,18 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
                 No enrolled students yet
               </h4>
               <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-slate-400">
-                Enroll students from their CRM profile or the enrollment
-                overview once records exist.
+                Add a student, then open that student profile to enroll them in
+                this program. The enrollment overview lists records after they
+                exist.
               </p>
+              <div className="mt-5 flex flex-wrap justify-center gap-3">
+                <Button href="/app/students" size="sm">
+                  View Students
+                </Button>
+                <Button href="/app/enrollments" size="sm" variant="secondary">
+                  Open Enrollment Overview
+                </Button>
+              </div>
             </div>
           ) : (
             <div className="mt-8 divide-y divide-white/10 overflow-hidden rounded-3xl border border-white/10">

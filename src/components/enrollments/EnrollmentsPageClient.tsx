@@ -4,8 +4,12 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
-import { EnrollmentStatusBadge } from "@/src/components/enrollments/EnrollmentStatusBadge";
+import {
+  EnrollmentStatusBadge,
+  formatEnrollmentStatus,
+} from "@/src/components/enrollments/EnrollmentStatusBadge";
 import { Badge } from "@/src/components/ui/Badge";
+import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
 import { EmptyState } from "@/src/components/ui/EmptyState";
 import { FeedbackAlert } from "@/src/components/ui/FeedbackAlert";
@@ -133,12 +137,20 @@ export function EnrollmentsPageClient() {
             Enrollments
           </h2>
           <p className="mt-3 max-w-2xl text-base leading-7 text-slate-400">
-            See which students are connected to which programs across this
-            workspace.
+            Review all program enrollments. To create or update an enrollment,
+            open the student profile.
           </p>
         </div>
-        <div className="rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm text-white">
-          {filteredEnrollments.length} visible
+        <div className="flex flex-wrap items-center gap-2">
+          <Button href="/app/students" size="sm" variant="secondary">
+            Open Students
+          </Button>
+          <Button href="/app/courses" size="sm" variant="secondary">
+            Open Programs
+          </Button>
+          <div className="rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm text-white">
+            {filteredEnrollments.length} visible
+          </div>
         </div>
       </div>
 
@@ -150,6 +162,10 @@ export function EnrollmentsPageClient() {
             </p>
             <p className="mt-1 text-xl font-semibold">
               {tenant?.name ?? "Loading workspace..."}
+            </p>
+            <p className="mt-2 max-w-xl text-sm leading-6 text-slate-400">
+              Enrollment status tracks learning administration. Access-control
+              rules such as expiry or payment gating are handled separately.
             </p>
           </div>
           <label className="block">
@@ -173,7 +189,7 @@ export function EnrollmentsPageClient() {
             >
               {statusFilters.map((status) => (
                 <option className="text-slate-950" key={status} value={status}>
-                  {status}
+                  {status === "all" ? "All statuses" : formatEnrollmentStatus(status)}
                 </option>
               ))}
             </select>
@@ -203,7 +219,7 @@ export function EnrollmentsPageClient() {
       ) : filteredEnrollments.length === 0 ? (
         <EmptyState
           action={{ label: "Open Students", onClick: () => router.push("/app/students") }}
-          description="Enroll a student from their profile to create the first program connection."
+          description="No enrollments yet. Add a student, create a program, then enroll the student from their profile."
           icon="EN"
           title="No enrollments found"
         />

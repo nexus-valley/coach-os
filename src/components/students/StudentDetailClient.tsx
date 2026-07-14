@@ -4,7 +4,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
-import { EnrollmentStatusBadge } from "@/src/components/enrollments/EnrollmentStatusBadge";
+import {
+  EnrollmentStatusBadge,
+  formatEnrollmentStatus,
+} from "@/src/components/enrollments/EnrollmentStatusBadge";
 import { PaymentStatusBadge } from "@/src/components/payments/PaymentStatusBadge";
 import {
   emptyStudentForm,
@@ -691,8 +694,8 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
             {getWorkspaceBranding(tenantSettings, tenant).displayName}
           </h3>
           <p className="mt-3 text-sm leading-6 text-slate-400">
-            This CRM record is scoped to the current tenant and cannot be loaded
-            without the matching workspace id.
+            This student record is scoped to the current workspace and can only
+            be loaded inside that workspace.
           </p>
           <div className="mt-7 flex flex-col gap-3">
             <Button onClick={openEnrollmentPanel} type="button">
@@ -764,8 +767,9 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
               </Badge>
               <h3 className="mt-4 text-2xl font-semibold">Enrolled programs</h3>
               <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-400">
-                Connect this student to program products. Payments and cohorts
-                are tracked in their own focused sections.
+                Use this section to assign programs to this student and track
+                enrollment status. Payment records and cohorts stay in their own
+                sections.
               </p>
             </div>
             <Button onClick={openEnrollmentPanel} type="button">
@@ -782,8 +786,8 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
                 No enrollments yet
               </h4>
               <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-slate-400">
-                Enroll this student into a program to start tracking learning
-                access and completion status.
+                Enroll this student into a program to start tracking their
+                learning relationship and progress status.
               </p>
             </div>
           ) : (
@@ -823,7 +827,7 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
                           key={status}
                           value={status}
                         >
-                          {status}
+                          {formatEnrollmentStatus(status as EnrollmentStatus)}
                         </option>
                       ),
                     )}
@@ -1118,7 +1122,9 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
               ) : (
                 <p className="rounded-2xl border border-white/10 bg-white/10 p-4 text-sm leading-6 text-slate-400">
                   Enrollment status starts as active. Programs already connected
-                  to this student are hidden from the selector.
+                  to this student are hidden from the selector. Status is used
+                  for learning administration and does not add payment or expiry
+                  rules in this module.
                 </p>
               )}
               <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
@@ -1287,8 +1293,8 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
               Delete {student.full_name}?
             </h3>
             <p className="mt-3 text-sm leading-6 text-slate-400">
-              This removes the student CRM record. Enrollment and payment
-              modules are not connected in this module.
+              This removes the student record. Enrollment and payment modules
+              are not connected in this module.
             </p>
             <div className="mt-7 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
               <Button
