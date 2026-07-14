@@ -325,13 +325,13 @@ export function SessionsPageClient() {
             Live Classes
           </h2>
           <p className="mt-3 max-w-2xl text-base leading-7 text-[#425B76]">
-            Schedule live classes, mark attendance, and keep delivery
-            organized for your students.
+            Schedule program-linked live teaching, manage meeting details, and
+            track attendance after each class.
           </p>
         </div>
         {canManage ? (
           <Button onClick={openCreateForm} size="lg" type="button">
-            Create Live Class
+            Schedule live class
           </Button>
         ) : null}
       </div>
@@ -399,12 +399,12 @@ export function SessionsPageClient() {
             canManage
               ? {
                   disabled: courses.length === 0 && cohorts.length === 0,
-                  label: "Create Live Class",
+                  label: "Schedule live class",
                   onClick: openCreateForm,
                 }
               : undefined
           }
-          description="Schedule a live class for a program or group to start managing attendance."
+          description="Create a program-linked live class for enrolled students, then add meeting details and track attendance after delivery."
           icon="SE"
           title="No live classes found"
         />
@@ -432,20 +432,38 @@ export function SessionsPageClient() {
                         {deliveryModeLabels[session.delivery_mode]}
                       </Badge>
                     </div>
-                    <span className="text-xs font-medium text-[#66788F]">
+                    <span className="text-xs font-semibold text-[#64748B]">
                       {formatDateTime(session.scheduled_start_at)}
                     </span>
                   </div>
                   <h3 className="mt-5 text-2xl font-semibold leading-tight text-[#0B1F33]">
                     {session.title}
                   </h3>
-                  <p className="mt-3 text-sm font-semibold text-[#0E7490]">
-                    {session.cohort?.name ??
-                      session.course?.title ??
-                      "General live class"}
-                  </p>
+                  <div className="mt-4 grid gap-3 text-sm">
+                    <div className="rounded-2xl border border-[#D8E8F0] bg-[#F8FAFC] p-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#64748B]">
+                        Program
+                      </p>
+                      <p className="mt-1 font-semibold text-[#0B1F33]">
+                        {session.course?.title ?? "General live class"}
+                      </p>
+                    </div>
+                    {session.cohort ? (
+                      <div className="rounded-2xl border border-[#D8E8F0] bg-[#F8FAFC] p-3">
+                        <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#64748B]">
+                          Cohort
+                        </p>
+                        <p className="mt-1 font-semibold text-[#0B1F33]">
+                          {session.cohort.name}
+                        </p>
+                      </div>
+                    ) : null}
+                  </div>
                   <p className="mt-4 line-clamp-3 text-sm leading-6 text-[#425B76]">
                     {session.description || "No live class notes added yet."}
+                  </p>
+                  <p className="mt-3 text-xs font-semibold uppercase tracking-[0.08em] text-[#64748B]">
+                    {session.trainer_user_id ? "Host assigned" : "Team hosted"}
                   </p>
                   {session.meeting_provider || session.meeting_url ? (
                     <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -473,19 +491,19 @@ export function SessionsPageClient() {
                       <p className="font-semibold text-[#0B1F33]">
                         {marked}
                       </p>
-                      <p className="mt-1 text-xs text-[#66788F]">Marked</p>
+                      <p className="mt-1 text-xs text-[#64748B]">Marked</p>
                     </div>
                     <div className="rounded-2xl bg-[#F6FBFE] p-3">
                       <p className="font-semibold text-[#0B1F33]">
                         {session.attendanceCounts.present +
                           session.attendanceCounts.late}
                       </p>
-                      <p className="mt-1 text-xs text-[#66788F]">Attended</p>
+                      <p className="mt-1 text-xs text-[#64748B]">Attended</p>
                     </div>
                   </div>
                   <div className="mt-5">
                     <Button href={`/app/sessions/${session.id}`} size="sm">
-                      Open Attendance
+                      Open command center
                     </Button>
                   </div>
                 </div>
@@ -504,7 +522,7 @@ export function SessionsPageClient() {
                   Live class setup
                 </p>
                 <h3 className="mt-2 text-2xl font-semibold text-[#0B1F33]">
-                  Create Live Class
+                  Schedule live class
                 </h3>
               </div>
               <button
@@ -522,7 +540,7 @@ export function SessionsPageClient() {
                   Live class title
                 </span>
                 <input
-                  className="mt-2 h-12 w-full rounded-2xl border border-[#D8E8F0] bg-white px-4 text-sm text-[#0B1F33] outline-none transition placeholder:text-[#66788F] focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
+                  className="mt-2 h-12 w-full rounded-2xl border border-[#D8E8F0] bg-white px-4 text-sm text-[#0B1F33] outline-none transition placeholder:text-[#64748B] focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
                   onChange={(event) =>
                     setForm((current) => ({
                       ...current,
@@ -668,7 +686,7 @@ export function SessionsPageClient() {
                     Timezone
                   </span>
                   <input
-                    className="mt-2 h-12 w-full rounded-2xl border border-[#D8E8F0] bg-white px-4 text-sm text-[#0B1F33] outline-none transition placeholder:text-[#66788F] focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
+                    className="mt-2 h-12 w-full rounded-2xl border border-[#D8E8F0] bg-white px-4 text-sm text-[#0B1F33] outline-none transition placeholder:text-[#64748B] focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
                     onChange={(event) =>
                       setForm((current) => ({
                         ...current,
@@ -688,7 +706,7 @@ export function SessionsPageClient() {
                     Meeting link
                   </span>
                   <input
-                    className="mt-2 h-12 w-full rounded-2xl border border-[#D8E8F0] bg-white px-4 text-sm text-[#0B1F33] outline-none transition placeholder:text-[#66788F] focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
+                    className="mt-2 h-12 w-full rounded-2xl border border-[#D8E8F0] bg-white px-4 text-sm text-[#0B1F33] outline-none transition placeholder:text-[#64748B] focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
                     onChange={(event) =>
                       setForm((current) => ({
                         ...current,
@@ -724,7 +742,7 @@ export function SessionsPageClient() {
                     Meeting ID
                   </span>
                   <input
-                    className="mt-2 h-12 w-full rounded-2xl border border-[#D8E8F0] bg-white px-4 text-sm text-[#0B1F33] outline-none transition placeholder:text-[#66788F] focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
+                    className="mt-2 h-12 w-full rounded-2xl border border-[#D8E8F0] bg-white px-4 text-sm text-[#0B1F33] outline-none transition placeholder:text-[#64748B] focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
                     onChange={(event) =>
                       setForm((current) => ({
                         ...current,
@@ -741,7 +759,7 @@ export function SessionsPageClient() {
                     Passcode
                   </span>
                   <input
-                    className="mt-2 h-12 w-full rounded-2xl border border-[#D8E8F0] bg-white px-4 text-sm text-[#0B1F33] outline-none transition placeholder:text-[#66788F] focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
+                    className="mt-2 h-12 w-full rounded-2xl border border-[#D8E8F0] bg-white px-4 text-sm text-[#0B1F33] outline-none transition placeholder:text-[#64748B] focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
                     onChange={(event) =>
                       setForm((current) => ({
                         ...current,
@@ -760,7 +778,7 @@ export function SessionsPageClient() {
                   Description
                 </span>
                 <textarea
-                  className="mt-2 min-h-24 w-full resize-none rounded-2xl border border-[#D8E8F0] bg-white px-4 py-3 text-sm leading-6 text-[#0B1F33] outline-none transition placeholder:text-[#66788F] focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
+                  className="mt-2 min-h-24 w-full resize-none rounded-2xl border border-[#D8E8F0] bg-white px-4 py-3 text-sm leading-6 text-[#0B1F33] outline-none transition placeholder:text-[#64748B] focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
                   onChange={(event) =>
                     setForm((current) => ({
                       ...current,
@@ -777,7 +795,7 @@ export function SessionsPageClient() {
                   Meeting notes
                 </span>
                 <textarea
-                  className="mt-2 min-h-20 w-full resize-none rounded-2xl border border-[#D8E8F0] bg-white px-4 py-3 text-sm leading-6 text-[#0B1F33] outline-none transition placeholder:text-[#66788F] focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
+                  className="mt-2 min-h-20 w-full resize-none rounded-2xl border border-[#D8E8F0] bg-white px-4 py-3 text-sm leading-6 text-[#0B1F33] outline-none transition placeholder:text-[#64748B] focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
                   onChange={(event) =>
                     setForm((current) => ({
                       ...current,
@@ -798,7 +816,7 @@ export function SessionsPageClient() {
                   Cancel
                 </Button>
                 <Button disabled={saving} type="submit">
-                  {saving ? "Creating..." : "Create Live Class"}
+                  {saving ? "Creating..." : "Schedule live class"}
                 </Button>
               </div>
             </form>

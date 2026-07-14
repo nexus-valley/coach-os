@@ -130,7 +130,7 @@ function SummaryCard({
   return (
     <div className="rounded-2xl border border-[#D8E8F0] bg-[#F6FBFE] p-4">
       <p className="text-2xl font-semibold text-[#0B1F33]">{value}</p>
-      <p className="mt-1 text-sm text-[#66788F]">{label}</p>
+      <p className="mt-1 text-sm text-[#64748B]">{label}</p>
     </div>
   );
 }
@@ -352,7 +352,7 @@ export function SessionDetailClient({ sessionId }: SessionDetailClientProps) {
 
   if (!currentRole || !canAccess) {
     return (
-      <AccessDeniedCard description="You do not have permission to access live class attendance." />
+      <AccessDeniedCard description="You do not have permission to access live class delivery tools." />
     );
   }
 
@@ -360,7 +360,9 @@ export function SessionDetailClient({ sessionId }: SessionDetailClientProps) {
     return (
       <div className="mx-auto max-w-7xl">
         <Card className="border-[#D8E8F0] bg-white p-8 shadow-2xl shadow-[#0B2A3D]/10">
-          <p className="text-sm font-semibold text-[#66788F]">Live class detail</p>
+          <p className="text-sm font-semibold text-[#64748B]">
+            Live class command center
+          </p>
           <h2 className="mt-3 text-2xl font-semibold text-[#0B1F33]">
             {error || "Live class not found."}
           </h2>
@@ -397,11 +399,14 @@ export function SessionDetailClient({ sessionId }: SessionDetailClientProps) {
               <h2 className="mt-5 text-4xl font-semibold leading-tight tracking-normal text-[#0B1F33]">
                 {session.title}
               </h2>
-              <p className="mt-3 text-sm font-semibold text-[#0E7490]">
-                {session.cohort?.name ??
-                  session.course?.title ??
-                  "General live class"}
-              </p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Badge tone="light">
+                  Program: {session.course?.title ?? "General live class"}
+                </Badge>
+                {session.cohort ? (
+                  <Badge tone="light">Cohort: {session.cohort.name}</Badge>
+                ) : null}
+              </div>
             </div>
             {canMark ? (
               <div className="flex flex-wrap gap-2">
@@ -434,25 +439,25 @@ export function SessionDetailClient({ sessionId }: SessionDetailClientProps) {
 
           <div className="mt-8 grid gap-4 border-t border-[#D8E8F0] pt-6 sm:grid-cols-2">
             <div>
-              <p className="text-sm text-[#66788F]">Starts</p>
+              <p className="text-sm text-[#64748B]">Starts</p>
               <p className="mt-2 font-semibold text-[#0B1F33]">
                 {formatDateTime(session.scheduled_start_at)}
               </p>
             </div>
             <div>
-              <p className="text-sm text-[#66788F]">Ends</p>
+              <p className="text-sm text-[#64748B]">Ends</p>
               <p className="mt-2 font-semibold text-[#0B1F33]">
                 {formatDateTime(session.scheduled_end_at)}
               </p>
             </div>
             <div>
-              <p className="text-sm text-[#66788F]">Delivery mode</p>
+              <p className="text-sm text-[#64748B]">Delivery mode</p>
               <p className="mt-2 font-semibold text-[#0B1F33]">
                 {deliveryModeLabels[session.delivery_mode]}
               </p>
             </div>
             <div>
-              <p className="text-sm text-[#66788F]">Timezone</p>
+              <p className="text-sm text-[#64748B]">Timezone</p>
               <p className="mt-2 font-semibold text-[#0B1F33]">
                 {session.timezone || "Asia/Kolkata"}
               </p>
@@ -466,8 +471,8 @@ export function SessionDetailClient({ sessionId }: SessionDetailClientProps) {
             <div className="mt-6 rounded-3xl border border-[#D8E8F0] bg-[#F6FBFE] p-5">
               <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
                 <div>
-                  <p className="text-sm font-semibold text-[#66788F]">
-                    Meeting details
+                  <p className="text-sm font-semibold text-[#64748B]">
+                    Meeting room details
                   </p>
                   <p className="mt-2 text-sm leading-6 text-[#425B76]">
                     {session.meeting_notes ||
@@ -487,19 +492,19 @@ export function SessionDetailClient({ sessionId }: SessionDetailClientProps) {
               </div>
               <div className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
                 <div>
-                  <p className="text-[#66788F]">Meeting ID</p>
+                  <p className="text-[#64748B]">Meeting ID</p>
                   <p className="mt-1 font-semibold text-[#0B1F33]">
                     {session.meeting_id || "Not set"}
                   </p>
                 </div>
                 <div>
-                  <p className="text-[#66788F]">Passcode</p>
+                  <p className="text-[#64748B]">Passcode</p>
                   <p className="mt-1 font-semibold text-[#0B1F33]">
                     {session.meeting_passcode || "Not set"}
                   </p>
                 </div>
                 <div>
-                  <p className="text-[#66788F]">Join opens</p>
+                  <p className="text-[#64748B]">Join opens</p>
                   <p className="mt-1 font-semibold text-[#0B1F33]">
                     {formatDateTime(session.join_available_from)}
                   </p>
@@ -510,14 +515,14 @@ export function SessionDetailClient({ sessionId }: SessionDetailClientProps) {
         </Card>
 
         <Card className="border-[#D8E8F0] bg-white p-6 shadow-2xl shadow-[#0B2A3D]/10">
-          <p className="text-sm font-semibold text-[#66788F]">
-            Attendance summary
+          <p className="text-sm font-semibold text-[#64748B]">
+            Live class engagement
           </p>
           <h3 className="mt-3 text-3xl font-semibold text-[#0B1F33]">
             {percentLabel}
           </h3>
           <p className="mt-3 text-sm leading-6 text-[#425B76]">
-            Present and late students count as attended for this foundation
+            Present and late students count as attended for this delivery
             metric.
           </p>
         </Card>
@@ -546,13 +551,13 @@ export function SessionDetailClient({ sessionId }: SessionDetailClientProps) {
       <Card className="mt-6 border-[#D8E8F0] bg-white p-6 shadow-2xl shadow-[#0B2A3D]/10 sm:p-8">
         <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
           <div>
-            <Badge tone="light">Attendance marking</Badge>
+            <Badge tone="light">Attendance and check-in</Badge>
             <h3 className="mt-4 text-2xl font-semibold text-[#0B1F33]">
               Student roster
             </h3>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-[#425B76]">
-              Mark attendance for students from the linked cohort or program
-              enrollment list.
+              Use this roster after the live class to capture attendance for
+              students from the linked cohort or program enrollment list.
             </p>
           </div>
           {canMark && roster.length > 0 ? (
@@ -594,7 +599,7 @@ export function SessionDetailClient({ sessionId }: SessionDetailClientProps) {
                     <p className="font-semibold text-[#0B1F33]">
                       {item.student.full_name}
                     </p>
-                    <p className="mt-1 text-sm text-[#66788F]">
+                    <p className="mt-1 text-sm text-[#64748B]">
                       {item.student.email || item.student.phone || "No contact added"}
                     </p>
                   </div>
@@ -629,7 +634,7 @@ export function SessionDetailClient({ sessionId }: SessionDetailClientProps) {
                       {current.status}
                     </Badge>
                     <input
-                      className="h-10 min-w-0 flex-1 rounded-2xl border border-[#D8E8F0] bg-white px-3 text-sm text-[#0B1F33] outline-none transition placeholder:text-[#66788F] focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
+                      className="h-10 min-w-0 flex-1 rounded-2xl border border-[#D8E8F0] bg-white px-3 text-sm text-[#0B1F33] outline-none transition placeholder:text-[#64748B] focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
                       disabled={!canMark}
                       onChange={(event) =>
                         setDraft((existing) => ({

@@ -27,6 +27,35 @@ import {
   usePortalSection,
 } from "@/src/components/portal/StudentPortalShared";
 
+type DashboardLiveClass = {
+  join_available_from: string | null;
+  meeting_url: string | null;
+  status: string;
+};
+
+function getDashboardJoinLabel(session: DashboardLiveClass) {
+  if (session.status === "canceled") {
+    return "Canceled";
+  }
+
+  if (session.status === "completed") {
+    return "Completed";
+  }
+
+  if (!session.meeting_url) {
+    return "Meeting link will be shared by your coach";
+  }
+
+  if (
+    session.join_available_from &&
+    Date.now() < new Date(session.join_available_from).getTime()
+  ) {
+    return `Join opens ${formatPortalDateTime(session.join_available_from)}`;
+  }
+
+  return "Join is open";
+}
+
 export function StudentPortalDashboard({ context }: { context: StudentPortalContext }) {
   const { error, loading, overview } = usePortalSection(context);
   const [announcements, setAnnouncements] = useState<StudentAnnouncement[]>([]);
@@ -117,6 +146,9 @@ export function StudentPortalDashboard({ context }: { context: StudentPortalCont
                 <p className="mt-1 text-sm text-[#425B76]">
                   {formatPortalDateTime(nextSession.scheduled_start_at)}
                 </p>
+                <p className="mt-3 rounded-2xl border border-[#D8E8F0] bg-white px-3 py-2 text-sm font-semibold text-[#425B76]">
+                  {getDashboardJoinLabel(nextSession)}
+                </p>
               </>
             ) : (
               <p className="mt-3 text-sm text-[#425B76]">
@@ -196,7 +228,7 @@ export function StudentPortalDashboard({ context }: { context: StudentPortalCont
                 >
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge tone="info">Coach update</Badge>
-                    <span className="text-xs font-medium text-[#66788F]">
+                    <span className="text-xs font-medium text-[#64748B]">
                       {formatAnnouncementDate(announcement.published_at)}
                     </span>
                   </div>
@@ -224,10 +256,17 @@ export function StudentPortalDashboard({ context }: { context: StudentPortalCont
                   className="rounded-2xl border border-[#D8E8F0] bg-[#F6FBFE] p-4"
                   key={session.id}
                 >
-                  <p className="font-semibold">{session.title}</p>
-                  <p className="mt-1 text-sm text-[#425B76]">
-                    {formatPortalDateTime(session.scheduled_start_at)}
-                  </p>
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <p className="font-semibold">{session.title}</p>
+                      <p className="mt-1 text-sm text-[#425B76]">
+                        {formatPortalDateTime(session.scheduled_start_at)}
+                      </p>
+                    </div>
+                    <span className="rounded-full border border-[#D8E8F0] bg-white px-3 py-1 text-xs font-semibold text-[#425B76]">
+                      {getDashboardJoinLabel(session)}
+                    </span>
+                  </div>
                 </div>
               ))
             )}
