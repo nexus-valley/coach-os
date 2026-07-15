@@ -162,9 +162,11 @@ export type StudentPortalSession = {
   join_available_from: string | null;
   meeting_provider: SessionMeetingProvider | null;
   meeting_url: string | null;
+  recording_url: string | null;
   scheduled_end_at: string | null;
   scheduled_start_at: string;
   status: string;
+  tenant_id: string;
   timezone: string;
   title: string;
 };
@@ -676,27 +678,6 @@ export async function getStudentPortalSessions(params: StudentPortalRequest) {
     return { recent: [], upcoming: [] };
   }
 
-  const supabase = getSupabaseClient();
-  let query = supabase
-    .from("sessions")
-    .select(
-      "id,tenant_id,course_id,cohort_id,title,delivery_mode,meeting_provider,meeting_url,join_available_from,timezone,scheduled_start_at,scheduled_end_at,status",
-    )
-    .eq("tenant_id", params.tenantId);
-  const scopedFilter = createScopedOrFilter(scope);
-
-  if (scopedFilter) {
-    query = query.or(scopedFilter);
-  }
-
-  const { data, error } = await query.order("scheduled_start_at", {
-    ascending: true,
-  });
-
-  if (error) {
-    throw error;
-  }
-
   const courseById = new Map(
     scope.courses.map((course) => [
       course.course.id,
@@ -714,31 +695,34 @@ export async function getStudentPortalSessions(params: StudentPortalRequest) {
         },
       ]),
   );
+  const data =
+    params.accessMode === "student"
+      ? await getStudentPortalSessionsFromRpc(params)
+      : await getStudentPortalSessionsFromTable(params, scope);
   const now = Date.now();
-  const sessions = ((data ?? []) as {
-    cohort_id: string | null;
-    course_id: string | null;
-    delivery_mode: SessionDeliveryMode;
-    id: string;
-    join_available_from: string | null;
-    meeting_provider: SessionMeetingProvider | null;
-    meeting_url: string | null;
-    scheduled_end_at: string | null;
-    scheduled_start_at: string;
-    status: string;
-    timezone: string;
-    title: string;
-  }[]).map((session) => ({
-    cohort: session.cohort_id ? cohortById.get(session.cohort_id) ?? null : null,
-    course: session.course_id ? courseById.get(session.course_id) ?? null : null,
+  const sessions = data.map((session) => ({
+    cohort: session.cohort_id
+      ? cohortById.get(session.cohort_id) ??
+        (session.cohort_name
+          ? { id: session.cohort_id, name: session.cohort_name }
+          : null)
+      : null,
+    course: session.course_id
+      ? courseById.get(session.course_id) ??
+        (session.course_title
+          ? { id: session.course_id, title: session.course_title }
+          : null)
+      : null,
     delivery_mode: session.delivery_mode ?? "offline",
     id: session.id,
     join_available_from: session.join_available_from,
     meeting_provider: session.meeting_provider,
     meeting_url: session.meeting_url,
+    recording_url: session.recording_url,
     scheduled_end_at: session.scheduled_end_at,
     scheduled_start_at: session.scheduled_start_at,
     status: session.status,
+    tenant_id: session.tenant_id,
     timezone: session.timezone ?? "Asia/Kolkata",
     title: session.title,
   })) satisfies StudentPortalSession[];
@@ -756,6 +740,88 @@ export async function getStudentPortalSessions(params: StudentPortalRequest) {
       )
       .slice(0, 6),
   };
+}
+
+type StudentPortalSessionRow = {
+  cohort_id: string | null;
+  cohort_name: string | null;
+  course_id: string | null;
+  course_title: string | null;
+  delivery_mode: SessionDeliveryMode;
+  id: string;
+  join_available_from: string | null;
+  meeting_provider: SessionMeetingProvider | null;
+  meeting_url: string | null;
+  recording_url: string | null;
+  scheduled_end_at: string | null;
+  scheduled_start_at: string;
+  status: string;
+  tenant_id: string;
+  timezone: string;
+  title: string;
+};
+
+async function getStudentPortalSessionsFromRpc(params: StudentPortalRequest) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.rpc("get_student_portal_sessions", {
+    p_tenant_id: params.tenantId,
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? []) as StudentPortalSessionRow[];
+}
+
+async function getStudentPortalSessionsFromTable(
+  params: StudentPortalRequest,
+  scope: {
+    cohortIds: string[];
+    courseIds: string[];
+  },
+) {
+  const supabase = getSupabaseClient();
+  let query = supabase
+    .from("sessions")
+    .select(
+      "id,tenant_id,course_id,cohort_id,title,delivery_mode,meeting_provider,meeting_url,join_available_from,recording_url,timezone,scheduled_start_at,scheduled_end_at,status",
+    )
+    .eq("tenant_id", params.tenantId);
+  const scopedFilter = createScopedOrFilter(scope);
+
+  if (scopedFilter) {
+    query = query.or(scopedFilter);
+  }
+
+  const { data, error } = await query.order("scheduled_start_at", {
+    ascending: true,
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  return ((data ?? []) as {
+    cohort_id: string | null;
+    course_id: string | null;
+    delivery_mode: SessionDeliveryMode;
+    id: string;
+    join_available_from: string | null;
+    meeting_provider: SessionMeetingProvider | null;
+    meeting_url: string | null;
+    recording_url: string | null;
+    scheduled_end_at: string | null;
+    scheduled_start_at: string;
+    status: string;
+    tenant_id: string;
+    timezone: string;
+    title: string;
+  }[]).map((session) => ({
+    ...session,
+    cohort_name: null,
+    course_title: null,
+  })) satisfies StudentPortalSessionRow[];
 }
 
 export async function getStudentUpcomingLiveClasses(params: StudentPortalRequest) {

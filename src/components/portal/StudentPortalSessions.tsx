@@ -63,15 +63,15 @@ function getJoinAvailabilityLabel(session: JoinWindowSession) {
     return "This live class is complete.";
   }
 
-  if (!session.meeting_url) {
-    return "Meeting link will be shared by your coach.";
-  }
-
   if (
     session.join_available_from &&
     Date.now() < new Date(session.join_available_from).getTime()
   ) {
     return `Join opens ${formatPortalDateTime(session.join_available_from)}`;
+  }
+
+  if (!session.meeting_url) {
+    return "Meeting link will be shared by your coach.";
   }
 
   return "Join is open.";
