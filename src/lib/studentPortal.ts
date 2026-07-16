@@ -99,6 +99,19 @@ export type StudentPortalAttendance = {
   total: number;
 };
 
+type StudentPortalAttendanceRpcRow = {
+  attendance_id: string;
+  attendance_status: AttendanceStatus;
+  marked_at: string;
+  remarks: string | null;
+  scheduled_start_at: string | null;
+  session_id: string;
+  session_status: string | null;
+  session_title: string | null;
+  student_id: string;
+  tenant_id: string;
+};
+
 export type StudentPortalAssignment = {
   assignment: {
     cohort_id: string | null;
@@ -592,6 +605,11 @@ async function getPortalScope(params: StudentPortalRequest) {
 
 export async function getStudentPortalAttendance(params: StudentPortalRequest) {
   await ensureTeamPortalPreviewAccess(params);
+
+  if (params.accessMode === "student") {
+    return getStudentPortalAttendanceFromRpc(params);
+  }
+
   const student = await getStudentById(params);
 
   if (!student) {
@@ -662,6 +680,54 @@ export async function getStudentPortalAttendance(params: StudentPortalRequest) {
       remarks: record.remarks,
       session: sessionById.get(record.session_id) ?? null,
       status: record.status,
+    })),
+    total,
+  } satisfies StudentPortalAttendance;
+}
+
+async function getStudentPortalAttendanceFromRpc(params: StudentPortalRequest) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.rpc("get_student_portal_attendance", {
+    p_tenant_id: params.tenantId,
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  const records = (data ?? []) as StudentPortalAttendanceRpcRow[];
+  const summary = {
+    absent: 0,
+    excused: 0,
+    late: 0,
+    present: 0,
+  };
+
+  for (const record of records) {
+    summary[record.attendance_status] += 1;
+  }
+
+  const total = records.length;
+  const percent =
+    total > 0 ? Math.round(((summary.present + summary.late) / total) * 100) : null;
+
+  return {
+    ...summary,
+    percent,
+    records: records.map((record) => ({
+      id: record.attendance_id,
+      marked_at: record.marked_at,
+      remarks: record.remarks,
+      session:
+        record.session_title && record.session_status && record.scheduled_start_at
+          ? {
+              id: record.session_id,
+              scheduled_start_at: record.scheduled_start_at,
+              status: record.session_status,
+              title: record.session_title,
+            }
+          : null,
+      status: record.attendance_status,
     })),
     total,
   } satisfies StudentPortalAttendance;
