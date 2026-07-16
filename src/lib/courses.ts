@@ -7,6 +7,8 @@ import {
 
 export type CourseStatus = "draft" | "published" | "archived";
 export type LessonType = "text" | "video" | "pdf" | "quiz" | "assignment";
+export type CoursePricingType = "free" | "paid";
+export type CourseSalesPaymentMode = "external" | "manual";
 
 export type Course = {
   id: string;
@@ -16,6 +18,16 @@ export type Course = {
   description: string | null;
   status: CourseStatus;
   thumbnail_url: string | null;
+  pricing_type: CoursePricingType;
+  price_amount: number | null;
+  sales_currency: "INR";
+  public_sales_enabled: boolean;
+  sales_payment_mode: CourseSalesPaymentMode;
+  payment_instructions: string | null;
+  external_payment_url: string | null;
+  sales_headline: string | null;
+  sales_summary: string | null;
+  access_duration_label: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -26,6 +38,21 @@ export type CreateCourseInput = {
   status: Exclude<CourseStatus, "archived">;
   tenantId: string;
   title: string;
+};
+
+export type UpdateCourseSalesSettingsInput = {
+  accessDurationLabel: string;
+  courseId: string;
+  externalPaymentUrl: string;
+  paymentInstructions: string;
+  priceAmount: number | null;
+  pricingType: CoursePricingType;
+  publicSalesEnabled: boolean;
+  salesCurrency: "INR";
+  salesHeadline: string;
+  salesPaymentMode: CourseSalesPaymentMode;
+  salesSummary: string;
+  tenantId: string;
 };
 
 export type CourseSection = {
@@ -102,6 +129,66 @@ export type DeleteLessonInput = {
   tenantId: string;
 };
 
+const courseSelect =
+  "id,tenant_id,title,slug,description,status,thumbnail_url,pricing_type,price_amount,sales_currency,public_sales_enabled,sales_payment_mode,payment_instructions,external_payment_url,sales_headline,sales_summary,access_duration_label,created_by,created_at,updated_at";
+
+const unsafeTextPattern = /[<>]/;
+
+function normalizeSalesText(value: string, label: string, maxLength: number) {
+  const trimmed = value.trim();
+
+  if (!trimmed) {
+    return "";
+  }
+
+  if (trimmed.length > maxLength) {
+    throw new Error(`${label} must be ${maxLength} characters or fewer.`);
+  }
+
+  if (unsafeTextPattern.test(trimmed)) {
+    throw new Error(`${label} must be plain text only.`);
+  }
+
+  return trimmed;
+}
+
+function validateCourseSalesSettings(input: UpdateCourseSalesSettingsInput) {
+  if (!["free", "paid"].includes(input.pricingType)) {
+    throw new Error("Choose whether this program is free or paid.");
+  }
+
+  if (input.salesCurrency !== "INR") {
+    throw new Error("Only INR pricing is supported right now.");
+  }
+
+  if (!["manual", "external"].includes(input.salesPaymentMode)) {
+    throw new Error("Choose manual instructions or an external payment link.");
+  }
+
+  if (input.pricingType === "paid") {
+    if (!input.priceAmount || input.priceAmount <= 0) {
+      throw new Error("Paid programs require a price greater than zero.");
+    }
+  }
+
+  if (
+    input.salesPaymentMode === "external" &&
+    input.externalPaymentUrl.trim() &&
+    !input.externalPaymentUrl.trim().startsWith("https://")
+  ) {
+    throw new Error("External payment links must start with https://.");
+  }
+
+  normalizeSalesText(input.paymentInstructions, "Payment instructions", 2000);
+  normalizeSalesText(input.salesHeadline, "Sales headline", 140);
+  normalizeSalesText(input.salesSummary, "Sales summary", 600);
+  normalizeSalesText(input.accessDurationLabel, "Access duration label", 80);
+
+  if (input.externalPaymentUrl.trim().length > 500) {
+    throw new Error("External payment URL must be 500 characters or fewer.");
+  }
+}
+
 export async function getCoursesForTenant(tenantId: string) {
   const supabase = getSupabaseClient();
   const trainerScope = await getCurrentTrainerScope(tenantId);
@@ -112,9 +199,7 @@ export async function getCoursesForTenant(tenantId: string) {
 
   let query = supabase
     .from("courses")
-    .select(
-      "id,tenant_id,title,slug,description,status,thumbnail_url,created_by,created_at,updated_at",
-    )
+    .select(courseSelect)
     .eq("tenant_id", tenantId);
 
   if (trainerScope) {
@@ -154,7 +239,15 @@ export async function createCourse(input: CreateCourseInput) {
     throw error;
   }
 
-  const course = data as Course;
+  const createdCourse = data as Pick<Course, "id" | "tenant_id">;
+  const course = await getCourseById({
+    courseId: createdCourse.id,
+    tenantId: createdCourse.tenant_id,
+  });
+
+  if (!course) {
+    throw new Error("Program was created, but its sales settings could not be loaded.");
+  }
 
   await refreshWorkspaceUsageSnapshot(course.tenant_id);
 
@@ -174,9 +267,7 @@ export async function getCourseById(params: {
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
     .from("courses")
-    .select(
-      "id,tenant_id,title,slug,description,status,thumbnail_url,created_by,created_at,updated_at",
-    )
+    .select(courseSelect)
     .eq("tenant_id", params.tenantId)
     .eq("id", params.courseId)
     .maybeSingle();
@@ -186,6 +277,57 @@ export async function getCourseById(params: {
   }
 
   return (data as Course | null) ?? null;
+}
+
+export async function updateCourseSalesSettings(
+  input: UpdateCourseSalesSettingsInput,
+) {
+  validateCourseSalesSettings(input);
+
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.rpc(
+    "update_course_sales_settings_secure",
+    {
+      p_access_duration_label: normalizeSalesText(
+        input.accessDurationLabel,
+        "Access duration label",
+        80,
+      ),
+      p_course_id: input.courseId,
+      p_external_payment_url:
+        input.salesPaymentMode === "external"
+          ? input.externalPaymentUrl.trim() || null
+          : null,
+      p_payment_instructions: normalizeSalesText(
+        input.paymentInstructions,
+        "Payment instructions",
+        2000,
+      ),
+      p_price_amount:
+        input.pricingType === "paid" ? input.priceAmount : null,
+      p_pricing_type: input.pricingType,
+      p_public_sales_enabled: input.publicSalesEnabled,
+      p_sales_currency: input.salesCurrency,
+      p_sales_headline: normalizeSalesText(
+        input.salesHeadline,
+        "Sales headline",
+        140,
+      ),
+      p_sales_payment_mode: input.salesPaymentMode,
+      p_sales_summary: normalizeSalesText(
+        input.salesSummary,
+        "Sales summary",
+        600,
+      ),
+      p_tenant_id: input.tenantId,
+    },
+  );
+
+  if (error) {
+    throw error;
+  }
+
+  return data as Course;
 }
 
 export async function getCourseStructure(courseId: string, tenantId: string) {

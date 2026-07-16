@@ -46,6 +46,22 @@ function StatusBadge({ status }: { status: Course["status"] }) {
   );
 }
 
+function formatProgramPrice(course: Course) {
+  if (course.pricing_type === "free") {
+    return "Free";
+  }
+
+  return new Intl.NumberFormat("en-IN", {
+    currency: course.sales_currency || "INR",
+    maximumFractionDigits: 0,
+    style: "currency",
+  }).format(course.price_amount ?? 0);
+}
+
+function getPaymentModeLabel(course: Course) {
+  return course.sales_payment_mode === "external" ? "External" : "Manual";
+}
+
 export function CoursesPageClient() {
   const router = useRouter();
   const [courses, setCourses] = useState<Course[]>([]);
@@ -284,6 +300,25 @@ export function CoursesPageClient() {
                         <span className="text-xs text-slate-500">
                           {formatDate(course.created_at)}
                         </span>
+                      </div>
+                      <div className="mt-5 flex flex-wrap gap-2">
+                        <Badge className="border-[#2ECBEA]/20 bg-[#2ECBEA]/10 text-[#A7F3FF]">
+                          {formatProgramPrice(course)}
+                        </Badge>
+                        <Badge
+                          className={
+                            course.public_sales_enabled
+                              ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-100"
+                              : "border-white/10 bg-white/10 text-slate-300"
+                          }
+                        >
+                          {course.public_sales_enabled
+                            ? "Public sales on"
+                            : "Sales off"}
+                        </Badge>
+                        <Badge className="border-white/10 bg-white/10 text-slate-300">
+                          {getPaymentModeLabel(course)}
+                        </Badge>
                       </div>
                       <h3 className="mt-6 text-2xl font-semibold leading-tight">
                         {course.title}

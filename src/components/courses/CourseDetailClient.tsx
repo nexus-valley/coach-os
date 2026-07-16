@@ -15,9 +15,12 @@ import {
   getCourseById,
   getCourseStructure,
   updateCourseSection,
+  updateCourseSalesSettings,
   updateLesson,
   type Course,
+  type CoursePricingType,
   type CourseSectionWithLessons,
+  type CourseSalesPaymentMode,
   type Lesson,
   type LessonType,
 } from "@/src/lib/courses";
@@ -27,6 +30,7 @@ import {
 } from "@/src/lib/enrollments";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 import {
+  canManageCourses,
   canDeleteRecords,
   getCurrentMemberRole,
   type MemberRole,
@@ -68,6 +72,19 @@ type DeleteTarget =
       title: string;
     };
 
+type SalesSettingsForm = {
+  accessDurationLabel: string;
+  externalPaymentUrl: string;
+  paymentInstructions: string;
+  priceAmount: string;
+  pricingType: CoursePricingType;
+  publicSalesEnabled: boolean;
+  salesCurrency: "INR";
+  salesHeadline: string;
+  salesPaymentMode: CourseSalesPaymentMode;
+  salesSummary: string;
+};
+
 const lessonTypes: LessonType[] = ["text", "video", "pdf", "quiz", "assignment"];
 
 function formatDate(value: string) {
@@ -86,6 +103,36 @@ function CourseStatusBadge({ status }: { status: Course["status"] }) {
   return <Badge className="border-white/10 bg-white/10 text-white">Draft</Badge>;
 }
 
+function createSalesSettingsForm(course: Course): SalesSettingsForm {
+  return {
+    accessDurationLabel: course.access_duration_label ?? "",
+    externalPaymentUrl: course.external_payment_url ?? "",
+    paymentInstructions: course.payment_instructions ?? "",
+    priceAmount:
+      course.pricing_type === "paid" && course.price_amount
+        ? String(course.price_amount)
+        : "",
+    pricingType: course.pricing_type ?? "free",
+    publicSalesEnabled: course.public_sales_enabled ?? false,
+    salesCurrency: course.sales_currency ?? "INR",
+    salesHeadline: course.sales_headline ?? "",
+    salesPaymentMode: course.sales_payment_mode ?? "manual",
+    salesSummary: course.sales_summary ?? "",
+  };
+}
+
+function formatProgramPrice(course: Course) {
+  if (course.pricing_type === "free") {
+    return "Free";
+  }
+
+  return new Intl.NumberFormat("en-IN", {
+    currency: course.sales_currency || "INR",
+    maximumFractionDigits: 0,
+    style: "currency",
+  }).format(course.price_amount ?? 0);
+}
+
 function getErrorMessage(caught: unknown, fallback: string) {
   return caught instanceof Error ? caught.message : fallback;
 }
@@ -100,12 +147,19 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
   const [lessonModal, setLessonModal] = useState<LessonModalState | null>(null);
   const [loading, setLoading] = useState(true);
   const [mutating, setMutating] = useState(false);
+  const [salesFeedback, setSalesFeedback] = useState<{
+    message: string;
+    tone: "error" | "success";
+  } | null>(null);
+  const [salesForm, setSalesForm] = useState<SalesSettingsForm | null>(null);
+  const [salesSaving, setSalesSaving] = useState(false);
   const [sectionModal, setSectionModal] = useState<SectionModalState | null>(
     null,
   );
   const [sections, setSections] = useState<CourseSectionWithLessons[]>([]);
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const canDelete = canDeleteRecords(currentRole);
+  const canManage = canManageCourses(currentRole);
 
   useEffect(() => {
     let active = true;
@@ -155,6 +209,7 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
 
         setTenant(currentTenant);
         setCourse(currentCourse);
+        setSalesForm(currentCourse ? createSalesSettingsForm(currentCourse) : null);
         setCurrentRole(memberRole);
         setSections(currentCourse ? currentStructure : []);
         setEnrollments(currentCourse ? courseEnrollments : []);
@@ -356,6 +411,68 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
     }
   }
 
+  async function handleSalesSettingsSubmit(
+    event: React.FormEvent<HTMLFormElement>,
+  ) {
+    event.preventDefault();
+
+    if (!tenant || !course || !salesForm) {
+      return;
+    }
+
+    setSalesFeedback(null);
+    setSalesSaving(true);
+
+    try {
+      const normalizedPrice =
+        salesForm.pricingType === "paid" ? Number(salesForm.priceAmount) : null;
+
+      if (
+        salesForm.pricingType === "paid" &&
+        (!Number.isFinite(normalizedPrice) || !normalizedPrice || normalizedPrice <= 0)
+      ) {
+        throw new Error("Paid programs require a price greater than zero.");
+      }
+
+      if (
+        salesForm.salesPaymentMode === "external" &&
+        salesForm.externalPaymentUrl.trim() &&
+        !salesForm.externalPaymentUrl.trim().startsWith("https://")
+      ) {
+        throw new Error("External payment links must start with https://.");
+      }
+
+      const updatedCourse = await updateCourseSalesSettings({
+        accessDurationLabel: salesForm.accessDurationLabel,
+        courseId: course.id,
+        externalPaymentUrl: salesForm.externalPaymentUrl,
+        paymentInstructions: salesForm.paymentInstructions,
+        priceAmount: normalizedPrice,
+        pricingType: salesForm.pricingType,
+        publicSalesEnabled: salesForm.publicSalesEnabled,
+        salesCurrency: salesForm.salesCurrency,
+        salesHeadline: salesForm.salesHeadline,
+        salesPaymentMode: salesForm.salesPaymentMode,
+        salesSummary: salesForm.salesSummary,
+        tenantId: tenant.id,
+      });
+
+      setCourse(updatedCourse);
+      setSalesForm(createSalesSettingsForm(updatedCourse));
+      setSalesFeedback({
+        message: "Sales settings saved.",
+        tone: "success",
+      });
+    } catch (caught) {
+      setSalesFeedback({
+        message: getErrorMessage(caught, "Unable to save sales settings."),
+        tone: "error",
+      });
+    } finally {
+      setSalesSaving(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="mx-auto max-w-7xl">
@@ -452,6 +569,309 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
           {actionError}
         </div>
       ) : null}
+
+      <section className="mt-6">
+        <Card className="border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/10 sm:p-8">
+          <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-start">
+            <div>
+              <Badge className="border-[#2ECBEA]/20 bg-[#2ECBEA]/10 text-[#A7F3FF]">
+                Sales settings
+              </Badge>
+              <h3 className="mt-4 text-2xl font-semibold">
+                Program sales readiness
+              </h3>
+              <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-400">
+                Set the public sales copy, price, and payment instructions for
+                this program. Online checkout is not enabled yet. Use manual
+                instructions or an external payment link for now.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Badge className="border-white/10 bg-white/10 text-slate-200">
+                {formatProgramPrice(course)}
+              </Badge>
+              <Badge
+                className={
+                  course.public_sales_enabled
+                    ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-100"
+                    : "border-white/10 bg-white/10 text-slate-300"
+                }
+              >
+                {course.public_sales_enabled ? "Public sales on" : "Sales off"}
+              </Badge>
+              <Badge className="border-white/10 bg-white/10 text-slate-300">
+                {course.sales_payment_mode === "external" ? "External" : "Manual"}
+              </Badge>
+            </div>
+          </div>
+
+          {salesFeedback ? (
+            <div
+              className={[
+                "mt-5 rounded-2xl border p-4 text-sm font-medium",
+                salesFeedback.tone === "success"
+                  ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-100"
+                  : "border-red-400/30 bg-red-500/10 text-red-100",
+              ].join(" ")}
+            >
+              {salesFeedback.message}
+            </div>
+          ) : null}
+
+          {salesForm ? (
+            <form className="mt-6 grid gap-5" onSubmit={handleSalesSettingsSubmit}>
+              <div className="grid gap-4 lg:grid-cols-3">
+                <label className="block text-sm font-semibold text-slate-200">
+                  Pricing type
+                  <select
+                    className="mt-2 h-12 w-full rounded-xl border border-white/10 bg-[#15181b] px-4 text-sm text-white outline-none focus:border-[#2ECBEA]/60 focus:ring-4 focus:ring-[#2ECBEA]/10"
+                    disabled={!canManage || salesSaving}
+                    onChange={(event) =>
+                      setSalesForm((current) =>
+                        current
+                          ? {
+                              ...current,
+                              pricingType: event.target.value as CoursePricingType,
+                              priceAmount:
+                                event.target.value === "free"
+                                  ? ""
+                                  : current.priceAmount,
+                            }
+                          : current,
+                      )
+                    }
+                    value={salesForm.pricingType}
+                  >
+                    <option value="free">Free</option>
+                    <option value="paid">Paid</option>
+                  </select>
+                </label>
+                <label className="block text-sm font-semibold text-slate-200">
+                  Price amount
+                  <input
+                    className="mt-2 h-12 w-full rounded-xl border border-white/10 bg-[#15181b] px-4 text-sm text-white outline-none placeholder:text-slate-500 focus:border-[#2ECBEA]/60 focus:ring-4 focus:ring-[#2ECBEA]/10 disabled:text-slate-500"
+                    disabled={
+                      !canManage ||
+                      salesSaving ||
+                      salesForm.pricingType === "free"
+                    }
+                    min="0"
+                    onChange={(event) =>
+                      setSalesForm((current) =>
+                        current
+                          ? { ...current, priceAmount: event.target.value }
+                          : current,
+                      )
+                    }
+                    placeholder="4999"
+                    step="0.01"
+                    type="number"
+                    value={salesForm.pricingType === "free" ? "" : salesForm.priceAmount}
+                  />
+                </label>
+                <label className="block text-sm font-semibold text-slate-200">
+                  Currency
+                  <select
+                    className="mt-2 h-12 w-full rounded-xl border border-white/10 bg-[#15181b] px-4 text-sm text-white outline-none focus:border-[#2ECBEA]/60 focus:ring-4 focus:ring-[#2ECBEA]/10"
+                    disabled={!canManage || salesSaving}
+                    onChange={(event) =>
+                      setSalesForm((current) =>
+                        current
+                          ? {
+                              ...current,
+                              salesCurrency: event.target.value as "INR",
+                            }
+                          : current,
+                      )
+                    }
+                    value={salesForm.salesCurrency}
+                  >
+                    <option value="INR">INR</option>
+                  </select>
+                </label>
+              </div>
+
+              <div className="grid gap-4 lg:grid-cols-3">
+                <label className="flex min-h-24 items-start gap-3 rounded-2xl border border-white/10 bg-[#15181b] p-4 text-sm">
+                  <input
+                    checked={salesForm.publicSalesEnabled}
+                    className="mt-1 h-4 w-4"
+                    disabled={!canManage || salesSaving}
+                    onChange={(event) =>
+                      setSalesForm((current) =>
+                        current
+                          ? {
+                              ...current,
+                              publicSalesEnabled: event.target.checked,
+                            }
+                          : current,
+                      )
+                    }
+                    type="checkbox"
+                  />
+                  <span>
+                    <span className="block font-semibold text-white">
+                      Enable public sales page
+                    </span>
+                    <span className="mt-1 block leading-6 text-slate-400">
+                      Marks this program ready for a future public sales page.
+                    </span>
+                  </span>
+                </label>
+                <label className="block text-sm font-semibold text-slate-200 lg:col-span-2">
+                  Payment mode
+                  <select
+                    className="mt-2 h-12 w-full rounded-xl border border-white/10 bg-[#15181b] px-4 text-sm text-white outline-none focus:border-[#2ECBEA]/60 focus:ring-4 focus:ring-[#2ECBEA]/10"
+                    disabled={!canManage || salesSaving}
+                    onChange={(event) =>
+                      setSalesForm((current) =>
+                        current
+                          ? {
+                              ...current,
+                              externalPaymentUrl:
+                                event.target.value === "external"
+                                  ? current.externalPaymentUrl
+                                  : "",
+                              salesPaymentMode:
+                                event.target.value as CourseSalesPaymentMode,
+                            }
+                          : current,
+                      )
+                    }
+                    value={salesForm.salesPaymentMode}
+                  >
+                    <option value="manual">Manual instructions</option>
+                    <option value="external">External payment link</option>
+                  </select>
+                </label>
+              </div>
+
+              <div className="grid gap-4 lg:grid-cols-2">
+                <label className="block text-sm font-semibold text-slate-200">
+                  Sales headline
+                  <input
+                    className="mt-2 h-12 w-full rounded-xl border border-white/10 bg-[#15181b] px-4 text-sm text-white outline-none placeholder:text-slate-500 focus:border-[#2ECBEA]/60 focus:ring-4 focus:ring-[#2ECBEA]/10"
+                    disabled={!canManage || salesSaving}
+                    maxLength={140}
+                    onChange={(event) =>
+                      setSalesForm((current) =>
+                        current
+                          ? { ...current, salesHeadline: event.target.value }
+                          : current,
+                      )
+                    }
+                    placeholder="Transform your coaching outcome"
+                    value={salesForm.salesHeadline}
+                  />
+                </label>
+                <label className="block text-sm font-semibold text-slate-200">
+                  Access duration label
+                  <input
+                    className="mt-2 h-12 w-full rounded-xl border border-white/10 bg-[#15181b] px-4 text-sm text-white outline-none placeholder:text-slate-500 focus:border-[#2ECBEA]/60 focus:ring-4 focus:ring-[#2ECBEA]/10"
+                    disabled={!canManage || salesSaving}
+                    maxLength={80}
+                    onChange={(event) =>
+                      setSalesForm((current) =>
+                        current
+                          ? {
+                              ...current,
+                              accessDurationLabel: event.target.value,
+                            }
+                          : current,
+                      )
+                    }
+                    placeholder="Lifetime access, 12 weeks, or coach-led cohort"
+                    value={salesForm.accessDurationLabel}
+                  />
+                </label>
+              </div>
+
+              <label className="block text-sm font-semibold text-slate-200">
+                Sales summary
+                <textarea
+                  className="mt-2 min-h-28 w-full resize-none rounded-xl border border-white/10 bg-[#15181b] px-4 py-3 text-sm leading-6 text-white outline-none placeholder:text-slate-500 focus:border-[#2ECBEA]/60 focus:ring-4 focus:ring-[#2ECBEA]/10"
+                  disabled={!canManage || salesSaving}
+                  maxLength={600}
+                  onChange={(event) =>
+                    setSalesForm((current) =>
+                      current
+                        ? { ...current, salesSummary: event.target.value }
+                        : current,
+                    )
+                  }
+                  placeholder="Describe who this program is for and what outcome students can expect."
+                  value={salesForm.salesSummary}
+                />
+              </label>
+
+              <label className="block text-sm font-semibold text-slate-200">
+                Payment instructions
+                <textarea
+                  className="mt-2 min-h-32 w-full resize-none rounded-xl border border-white/10 bg-[#15181b] px-4 py-3 text-sm leading-6 text-white outline-none placeholder:text-slate-500 focus:border-[#2ECBEA]/60 focus:ring-4 focus:ring-[#2ECBEA]/10"
+                  disabled={!canManage || salesSaving}
+                  maxLength={2000}
+                  onChange={(event) =>
+                    setSalesForm((current) =>
+                      current
+                        ? {
+                            ...current,
+                            paymentInstructions: event.target.value,
+                          }
+                        : current,
+                    )
+                  }
+                  placeholder="Share bank transfer, UPI, or offline payment steps students should follow."
+                  value={salesForm.paymentInstructions}
+                />
+              </label>
+
+              {salesForm.salesPaymentMode === "external" ? (
+                <label className="block text-sm font-semibold text-slate-200">
+                  External payment URL
+                  <input
+                    className="mt-2 h-12 w-full rounded-xl border border-white/10 bg-[#15181b] px-4 text-sm text-white outline-none placeholder:text-slate-500 focus:border-[#2ECBEA]/60 focus:ring-4 focus:ring-[#2ECBEA]/10"
+                    disabled={!canManage || salesSaving}
+                    maxLength={500}
+                    onChange={(event) =>
+                      setSalesForm((current) =>
+                        current
+                          ? {
+                              ...current,
+                              externalPaymentUrl: event.target.value,
+                            }
+                          : current,
+                      )
+                    }
+                    placeholder="https://"
+                    type="url"
+                    value={salesForm.externalPaymentUrl}
+                  />
+                </label>
+              ) : null}
+
+              <div className="flex flex-col gap-3 border-t border-white/10 pt-5 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm leading-6 text-slate-400">
+                  Saving these settings does not collect payment, generate an
+                  invoice, or activate student access.
+                </p>
+                {canManage ? (
+                  <Button
+                    className="bg-teal-400 text-black hover:bg-teal-300"
+                    disabled={salesSaving}
+                    type="submit"
+                  >
+                    {salesSaving ? "Saving..." : "Save Sales Settings"}
+                  </Button>
+                ) : (
+                  <Badge className="border-white/10 bg-white/10 text-slate-300">
+                    Read only
+                  </Badge>
+                )}
+              </div>
+            </form>
+          ) : null}
+        </Card>
+      </section>
 
       <section className="mt-6">
         <Card className="border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/10 sm:p-8">
