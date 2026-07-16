@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
+import Link from "next/link";
 
 import { CoachFortBrandAsset } from "@/src/components/branding/CoachFortBrandAsset";
 import { Badge } from "@/src/components/ui/Badge";
@@ -8,6 +9,7 @@ import { Button } from "@/src/components/ui/Button";
 import {
   getPublicSite,
   submitPublicSiteLead,
+  type PublicSiteCoursePreview,
   type PublicSitePayload,
 } from "@/src/lib/publicSite";
 import { getSafeTenantBrandColor } from "@/src/lib/tenantSettings";
@@ -37,7 +39,7 @@ function getDisplayName(site: PublicSitePayload) {
     site.tenant.workspace_display_name?.trim() ||
     site.tenant.brand_name?.trim() ||
     site.tenant.name?.trim() ||
-    "CoachFort Institute"
+    "CoachFort Coach"
   );
 }
 
@@ -53,12 +55,32 @@ function getHeroSubtitle(site: PublicSitePayload) {
   return (
     site.site.public_hero_subtitle?.trim() ||
     site.site.public_page_description?.trim() ||
-    "Explore coaching programs, course previews, and contact the institute team."
+    "Explore coaching programs and request the next step with the coach team."
   );
 }
 
 function getErrorMessage(caught: unknown, fallback: string) {
   return caught instanceof Error ? caught.message : fallback;
+}
+
+function formatCoursePrice(course: PublicSiteCoursePreview) {
+  if (!course.public_sales_enabled) {
+    return null;
+  }
+
+  if (course.pricing_type === "free") {
+    return "Free";
+  }
+
+  if (course.price_amount == null) {
+    return null;
+  }
+
+  return new Intl.NumberFormat("en-IN", {
+    currency: course.sales_currency || "INR",
+    maximumFractionDigits: 0,
+    style: "currency",
+  }).format(course.price_amount);
 }
 
 export function PublicSitePage({ tenantSlug }: PublicSitePageProps) {
@@ -151,7 +173,7 @@ export function PublicSitePage({ tenantSlug }: PublicSitePageProps) {
       });
 
       setForm(emptyLeadForm);
-      setMessage("Thanks. The institute team has received your inquiry.");
+      setMessage("Thanks. The coach team has received your inquiry.");
     } catch (caught) {
       setError(getErrorMessage(caught, "Unable to submit inquiry."));
     } finally {
@@ -190,7 +212,7 @@ export function PublicSitePage({ tenantSlug }: PublicSitePageProps) {
           <CoachFortBrandAsset className="mx-auto h-14 w-14" variant="appIcon" />
           <h1 className="mt-6 text-2xl font-semibold">Site not found</h1>
           <p className="mt-3 text-sm leading-6 text-[#425B76]">
-            This institute website is not published yet.
+            This coach page is not published yet.
           </p>
         </div>
       </main>
@@ -229,7 +251,7 @@ export function PublicSitePage({ tenantSlug }: PublicSitePageProps) {
             <div className="min-w-0">
               <p className="truncate text-lg font-semibold">{displayName}</p>
               <p className="truncate text-xs font-medium text-[#5D7185]">
-                {site.tenant.brand_tagline || "Institute Website"}
+                {site.tenant.brand_tagline || "Coach program hub"}
               </p>
             </div>
           </div>
@@ -265,7 +287,7 @@ export function PublicSitePage({ tenantSlug }: PublicSitePageProps) {
                 className="inline-flex h-12 items-center justify-center rounded-full border border-[#D8E8F0] bg-white px-6 text-base font-semibold text-[#0B2A3D] shadow-sm transition hover:-translate-y-0.5"
                 href={`mailto:${site.tenant.support_email}`}
               >
-                Email institute
+                Email coach
               </a>
             ) : null}
           </div>
@@ -279,17 +301,17 @@ export function PublicSitePage({ tenantSlug }: PublicSitePageProps) {
             }}
           >
             <p className="text-sm font-semibold text-white/75">
-              Course-ready website
+              Program-ready coach page
             </p>
             <h2 className="mt-4 text-3xl font-semibold">{displayName}</h2>
             <p className="mt-4 text-sm leading-6 text-white/80">
-              Public course previews, inquiry capture, support details, and
+              Public program previews, inquiry capture, support details, and
               CoachFort-powered operations behind the scenes.
             </p>
           </div>
           <div className="mt-5 grid gap-3 sm:grid-cols-3">
             {[
-              `${site.courses.length} courses`,
+              `${site.courses.length} programs`,
               site.site.public_show_contact_form ? "Inquiry form" : "Contact hidden",
               site.tenant.show_powered_by ? "Powered by CoachFort" : "Tenant brand",
             ].map((item) => (
@@ -312,7 +334,7 @@ export function PublicSitePage({ tenantSlug }: PublicSitePageProps) {
             </h2>
             <p className="mt-4 text-sm leading-7 text-[#425B76]">
               {site.site.public_about_body ||
-                "This institute uses CoachFort to manage courses, classes, assignments, payments, certificates, and student communication."}
+                "This coach uses CoachFort to organize programs, live classes, materials, payments, and student communication."}
             </p>
           </div>
           <div className="grid gap-4 md:grid-cols-3">
@@ -320,15 +342,15 @@ export function PublicSitePage({ tenantSlug }: PublicSitePageProps) {
               ? highlights
               : [
                   {
-                    body: "Structured course and cohort experience for learners.",
+                    body: "Structured program experience for students.",
                     title: "Organized learning",
                   },
                   {
-                    body: "Attendance, assignments, and progress stay connected.",
+                    body: "Live classes, materials, and progress stay connected.",
                     title: "Progress tracking",
                   },
                   {
-                    body: "Clear institute contact and inquiry workflow.",
+                    body: "Clear coach contact and request-enrollment workflow.",
                     title: "Easy contact",
                   },
                 ]
@@ -354,7 +376,7 @@ export function PublicSitePage({ tenantSlug }: PublicSitePageProps) {
           <div className="mx-auto max-w-7xl px-5 sm:px-6 lg:px-8">
             <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
               <div>
-                <Badge tone="admin">Course previews</Badge>
+                <Badge tone="admin">Program previews</Badge>
                 <h2 className="mt-4 text-3xl font-semibold tracking-normal">
                   Published programs
                 </h2>
@@ -366,8 +388,8 @@ export function PublicSitePage({ tenantSlug }: PublicSitePageProps) {
             <div className="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
               {site.courses.length === 0 ? (
                 <div className="rounded-3xl border border-[#D8E8F0] bg-[#F6FBFE] p-6 text-sm text-[#425B76]">
-                  Course previews will appear here once the institute publishes
-                  courses.
+                  Program previews will appear here once the coach publishes
+                  programs.
                 </div>
               ) : (
                 site.courses.map((course) => (
@@ -375,13 +397,36 @@ export function PublicSitePage({ tenantSlug }: PublicSitePageProps) {
                     className="rounded-3xl border border-[#D8E8F0] bg-white p-6 shadow-xl shadow-[#0B2A3D]/5"
                     key={course.id}
                   >
-                    <Badge tone="success">Published</Badge>
+                    <div className="flex flex-wrap gap-2">
+                      <Badge tone="success">Published</Badge>
+                      {course.public_sales_enabled ? (
+                        <Badge tone="premium">
+                          {formatCoursePrice(course) || "Enrollment ready"}
+                        </Badge>
+                      ) : null}
+                    </div>
                     <h3 className="mt-5 text-xl font-semibold">
                       {course.title}
                     </h3>
                     <p className="mt-3 line-clamp-4 text-sm leading-6 text-[#425B76]">
-                      {course.description || "Course details coming soon."}
+                      {course.description || "Program details coming soon."}
                     </p>
+                    {course.public_sales_enabled ? (
+                      <div className="mt-5 flex flex-col gap-3 border-t border-[#D8E8F0] pt-5">
+                        {course.access_duration_label ? (
+                          <p className="text-xs font-semibold text-[#425B76]">
+                            {course.access_duration_label}
+                          </p>
+                        ) : null}
+                        <Link
+                          className="inline-flex h-10 items-center justify-center rounded-full px-4 text-sm font-semibold text-white shadow-md transition hover:-translate-y-0.5"
+                          href={`/site/${site.tenant.slug}/programs/${course.slug}`}
+                          style={{ backgroundColor: brandColor }}
+                        >
+                          View program
+                        </Link>
+                      </div>
+                    ) : null}
                   </div>
                 ))
               )}
@@ -402,8 +447,8 @@ export function PublicSitePage({ tenantSlug }: PublicSitePageProps) {
                 Contact {displayName}
               </h2>
               <p className="mt-4 text-sm leading-7 text-[#425B76]">
-                Share your details and the institute team can follow up about
-                courses, batches, fees, or admissions.
+                Share your details and the coach team can follow up about
+                programs, availability, and enrollment next steps.
               </p>
               {site.tenant.support_email || site.tenant.support_phone ? (
                 <div className="mt-5 rounded-3xl border border-[#D8E8F0] bg-white p-5 text-sm leading-7 text-[#425B76]">
@@ -438,7 +483,7 @@ export function PublicSitePage({ tenantSlug }: PublicSitePageProps) {
                   />
                 </label>
                 <label className="block text-sm font-semibold text-[#0B1F33]">
-                  Interested course
+                  Interested program
                   <select
                     className="mt-2 h-11 w-full rounded-2xl border border-[#D8E8F0] px-4 text-sm outline-none focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
                     onChange={(event) =>
@@ -521,7 +566,7 @@ export function PublicSitePage({ tenantSlug }: PublicSitePageProps) {
 
       <footer className="border-t border-[#D8E8F0] bg-white px-5 py-6 text-sm text-[#425B76] sm:px-6 lg:px-8">
         <div className="mx-auto flex max-w-7xl flex-col justify-between gap-3 sm:flex-row sm:items-center">
-          <p>{site.site.public_footer_note || `${displayName} public website.`}</p>
+              <p>{site.site.public_footer_note || `${displayName} public coach page.`}</p>
           {site.tenant.show_powered_by ? (
             <p className="font-semibold">Powered by CoachFort</p>
           ) : null}

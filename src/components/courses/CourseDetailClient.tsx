@@ -502,6 +502,38 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
     );
   }
 
+  const publicProgramPath = tenant
+    ? `/site/${tenant.slug}/programs/${course.slug}`
+    : "";
+  const publicSalesReady =
+    Boolean(publicProgramPath) &&
+    course.status === "published" &&
+    course.public_sales_enabled;
+  const salesReadinessItems = [
+    {
+      complete: course.status === "published",
+      label: "Publish program",
+    },
+    {
+      complete: course.public_sales_enabled,
+      label: "Enable public sales page",
+    },
+    {
+      complete: Boolean(
+        course.sales_headline?.trim() || course.sales_summary?.trim(),
+      ),
+      label: "Add sales headline or summary",
+    },
+    {
+      complete: Boolean(
+        course.payment_instructions?.trim() ||
+          (course.sales_payment_mode === "external" &&
+            course.external_payment_url?.trim()),
+      ),
+      label: "Add payment guidance",
+    },
+  ];
+
   return (
     <div className="mx-auto max-w-7xl">
       <Link
@@ -585,6 +617,57 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
                 this program. Online checkout is not enabled yet. Use manual
                 instructions or an external payment link for now.
               </p>
+              <div className="mt-5 rounded-2xl border border-white/10 bg-[#15181b] p-4">
+                <p className="text-sm font-semibold text-white">
+                  Public program link
+                </p>
+                {publicSalesReady ? (
+                  <div className="mt-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                    <p className="break-all rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-3 text-sm font-semibold text-emerald-100">
+                      {publicProgramPath}
+                    </p>
+                    <Button
+                      className="shrink-0 border-white/15 bg-transparent text-white hover:bg-white/10"
+                      href={publicProgramPath}
+                      size="sm"
+                      variant="secondary"
+                    >
+                      Open public page
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                    {salesReadinessItems.map((item) => (
+                      <div
+                        className="flex items-center gap-3 rounded-xl border border-white/10 bg-[#101214] px-4 py-3 text-sm"
+                        key={item.label}
+                      >
+                        <span
+                          className={[
+                            "flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold",
+                            item.complete
+                              ? "bg-emerald-400 text-[#052E1A]"
+                              : "bg-white/10 text-slate-400",
+                          ].join(" ")}
+                        >
+                          {item.complete ? "OK" : "-"}
+                        </span>
+                        <span
+                          className={
+                            item.complete ? "text-slate-200" : "text-slate-400"
+                          }
+                        >
+                          {item.label}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <p className="mt-3 text-xs leading-5 text-slate-500">
+                  The public page lets visitors request enrollment. It does not
+                  collect payment, generate invoices, or activate access.
+                </p>
+              </div>
             </div>
             <div className="flex flex-wrap gap-2">
               <Badge className="border-white/10 bg-white/10 text-slate-200">

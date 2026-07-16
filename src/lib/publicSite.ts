@@ -3,8 +3,13 @@ import { requireTenantPermission } from "@/src/lib/permissions";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 
 export type PublicSiteCoursePreview = {
+  access_duration_label: string | null;
   description: string | null;
   id: string;
+  price_amount: number | null;
+  pricing_type: "free" | "paid" | null;
+  public_sales_enabled: boolean;
+  sales_currency: string | null;
   slug: string;
   thumbnail_url: string | null;
   title: string;
@@ -55,6 +60,45 @@ export type PublicSitePayload = {
   tenant: PublicSiteTenant;
 };
 
+export type PublicProgramSalesProgram = {
+  access_duration_label: string | null;
+  description: string | null;
+  external_payment_url: string | null;
+  id: string;
+  payment_instructions: string | null;
+  price_amount: number | null;
+  pricing_type: "free" | "paid";
+  sales_currency: string;
+  sales_headline: string | null;
+  sales_payment_mode: "external" | "manual";
+  sales_summary: string | null;
+  slug: string;
+  thumbnail_url: string | null;
+  title: string;
+};
+
+export type PublicProgramSalesPagePayload = {
+  program: PublicProgramSalesProgram;
+  registration: {
+    enabled: boolean;
+    interested_course_id: string;
+  };
+  site: Pick<
+    PublicSiteSettings,
+    | "contact_cta_text"
+    | "public_footer_note"
+    | "public_hero_cta_label"
+    | "public_hero_subtitle"
+    | "public_hero_title"
+    | "public_page_description"
+    | "public_page_title"
+    | "public_show_contact_form"
+    | "public_show_support_contact"
+    | "public_site_enabled"
+  >;
+  tenant: PublicSiteTenant;
+};
+
 export type PublicSiteLead = {
   created_at: string;
   email: string | null;
@@ -92,6 +136,11 @@ export type PublicSiteSettingsInput = {
 export type SubmitPublicSiteLeadInput = {
   email: string;
   interestedCourseId?: string | null;
+  metadata?: {
+    course_slug?: string;
+    page_path?: string;
+    source?: "program_sales_page" | "public_site";
+  };
   message: string;
   name: string;
   phone: string;
@@ -233,11 +282,29 @@ export async function getPublicSite(slug: string) {
   return (data as PublicSitePayload | null) ?? null;
 }
 
+export async function getPublicProgramSalesPage(
+  tenantSlug: string,
+  courseSlug: string,
+) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.rpc("get_public_program_sales_page", {
+    p_course_slug: courseSlug,
+    p_tenant_slug: tenantSlug,
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  return (data as PublicProgramSalesPagePayload | null) ?? null;
+}
+
 export async function submitPublicSiteLead(input: SubmitPublicSiteLeadInput) {
   const supabase = getSupabaseClient();
   const { data, error } = await supabase.rpc("submit_public_site_lead", {
     p_email: input.email.trim() || null,
     p_interested_course_id: input.interestedCourseId || null,
+    p_metadata_json: input.metadata ?? {},
     p_message: input.message.trim() || null,
     p_name: input.name.trim(),
     p_phone: input.phone.trim() || null,
