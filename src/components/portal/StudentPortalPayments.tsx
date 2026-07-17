@@ -3,19 +3,15 @@
 import { useEffect, useState } from "react";
 
 import { Badge } from "@/src/components/ui/Badge";
-import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
 import { PageHeader } from "@/src/components/ui/PageHeader";
 import { SectionHeader } from "@/src/components/ui/SectionHeader";
 import { StatCard } from "@/src/components/ui/StatCard";
 import type { StudentPortalContext } from "@/src/lib/studentPortalAuth";
 import {
-  formatPortalCurrency,
-  formatPortalDate,
   PortalEmptyState,
   PortalError,
   PortalLoadingCard,
-  usePortalSection,
 } from "@/src/components/portal/StudentPortalShared";
 import {
   formatFinanceCurrency,
@@ -24,19 +20,23 @@ import {
   type FinanceStudentSummary,
 } from "@/src/lib/finance";
 
+function formatStatus(value: string) {
+  return value.replace(/_/g, " ");
+}
+
 function FeedbackCopy() {
   return (
     <Card className="border-[#D8E8F0] bg-[#F7FCFF] p-4">
       <p className="text-sm leading-6 text-[#425B76]">
         Online payment is not enabled yet. Your coach records payments
-        manually, and receipts appear here after they are issued.
+        manually, and receipts appear here after they are issued. Your coach
+        will confirm payment instructions directly.
       </p>
     </Card>
   );
 }
 
 export function StudentPortalPayments({ context }: { context: StudentPortalContext }) {
-  const { error, loading, overview } = usePortalSection(context);
   const [financeError, setFinanceError] = useState("");
   const [financeLoading, setFinanceLoading] = useState(true);
   const [financeSummary, setFinanceSummary] =
@@ -76,10 +76,14 @@ export function StudentPortalPayments({ context }: { context: StudentPortalConte
     };
   }, [context.student.id]);
 
-  if (loading) return <PortalLoadingCard label="Loading payments and invoices" />;
-  if (error || !overview) return <PortalError message={error || "Unable to load payments and invoices."} />;
+  if (financeLoading) {
+    return <PortalLoadingCard label="Loading payments and invoices" />;
+  }
 
-  const paymentRows = [...overview.payments.payments, ...overview.payments.paymentLinks];
+  if (financeError) {
+    return <PortalError message={financeError} />;
+  }
+
   const financeRows =
     (financeSummary?.invoices.length ?? 0) +
     (financeSummary?.payments.length ?? 0) +
@@ -108,127 +112,136 @@ export function StudentPortalPayments({ context }: { context: StudentPortalConte
         <StatCard label="Receipts" value={financeSummary?.receipts.length ?? 0} />
       </section>
 
-      {financeError ? (
-        <PortalError message={financeError} />
-      ) : financeLoading ? (
-        <div className="mt-6">
-          <PortalLoadingCard label="Loading payment records" />
-        </div>
-      ) : null}
-
       <SectionHeader
-        description="Your coach records payments manually during beta. Online checkout remains unavailable here."
+        description="Your coach records invoices, manual payments, and receipts here. Online checkout remains unavailable."
         title="Payment and invoice records"
       />
       <div className="space-y-4">
-        {!financeLoading && financeRows === 0 && paymentRows.length === 0 ? (
-          <PortalEmptyState>No payment records visible yet.</PortalEmptyState>
+        {financeRows === 0 ? (
+          <PortalEmptyState>
+            No payment records visible yet. No payment action is required here
+            right now.
+          </PortalEmptyState>
         ) : (
           <>
-            {financeSummary?.invoices.map((invoice) => (
-              <Card className="border-[#D8E8F0] bg-white p-5" key={invoice.id}>
-                <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
-                  <div>
-                    <p className="text-xl font-semibold">
-                      {invoice.invoice_number}
-                    </p>
-                    <p className="mt-1 text-sm text-[#425B76]">
-                      Balance{" "}
-                      {formatFinanceCurrency(
-                        invoice.balance_amount,
-                        invoice.currency,
-                      )}
-                    </p>
-                    <p className="mt-1 text-xs text-[#66788F]">
-                      Due {formatFinanceDate(invoice.due_date)}
-                    </p>
-                  </div>
-                  <Badge
-                    tone={
-                      invoice.status === "paid"
-                        ? "success"
-                        : invoice.status === "overdue"
-                          ? "danger"
-                          : "warning"
-                    }
-                  >
-                    {invoice.status}
-                  </Badge>
-                </div>
-              </Card>
-            ))}
+            <section className="space-y-3">
+              <SectionHeader
+                description="Invoices appear after your coach issues them."
+                title="Invoices"
+              />
+              {financeSummary?.invoices.length ? (
+                financeSummary.invoices.map((invoice) => (
+                  <Card className="border-[#D8E8F0] bg-white p-5" key={invoice.id}>
+                    <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
+                      <div>
+                        <p className="text-xl font-semibold">
+                          {invoice.invoice_number}
+                        </p>
+                        <p className="mt-1 text-sm text-[#425B76]">
+                          {invoice.course_title ?? "Program invoice"}
+                        </p>
+                        <p className="mt-1 text-sm text-[#425B76]">
+                          Paid{" "}
+                          {formatFinanceCurrency(
+                            invoice.paid_amount,
+                            invoice.currency,
+                          )}{" "}
+                          · Balance{" "}
+                          {formatFinanceCurrency(
+                            invoice.balance_amount,
+                            invoice.currency,
+                          )}
+                        </p>
+                        <p className="mt-1 text-xs text-[#66788F]">
+                          Due {formatFinanceDate(invoice.due_date)}
+                        </p>
+                      </div>
+                      <Badge
+                        tone={
+                          invoice.status === "paid"
+                            ? "success"
+                            : invoice.status === "overdue"
+                              ? "danger"
+                              : "warning"
+                        }
+                      >
+                        {formatStatus(invoice.status)}
+                      </Badge>
+                    </div>
+                  </Card>
+                ))
+              ) : (
+                <PortalEmptyState>No invoices issued yet.</PortalEmptyState>
+              )}
+            </section>
 
-            {financeSummary?.payments.map((payment) => (
-              <Card className="border-[#D8E8F0] bg-white p-5" key={payment.id}>
-                <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
-                  <div>
-                    <p className="text-xl font-semibold">
-                      {formatFinanceCurrency(payment.amount, payment.currency)}
-                    </p>
-                    <p className="mt-1 text-sm text-[#425B76]">
-                      Manual payment - {payment.payment_method}
-                    </p>
-                    <p className="mt-1 text-xs text-[#66788F]">
-                      Paid {formatFinanceDate(payment.payment_date)}
-                    </p>
-                  </div>
-                  <Badge tone={payment.status === "cancelled" ? "danger" : "success"}>
-                    {payment.status}
-                  </Badge>
-                </div>
-              </Card>
-            ))}
+            <section className="space-y-3">
+              <SectionHeader
+                description="Manual, offline, or external payments appear after your coach records them."
+                title="Payments"
+              />
+              {financeSummary?.payments.length ? (
+                financeSummary.payments.map((payment) => (
+                  <Card className="border-[#D8E8F0] bg-white p-5" key={payment.id}>
+                    <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
+                      <div>
+                        <p className="text-xl font-semibold">
+                          {formatFinanceCurrency(payment.amount, payment.currency)}
+                        </p>
+                        <p className="mt-1 text-sm text-[#425B76]">
+                          {payment.course_title ?? "Program payment"}
+                        </p>
+                        <p className="mt-1 text-sm text-[#425B76]">
+                          Manual payment · {formatStatus(payment.payment_method)}
+                        </p>
+                        <p className="mt-1 text-xs text-[#66788F]">
+                          Paid {formatFinanceDate(payment.payment_date)}
+                        </p>
+                      </div>
+                      <Badge tone={payment.status === "cancelled" ? "danger" : "success"}>
+                        {formatStatus(payment.status)}
+                      </Badge>
+                    </div>
+                  </Card>
+                ))
+              ) : (
+                <PortalEmptyState>No payments recorded yet.</PortalEmptyState>
+              )}
+            </section>
 
-            {financeSummary?.receipts.map((receipt) => (
-              <Card className="border-[#D8E8F0] bg-white p-5" key={receipt.id}>
-                <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
-                  <div>
-                    <p className="text-xl font-semibold">
-                      {receipt.receipt_number}
-                    </p>
-                    <p className="mt-1 text-sm text-[#425B76]">
-                      {formatFinanceCurrency(receipt.amount, receipt.currency)}
-                    </p>
-                    <p className="mt-1 text-xs text-[#66788F]">
-                      Issued {formatFinanceDate(receipt.issued_at)}
-                    </p>
-                  </div>
-                  <Badge tone={receipt.status === "issued" ? "success" : "danger"}>
-                    {receipt.status}
-                  </Badge>
-                </div>
-              </Card>
-            ))}
-
-            {paymentRows.map((payment) => (
-            <Card className="border-[#D8E8F0] bg-white p-5" key={payment.id}>
-              <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
-                <div>
-                  <p className="text-xl font-semibold">
-                    {formatPortalCurrency(payment.amount, payment.currency)}
-                  </p>
-                  <p className="mt-1 text-sm text-[#425B76]">
-                    {payment.courseTitle ?? "General payment"}
-                  </p>
-                  <p className="mt-1 text-xs text-[#66788F]">
-                    {"paidAt" in payment
-                      ? `Paid ${formatPortalDate(payment.paidAt)}`
-                      : `Expires ${formatPortalDate(payment.expiresAt)}`}
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-2 sm:justify-end">
-                  <Badge tone={payment.status === "completed" ? "success" : "warning"}>
-                    {payment.status}
-                  </Badge>
-                  {"paymentUrl" in payment ? (
-                    <Button disabled size="sm" variant="secondary">
-                      Online payment disabled
-                    </Button>
-                  ) : null}
-                </div>
-              </div>
-            </Card>
-            ))}
+            <section className="space-y-3">
+              <SectionHeader
+                description="Receipts appear after your coach records a payment."
+                title="Receipts"
+              />
+              {financeSummary?.receipts.length ? (
+                financeSummary.receipts.map((receipt) => (
+                  <Card className="border-[#D8E8F0] bg-white p-5" key={receipt.id}>
+                    <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
+                      <div>
+                        <p className="text-xl font-semibold">
+                          {receipt.receipt_number}
+                        </p>
+                        <p className="mt-1 text-sm text-[#425B76]">
+                          {receipt.course_title ?? "Program receipt"}
+                        </p>
+                        <p className="mt-1 text-sm text-[#425B76]">
+                          {formatFinanceCurrency(receipt.amount, receipt.currency)}
+                        </p>
+                        <p className="mt-1 text-xs text-[#66788F]">
+                          Issued {formatFinanceDate(receipt.issued_at)}
+                        </p>
+                      </div>
+                      <Badge tone={receipt.status === "issued" ? "success" : "danger"}>
+                        {formatStatus(receipt.status)}
+                      </Badge>
+                    </div>
+                  </Card>
+                ))
+              ) : (
+                <PortalEmptyState>No receipts issued yet.</PortalEmptyState>
+              )}
+            </section>
           </>
         )}
       </div>

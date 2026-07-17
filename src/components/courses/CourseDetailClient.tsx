@@ -1477,6 +1477,11 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
               <Button href="/app/enrollments" size="sm" variant="secondary">
                 Enrollment Overview
               </Button>
+              {canApproveRequests ? (
+                <Button href="/app/finance" size="sm" variant="secondary">
+                  Open Finance Center
+                </Button>
+              ) : null}
               <div className="rounded-full border border-white/10 bg-[#101214] px-4 py-2 text-sm text-slate-300">
                 {enrollments.length} enrolled
               </div>
@@ -1509,7 +1514,7 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
             <div className="mt-8 divide-y divide-white/10 overflow-hidden rounded-3xl border border-white/10">
               {enrollments.map((enrollment) => (
                 <div
-                  className="grid gap-4 bg-[#101214] p-4 lg:grid-cols-[1fr_1fr_auto_auto] lg:items-center"
+                  className="grid gap-4 bg-[#101214] p-4 lg:grid-cols-[1fr_1fr_auto_auto_auto] lg:items-center"
                   key={enrollment.id}
                 >
                   <div>
@@ -1526,6 +1531,22 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
                     Enrolled {formatDate(enrollment.enrolled_at)}
                   </p>
                   <EnrollmentStatusBadge status={enrollment.status} />
+                  {canApproveRequests ? (
+                    <div className="rounded-2xl border border-white/10 bg-white/5 p-3 text-sm text-slate-300">
+                      <p className="leading-5">
+                        Use Finance Center to create invoices, record manual
+                        payments, and issue receipts for this student/program.
+                      </p>
+                      <Button
+                        className="mt-3"
+                        href="/app/finance"
+                        size="sm"
+                        variant="secondary"
+                      >
+                        Open Finance Center
+                      </Button>
+                    </div>
+                  ) : null}
                   <Link
                     className="text-sm font-semibold text-white transition hover:text-slate-300"
                     href={`/app/students/${enrollment.student_id}`}

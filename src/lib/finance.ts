@@ -70,10 +70,12 @@ export type FinanceFeePlan = {
 export type FinanceInvoice = {
   balance_amount: number;
   course_id: string | null;
+  course_title?: string | null;
   created_at: string;
   currency: string;
   discount_amount: number;
   due_date: string | null;
+  enrollment_id?: string | null;
   fee_plan_id: string | null;
   id: string;
   invoice_date: string;
@@ -90,8 +92,11 @@ export type FinanceInvoice = {
 
 export type FinancePayment = {
   amount: number;
+  course_id?: string | null;
+  course_title?: string | null;
   created_at: string;
   currency: string;
+  enrollment_id?: string | null;
   id: string;
   invoice_id: string | null;
   payment_date: string;
@@ -103,8 +108,11 @@ export type FinancePayment = {
 
 export type FinanceReceipt = {
   amount: number;
+  course_id?: string | null;
+  course_title?: string | null;
   created_at: string;
   currency: string;
+  enrollment_id?: string | null;
   id: string;
   issued_at: string;
   payment_id: string;
@@ -201,9 +209,9 @@ const settingsSelect =
 const feePlanSelect =
   "id,tenant_id,course_id,name,description,amount,currency,billing_cycle,installments_count,due_day,status,metadata_json,created_at";
 const invoiceSelect =
-  "id,tenant_id,student_id,course_id,fee_plan_id,invoice_number,invoice_date,due_date,subtotal_amount,discount_amount,tax_amount,total_amount,paid_amount,balance_amount,currency,status,notes,created_at";
+  "id,tenant_id,student_id,course_id,enrollment_id,fee_plan_id,invoice_number,invoice_date,due_date,subtotal_amount,discount_amount,tax_amount,total_amount,paid_amount,balance_amount,currency,status,notes,created_at";
 const paymentSelect =
-  "id,tenant_id,invoice_id,student_id,payment_date,amount,currency,payment_method,status,created_at";
+  "id,tenant_id,invoice_id,enrollment_id,student_id,payment_date,amount,currency,payment_method,status,created_at";
 const receiptSelect =
   "id,tenant_id,payment_id,student_id,receipt_number,issued_at,amount,currency,status,created_at";
 const adjustmentSelect =
@@ -456,6 +464,7 @@ export async function createFinanceInvoice(input: {
   courseId?: string | null;
   discountAmount: number;
   dueDate?: string | null;
+  enrollmentId?: string | null;
   feePlanId?: string | null;
   invoiceDate: string;
   notes?: string;
@@ -469,6 +478,7 @@ export async function createFinanceInvoice(input: {
     p_course_id: input.courseId || null,
     p_discount_amount: input.discountAmount,
     p_due_date: input.dueDate || null,
+    p_enrollment_id: input.enrollmentId ?? null,
     p_fee_plan_id: input.feePlanId || null,
     p_invoice_date: input.invoiceDate,
     p_metadata_json: {},
@@ -485,6 +495,7 @@ export async function createFinanceInvoice(input: {
 
 export async function recordFinancePayment(input: {
   amount: number;
+  enrollmentId?: string | null;
   invoiceId?: string | null;
   notes?: string;
   paymentDate: string;
@@ -496,6 +507,7 @@ export async function recordFinancePayment(input: {
   const supabase = getSupabaseClient();
   const { data, error } = await supabase.rpc("record_payment", {
     p_amount: input.amount,
+    p_enrollment_id: input.enrollmentId ?? null,
     p_invoice_id: input.invoiceId || null,
     p_metadata_json: {},
     p_notes: input.notes || null,

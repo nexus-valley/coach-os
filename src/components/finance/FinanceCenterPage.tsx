@@ -336,6 +336,7 @@ export function FinanceCenterPage() {
       () =>
         recordFinancePayment({
           amount: toAmount(paymentForm.amount),
+          enrollmentId: invoice?.enrollment_id ?? null,
           invoiceId: paymentForm.invoiceId || null,
           notes: paymentForm.notes,
           paymentDate: paymentForm.paymentDate,
@@ -724,7 +725,13 @@ export function FinanceCenterPage() {
 
       <div className="grid gap-6 xl:grid-cols-2">
         <Card className="p-5">
-          <h2 className="text-lg font-semibold">Record Manual Payment</h2>
+          <h2 className="text-lg font-semibold">
+            Record manual payment and issue receipt
+          </h2>
+          <p className="mt-2 text-sm leading-6 text-[#66788F]">
+            Use this only after the coach has confirmed an offline, manual, or
+            external payment. Recording a payment issues a receipt automatically.
+          </p>
           <form className="mt-4 grid gap-3" onSubmit={handleRecordPayment}>
             <select
               className="rounded-2xl border border-[#D8E8F0] px-4 py-3 text-sm"
@@ -822,7 +829,7 @@ export function FinanceCenterPage() {
               value={paymentForm.referenceNumber}
             />
             <Button disabled={saving} type="submit">
-              Record Payment
+              Record Payment and Issue Receipt
             </Button>
           </form>
         </Card>
@@ -1057,6 +1064,11 @@ export function FinanceCenterPage() {
                         {payment.status}
                       </Badge>
                     </div>
+                    {payment.enrollment_id ? (
+                      <p className="mt-2 text-xs text-[#66788F]">
+                        Linked to program enrollment
+                      </p>
+                    ) : null}
                     {payment.status === "recorded" || payment.status === "confirmed" ? (
                       <Button
                         className="mt-3"
