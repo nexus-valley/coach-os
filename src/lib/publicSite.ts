@@ -1,5 +1,8 @@
 import { logActivity } from "@/src/lib/auditLogger";
-import { requireTenantPermission } from "@/src/lib/permissions";
+import {
+  getMemberRoleForTenant,
+  requireTenantPermission,
+} from "@/src/lib/permissions";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 
 export type PublicSiteCoursePreview = {
@@ -100,6 +103,10 @@ export type PublicProgramSalesPagePayload = {
 };
 
 export type PublicSiteLead = {
+  converted_at?: string | null;
+  converted_enrollment_id?: string | null;
+  converted_student_id?: string | null;
+  conversion_note?: string | null;
   created_at: string;
   email: string | null;
   id: string;
@@ -110,6 +117,53 @@ export type PublicSiteLead = {
   phone: string | null;
   source: string | null;
   status: "new" | "contacted" | "converted" | "closed";
+};
+
+export type EnrollmentRequestStudentCandidate = {
+  email: string | null;
+  full_name: string;
+  id: string;
+  phone: string | null;
+  status: "active";
+};
+
+export type PaymentConfirmationMode =
+  | "external_payment_confirmed"
+  | "manual_payment_received"
+  | "no_payment_required";
+
+export type ApprovePublicProgramEnrollmentRequestInput = {
+  conversionNote?: string;
+  courseId: string;
+  existingStudentId?: null | string;
+  leadId: string;
+  paymentConfirmationMode: PaymentConfirmationMode;
+  paymentReference?: string;
+  studentAction: "create" | "existing";
+  studentEmail?: string;
+  studentName?: string;
+  studentPhone?: string;
+  tenantId: string;
+};
+
+export type ApprovePublicProgramEnrollmentRequestResult = {
+  enrollment: {
+    course_id: string;
+    id: string;
+    status: string;
+  };
+  lead: {
+    converted_at: string;
+    id: string;
+    status: "converted";
+  };
+  student: {
+    email: string | null;
+    id: string;
+    name: string;
+    phone: string | null;
+    status: string;
+  };
 };
 
 export type PublicSiteSettingsInput = {
@@ -175,6 +229,11 @@ const textMaxLengths: Record<keyof Omit<PublicSiteSettingsInput,
 
 const slugPattern = /^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$/;
 const unsafeTextPattern = /[<>]/;
+const paymentConfirmationModes: PaymentConfirmationMode[] = [
+  "external_payment_confirmed",
+  "manual_payment_received",
+  "no_payment_required",
+];
 
 function normalizeOptionalText(value: string, label: string, maxLength: number) {
   const trimmed = value.trim();
@@ -426,7 +485,7 @@ export async function getPublicSiteLeadsForCourse(params: {
   const { data, error } = await supabase
     .from("public_site_leads")
     .select(
-      "id,source,name,email,phone,message,interested_course_id,status,metadata_json,created_at",
+      "id,source,name,email,phone,message,interested_course_id,status,metadata_json,converted_student_id,converted_enrollment_id,converted_at,conversion_note,created_at",
     )
     .eq("tenant_id", params.tenantId)
     .eq("interested_course_id", params.courseId)
@@ -438,4 +497,115 @@ export async function getPublicSiteLeadsForCourse(params: {
   }
 
   return (data ?? []) as PublicSiteLead[];
+}
+
+export async function getEnrollmentRequestStudentCandidates(params: {
+  limit?: number;
+  tenantId: string;
+}) {
+  const supabase = getSupabaseClient();
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError) {
+    throw userError;
+  }
+
+  if (!user) {
+    throw new Error("You must be logged in to review enrollment requests.");
+  }
+
+  const role = await getMemberRoleForTenant(params.tenantId, user.id);
+
+  if (role !== "owner" && role !== "admin") {
+    throw new Error("Only owners and admins can review enrollment requests.");
+  }
+
+  const { data, error } = await supabase
+    .from("students")
+    .select("id,full_name,email,phone,status")
+    .eq("tenant_id", params.tenantId)
+    .eq("status", "active")
+    .order("full_name", { ascending: true })
+    .limit(params.limit ?? 75);
+
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? []) as EnrollmentRequestStudentCandidate[];
+}
+
+export async function approvePublicProgramEnrollmentRequest(
+  input: ApprovePublicProgramEnrollmentRequestInput,
+) {
+  if (input.studentAction !== "create" && input.studentAction !== "existing") {
+    throw new Error("Choose whether to create or link a student.");
+  }
+
+  if (!paymentConfirmationModes.includes(input.paymentConfirmationMode)) {
+    throw new Error("Choose a valid payment confirmation option.");
+  }
+
+  if (input.studentAction === "existing" && !input.existingStudentId) {
+    throw new Error("Select an existing active student.");
+  }
+
+  if (input.studentAction === "create") {
+    const hasContact =
+      Boolean(input.studentEmail?.trim()) || Boolean(input.studentPhone?.trim());
+
+    if (!input.studentName?.trim()) {
+      throw new Error("Student name is required.");
+    }
+
+    if (!hasContact) {
+      throw new Error("Student email or phone is required.");
+    }
+  }
+
+  const paymentReference = input.paymentReference?.trim() ?? "";
+  const conversionNote = input.conversionNote?.trim() ?? "";
+
+  if (
+    paymentReference &&
+    (paymentReference.length > 160 || unsafeTextPattern.test(paymentReference))
+  ) {
+    throw new Error("Payment reference must be plain text under 160 characters.");
+  }
+
+  if (
+    conversionNote &&
+    (conversionNote.length > 1000 || unsafeTextPattern.test(conversionNote))
+  ) {
+    throw new Error("Internal note must be plain text under 1000 characters.");
+  }
+
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.rpc(
+    "approve_public_program_enrollment_request",
+    {
+      p_conversion_note: conversionNote || null,
+      p_course_id: input.courseId,
+      p_existing_student_id: input.existingStudentId ?? null,
+      p_lead_id: input.leadId,
+      p_payment_confirmation_mode: input.paymentConfirmationMode,
+      p_payment_reference: paymentReference || null,
+      p_student_action: input.studentAction,
+      p_student_email: input.studentEmail?.trim() || null,
+      p_student_name: input.studentName?.trim() || null,
+      p_student_phone: input.studentPhone?.trim() || null,
+      p_tenant_id: input.tenantId,
+    },
+  );
+
+  if (error) {
+    throw new Error(
+      getErrorMessage(error, "Unable to approve enrollment request."),
+    );
+  }
+
+  return data as ApprovePublicProgramEnrollmentRequestResult;
 }

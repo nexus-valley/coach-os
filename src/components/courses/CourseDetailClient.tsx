@@ -29,7 +29,11 @@ import {
   type EnrollmentWithRelations,
 } from "@/src/lib/enrollments";
 import {
+  approvePublicProgramEnrollmentRequest,
+  getEnrollmentRequestStudentCandidates,
   getPublicSiteLeadsForCourse,
+  type EnrollmentRequestStudentCandidate,
+  type PaymentConfirmationMode,
   type PublicSiteLead,
 } from "@/src/lib/publicSite";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
@@ -87,6 +91,19 @@ type SalesSettingsForm = {
   salesHeadline: string;
   salesPaymentMode: CourseSalesPaymentMode;
   salesSummary: string;
+};
+
+type ReviewRequestModalState = {
+  conversionNote: string;
+  error: string;
+  existingStudentId: string;
+  paymentConfirmationMode: PaymentConfirmationMode;
+  paymentReference: string;
+  request: PublicSiteLead;
+  studentAction: "create" | "existing";
+  studentEmail: string;
+  studentName: string;
+  studentPhone: string;
 };
 
 const lessonTypes: LessonType[] = ["text", "video", "pdf", "quiz", "assignment"];
@@ -174,13 +191,26 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
   } | null>(null);
   const [salesForm, setSalesForm] = useState<SalesSettingsForm | null>(null);
   const [salesSaving, setSalesSaving] = useState(false);
+  const [requestFeedback, setRequestFeedback] = useState<{
+    message: string;
+    tone: "error" | "success";
+  } | null>(null);
+  const [reviewModal, setReviewModal] =
+    useState<ReviewRequestModalState | null>(null);
+  const [reviewSaving, setReviewSaving] = useState(false);
   const [sectionModal, setSectionModal] = useState<SectionModalState | null>(
     null,
   );
   const [sections, setSections] = useState<CourseSectionWithLessons[]>([]);
+  const [studentCandidates, setStudentCandidates] = useState<
+    EnrollmentRequestStudentCandidate[]
+  >([]);
+  const [studentCandidatesLoading, setStudentCandidatesLoading] =
+    useState(true);
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const canDelete = canDeleteRecords(currentRole);
   const canManage = canManageCourses(currentRole);
+  const canApproveRequests = currentRole === "owner" || currentRole === "admin";
 
   useEffect(() => {
     let active = true;
@@ -188,6 +218,7 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
     async function loadCourse() {
       try {
         setEnrollmentRequestsLoading(true);
+        setStudentCandidatesLoading(true);
         const currentTenant = await getCurrentTenant();
 
         if (!active) {
@@ -224,13 +255,20 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
               ? getCurrentMemberRole(currentTenant.id, user.id)
               : Promise.resolve(null),
           ]);
-        const courseEnrollmentRequests =
-          currentCourse && canManageCourses(memberRole)
-            ? await getPublicSiteLeadsForCourse({
-                courseId,
-                tenantId: currentTenant.id,
-              })
-            : [];
+        const canReviewRequests =
+          memberRole === "owner" || memberRole === "admin";
+        const [courseEnrollmentRequests, activeStudentCandidates] =
+          currentCourse && canReviewRequests
+            ? await Promise.all([
+                getPublicSiteLeadsForCourse({
+                  courseId,
+                  tenantId: currentTenant.id,
+                }),
+                getEnrollmentRequestStudentCandidates({
+                  tenantId: currentTenant.id,
+                }),
+              ])
+            : [[], []];
 
         if (!active) {
           return;
@@ -241,6 +279,7 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
         setSalesForm(currentCourse ? createSalesSettingsForm(currentCourse) : null);
         setCurrentRole(memberRole);
         setEnrollmentRequests(courseEnrollmentRequests);
+        setStudentCandidates(activeStudentCandidates);
         setSections(currentCourse ? currentStructure : []);
         setEnrollments(currentCourse ? courseEnrollments : []);
 
@@ -259,6 +298,7 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
         if (active) {
           setLoading(false);
           setEnrollmentRequestsLoading(false);
+          setStudentCandidatesLoading(false);
         }
       }
     }
@@ -276,6 +316,54 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
     }
 
     setSections(await getCourseStructure(courseId, tenant.id));
+  }
+
+  async function refreshEnrollmentRequests() {
+    if (!tenant || !course || !canApproveRequests) {
+      return;
+    }
+
+    setEnrollmentRequestsLoading(true);
+
+    try {
+      setEnrollmentRequests(
+        await getPublicSiteLeadsForCourse({
+          courseId: course.id,
+          tenantId: tenant.id,
+        }),
+      );
+    } finally {
+      setEnrollmentRequestsLoading(false);
+    }
+  }
+
+  async function refreshEnrollments() {
+    if (!tenant || !course) {
+      return;
+    }
+
+    setEnrollments(
+      await getEnrollmentsForCourse({
+        courseId: course.id,
+        tenantId: tenant.id,
+      }),
+    );
+  }
+
+  function openReviewRequest(request: PublicSiteLead) {
+    setRequestFeedback(null);
+    setReviewModal({
+      conversionNote: "",
+      error: "",
+      existingStudentId: "",
+      paymentConfirmationMode: "no_payment_required",
+      paymentReference: "",
+      request,
+      studentAction: "create",
+      studentEmail: request.email ?? "",
+      studentName: request.name,
+      studentPhone: request.phone ?? "",
+    });
   }
 
   function getNextSectionOrder() {
@@ -501,6 +589,59 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
       });
     } finally {
       setSalesSaving(false);
+    }
+  }
+
+  async function handleApproveRequestSubmit(
+    event: React.FormEvent<HTMLFormElement>,
+  ) {
+    event.preventDefault();
+
+    if (!tenant || !course || !reviewModal) {
+      return;
+    }
+
+    setReviewSaving(true);
+    setReviewModal((current) => (current ? { ...current, error: "" } : current));
+
+    try {
+      await approvePublicProgramEnrollmentRequest({
+        conversionNote: reviewModal.conversionNote,
+        courseId: course.id,
+        existingStudentId:
+          reviewModal.studentAction === "existing"
+            ? reviewModal.existingStudentId
+            : null,
+        leadId: reviewModal.request.id,
+        paymentConfirmationMode: reviewModal.paymentConfirmationMode,
+        paymentReference: reviewModal.paymentReference,
+        studentAction: reviewModal.studentAction,
+        studentEmail: reviewModal.studentEmail,
+        studentName: reviewModal.studentName,
+        studentPhone: reviewModal.studentPhone,
+        tenantId: tenant.id,
+      });
+
+      await Promise.all([refreshEnrollmentRequests(), refreshEnrollments()]);
+      setReviewModal(null);
+      setRequestFeedback({
+        message: "Request approved. Enrollment access is active.",
+        tone: "success",
+      });
+    } catch (caught) {
+      setReviewModal((current) =>
+        current
+          ? {
+              ...current,
+              error: getErrorMessage(
+                caught,
+                "Unable to approve this request right now.",
+              ),
+            }
+          : current,
+      );
+    } finally {
+      setReviewSaving(false);
     }
   }
 
@@ -1014,6 +1155,19 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
               steps by the coach/admin.
             </p>
 
+            {requestFeedback ? (
+              <div
+                className={[
+                  "mt-5 rounded-2xl border p-4 text-sm font-medium",
+                  requestFeedback.tone === "success"
+                    ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-100"
+                    : "border-red-400/30 bg-red-500/10 text-red-100",
+                ].join(" ")}
+              >
+                {requestFeedback.message}
+              </div>
+            ) : null}
+
             {enrollmentRequestsLoading ? (
               <div className="mt-6 rounded-3xl border border-white/10 bg-[#15181b] p-5">
                 <div className="h-5 w-44 animate-pulse rounded-full bg-white/10" />
@@ -1035,52 +1189,93 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
               </div>
             ) : (
               <div className="mt-6 grid gap-4 lg:grid-cols-2">
-                {enrollmentRequests.map((request) => (
-                  <article
-                    className="rounded-3xl border border-white/10 bg-[#15181b] p-5"
-                    key={request.id}
-                  >
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                      <div className="min-w-0">
-                        <p className="truncate text-lg font-semibold text-white">
-                          {request.name}
-                        </p>
-                        <p className="mt-1 text-xs font-medium text-slate-500">
-                          {formatDate(request.created_at)}
-                        </p>
+                {enrollmentRequests.map((request) => {
+                  const canReviewRequest =
+                    canApproveRequests &&
+                    (request.status === "new" ||
+                      request.status === "contacted") &&
+                    !request.converted_student_id &&
+                    !request.converted_enrollment_id;
+                  const isConverted =
+                    request.status === "converted" ||
+                    Boolean(request.converted_student_id) ||
+                    Boolean(request.converted_enrollment_id);
+
+                  return (
+                    <article
+                      className="rounded-3xl border border-white/10 bg-[#15181b] p-5"
+                      key={request.id}
+                    >
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="min-w-0">
+                          <p className="truncate text-lg font-semibold text-white">
+                            {request.name}
+                          </p>
+                          <p className="mt-1 text-xs font-medium text-slate-500">
+                            {formatDate(request.created_at)}
+                          </p>
+                        </div>
+                        <Badge
+                          className={
+                            isConverted
+                              ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-100"
+                              : request.status === "closed"
+                                ? "border-white/10 bg-white/10 text-slate-300"
+                                : "border-[#2ECBEA]/20 bg-[#2ECBEA]/10 text-[#A7F3FF]"
+                          }
+                        >
+                          {isConverted ? "converted" : request.status}
+                        </Badge>
                       </div>
-                      <Badge className="border-emerald-400/20 bg-emerald-400/10 text-emerald-100">
-                        {request.status}
-                      </Badge>
-                    </div>
 
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      <Badge className="border-white/10 bg-white/10 text-slate-300">
-                        {getLeadSourceLabel(request.source)}
-                      </Badge>
-                      {request.email ? (
-                        <span className="max-w-full truncate rounded-full border border-white/10 bg-[#101214] px-3 py-1 text-xs font-semibold text-slate-300">
-                          {request.email}
-                        </span>
-                      ) : null}
-                      {request.phone ? (
-                        <span className="rounded-full border border-white/10 bg-[#101214] px-3 py-1 text-xs font-semibold text-slate-300">
-                          {request.phone}
-                        </span>
-                      ) : null}
-                    </div>
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        <Badge className="border-white/10 bg-white/10 text-slate-300">
+                          {getLeadSourceLabel(request.source)}
+                        </Badge>
+                        {request.email ? (
+                          <span className="max-w-full truncate rounded-full border border-white/10 bg-[#101214] px-3 py-1 text-xs font-semibold text-slate-300">
+                            {request.email}
+                          </span>
+                        ) : null}
+                        {request.phone ? (
+                          <span className="rounded-full border border-white/10 bg-[#101214] px-3 py-1 text-xs font-semibold text-slate-300">
+                            {request.phone}
+                          </span>
+                        ) : null}
+                      </div>
 
-                    {request.message ? (
-                      <p className="mt-4 line-clamp-3 text-sm leading-6 text-slate-300">
-                        {request.message}
-                      </p>
-                    ) : (
-                      <p className="mt-4 text-sm leading-6 text-slate-500">
-                        No message or goal was included.
-                      </p>
-                    )}
-                  </article>
-                ))}
+                      {request.message ? (
+                        <p className="mt-4 line-clamp-3 text-sm leading-6 text-slate-300">
+                          {request.message}
+                        </p>
+                      ) : (
+                        <p className="mt-4 text-sm leading-6 text-slate-500">
+                          No message or goal was included.
+                        </p>
+                      )}
+
+                      <div className="mt-5 flex flex-col gap-3 border-t border-white/10 pt-4 sm:flex-row sm:items-center sm:justify-between">
+                        <p className="text-xs leading-5 text-slate-500">
+                          {isConverted
+                            ? "Converted requests are kept read-only here."
+                            : request.status === "closed"
+                              ? "Closed requests are not available for approval."
+                              : "Review is required before enrollment access is activated."}
+                        </p>
+                        {canReviewRequest ? (
+                          <Button
+                            className="shrink-0 bg-teal-400 text-black hover:bg-teal-300"
+                            onClick={() => openReviewRequest(request)}
+                            size="sm"
+                            type="button"
+                          >
+                            Review request
+                          </Button>
+                        ) : null}
+                      </div>
+                    </article>
+                  );
+                })}
               </div>
             )}
           </Card>
@@ -1369,6 +1564,327 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
           </Card>
         ))}
       </section>
+
+      {reviewModal && canApproveRequests ? (
+        <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-black/70 px-4 py-4 backdrop-blur-sm sm:items-center">
+          <Card className="max-h-[calc(100vh-2rem)] w-full max-w-3xl overflow-y-auto border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/40 sm:p-8">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <Badge className="border-[#2ECBEA]/20 bg-[#2ECBEA]/10 text-[#A7F3FF]">
+                  Enrollment request
+                </Badge>
+                <h3 className="mt-4 text-2xl font-semibold">
+                  Review enrollment request
+                </h3>
+                <p className="mt-3 text-sm leading-6 text-slate-400">
+                  Review the request, link or create an internal student, and
+                  approve access only after the coach/admin has confirmed the
+                  payment status.
+                </p>
+              </div>
+              <Badge className="border-white/10 bg-white/10 text-slate-300">
+                {getLeadSourceLabel(reviewModal.request.source)}
+              </Badge>
+            </div>
+
+            <div className="mt-6 grid gap-4 rounded-3xl border border-white/10 bg-[#15181b] p-5 sm:grid-cols-2">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                  Request
+                </p>
+                <p className="mt-2 text-lg font-semibold text-white">
+                  {reviewModal.request.name}
+                </p>
+                <p className="mt-1 text-sm text-slate-400">
+                  {formatDate(reviewModal.request.created_at)}
+                </p>
+              </div>
+              <div className="space-y-2 text-sm text-slate-300">
+                <p>{reviewModal.request.email || "No email provided"}</p>
+                <p>{reviewModal.request.phone || "No phone provided"}</p>
+              </div>
+              <div className="sm:col-span-2">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                  Message
+                </p>
+                <p className="mt-2 text-sm leading-6 text-slate-300">
+                  {reviewModal.request.message ||
+                    "No message or goal was included."}
+                </p>
+              </div>
+            </div>
+
+            {reviewModal.error ? (
+              <div className="mt-5 rounded-2xl border border-red-400/30 bg-red-500/10 p-4 text-sm font-medium text-red-100">
+                {reviewModal.error}
+              </div>
+            ) : null}
+
+            <form className="mt-6 space-y-6" onSubmit={handleApproveRequestSubmit}>
+              <section className="rounded-3xl border border-white/10 bg-[#15181b] p-5">
+                <h4 className="text-lg font-semibold text-white">Student</h4>
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <label
+                    className={[
+                      "flex cursor-pointer gap-3 rounded-2xl border p-4 text-sm transition",
+                      reviewModal.studentAction === "create"
+                        ? "border-teal-400/40 bg-teal-400/10 text-white"
+                        : "border-white/10 bg-[#101214] text-slate-300",
+                    ].join(" ")}
+                  >
+                    <input
+                      checked={reviewModal.studentAction === "create"}
+                      className="mt-1 h-4 w-4 accent-teal-400"
+                      onChange={() =>
+                        setReviewModal((current) =>
+                          current
+                            ? { ...current, studentAction: "create" }
+                            : current,
+                        )
+                      }
+                      type="radio"
+                    />
+                    <span>
+                      <span className="block font-semibold">
+                        Create new internal student
+                      </span>
+                      <span className="mt-1 block leading-6 text-slate-400">
+                        This creates an internal student record only. It does
+                        not create a login account.
+                      </span>
+                    </span>
+                  </label>
+
+                  <label
+                    className={[
+                      "flex cursor-pointer gap-3 rounded-2xl border p-4 text-sm transition",
+                      reviewModal.studentAction === "existing"
+                        ? "border-teal-400/40 bg-teal-400/10 text-white"
+                        : "border-white/10 bg-[#101214] text-slate-300",
+                    ].join(" ")}
+                  >
+                    <input
+                      checked={reviewModal.studentAction === "existing"}
+                      className="mt-1 h-4 w-4 accent-teal-400"
+                      onChange={() =>
+                        setReviewModal((current) =>
+                          current
+                            ? { ...current, studentAction: "existing" }
+                            : current,
+                        )
+                      }
+                      type="radio"
+                    />
+                    <span>
+                      <span className="block font-semibold">
+                        Link existing active student
+                      </span>
+                      <span className="mt-1 block leading-6 text-slate-400">
+                        Use this when the learner already exists in this
+                        workspace.
+                      </span>
+                    </span>
+                  </label>
+                </div>
+
+                {reviewModal.studentAction === "create" ? (
+                  <div className="mt-5 grid gap-4 sm:grid-cols-3">
+                    <label className="block text-sm font-semibold text-slate-200">
+                      Student name
+                      <input
+                        className="mt-2 h-12 w-full rounded-xl border border-white/10 bg-[#101214] px-4 text-sm text-white outline-none placeholder:text-slate-500 focus:border-teal-400/50 focus:ring-4 focus:ring-teal-400/10"
+                        maxLength={160}
+                        onChange={(event) =>
+                          setReviewModal((current) =>
+                            current
+                              ? { ...current, studentName: event.target.value }
+                              : current,
+                          )
+                        }
+                        required
+                        value={reviewModal.studentName}
+                      />
+                    </label>
+                    <label className="block text-sm font-semibold text-slate-200">
+                      Email
+                      <input
+                        className="mt-2 h-12 w-full rounded-xl border border-white/10 bg-[#101214] px-4 text-sm text-white outline-none placeholder:text-slate-500 focus:border-teal-400/50 focus:ring-4 focus:ring-teal-400/10"
+                        maxLength={254}
+                        onChange={(event) =>
+                          setReviewModal((current) =>
+                            current
+                              ? { ...current, studentEmail: event.target.value }
+                              : current,
+                          )
+                        }
+                        type="email"
+                        value={reviewModal.studentEmail}
+                      />
+                    </label>
+                    <label className="block text-sm font-semibold text-slate-200">
+                      Phone
+                      <input
+                        className="mt-2 h-12 w-full rounded-xl border border-white/10 bg-[#101214] px-4 text-sm text-white outline-none placeholder:text-slate-500 focus:border-teal-400/50 focus:ring-4 focus:ring-teal-400/10"
+                        maxLength={40}
+                        onChange={(event) =>
+                          setReviewModal((current) =>
+                            current
+                              ? { ...current, studentPhone: event.target.value }
+                              : current,
+                          )
+                        }
+                        value={reviewModal.studentPhone}
+                      />
+                    </label>
+                  </div>
+                ) : (
+                  <div className="mt-5">
+                    {studentCandidatesLoading ? (
+                      <div className="rounded-2xl border border-white/10 bg-[#101214] p-4 text-sm text-slate-400">
+                        Loading active students...
+                      </div>
+                    ) : studentCandidates.length === 0 ? (
+                      <div className="rounded-2xl border border-dashed border-white/15 bg-[#101214] p-5 text-sm leading-6 text-slate-400">
+                        No active students found. Create a new internal student
+                        instead.
+                      </div>
+                    ) : (
+                      <label className="block text-sm font-semibold text-slate-200">
+                        Active student
+                        <select
+                          className="mt-2 h-12 w-full rounded-xl border border-white/10 bg-[#101214] px-4 text-sm text-white outline-none focus:border-teal-400/50 focus:ring-4 focus:ring-teal-400/10"
+                          onChange={(event) =>
+                            setReviewModal((current) =>
+                              current
+                                ? {
+                                    ...current,
+                                    existingStudentId: event.target.value,
+                                  }
+                                : current,
+                            )
+                          }
+                          required
+                          value={reviewModal.existingStudentId}
+                        >
+                          <option value="">Select active student</option>
+                          {studentCandidates.map((student) => (
+                            <option key={student.id} value={student.id}>
+                              {student.full_name}
+                              {student.email ? ` - ${student.email}` : ""}
+                              {!student.email && student.phone
+                                ? ` - ${student.phone}`
+                                : ""}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
+                  </div>
+                )}
+              </section>
+
+              <section className="rounded-3xl border border-white/10 bg-[#15181b] p-5">
+                <h4 className="text-lg font-semibold text-white">
+                  Payment confirmation
+                </h4>
+                <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                  <label className="block text-sm font-semibold text-slate-200">
+                    Confirmation mode
+                    <select
+                      className="mt-2 h-12 w-full rounded-xl border border-white/10 bg-[#101214] px-4 text-sm text-white outline-none focus:border-teal-400/50 focus:ring-4 focus:ring-teal-400/10"
+                      onChange={(event) =>
+                        setReviewModal((current) =>
+                          current
+                            ? {
+                                ...current,
+                                paymentConfirmationMode: event.target
+                                  .value as PaymentConfirmationMode,
+                              }
+                            : current,
+                        )
+                      }
+                      value={reviewModal.paymentConfirmationMode}
+                    >
+                      <option value="no_payment_required">
+                        No payment required
+                      </option>
+                      <option value="manual_payment_received">
+                        Manual payment received
+                      </option>
+                      <option value="external_payment_confirmed">
+                        External payment confirmed
+                      </option>
+                    </select>
+                  </label>
+                  <label className="block text-sm font-semibold text-slate-200">
+                    Payment reference
+                    <input
+                      className="mt-2 h-12 w-full rounded-xl border border-white/10 bg-[#101214] px-4 text-sm text-white outline-none placeholder:text-slate-500 focus:border-teal-400/50 focus:ring-4 focus:ring-teal-400/10"
+                      maxLength={160}
+                      onChange={(event) =>
+                        setReviewModal((current) =>
+                          current
+                            ? {
+                                ...current,
+                                paymentReference: event.target.value,
+                              }
+                            : current,
+                        )
+                      }
+                      placeholder="Optional bank/UPI/external reference"
+                      value={reviewModal.paymentReference}
+                    />
+                  </label>
+                </div>
+
+                <label className="mt-4 block text-sm font-semibold text-slate-200">
+                  Internal note
+                  <textarea
+                    className="mt-2 min-h-24 w-full resize-none rounded-xl border border-white/10 bg-[#101214] px-4 py-3 text-sm leading-6 text-white outline-none placeholder:text-slate-500 focus:border-teal-400/50 focus:ring-4 focus:ring-teal-400/10"
+                    maxLength={1000}
+                    onChange={(event) =>
+                      setReviewModal((current) =>
+                        current
+                          ? { ...current, conversionNote: event.target.value }
+                          : current,
+                      )
+                    }
+                    placeholder="Optional approval context for the team."
+                    value={reviewModal.conversionNote}
+                  />
+                </label>
+              </section>
+
+              <div className="rounded-3xl border border-amber-300/30 bg-amber-300/10 p-5 text-sm leading-6 text-amber-50">
+                <p className="font-semibold">Approval warning</p>
+                <p className="mt-2">
+                  Approving this request creates an active enrollment and
+                  activates learning access for this student. It does not create
+                  an invoice, receipt, payment record, login account, or
+                  online payment.
+                </p>
+              </div>
+
+              <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                <Button
+                  onClick={() => setReviewModal(null)}
+                  type="button"
+                  variant="secondary"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  className="bg-teal-400 text-black hover:bg-teal-300"
+                  disabled={reviewSaving}
+                  type="submit"
+                >
+                  {reviewSaving ? "Approving..." : "Approve and activate access"}
+                </Button>
+              </div>
+            </form>
+          </Card>
+        </div>
+      ) : null}
 
       {sectionModal ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 px-4 py-4 backdrop-blur-sm sm:items-center">
