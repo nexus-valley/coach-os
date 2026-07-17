@@ -28,6 +28,10 @@ import {
   getEnrollmentsForCourse,
   type EnrollmentWithRelations,
 } from "@/src/lib/enrollments";
+import {
+  getPublicSiteLeadsForCourse,
+  type PublicSiteLead,
+} from "@/src/lib/publicSite";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 import {
   canManageCourses,
@@ -133,6 +137,18 @@ function formatProgramPrice(course: Course) {
   }).format(course.price_amount ?? 0);
 }
 
+function getLeadSourceLabel(source: string | null) {
+  if (source === "program_sales_page") {
+    return "Public program page";
+  }
+
+  if (source === "public_site") {
+    return "Public coach page";
+  }
+
+  return "Public inquiry";
+}
+
 function getErrorMessage(caught: unknown, fallback: string) {
   return caught instanceof Error ? caught.message : fallback;
 }
@@ -143,6 +159,11 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
   const [currentRole, setCurrentRole] = useState<MemberRole | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
   const [enrollments, setEnrollments] = useState<EnrollmentWithRelations[]>([]);
+  const [enrollmentRequests, setEnrollmentRequests] = useState<
+    PublicSiteLead[]
+  >([]);
+  const [enrollmentRequestsLoading, setEnrollmentRequestsLoading] =
+    useState(true);
   const [error, setError] = useState("");
   const [lessonModal, setLessonModal] = useState<LessonModalState | null>(null);
   const [loading, setLoading] = useState(true);
@@ -166,6 +187,7 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
 
     async function loadCourse() {
       try {
+        setEnrollmentRequestsLoading(true);
         const currentTenant = await getCurrentTenant();
 
         if (!active) {
@@ -202,6 +224,13 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
               ? getCurrentMemberRole(currentTenant.id, user.id)
               : Promise.resolve(null),
           ]);
+        const courseEnrollmentRequests =
+          currentCourse && canManageCourses(memberRole)
+            ? await getPublicSiteLeadsForCourse({
+                courseId,
+                tenantId: currentTenant.id,
+              })
+            : [];
 
         if (!active) {
           return;
@@ -211,6 +240,7 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
         setCourse(currentCourse);
         setSalesForm(currentCourse ? createSalesSettingsForm(currentCourse) : null);
         setCurrentRole(memberRole);
+        setEnrollmentRequests(courseEnrollmentRequests);
         setSections(currentCourse ? currentStructure : []);
         setEnrollments(currentCourse ? courseEnrollments : []);
 
@@ -228,6 +258,7 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
       } finally {
         if (active) {
           setLoading(false);
+          setEnrollmentRequestsLoading(false);
         }
       }
     }
@@ -955,6 +986,106 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
           ) : null}
         </Card>
       </section>
+
+      {canManage ? (
+        <section className="mt-6">
+          <Card className="border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/10 sm:p-8">
+            <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-start">
+              <div>
+                <Badge className="border-[#2ECBEA]/20 bg-[#2ECBEA]/10 text-[#A7F3FF]">
+                  Requests
+                </Badge>
+                <h3 className="mt-4 text-2xl font-semibold">
+                  Recent enrollment requests
+                </h3>
+                <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-400">
+                  Requests submitted from this program&apos;s public page appear
+                  here. This does not create enrollment, payment, invoice, or
+                  access automatically.
+                </p>
+              </div>
+              <Badge className="border-white/10 bg-white/10 text-slate-200">
+                {enrollmentRequests.length} recent
+              </Badge>
+            </div>
+
+            <p className="mt-5 rounded-2xl border border-white/10 bg-[#15181b] px-4 py-3 text-sm leading-6 text-slate-300">
+              Enrollment, payment, invoices, and access are handled in later
+              steps by the coach/admin.
+            </p>
+
+            {enrollmentRequestsLoading ? (
+              <div className="mt-6 rounded-3xl border border-white/10 bg-[#15181b] p-5">
+                <div className="h-5 w-44 animate-pulse rounded-full bg-white/10" />
+                <div className="mt-4 h-4 w-full max-w-xl animate-pulse rounded-full bg-white/10" />
+                <div className="mt-3 h-4 w-2/3 animate-pulse rounded-full bg-white/10" />
+              </div>
+            ) : enrollmentRequests.length === 0 ? (
+              <div className="mt-6 rounded-3xl border border-dashed border-white/15 bg-[#15181b] p-8 text-center">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10 text-sm font-bold text-slate-300">
+                  RE
+                </div>
+                <h4 className="mt-5 text-xl font-semibold">
+                  No enrollment requests for this program yet.
+                </h4>
+                <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-slate-400">
+                  When a visitor requests enrollment from this program&apos;s
+                  public page, the latest requests will appear here for review.
+                </p>
+              </div>
+            ) : (
+              <div className="mt-6 grid gap-4 lg:grid-cols-2">
+                {enrollmentRequests.map((request) => (
+                  <article
+                    className="rounded-3xl border border-white/10 bg-[#15181b] p-5"
+                    key={request.id}
+                  >
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0">
+                        <p className="truncate text-lg font-semibold text-white">
+                          {request.name}
+                        </p>
+                        <p className="mt-1 text-xs font-medium text-slate-500">
+                          {formatDate(request.created_at)}
+                        </p>
+                      </div>
+                      <Badge className="border-emerald-400/20 bg-emerald-400/10 text-emerald-100">
+                        {request.status}
+                      </Badge>
+                    </div>
+
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <Badge className="border-white/10 bg-white/10 text-slate-300">
+                        {getLeadSourceLabel(request.source)}
+                      </Badge>
+                      {request.email ? (
+                        <span className="max-w-full truncate rounded-full border border-white/10 bg-[#101214] px-3 py-1 text-xs font-semibold text-slate-300">
+                          {request.email}
+                        </span>
+                      ) : null}
+                      {request.phone ? (
+                        <span className="rounded-full border border-white/10 bg-[#101214] px-3 py-1 text-xs font-semibold text-slate-300">
+                          {request.phone}
+                        </span>
+                      ) : null}
+                    </div>
+
+                    {request.message ? (
+                      <p className="mt-4 line-clamp-3 text-sm leading-6 text-slate-300">
+                        {request.message}
+                      </p>
+                    ) : (
+                      <p className="mt-4 text-sm leading-6 text-slate-500">
+                        No message or goal was included.
+                      </p>
+                    )}
+                  </article>
+                ))}
+              </div>
+            )}
+          </Card>
+        </section>
+      ) : null}
 
       <section className="mt-6">
         <Card className="border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/10 sm:p-8">

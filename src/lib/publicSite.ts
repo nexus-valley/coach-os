@@ -104,9 +104,11 @@ export type PublicSiteLead = {
   email: string | null;
   id: string;
   interested_course_id: string | null;
+  metadata_json?: Record<string, unknown> | null;
   message: string | null;
   name: string;
   phone: string | null;
+  source: string | null;
   status: "new" | "contacted" | "converted" | "closed";
 };
 
@@ -395,11 +397,41 @@ export async function getPublicSiteLeads(tenantId: string, limit = 20) {
   const { data, error } = await supabase
     .from("public_site_leads")
     .select(
-      "id,name,email,phone,message,interested_course_id,status,created_at",
+      "id,source,name,email,phone,message,interested_course_id,status,created_at",
     )
     .eq("tenant_id", tenantId)
     .order("created_at", { ascending: false })
     .limit(limit);
+
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? []) as PublicSiteLead[];
+}
+
+export async function getPublicSiteLeadsForCourse(params: {
+  courseId: string;
+  limit?: number;
+  tenantId: string;
+}) {
+  await requireTenantPermission({
+    description:
+      "Blocked program enrollment request read without course management permission.",
+    permission: "manage_courses",
+    tenantId: params.tenantId,
+  });
+
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from("public_site_leads")
+    .select(
+      "id,source,name,email,phone,message,interested_course_id,status,metadata_json,created_at",
+    )
+    .eq("tenant_id", params.tenantId)
+    .eq("interested_course_id", params.courseId)
+    .order("created_at", { ascending: false })
+    .limit(params.limit ?? 8);
 
   if (error) {
     throw error;
