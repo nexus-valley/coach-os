@@ -9,7 +9,7 @@ export function AdminDashboard({ metrics }: { metrics: DashboardMetrics }) {
     <Card className="mb-8 mt-8 border-[#D8E8F0] bg-white p-6 shadow-sm shadow-[#0B2A3D]/5">
       <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
         <SectionHeader
-          description="Track students, sessions, payments due, assignments, notifications, and workflow health."
+          description="Track students, sessions, open balances, assignments, notifications, and workflow health."
           eyebrow="Admin Dashboard"
           title="Daily operations"
         />
@@ -34,7 +34,7 @@ export function AdminDashboard({ metrics }: { metrics: DashboardMetrics }) {
           label="Pending Reviews"
           value={metrics.assignments.pendingReviews}
         />
-        <StatCard label="Pending Payments" value={metrics.pendingPayments} />
+        <StatCard label="Open Balances" value={metrics.pendingPayments} />
         <StatCard
           label="Unread Threads"
           value={metrics.conversations.unreadThreads}

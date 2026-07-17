@@ -5,8 +5,13 @@ import {
 } from "@/src/lib/conversations";
 import type { CourseStatus } from "@/src/lib/courses";
 import { getDelegatedPermissionCounts } from "@/src/lib/delegatedPermissions";
+import type {
+  FinanceInvoiceStatus,
+  FinancePaymentMethod,
+  FinancePaymentStatus,
+} from "@/src/lib/finance";
 import { getUnreadThreadCount } from "@/src/lib/messages";
-import type { PaymentMethod, PaymentStatus } from "@/src/lib/payments";
+import { getMemberRoleForTenant } from "@/src/lib/permissions";
 import type {
   SessionDeliveryMode,
   SessionMeetingProvider,
@@ -18,13 +23,13 @@ import { getCurrentTrainerScope } from "@/src/lib/trainerAssignments";
 
 type DashboardPayment = {
   amount: number;
-  course_id: string;
   created_at: string;
   currency: string;
   id: string;
-  paid_at: string;
-  payment_method: PaymentMethod;
-  status: PaymentStatus;
+  invoice_id: string | null;
+  payment_date: string;
+  payment_method: FinancePaymentMethod;
+  status: FinancePaymentStatus;
   student_id: string;
   tenant_id: string;
 };
@@ -50,6 +55,23 @@ export type DashboardCourseRevenue = {
   paymentCount: number;
   revenue: number;
 };
+
+type DashboardFinanceInvoice = {
+  balance_amount: number;
+  course_id: string | null;
+  created_at: string;
+  currency: string;
+  id: string;
+  status: FinanceInvoiceStatus;
+  student_id: string;
+  tenant_id: string;
+  total_amount: number;
+};
+
+export type DashboardPaymentStatusSummary = Record<
+  FinancePaymentStatus,
+  number
+>;
 
 export type DashboardSessionPreview = {
   cohortName: string | null;
@@ -111,7 +133,7 @@ export type DashboardMetrics = {
   conversations: DashboardConversationSummary;
   courseRevenue: DashboardCourseRevenue[];
   delegatedPermissions: number;
-  paymentStatusSummary: Record<PaymentStatus, number>;
+  paymentStatusSummary: DashboardPaymentStatusSummary;
   failedAutomationRuns: number;
   pendingPayments: number;
   pendingRemindersDue: number;
@@ -134,7 +156,9 @@ type DashboardStudentLookup = {
 };
 
 const paymentSelect =
-  "id,tenant_id,student_id,course_id,amount,currency,payment_method,status,paid_at,created_at";
+  "id,tenant_id,invoice_id,student_id,payment_date,amount,currency,payment_method,status,created_at";
+const financeInvoiceSelect =
+  "id,tenant_id,student_id,course_id,total_amount,balance_amount,currency,status,created_at";
 
 const emptyAttendanceSummary: DashboardAttendanceSummary = {
   attendancePercent: null,
@@ -165,45 +189,65 @@ const emptyConversationSummary: DashboardConversationSummary = {
   unreadThreads: 0,
 };
 
-function sumCompletedRevenue(payments: DashboardPayment[]) {
+function isCollectedPayment(payment: DashboardPayment) {
+  return payment.status === "recorded" || payment.status === "confirmed";
+}
+
+function isOpenInvoice(invoice: DashboardFinanceInvoice) {
+  return (
+    Number(invoice.balance_amount || 0) > 0 &&
+    !["cancelled", "paid", "void"].includes(invoice.status)
+  );
+}
+
+function sumRecordedRevenue(payments: DashboardPayment[]) {
   return payments
-    .filter((payment) => payment.status === "completed")
+    .filter(isCollectedPayment)
     .reduce((total, payment) => total + Number(payment.amount || 0), 0);
 }
 
 function buildPaymentSummary(payments: DashboardPayment[]) {
-  return payments.reduce<Record<PaymentStatus, number>>(
+  return payments.reduce<DashboardPaymentStatusSummary>(
     (summary, payment) => ({
       ...summary,
       [payment.status]: summary[payment.status] + 1,
     }),
     {
-      completed: 0,
+      cancelled: 0,
+      confirmed: 0,
       failed: 0,
-      pending: 0,
+      recorded: 0,
+      refunded: 0,
     },
   );
 }
 
 function buildCourseRevenue(
   payments: DashboardPayment[],
+  invoicesById: Map<string, DashboardFinanceInvoice>,
   coursesById: Map<string, DashboardCourseLookup>,
 ) {
   const revenueByCourse = new Map<string, DashboardCourseRevenue>();
 
   payments
-    .filter((payment) => payment.status === "completed")
+    .filter(isCollectedPayment)
     .forEach((payment) => {
-      const current = revenueByCourse.get(payment.course_id) ?? {
-        courseId: payment.course_id,
+      const invoice = payment.invoice_id
+        ? invoicesById.get(payment.invoice_id)
+        : undefined;
+      const courseId = invoice?.course_id ?? "general-finance";
+      const current = revenueByCourse.get(courseId) ?? {
+        courseId,
         courseTitle:
-          coursesById.get(payment.course_id)?.title ?? "Course unavailable",
-        currency: payment.currency || "USD",
+          (invoice?.course_id
+            ? coursesById.get(invoice.course_id)?.title
+            : null) ?? "General finance",
+        currency: payment.currency || "INR",
         paymentCount: 0,
         revenue: 0,
       };
 
-      revenueByCourse.set(payment.course_id, {
+      revenueByCourse.set(courseId, {
         ...current,
         paymentCount: current.paymentCount + 1,
         revenue: current.revenue + Number(payment.amount || 0),
@@ -597,6 +641,13 @@ export async function getDashboardMetrics(
 ): Promise<DashboardMetrics> {
   const supabase = getSupabaseClient();
   const trainerScope = await getCurrentTrainerScope(tenantId);
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const currentRole = user
+    ? await getMemberRoleForTenant(tenantId, user.id)
+    : null;
+  const canReadFinance = currentRole === "owner" || currentRole === "admin";
 
   if (trainerScope) {
     const [courseRowsResult, enrollmentRowsResult, cohortMembersResult] =
@@ -683,9 +734,11 @@ export async function getDashboardMetrics(
       courseRevenue: [],
       delegatedPermissions: 0,
       paymentStatusSummary: {
-        completed: 0,
+        cancelled: 0,
+        confirmed: 0,
         failed: 0,
-        pending: 0,
+        recorded: 0,
+        refunded: 0,
       },
       failedAutomationRuns: 0,
       pendingPayments: 0,
@@ -703,7 +756,8 @@ export async function getDashboardMetrics(
     publishedCoursesCountResult,
     draftCoursesCountResult,
     enrollmentsCountResult,
-    paymentsResult,
+    financePaymentsResult,
+    financeInvoicesResult,
     recentStudentsResult,
     reminderCounts,
     automationCounts,
@@ -730,11 +784,20 @@ export async function getDashboardMetrics(
       .from("enrollments")
       .select("id", { count: "exact", head: true })
       .eq("tenant_id", tenantId),
-    supabase
-      .from("payments")
-      .select(paymentSelect)
-      .eq("tenant_id", tenantId)
-      .order("paid_at", { ascending: false }),
+    canReadFinance
+      ? supabase
+          .from("finance_payments")
+          .select(paymentSelect)
+          .eq("tenant_id", tenantId)
+          .order("payment_date", { ascending: false })
+      : Promise.resolve({ data: [], error: null }),
+    canReadFinance
+      ? supabase
+          .from("finance_invoices")
+          .select(financeInvoiceSelect)
+          .eq("tenant_id", tenantId)
+          .order("created_at", { ascending: false })
+      : Promise.resolve({ data: [], error: null }),
     supabase
       .from("students")
       .select("id,full_name,email,phone,status,created_at")
@@ -765,18 +828,24 @@ export async function getDashboardMetrics(
     throw enrollmentsCountResult.error;
   }
 
-  if (paymentsResult.error) {
-    throw paymentsResult.error;
+  if (financePaymentsResult.error) {
+    throw financePaymentsResult.error;
+  }
+
+  if (financeInvoicesResult.error) {
+    throw financeInvoicesResult.error;
   }
 
   if (recentStudentsResult.error) {
     throw recentStudentsResult.error;
   }
 
-  const payments = (paymentsResult.data ?? []) as DashboardPayment[];
+  const payments = (financePaymentsResult.data ?? []) as DashboardPayment[];
+  const invoices = (financeInvoicesResult.data ?? []) as DashboardFinanceInvoice[];
+  const invoicesById = new Map(invoices.map((invoice) => [invoice.id, invoice]));
   const courseIds = Array.from(
-    new Set(payments.map((payment) => payment.course_id)),
-  );
+    new Set(invoices.map((invoice) => invoice.course_id).filter(Boolean)),
+  ) as string[];
   const studentIds = Array.from(
     new Set(payments.slice(0, 5).map((payment) => payment.student_id)),
   );
@@ -826,25 +895,32 @@ export async function getDashboardMetrics(
     assignments,
     attendance,
     conversations,
-    courseRevenue: buildCourseRevenue(payments, coursesById),
+    courseRevenue: buildCourseRevenue(payments, invoicesById, coursesById),
     delegatedPermissions: delegatedPermissionCounts.active,
     paymentStatusSummary: buildPaymentSummary(payments),
     failedAutomationRuns: automationCounts.failedRuns,
-    pendingPayments: payments.filter((payment) => payment.status === "pending")
-      .length,
+    pendingPayments: invoices.filter(isOpenInvoice).length,
     pendingRemindersDue: reminderCounts.pendingDueTodayOrOverdue,
-    recentPayments: payments.slice(0, 5).map((payment) => ({
-      ...payment,
-      courseTitle:
-        coursesById.get(payment.course_id)?.title ?? "Course unavailable",
-      studentName:
-        studentsById.get(payment.student_id)?.full_name ??
-        "Student unavailable",
-    })),
+    recentPayments: payments.slice(0, 5).map((payment) => {
+      const invoice = payment.invoice_id
+        ? invoicesById.get(payment.invoice_id)
+        : undefined;
+
+      return {
+        ...payment,
+        courseTitle:
+          (invoice?.course_id
+            ? coursesById.get(invoice.course_id)?.title
+            : null) ?? "General finance",
+        studentName:
+          studentsById.get(payment.student_id)?.full_name ??
+          "Student unavailable",
+      };
+    }),
     recentStudents: (recentStudentsResult.data ??
       []) as DashboardRecentStudent[],
     totalEnrollments: enrollmentsCountResult.count ?? 0,
-    totalRevenue: sumCompletedRevenue(payments),
+    totalRevenue: sumRecordedRevenue(payments),
     totalStudents: studentsCountResult.count ?? 0,
   };
 }

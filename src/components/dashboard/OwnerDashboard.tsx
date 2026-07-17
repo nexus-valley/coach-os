@@ -29,9 +29,9 @@ export function OwnerDashboard({
 }) {
   const attentionItems = [
     {
-      description: "Pending payments need owner review.",
+      description: "Outstanding invoices need owner review.",
       href: "/app/finance",
-      label: "Pending payments",
+      label: "Open balances",
       tone: "warning" as const,
       value: metrics.pendingPayments,
     },
@@ -103,9 +103,14 @@ export function OwnerDashboard({
       label: "Review programs",
     },
     {
-      description: "Check fee plans, invoices, and payment status.",
+      description: "Check fee plans, invoices, recorded payments, and receipts.",
       href: "/app/finance",
       label: "Open sales",
+    },
+    {
+      description: "Review public program requests and approve access from Programs.",
+      href: "/app/courses",
+      label: "Program sales requests",
     },
     {
       description: "Review coaching materials and uploads.",
@@ -197,7 +202,7 @@ export function OwnerDashboard({
 
       <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
-          description="Completed payment revenue recorded in the workspace."
+          description="Recorded Finance Center payment revenue in the workspace."
           label="Revenue"
           value={formatCurrency(metrics.totalRevenue)}
         />
@@ -212,8 +217,8 @@ export function OwnerDashboard({
           value={metrics.activeCourses.toLocaleString()}
         />
         <StatCard
-          description="Pending payment records that may need follow-up."
-          label="Payments due"
+          description="Outstanding invoice records that may need follow-up."
+          label="Open balances"
           status={
             metrics.pendingPayments > 0 ? (
               <Badge tone="warning">Review</Badge>
@@ -263,7 +268,7 @@ export function OwnerDashboard({
             <div className="mt-5 rounded-lg border border-[#D8E8F0] bg-white p-5">
               <Badge tone="success">No urgent owner signals</Badge>
               <p className="mt-3 text-sm leading-6 text-[#5D7185]">
-                Payments, reviews, attendance alerts, reminders, conversations,
+                Open balances, reviews, attendance alerts, reminders, conversations,
                 permissions, and automation failures are clear based on the
                 current dashboard data.
               </p>
@@ -279,9 +284,12 @@ export function OwnerDashboard({
           <div className="mt-5 grid gap-3 sm:grid-cols-2">
             <div className="rounded-lg border border-[#D8E8F0] bg-[#F7FCFF] p-4">
               <p className="text-2xl font-semibold text-[#0B1F33]">
-                {metrics.paymentStatusSummary.completed.toLocaleString()}
+                {(
+                  metrics.paymentStatusSummary.recorded +
+                  metrics.paymentStatusSummary.confirmed
+                ).toLocaleString()}
               </p>
-              <p className="mt-1 text-sm text-[#5D7185]">Completed payments</p>
+              <p className="mt-1 text-sm text-[#5D7185]">Recorded payments</p>
             </div>
             <div className="rounded-lg border border-[#D8E8F0] bg-[#F7FCFF] p-4">
               <p className="text-2xl font-semibold text-[#0B1F33]">

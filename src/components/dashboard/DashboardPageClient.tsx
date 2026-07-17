@@ -45,7 +45,7 @@ import {
   type WorkspaceUsage,
 } from "@/src/lib/usage";
 
-function formatCurrency(value: number, currency = "USD") {
+function formatCurrency(value: number, currency = "INR") {
   return new Intl.NumberFormat("en-US", {
     currency,
     maximumFractionDigits: 0,
@@ -313,7 +313,7 @@ export function DashboardPageClient() {
       value: String(metrics.totalEnrollments),
     },
     {
-      detail: "Completed payment volume",
+      detail: "Recorded Finance Center payment volume",
       label: "Total Revenue",
       value: formatCurrency(metrics.totalRevenue),
     },
@@ -366,7 +366,7 @@ export function DashboardPageClient() {
             Workspace: {tenant?.name ?? "Current workspace"}
           </div>
         }
-        description="Real-time workspace analytics for students, programs, enrollments, payments, and operational health."
+        description="Real-time workspace analytics for students, programs, enrollments, Finance Center activity, and operational health."
         eyebrow="Dashboard analytics"
         title="Dashboard"
       />
@@ -837,38 +837,50 @@ export function DashboardPageClient() {
         <Card className="border-[#D8E8F0] bg-white p-6 text-[#0B1F33] shadow-2xl shadow-[#0B2A3D]/10">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <h3 className="text-xl font-semibold">Payment Status Summary</h3>
+              <h3 className="text-xl font-semibold">Recorded Payment Summary</h3>
               <p className="mt-2 text-sm leading-6 text-[#425B76]">
-                Revenue health across tracked payments.
+                Finance Center payment status across recorded manual payments.
               </p>
             </div>
             <Badge className="border-[#14B8C6]/30 bg-[#14B8C6]/10 text-[#0E7490]">
-              {metrics.pendingPayments} pending
+              {metrics.pendingPayments} open balances
             </Badge>
           </div>
 
           <div className="mt-7 space-y-4">
             {[
               {
-                label: "Completed",
+                label: "Recorded",
                 tone: "bg-teal-400",
-                value: metrics.paymentStatusSummary.completed,
+                value: metrics.paymentStatusSummary.recorded,
               },
               {
-                label: "Pending",
+                label: "Confirmed",
+                tone: "bg-cyan-400",
+                value: metrics.paymentStatusSummary.confirmed,
+              },
+              {
+                label: "Refunded",
                 tone: "bg-amber-300",
-                value: metrics.paymentStatusSummary.pending,
+                value: metrics.paymentStatusSummary.refunded,
               },
               {
                 label: "Failed",
                 tone: "bg-red-400",
                 value: metrics.paymentStatusSummary.failed,
               },
+              {
+                label: "Cancelled",
+                tone: "bg-slate-300",
+                value: metrics.paymentStatusSummary.cancelled,
+              },
             ].map((item) => {
               const totalPayments =
-                metrics.paymentStatusSummary.completed +
-                metrics.paymentStatusSummary.pending +
-                metrics.paymentStatusSummary.failed;
+                metrics.paymentStatusSummary.recorded +
+                metrics.paymentStatusSummary.confirmed +
+                metrics.paymentStatusSummary.refunded +
+                metrics.paymentStatusSummary.failed +
+                metrics.paymentStatusSummary.cancelled;
               const width =
                 totalPayments > 0 ? `${(item.value / totalPayments) * 100}%` : "0%";
 
@@ -897,9 +909,9 @@ export function DashboardPageClient() {
         <Card className="border-[#D8E8F0] bg-white p-6 text-[#0B1F33] shadow-2xl shadow-[#0B2A3D]/10">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <h3 className="text-xl font-semibold">Program Revenue Overview</h3>
+              <h3 className="text-xl font-semibold">Program Sales Overview</h3>
               <p className="mt-2 text-sm leading-6 text-[#425B76]">
-                Completed payments grouped by program.
+                Recorded Finance Center payments grouped by program.
               </p>
             </div>
             <Badge className="border-[#D8E8F0] bg-[#F6FBFE] text-[#425B76]">
@@ -910,10 +922,10 @@ export function DashboardPageClient() {
           {metrics.courseRevenue.length === 0 ? (
             <div className="mt-7 rounded-3xl border border-dashed border-[#C7DDEA] bg-[#F6FBFE] p-6 text-center">
               <p className="text-sm font-semibold text-[#0B1F33]">
-                No completed revenue yet
+                No recorded revenue yet
               </p>
               <p className="mt-2 text-sm leading-6 text-[#425B76]">
-                Completed student payments will appear here by program.
+                Recorded student payments will appear here by program.
               </p>
             </div>
           ) : (
@@ -935,7 +947,7 @@ export function DashboardPageClient() {
                           {course.courseTitle}
                         </p>
                         <p className="mt-1 text-sm text-[#66788F]">
-                          {course.paymentCount} completed payments
+                          {course.paymentCount} recorded payments
                         </p>
                       </div>
                       <p className="font-semibold text-[#0E7490]">
@@ -958,7 +970,7 @@ export function DashboardPageClient() {
 
       <section className="mt-6 grid gap-6 xl:grid-cols-2">
         <Card className="border-[#D8E8F0] bg-white p-6 text-[#0B1F33] shadow-2xl shadow-[#0B2A3D]/10">
-          <h3 className="text-xl font-semibold">Recent Payments</h3>
+          <h3 className="text-xl font-semibold">Recent Recorded Payments</h3>
           <p className="mt-2 text-sm leading-6 text-[#425B76]">
             Latest five payments recorded in this workspace.
           </p>
@@ -979,7 +991,7 @@ export function DashboardPageClient() {
                       {payment.studentName}
                     </p>
                     <p className="mt-1 text-sm text-[#425B76]">
-                      {payment.courseTitle} · {formatDate(payment.paid_at)}
+                      {payment.courseTitle} · {formatDate(payment.payment_date)}
                     </p>
                   </div>
                   <div className="sm:text-right">

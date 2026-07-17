@@ -916,19 +916,19 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
           <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-start">
             <div>
               <Badge className="border-white/15 bg-white/10 text-white">
-                Legacy Payment Links
+                Historical Link Records
               </Badge>
               <h3 className="mt-4 text-2xl font-semibold">
-                Legacy payment-link history
+                Historical payment-link records
               </h3>
               <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-400">
                 New fee plans, invoices, manual payments, and receipts are
-                managed in Sales. Existing payment-link records remain
+                managed in Finance Center. Existing historical link records remain
                 visible here for historical reference only.
               </p>
             </div>
             <Button onClick={openPaymentLinkPanel} type="button">
-              Open Sales
+              View historical link records
             </Button>
           </div>
 
@@ -938,12 +938,11 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
                 PL
               </div>
               <h4 className="mt-5 text-xl font-semibold">
-                No legacy payment links
+                No historical link records
               </h4>
               <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-slate-400">
-                Use Sales for new invoices, payments, and receipts.
-                Payment gateway links remain on hold until provider integration
-                is approved.
+                Current invoices, manual payments, and receipts are managed in
+                Finance Center.
               </p>
             </div>
           ) : (
@@ -1012,16 +1011,18 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
           <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-start">
             <div>
               <Badge className="border-white/15 bg-white/10 text-white">
-                Payment History
+                Historical Payment Records
               </Badge>
-              <h3 className="mt-4 text-2xl font-semibold">Student payments</h3>
+              <h3 className="mt-4 text-2xl font-semibold">
+                Historical student payments
+              </h3>
               <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-400">
                 Historical legacy payment records are shown here. New invoices,
-                payments, and receipts are managed in Sales.
+                manual payments, and receipts are managed in Finance Center.
               </p>
             </div>
             <Button onClick={openPaymentPanel} type="button">
-              Open Sales
+              View historical payment records
             </Button>
           </div>
 
@@ -1032,8 +1033,8 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
               </div>
               <h4 className="mt-5 text-xl font-semibold">No payments yet</h4>
               <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-slate-400">
-                Add a payment once this student has an enrollment connected to a
-                program.
+                Current invoices, manual payments, and receipts are managed in
+                Finance Center.
               </p>
             </div>
           ) : (

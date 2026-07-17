@@ -9,7 +9,7 @@ export function StaffDashboard({ metrics }: { metrics: DashboardMetrics }) {
     <Card className="mb-8 mt-8 border-[#D8E8F0] bg-white p-6 shadow-sm shadow-[#0B2A3D]/5">
       <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
         <SectionHeader
-          description="Student follow-ups, payment collection, reminders, and day-to-day coordination."
+          description="Student follow-ups, open balance coordination, reminders, and day-to-day operations."
           eyebrow="Staff Dashboard"
           title="Operational workspace"
         />
@@ -27,7 +27,7 @@ export function StaffDashboard({ metrics }: { metrics: DashboardMetrics }) {
       </div>
       <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Recent Students" value={metrics.recentStudents.length} />
-        <StatCard label="Payments To Collect" value={metrics.pendingPayments} />
+        <StatCard label="Open Balance Follow-ups" value={metrics.pendingPayments} />
         <StatCard label="Reminders Due" value={metrics.pendingRemindersDue} />
         <StatCard label="Messages" value={metrics.conversations.unreadThreads} />
       </div>

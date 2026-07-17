@@ -829,7 +829,7 @@ export function FinanceCenterPage() {
               value={paymentForm.referenceNumber}
             />
             <Button disabled={saving} type="submit">
-              Record Payment and Issue Receipt
+              Record manual payment and issue receipt
             </Button>
           </form>
         </Card>
