@@ -22,8 +22,9 @@ export function MarketingFooter() {
           <CoachFortBrandAsset className="h-12 w-44" variant="fullLogo" />
           <p className="mt-5 max-w-md leading-7 text-[#425B76]">
             CoachFort is built by Nexus Valley Technologies to help coaching
-            teams in India and overseas manage students, courses, payments,
-            reminders, and growth workflows from one clean platform.
+            businesses run white-label program pages, enrollment requests, live
+            classes, materials, community, invoices, manual payments, and
+            receipts from one clean platform.
           </p>
           <p className="mt-6 text-[#66788F]">
             &copy; 2026 Nexus Valley Technologies. All rights reserved.

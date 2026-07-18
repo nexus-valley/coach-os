@@ -12,9 +12,9 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-const title = "CoachFort | Coaching Centre Management Platform";
+const title = "CoachFort | White-Label Online Coaching Platform";
 const description =
-  "CoachFort helps coaching centres, academies, training institutes, and education businesses manage students, courses, sessions, assignments, manual fee tracking, documents, and follow-up workflows.";
+  "CoachFort helps coaches create branded program pages, collect enrollment requests, manage student access, deliver live classes and materials, and track invoices, manual payments, and receipts under their own brand.";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://coachfort.com"),

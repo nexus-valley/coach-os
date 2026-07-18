@@ -58,7 +58,7 @@ function formatPrice(page: PublicProgramSalesPagePayload) {
 
 function getPaymentModeLabel(page: PublicProgramSalesPagePayload) {
   return page.program.sales_payment_mode === "external"
-    ? "External payment link"
+    ? "Coach's external payment page"
     : "Manual payment";
 }
 
@@ -116,7 +116,7 @@ export function PublicProgramSalesPage({
     () => [
       "Request enrollment with your contact details.",
       "The coach reviews your request and contacts you.",
-      "Payment and access details are confirmed outside instant checkout.",
+      "Payment and access details are confirmed directly with the coach.",
       "Student access is activated later by the coach or team.",
     ],
     [],
@@ -389,8 +389,8 @@ export function PublicProgramSalesPage({
             page.program.external_payment_url ? (
               <div className="mt-5 rounded-2xl border border-[#D8E8F0] bg-[#F6FBFE] p-4">
                 <p className="text-sm leading-7 text-[#334155]">
-                  This external link opens outside CoachFort and does not
-                  automatically activate access.
+                  Payment opens outside CoachFort. Confirm payment directly
+                  with the coach; it does not automatically activate access.
                 </p>
                 <a
                   className="mt-4 inline-flex h-11 items-center justify-center rounded-full px-5 text-sm font-semibold text-white shadow-lg transition hover:-translate-y-0.5"
@@ -399,7 +399,7 @@ export function PublicProgramSalesPage({
                   style={{ backgroundColor: brandColor }}
                   target="_blank"
                 >
-                  Open external payment link
+                  Open coach&apos;s external payment page
                 </a>
               </div>
             ) : null}
@@ -418,7 +418,7 @@ export function PublicProgramSalesPage({
           </h2>
           <p className="mt-4 text-sm leading-7 text-[#334155]">
             Share your details and the coach will contact you with payment and
-            access details. Online checkout is not enabled yet.
+            access details. Online payment is not handled on this page.
           </p>
           {page.tenant.support_email || page.tenant.support_phone ? (
             <div className="mt-5 rounded-3xl border border-[#D8E8F0] bg-white p-5 text-sm leading-7 text-[#334155] shadow-lg shadow-[#0B2A3D]/5">

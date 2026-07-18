@@ -10,13 +10,13 @@ import { Card } from "@/src/components/ui/Card";
 export const metadata: Metadata = {
   title: "Support | CoachFort",
   description:
-    "Contact CoachFort support for testing, onboarding, login, invites, billing readiness, and payment policy questions.",
+    "Contact CoachFort support for testing, onboarding, login, invites, workspace setup, billing readiness, and payment policy questions.",
 };
 
 const supportTopics = [
   {
     description:
-      "Public signup is enabled for testing and product exploration. Please do not use CoachFort for live academy operations yet.",
+      "Public signup is enabled for testing and product exploration. Please set up branded program pages and student access flows carefully before live student operations.",
     title: "Testing and onboarding",
   },
   {
@@ -31,12 +31,12 @@ const supportTopics = [
   },
   {
     description:
-      "Billing profile setup prepares invoice, receipt, renewal, and payment support readiness. It does not start checkout or change a plan.",
+      "Billing profile setup prepares CoachFort subscription, invoice, receipt, renewal, and payment support readiness. It does not start a payment or change a plan.",
     title: "Billing profile readiness",
   },
   {
     description:
-      "Public checkout is not active yet. Payment, refund, cancellation, and renewal details should be read with the payment policy.",
+      "CoachFort subscription payment, refund, cancellation, and renewal details should be read with the payment policy. Student program payments remain between the coach and student.",
     title: "Payment support",
   },
 ];
@@ -56,7 +56,7 @@ export default function SupportPage() {
           <p className="mt-5 max-w-3xl text-base leading-8 text-[#425B76] sm:text-lg">
             CoachFort is currently under maintenance and testing. Support is
             focused on account access, workspace setup, billing readiness, and
-            payment policy questions while users explore the platform.
+            payment policy questions while coaches explore the platform.
           </p>
           <div className="mt-7 flex flex-col gap-3 sm:flex-row">
             <Button href="mailto:support@coachfort.com" size="lg">

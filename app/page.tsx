@@ -7,32 +7,32 @@ import { EarlyAccessNotice } from "@/src/components/marketing/EarlyAccessNotice"
 import { Fragment } from "react";
 
 const valuePills = [
-  "Student CRM",
-  "Course Delivery",
-  "Cohorts & Batches",
-  "Certificates",
-  "Manual Follow-ups",
-  "Manual Payments",
+  "Program Sales",
+  "Branded Program Pages",
+  "Enrollment Requests",
+  "Student Access",
+  "Live Classes & Materials",
+  "Community",
+  "Finance Center",
   "Analytics",
-  "Admin Controls",
 ];
 
 const pricingPlans = [
   {
-    description: "For small academies getting started",
+    description: "For coaches setting up a branded program business",
     monthly: "₹1,499 / month",
     name: "Starter",
     yearly: "₹14,990 / year",
   },
   {
     description:
-      "For growing academies with more students, team members, and operations",
+      "For growing coaching teams with more programs, students, and operations",
     monthly: "₹5,999 / month",
     name: "Growth",
     yearly: "₹59,990 / year",
   },
   {
-    description: "For larger academies and advanced needs",
+    description: "For larger coaching businesses and advanced needs",
     monthly: "Custom pricing",
     name: "Premium",
     yearly: "Contact CoachFort support",
@@ -41,74 +41,74 @@ const pricingPlans = [
 
 const features = [
   {
-    bullets: ["Structured sections", "Lesson resources", "Progress tracking"],
+    bullets: ["Sales-ready pages", "Program details", "Coach-owned brand"],
     description:
-      "Create structured courses with sections, lessons, video/resource links, and learner progress tracking.",
-    icon: "CB",
-    title: "Course Builder",
+      "Create programs with public-facing sales copy, branded pages, pricing readiness, and clear request-enrollment steps.",
+    icon: "PS",
+    title: "Program sales",
   },
   {
-    bullets: ["Batch dates", "Member lists", "Course linkage"],
+    bullets: ["Public links", "Request capture", "Coach follow-up"],
     description:
-      "Organize students into batches, connect cohorts to courses, and track members with start and end dates.",
-    icon: "LC",
-    title: "Cohorts & Batches",
+      "Share branded program pages so students can request enrollment while the coach keeps approval and access under control.",
+    icon: "BP",
+    title: "Branded program pages",
   },
   {
-    bullets: ["Contact records", "Notes", "Follow-ups"],
+    bullets: ["Approve students", "Activate access", "Keep context"],
     description:
-      "Manage student profiles, contact details, notes, enrollments, payments, and follow-ups in one place.",
-    icon: "CRM",
-    title: "Student CRM",
+      "Review enrollment requests, create or link students, and activate program access only after coach approval.",
+    icon: "EA",
+    title: "Enrollment requests",
   },
   {
-    bullets: ["Invoices", "Receipts", "Status tracking"],
+    bullets: ["Invoices", "Recorded payments", "Receipts"],
     description:
-      "Manage fee plans, invoices, manual payment records, receipts, and due status in Finance Center.",
-    icon: "PY",
-    title: "Manual Payments",
+      "Use Finance Center to manage invoices, manual payment records, receipts, and open balances for student program sales.",
+    icon: "FC",
+    title: "Finance Center",
   },
   {
-    bullets: ["Templates", "Reminders", "Manual sharing"],
+    bullets: ["Live sessions", "Materials", "Student portal"],
     description:
-      "Prepare reminders, receipts, and certificates for manual sharing and follow-up workflows across your preferred channels.",
-    icon: "WA",
-    title: "Manual Follow-up Workflows",
+      "Deliver live classes, learning materials, and program updates through a branded student portal.",
+    icon: "LM",
+    title: "Live classes and materials",
   },
   {
-    bullets: ["Engagement base", "Learner touchpoints", "Future-ready"],
+    bullets: ["Student updates", "Posts", "Engagement"],
     description:
-      "Build engagement around your coaching programs with future-ready community and learner interaction workflows.",
+      "Keep student communication and community touchpoints connected to the programs they are learning from.",
     icon: "CM",
     title: "Community",
   },
   {
-    bullets: ["Revenue reports", "CSV exports", "Course performance"],
+    bullets: ["Revenue reports", "CSV exports", "Program performance"],
     description:
-      "View revenue, students, enrollments, course performance, payment activity, and export reports for business decisions.",
+      "View recorded payments, enrollments, program performance, student growth, and export-ready reports for business decisions.",
     icon: "AN",
     title: "Analytics",
   },
   {
     bullets: ["Roles", "Branding", "Workspace controls"],
     description:
-      "Manage workspace branding, roles, permissions, subscription plans, and secure team access.",
+      "Manage your coaching brand, roles, permissions, subscription plan, and secure team access.",
     icon: "AD",
     title: "Admin Controls",
   },
 ];
 
 const comparisonRows = [
-  ["Student records", "Spreadsheets and scattered notes", "Unified CRM with profile, payments, courses, and follow-ups"],
-  ["Course delivery", "Content spread across drives and chat apps", "Structured courses, sections, lessons, and portal previews"],
-  ["Payments", "Manual tracking and hard-to-find receipts", "Finance Center invoices, manual payments, receipts, and reports"],
-  ["Operations", "Multiple tools with no shared context", "One workspace for team, branding, reminders, analytics, and workflows"],
+  ["Program sales", "Unbranded links and scattered interest forms", "Branded program pages with enrollment requests and coach approval"],
+  ["Student access", "Manual messages and unclear access tracking", "Approved enrollments, student portal access, live classes, and materials"],
+  ["Money records", "Manual tracking and hard-to-find receipts", "Finance Center invoices, manual payments, receipts, and reports"],
+  ["Operations", "Multiple tools with no shared context", "One workspace for brand, team, programs, finance, analytics, and student communication"],
 ];
 
 const faqs = [
   {
     answer:
-      "CoachFort is a coaching business platform for managing students, courses, cohorts, payments, certificates, reminders, reports, and daily operations from one workspace.",
+      "CoachFort is a white-label online coaching platform for creating programs, sharing branded public program pages, collecting enrollment requests, managing student access, delivering live classes and materials, and tracking invoices, manual payments, and receipts from one workspace.",
     question: "What is CoachFort?",
   },
   {
@@ -138,7 +138,7 @@ const faqs = [
   },
   {
     answer:
-      "No. CoachFort is built around practical workflows so coaches and academy teams can manage operations without technical setup.",
+      "No. CoachFort is built around practical workflows so coaches and coaching teams can manage programs, students, access, and finance records without technical setup.",
     question: "Do I need technical knowledge?",
   },
 ];
@@ -167,7 +167,7 @@ function HeroVisual() {
           <div className="grid gap-3 py-5 sm:grid-cols-3">
             {[
               ["Students", "2,480", "+18%"],
-              ["Fee records", "840K", "Sample total"],
+                ["Recorded payments", "840K", "Sample total"],
               ["Completion", "91%", "On track"],
             ].map(([label, value, note]) => (
               <div
@@ -189,7 +189,7 @@ function HeroVisual() {
             <div className="rounded-2xl border border-[#D8E8F0] bg-white p-4 shadow-sm shadow-[#0B2A3D]/5">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-semibold text-[#0B1F33]">
-                  Course progress
+                  Program progress
                 </p>
                 <span className="text-xs font-semibold text-[#145DA0]">
                   76%
@@ -200,13 +200,13 @@ function HeroVisual() {
               </div>
               <div className="mt-4 space-y-2">
                 {["Stock Market Basics", "Digital Marketing Masterclass"].map(
-                  (course) => (
+                  (program) => (
                     <div
                       className="flex items-center justify-between rounded-xl bg-[#F6FBFE] px-3 py-2 text-xs"
-                      key={course}
+                      key={program}
                     >
                       <span className="font-medium text-[#425B76]">
-                        {course}
+                        {program}
                       </span>
                       <span className="font-semibold text-[#0B2A3D]">
                         Active
@@ -223,17 +223,17 @@ function HeroVisual() {
                   Manual follow-ups
                 </p>
                 <p className="mt-2 text-xs leading-5 text-[#66788F]">
-                  Payment follow-up and completion reminders are prepared for
+                  Payment follow-up and program reminders are prepared for
                   manual sharing through your preferred support channel.
                 </p>
               </div>
               <div className="rounded-2xl border border-[#D8E8F0] bg-white p-4 shadow-sm shadow-[#0B2A3D]/5">
                 <p className="text-sm font-semibold text-[#0B1F33]">
-                  Cohort activity
+                  Program activity
                 </p>
                 <div className="mt-3 space-y-2 text-xs text-[#425B76]">
-                  <p>Weekend Batch added 8 students</p>
-                  <p>Evening Batch has 2 pending payments</p>
+                  <p>New public request received</p>
+                  <p>Access review pending for 2 students</p>
                 </div>
               </div>
             </div>
@@ -274,9 +274,10 @@ export default function Home() {
               Run Your Coaching Business from One Powerful Platform
             </h1>
             <p className="mt-6 max-w-2xl text-lg leading-8 text-[#425B76] sm:text-xl">
-              Manage students, courses, cohorts, payments, certificates,
-              follow-up workflows, analytics, and operations from a single
-              premium workspace for India and overseas academies.
+              Create and sell programs, share branded public pages, collect
+              enrollment requests, approve student access, deliver live classes
+              and materials, and track invoices, manual payments, and receipts
+              under your own brand.
             </p>
             <div className="mt-9 flex flex-col gap-3 sm:flex-row sm:items-center">
               <Button href="/signup" size="lg">
@@ -294,7 +295,7 @@ export default function Home() {
             </div>
             <p className="mt-5 text-sm font-medium text-[#66788F]">
               Public signup enabled for testing &bull; Demo workspace ready
-              &bull; Do not use for live academy operations yet
+              &bull; Do not use for live student operations yet
             </p>
           </div>
 
@@ -327,16 +328,16 @@ export default function Home() {
           </h2>
           <p className="mt-4 leading-7 text-[#425B76]">
             CoachFort is designed around the daily operating rhythm of online
-            coaches and academies in India and overseas, not generic project
-            management.
+            coaches, educators, trainers, consultants, and coaching businesses,
+            not generic project management.
           </p>
         </div>
         <div className="grid gap-4 sm:grid-cols-2 lg:col-span-2">
           {[
-            ["Everything in one platform", "CRM, courses, payments, certificates, reports, reminders, and admin workflows stay connected."],
-            ["Built for coaching businesses", "Cohorts, student profiles, course access, and receipts match real coaching operations."],
-            ["Channel-ready follow-ups", "Prepare reminders, receipts, and certificates for manual sharing through your preferred support channel."],
-            ["Premium operations dashboard", "Track revenue, enrollments, student growth, payment status, and workspace progress clearly."],
+            ["Everything in one platform", "Program pages, enrollment requests, student access, live classes, materials, community, and finance records stay connected."],
+            ["Built for coaching businesses", "Coach-approved access, student portals, invoices, manual payments, and receipts match real online coaching operations."],
+            ["Coach-owned relationships", "Students request enrollment through your branded page while payment and access decisions stay with your coaching team."],
+            ["Premium operations dashboard", "Track recorded payments, enrollments, student growth, open balances, and workspace progress clearly."],
           ].map(([title, text]) => (
             <Card className="group p-6 transition hover:-translate-y-1" key={title}>
               <span className="mb-5 block h-1.5 w-12 rounded-full bg-[linear-gradient(90deg,#145DA0,#2ECBEA)]" />
@@ -360,7 +361,8 @@ export default function Home() {
             </h2>
             <p className="mt-4 leading-7 text-cyan-50/75">
               Replace operational patchwork with a focused workspace built for
-              student delivery, payments, follow-ups, and team control.
+              program sales, student access, live delivery, finance records,
+              and team control.
             </p>
           </div>
           <div className="overflow-x-auto rounded-3xl border border-white/10 bg-white/8 shadow-2xl shadow-black/20">
@@ -396,12 +398,12 @@ export default function Home() {
       >
         <div className="max-w-2xl">
           <Badge>Features</Badge>
-          <h2 className="mt-5 text-3xl font-semibold tracking-normal text-[#0B1F33] sm:text-4xl">
-            A complete operating layer for serious coaching teams.
+            <h2 className="mt-5 text-3xl font-semibold tracking-normal text-[#0B1F33] sm:text-4xl">
+            A complete operating layer for serious online coaching teams.
           </h2>
-          <p className="mt-4 leading-7 text-[#425B76]">
-            Each module is built to reduce operational friction and make the
-            business easier to run as it grows.
+            <p className="mt-4 leading-7 text-[#425B76]">
+              Each module is built to reduce operational friction and make the
+              coaching business easier to run as it grows.
           </p>
         </div>
         <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
@@ -448,9 +450,9 @@ export default function Home() {
               Clear plans for testing and subscription discussions.
             </h2>
             <p className="mt-4 leading-7 text-[#425B76]">
-              Pick the plan that matches your academy stage. Online checkout is
-              not active yet. During testing, subscription activation is handled
-              through CoachFort support.
+              Pick the plan that matches your coaching business stage. During
+              testing, subscription activation is handled through CoachFort
+              support.
             </p>
           </div>
           <div className="mt-10 grid gap-5 lg:grid-cols-3">
@@ -485,9 +487,8 @@ export default function Home() {
           </div>
           <Card className="mt-6 border-[#F5D48C] bg-[#FFF8E7] p-5">
             <p className="text-sm font-semibold leading-6 text-[#6F4B00]">
-              Online checkout is not active yet. During testing, subscription
-              activation is handled through CoachFort support. No Razorpay
-              checkout or payment order is started from this page.
+              During testing, subscription activation is handled through
+              CoachFort support. No online payment is started from this page.
             </p>
           </Card>
         </div>
@@ -501,8 +502,9 @@ export default function Home() {
               Experience the Platform Live
             </h2>
             <p className="mt-4 max-w-2xl leading-7 text-[#425B76]">
-              Explore a fully interactive demo workspace with sample students,
-              payments, courses, reminders, and reports.
+              Explore a fully interactive demo workspace with sample programs,
+              enrollment requests, student access, manual finance records, and
+              reports.
             </p>
           </div>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row lg:mt-0">
@@ -530,12 +532,12 @@ export default function Home() {
           <div className="space-y-5 text-base leading-8 text-[#425B76]">
             <p>
               CoachFort is built by Nexus Valley to help coaches, trainers, and
-              small academies run their business without complexity.
+              coaching businesses run under their own brand without complexity.
             </p>
             <p>
-              From managing students and courses to tracking payments and
-              preparing follow-up workflows, CoachFort brings everything into
-              one simple platform.
+              From branded program pages and student access to live delivery,
+              community, invoices, manual payments, and receipts, CoachFort
+              brings the operating pieces into one simple platform.
             </p>
             <p>
               We focus on practical, real-world workflows so coaches can spend

@@ -15,23 +15,23 @@ type DemoAccessState = "checking" | "guest";
 const demoHighlights = [
   {
     description:
-      "Explore sample students, notes, enrollments, cohorts, and follow-up workflows.",
-    title: "Student CRM",
+      "Review how a coach can set up programs, share public pages, and collect enrollment requests.",
+    title: "Program sales flow",
   },
   {
     description:
-      "Open structured demo courses with sections, lessons, and progress-ready content.",
-    title: "Course delivery",
+      "See approved student access, live class readiness, materials, and student portal context.",
+    title: "Student access and delivery",
   },
   {
     description:
-      "Review sample Finance Center workflows, manual payment records, receipts, and payment status reporting.",
-    title: "Payments and receipts",
+      "Review Finance Center workflows for invoices, manual payment records, receipts, and open balances.",
+    title: "Invoices and receipts",
   },
   {
     description:
-      "See reports, reminders, automation rules, and WhatsApp-ready sharing flows in context.",
-    title: "Operations command center",
+      "See owner dashboards for enrollments, recorded payments, student growth, and coaching operations.",
+    title: "Owner dashboard",
   },
 ];
 
@@ -115,10 +115,11 @@ export function DemoPageClient() {
             You are about to enter a sample CoachFort workspace.
           </h1>
           <p className="mt-6 max-w-2xl text-lg leading-8 text-[#425B76]">
-            The demo lets prospects explore CoachFort with sample students,
-            courses, payments, receipts, reminders, reports, and WhatsApp-ready
-            workflows. Demo data is clearly marked as sample data and is loaded
-            only into the workspace you choose.
+            The demo lets prospects explore CoachFort with sample programs,
+            enrollment requests, student access, live delivery, invoices,
+            manual payment records, receipts, reports, and coaching operations.
+            Demo data is clearly marked as sample data and is loaded only into
+            the workspace you choose.
           </p>
 
           <div className="mt-9 flex flex-col gap-3 sm:flex-row">

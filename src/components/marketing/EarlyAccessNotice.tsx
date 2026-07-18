@@ -2,7 +2,7 @@ import { Button } from "@/src/components/ui/Button";
 
 export const earlyAccessContactHref = "/support";
 export const maintenanceTestingMessage =
-  "CoachFort is currently under maintenance and testing. You may explore the platform, but please do not use it for live academy operations yet.";
+  "CoachFort is currently in early access for online coaching businesses setting up branded program pages and student access flows. Explore safely before using it for live student operations.";
 export const earlyAccessMessage =
   maintenanceTestingMessage;
 

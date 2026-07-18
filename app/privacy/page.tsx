@@ -9,28 +9,28 @@ import { Card } from "@/src/components/ui/Card";
 export const metadata: Metadata = {
   title: "Privacy | CoachFort",
   description:
-    "Draft CoachFort privacy overview for academy data, student records, authentication, support, billing readiness, processors, and deletion requests.",
+    "Draft CoachFort privacy overview for coaching workspace data, student records, authentication, support, billing readiness, processors, and deletion requests.",
 };
 
 const sections = [
   {
     body: [
-      "CoachFort may process academy profile details, team user accounts, student records, courses, cohorts, sessions, assignments, documents, messages, announcements, community posts, billing profile details, technical logs, and support context.",
-      "The exact data depends on what each academy adds to its workspace and which modules it chooses to use.",
+      "CoachFort may process coaching workspace details, team user accounts, student records, programs, live sessions, assignments, documents, messages, announcements, community posts, billing profile details, technical logs, and support context.",
+      "The exact data depends on what each coach or coaching business adds to its workspace and which modules it chooses to use.",
     ],
     title: "Information processed in CoachFort",
   },
   {
     body: [
-      "CoachFort uses this information to provide the platform, authenticate users, support student portal access, secure tenant workspaces, operate academy workflows, prepare billing readiness, and help with support requests.",
-      "CoachFort does not sell academy or student data.",
+      "CoachFort uses this information to provide the platform, authenticate users, support student portal access, secure tenant workspaces, operate coaching workflows, prepare billing readiness, and help with support requests.",
+      "CoachFort does not sell coach, workspace, or student data.",
     ],
     title: "How information is used",
   },
   {
     body: [
-      "Student data is controlled by the academy or customer that adds it to CoachFort. Academies should only add student information they are allowed to process and should respond to student or guardian requests according to their own policies and applicable obligations.",
-      "CoachFort provides the software workspace and access controls, while each academy remains responsible for the accuracy and appropriateness of the student information it stores.",
+      "Student data is controlled by the coach, coaching business, or customer that adds it to CoachFort. Workspace owners should only add student information they are allowed to process and should respond to student or guardian requests according to their own policies and applicable obligations.",
+      "CoachFort provides the software workspace and access controls, while each coaching business remains responsible for the accuracy and appropriateness of the student information it stores.",
     ],
     title: "Student data responsibility",
   },
@@ -44,7 +44,7 @@ const sections = [
   {
     body: [
       "CoachFort uses tenant-scoped access controls, authentication, role-based UI, and security-focused backend patterns to protect workspace information.",
-      "No system can guarantee absolute security, so academy owners should use strong passwords, protect OTPs and invite links, and remove access for users who no longer need it.",
+      "No system can guarantee absolute security, so workspace owners should use strong passwords, protect OTPs and invite links, and remove access for users who no longer need it.",
     ],
     title: "Security",
   },
@@ -57,7 +57,7 @@ const sections = [
   },
   {
     body: [
-      "Academies may request support for account, workspace, billing readiness, or data deletion questions through CoachFort support.",
+      "Coaches and workspace owners may request support for account, workspace, billing readiness, or data deletion questions through CoachFort support.",
       "Retention and deletion workflows should be reviewed before broad public launch, especially for legal, tax, audit, student, and payment-related records.",
     ],
     title: "Retention and deletion requests",

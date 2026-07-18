@@ -9,23 +9,23 @@ import { Card } from "@/src/components/ui/Card";
 export const metadata: Metadata = {
   title: "Terms of Use | CoachFort",
   description:
-    "Draft CoachFort terms for controlled beta use, academy responsibilities, acceptable use, service availability, and payment policy references.",
+    "Draft CoachFort terms for controlled beta use, coaching workspace responsibilities, acceptable use, service availability, and payment policy references.",
 };
 
 const sections = [
   {
     body: [
-      "CoachFort is currently under maintenance and testing. Users may explore the platform, but should not use it for live academy operations yet.",
+      "CoachFort is currently under maintenance and testing. Users may explore the platform, but should not use it for live student operations until their workspace, program pages, and access flows are ready.",
       "These terms are provided for product transparency and should be reviewed before broad public launch. They are not a substitute for legal advice.",
     ],
     title: "Testing status",
   },
   {
     body: [
-      "Academies are responsible for the student records, course content, documents, messages, announcements, community posts, billing details, and user access they add to CoachFort.",
-      "Each academy should make sure it has the right permission to upload, process, and share information about its students, team members, and customers.",
+      "Coaching businesses are responsible for the student records, program content, documents, messages, announcements, community posts, billing details, and user access they add to CoachFort.",
+      "Each coach or workspace owner should make sure it has the right permission to upload, process, and share information about its students, team members, and customers.",
     ],
-    title: "Academy responsibility",
+    title: "Coaching workspace responsibility",
   },
   {
     body: [
@@ -37,27 +37,27 @@ const sections = [
   {
     body: [
       "CoachFort must not be used to upload unlawful content, send spam, attempt unauthorized access, bypass tenant isolation, misuse student information, or interfere with platform reliability.",
-      "Community, messaging, announcement, and document features should be used for academy operations and student support, not public social networking or bulk marketing unless a future reviewed module enables that capability.",
+      "Community, messaging, announcement, and document features should be used for coaching operations and student support, not public social networking or bulk marketing unless a future reviewed module enables that capability.",
     ],
     title: "Acceptable use",
   },
   {
     body: [
       "Features may change during beta as CoachFort improves the product, strengthens safety checks, and prepares billing and payment readiness.",
-      "Online checkout and payment gateway activation are not promised by these terms. Payment-related details are handled separately in the payment policy.",
+      "Online subscription payment activation is not promised by these terms. Coach-to-student program payment details are handled by the coach, and CoachFort billing details are handled separately in the payment policy.",
     ],
     title: "Service changes and availability",
   },
   {
     body: [
-      "Subscription, refund, cancellation, renewal, tax, and checkout information should be read together with the CoachFort payment policy.",
-      "Public checkout is not active until CoachFort completes the required payment-provider setup, testing, and review.",
+      "CoachFort subscription, refund, cancellation, renewal, tax, and billing information should be read together with the CoachFort payment policy.",
+      "Student program payments are between the coach or coaching business and the student. Public program requests do not automatically create accounts, collect payments, generate invoices, or activate access.",
     ],
     title: "Subscriptions and payments",
   },
   {
     body: [
-      "CoachFort is provided during controlled beta on a practical best-effort basis. The platform is designed to support academy operations, but each academy remains responsible for its business decisions, student communication, financial records, and compliance obligations.",
+      "CoachFort is provided during controlled beta on a practical best-effort basis. The platform is designed to support online coaching operations, but each coaching business remains responsible for its business decisions, student communication, financial records, and compliance obligations.",
       "Any final limitation of liability, warranty, jurisdiction, or dispute language should be reviewed before broad public launch.",
     ],
     title: "Practical disclaimer",

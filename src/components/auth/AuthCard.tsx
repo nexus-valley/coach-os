@@ -37,12 +37,12 @@ export function AuthCard({
               variant="fullLogo"
             />
             <h1 className="mt-10 text-5xl font-semibold leading-tight tracking-normal">
-              Premium workspace infrastructure for modern coaching teams.
+              Premium white-label workspace for modern coaching teams.
             </h1>
             <p className="mt-6 text-lg leading-8 text-zinc-400">
-              Sign in or continue from an invitation to access courses,
-              cohorts, CRM, manual finance tracking, communication workflows,
-              and analytics.
+              Sign in or continue from an invitation to manage programs,
+              enrollment requests, student access, live delivery, Finance
+              Center records, communication, and analytics.
             </p>
           </div>
         </section>

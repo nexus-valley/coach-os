@@ -8,7 +8,7 @@ import { Card } from "@/src/components/ui/Card";
 export const metadata: Metadata = {
   title: "Payment, Refund & Cancellation Policy | CoachFort",
   description:
-    "Draft beta payment policy for CoachFort pricing, taxes, receipts, refunds, cancellations, renewals, payment verification, and payment support.",
+    "Draft beta payment policy for CoachFort workspace subscriptions and the separation between CoachFort billing and coach-managed student program payments.",
   robots: {
     follow: false,
     index: false,
@@ -16,7 +16,7 @@ export const metadata: Metadata = {
 };
 
 const supportDetails = [
-  "Registered academy or workspace email",
+  "Registered coach or workspace email",
   "Selected plan and billing cycle",
   "Order ID, if shown",
   "Razorpay payment ID, if shown",
@@ -80,10 +80,11 @@ export default function PaymentPolicyPage() {
             Payment, Refund & Cancellation Policy
           </h1>
           <p className="mt-5 max-w-3xl text-base leading-8 text-[#425B76] sm:text-lg">
-            This draft explains how CoachFort plans to handle subscription
-            payments, taxes, receipts, refunds, cancellations, renewals, payment
-            verification, and payment support during beta. Public checkout is
-            not active yet.
+            This draft explains how CoachFort plans to handle workspace
+            subscription payments, taxes, receipts, refunds, cancellations,
+            renewals, payment verification, and payment support during beta. It
+            also separates CoachFort subscription billing from student program
+            payments handled directly between coaches and students.
           </p>
           <p className="mt-5 text-sm font-semibold text-[#66788F]">
             Last updated: Draft for beta launch
@@ -92,12 +93,12 @@ export default function PaymentPolicyPage() {
       </section>
 
       <section className="mx-auto grid max-w-5xl gap-5 px-5 py-10 sm:px-6 lg:px-8">
-        <PolicySection title="Pricing and Taxes">
+        <PolicySection title="CoachFort Subscription Pricing and Taxes">
           <p>
             Prices shown for CoachFort plans are base subscription fees in INR
             and are exclusive of applicable taxes unless stated otherwise.
-            Applicable taxes, if any, should be shown before payment when public
-            checkout is enabled.
+            Applicable taxes, if any, should be shown before payment when native
+            subscription billing is enabled.
           </p>
           <p>
             Tax and GST handling should be reviewed by CoachFort&apos;s business,
@@ -105,19 +106,39 @@ export default function PaymentPolicyPage() {
           </p>
         </PolicySection>
 
-        <PolicySection title="Payment Processing">
+        <PolicySection title="Student Program Payments Are Separate">
           <p>
-            Payments are processed securely through Razorpay when online
-            checkout is enabled. Public checkout is not active during the
-            current beta preparation stage.
+            Student program payments are between the coach or coaching business
+            and the student. CoachFort does not collect student program money as
+            a marketplace, payment gateway, or instant course purchase platform.
           </p>
           <p>
-            Premium is a contact-sales plan for larger academies and custom
-            requirements. It is not available for self-serve checkout.
+            CoachFort currently helps coaches track invoices, manual payment
+            records, and receipts for their own student program sales. Public
+            program requests do not automatically create student accounts,
+            collect payments, generate invoices, or activate access.
+          </p>
+          <p>
+            Coaches approve access. If a coach uses an external payment page,
+            that page is controlled by the coach or their provider and opens
+            outside CoachFort.
           </p>
         </PolicySection>
 
-        <PolicySection title="Payment Verification and Plan Activation">
+        <PolicySection title="CoachFort Subscription Payment Processing">
+          <p>
+            Payments are processed securely through Razorpay when online
+            subscription payment is enabled. Native CoachFort subscription
+            billing is not active during the current beta preparation stage.
+          </p>
+          <p>
+            Premium is a contact-sales plan for larger coaching businesses and
+            custom requirements. It is not available for self-serve subscription
+            payment.
+          </p>
+        </PolicySection>
+
+        <PolicySection title="Subscription Payment Verification and Plan Activation">
           <p>
             Your CoachFort plan activates only after server-side payment
             verification is completed. Browser payment success alone does not
@@ -130,20 +151,20 @@ export default function PaymentPolicyPage() {
           </p>
         </PolicySection>
 
-        <PolicySection title="Receipts and GST Invoices">
+        <PolicySection title="CoachFort Subscription Receipts and GST Invoices">
           <p>
             A payment receipt will be available after successful payment
             verification.
           </p>
           <p>
-            GST invoice support may be handled manually during beta and depends
-            on billing details provided by the customer. CoachFort should not be
-            treated as offering automated GST invoice generation until that
-            workflow is implemented and verified.
+            GST invoice support for CoachFort subscriptions may be handled
+            manually during beta and depends on billing details provided by the
+            customer. CoachFort should not be treated as offering automated GST
+            invoice generation until that workflow is implemented and verified.
           </p>
         </PolicySection>
 
-        <PolicySection title="Refund Policy">
+        <PolicySection title="CoachFort Subscription Refund Policy">
           <p>
             Refund requests are reviewed case by case. For beta subscriptions,
             refund review requests should be raised within 7 days of payment.
@@ -158,7 +179,7 @@ export default function PaymentPolicyPage() {
           </p>
         </PolicySection>
 
-        <PolicySection title="Cancellation Policy">
+        <PolicySection title="CoachFort Subscription Cancellation Policy">
           <p>
             During beta, cancellation requests are handled through CoachFort
             support or platform operations. Self-serve cancellation is not
@@ -172,7 +193,7 @@ export default function PaymentPolicyPage() {
           </p>
         </PolicySection>
 
-        <PolicySection title="Renewal Policy">
+        <PolicySection title="CoachFort Subscription Renewal Policy">
           <p>
             During beta, CoachFort paid access may use one-time Razorpay orders
             or manual renewal flows.
@@ -234,8 +255,8 @@ export default function PaymentPolicyPage() {
           <p>
             This page is informational and should not be treated as final legal
             or tax advice. Tax, GST, refund, cancellation, renewal, and public
-            checkout wording should be reviewed by the appropriate business,
-            legal, or tax advisor before public launch.
+            native subscription payment wording should be reviewed by the
+            appropriate business, legal, or tax advisor before public launch.
           </p>
         </PolicySection>
       </section>
