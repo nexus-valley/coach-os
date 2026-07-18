@@ -51,10 +51,10 @@ function buildMockResponse({ context, message }: AssistantProviderInput) {
     }
 
     if (lowerMessage.includes("payment")) {
-      return `Your portal shows ${payments} pending payment item(s). Check Payments for the exact institute-provided status.`;
+      return `Your portal shows ${payments} pending payment item(s). Check Payments for the exact coach-provided status.`;
     }
 
-    return `For today, start with your upcoming sessions (${sessions}), pending assignments (${assignments}), and payment reminders (${payments}). I can guide you, but confirm critical details with your institute.`;
+    return `For today, start with your upcoming sessions (${sessions}), pending assignments (${assignments}), and payment reminders (${payments}). I can guide you, but confirm critical details with your coach.`;
   }
 
   const role = context.role ?? "team";
@@ -73,10 +73,10 @@ function buildMockResponse({ context, message }: AssistantProviderInput) {
 
   if (role === "trainer") {
     if (lowerMessage.includes("assignment") || lowerMessage.includes("review")) {
-      return `Your trainer context shows ${submissions} submission(s) needing review. Check Assignments for the scoped review list before taking action.`;
+      return `Your coaching context shows ${submissions} submission(s) needing review. Check Assignments for the scoped review list before taking action.`;
     }
 
-    return `Your trainer workload snapshot shows ${sessions} upcoming session(s) and ${submissions} pending submission review(s). I can suggest priorities, but I cannot update records for you.`;
+    return `Your coaching workload snapshot shows ${sessions} upcoming session(s) and ${submissions} pending submission review(s). I can suggest priorities, but I cannot update records for you.`;
   }
 
   if (lowerMessage.includes("payment")) {

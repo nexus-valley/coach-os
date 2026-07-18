@@ -26,6 +26,11 @@ import {
   PortalLoadingCard,
   usePortalSection,
 } from "@/src/components/portal/StudentPortalShared";
+import {
+  formatFinanceCurrency,
+  getStudentFinanceSummary,
+  type FinanceStudentSummary,
+} from "@/src/lib/finance";
 
 type DashboardLiveClass = {
   join_available_from: string | null;
@@ -59,6 +64,8 @@ function getDashboardJoinLabel(session: DashboardLiveClass) {
 export function StudentPortalDashboard({ context }: { context: StudentPortalContext }) {
   const { error, loading, overview } = usePortalSection(context);
   const [announcements, setAnnouncements] = useState<StudentAnnouncement[]>([]);
+  const [financeSummary, setFinanceSummary] =
+    useState<FinanceStudentSummary | null>(null);
   const [settings, setSettings] = useState<TenantSettings | null>(null);
 
   useEffect(() => {
@@ -80,6 +87,26 @@ export function StudentPortalDashboard({ context }: { context: StudentPortalCont
       active = false;
     };
   }, [context.tenant.id]);
+
+  useEffect(() => {
+    let active = true;
+
+    getStudentFinanceSummary(context.student.id)
+      .then((summary) => {
+        if (active) {
+          setFinanceSummary(summary);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setFinanceSummary(null);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [context.student.id]);
 
   useEffect(() => {
     let active = true;
@@ -112,6 +139,8 @@ export function StudentPortalDashboard({ context }: { context: StudentPortalCont
   const branding = getWorkspaceBranding(settings, context.tenant);
   const nextSession = overview.sessions.upcoming[0] ?? null;
   const nextAssignment = overview.assignments[0] ?? null;
+  const recordedPayments = financeSummary?.payments.length ?? 0;
+  const openBalances = financeSummary?.outstanding_amount ?? 0;
 
   return (
     <div className="space-y-6">
@@ -129,7 +158,7 @@ export function StudentPortalDashboard({ context }: { context: StudentPortalCont
         description={branding.portalWelcomeSubtitle}
         eyebrow="Student portal"
         metadata={<Badge tone="light">Signed in as {overview.student.full_name}</Badge>}
-        title={branding.portalWelcomeTitle}
+        title="Welcome back"
       />
 
       <Card className="p-5">
@@ -198,10 +227,13 @@ export function StudentPortalDashboard({ context }: { context: StudentPortalCont
           label="Certificates"
           value={overview.summary.completedCertificates}
         />
-        <StatCard label="Paid invoices" value={overview.summary.paidPayments} />
         <StatCard
-          label="Pending payments"
-          value={overview.summary.pendingPayments}
+          label="Recorded payments"
+          value={recordedPayments}
+        />
+        <StatCard
+          label="Open balances"
+          value={formatFinanceCurrency(openBalances)}
         />
       </section>
 

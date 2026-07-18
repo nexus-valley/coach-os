@@ -42,7 +42,7 @@ export function StudentPortalAssignments({ context }: { context: StudentPortalCo
       </section>
 
       <SectionHeader
-        description="Assignments are shown only when they are published for your enrolled program or cohort."
+        description="Assignments are shown only when they are published for your enrolled program or student group."
         title="Your assignment list"
       />
       <div className="space-y-4">

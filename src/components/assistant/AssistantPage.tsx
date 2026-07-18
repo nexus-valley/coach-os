@@ -31,7 +31,7 @@ const teamPrompts: Record<MemberRole, string[]> = {
   ],
   owner: [
     "Summarize today’s operations",
-    "What should I check before publishing more courses?",
+    "What should I check before publishing more programs?",
     "What needs my attention?",
   ],
   staff: [
@@ -42,7 +42,7 @@ const teamPrompts: Record<MemberRole, string[]> = {
   trainer: [
     "What sessions do I have coming up?",
     "Which assignments need review?",
-    "Summarize my trainer workload",
+    "Summarize my coaching workload",
   ],
 };
 
@@ -58,11 +58,11 @@ function createId() {
 
 function getInitialMessage(scope: AssistantScope, role?: MemberRole | null) {
   if (scope === "student") {
-    return "I can help summarize your courses, sessions, assignments, payments, and notifications. I cannot change records or replace your trainer’s guidance.";
+    return "I can help summarize your programs, sessions, assignments, payments, and notifications. I cannot change records or replace your coach’s guidance.";
   }
 
   if (role === "trainer") {
-    return "I can summarize your assigned sessions, assignment reviews, and trainer workload. I cannot update attendance, assignments, or student records.";
+    return "I can summarize your assigned sessions, assignment reviews, and coaching workload. I cannot update attendance, assignments, or student records.";
   }
 
   return "I can summarize safe workspace context and suggest next steps. I cannot make changes, modify records, or access restricted data.";
@@ -313,7 +313,7 @@ export function AssistantPage({
             </h2>
             <p className="mt-2">
               This preview uses allowlisted summaries only. It cannot modify
-              payments, attendance, courses, students, sessions, automations, or
+              payments, attendance, programs, students, sessions, automations, or
               settings.
             </p>
           </Card>

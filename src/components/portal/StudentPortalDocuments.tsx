@@ -36,6 +36,12 @@ function typeTone(type: string): "light" | "success" | "trainer" | "warning" {
   return "light";
 }
 
+function getStudentDocumentLabel(type: string) {
+  if (type === "course") return "Program";
+  if (type === "cohort") return "Student group";
+  return formatDocumentLabel(type);
+}
+
 export function StudentPortalDocuments({
   context,
 }: {
@@ -115,7 +121,7 @@ export function StudentPortalDocuments({
   return (
     <div className="space-y-6">
       <PageHeader
-        description="Find materials, references, and resources shared for your profile, programs, cohorts, or live classes."
+        description="Find materials, references, and resources shared for your profile, programs, student groups, or live classes."
         eyebrow="Resources"
         title="Materials"
       />
@@ -159,7 +165,7 @@ export function StudentPortalDocuments({
                     </p>
                   </div>
                   <Badge tone={typeTone(document.document_type)}>
-                    {formatDocumentLabel(document.document_type)}
+                    {getStudentDocumentLabel(document.document_type)}
                   </Badge>
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2 text-xs text-[#66788F]">
@@ -176,7 +182,7 @@ export function StudentPortalDocuments({
                 <SectionHeader
                   actions={
                     <Badge tone={typeTone(selectedDocument.document_type)}>
-                      {formatDocumentLabel(selectedDocument.document_type)}
+                      {getStudentDocumentLabel(selectedDocument.document_type)}
                     </Badge>
                   }
                   description="Review the material details before opening a reference or file."

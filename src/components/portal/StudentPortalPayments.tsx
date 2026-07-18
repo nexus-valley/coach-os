@@ -113,7 +113,7 @@ export function StudentPortalPayments({ context }: { context: StudentPortalConte
       </section>
 
       <SectionHeader
-        description="Your coach records invoices, manual payments, and receipts here. Online checkout remains unavailable."
+        description="Your coach records invoices, manual payments, and receipts here. Online payment remains unavailable."
         title="Payment and invoice records"
       />
       <div className="space-y-4">
