@@ -1,6 +1,6 @@
 import { logActivity, type AuditLog } from "@/src/lib/auditLogger";
+import { getTeamChatThreads } from "@/src/lib/academyChat";
 import { getDelegatedPermissionCounts } from "@/src/lib/delegatedPermissions";
-import { safeGetUnreadThreadCount } from "@/src/lib/messages";
 import { safeOptionalQuery } from "@/src/lib/optionalQuery";
 import {
   canAccessOperations,
@@ -1005,23 +1005,28 @@ export async function getOperationsConsoleData(
       0,
     ),
     optionalOperationQuery(
-      "countActiveConversationThreads",
-      "conversation_threads",
-      () => countExactWithStatus("conversation_threads", tenantId, "active"),
+      "countActiveTeamChatThreads",
+      "get_team_chat_threads",
+      async () => {
+        const threads = await getTeamChatThreads(tenantId);
+
+        return threads.filter((thread) => thread.status === "active").length;
+      },
       0,
     ),
     optionalOperationQuery(
-      "countRecentAnnouncements",
-      "conversation_threads",
+      "countRecentTeamChatAnnouncements",
+      "get_team_chat_threads",
       async () => {
-        const result = await supabase
-          .from("conversation_threads")
-          .select("id", { count: "exact", head: true })
-          .eq("tenant_id", tenantId)
-          .eq("thread_type", "announcement")
-          .gte("created_at", last30Days.toISOString());
+        const threads = await getTeamChatThreads(tenantId);
+        const threshold = last30Days.getTime();
 
-        return getCount(result as CountResult);
+        return threads.filter(
+          (thread) =>
+            ["course_announcement", "cohort_announcement"].includes(
+              thread.thread_type,
+            ) && new Date(thread.created_at).getTime() >= threshold,
+        ).length;
       },
       0,
     ),
@@ -1071,9 +1076,9 @@ export async function getOperationsConsoleData(
       },
     ),
     optionalOperationQuery(
-      "safeGetUnreadThreadCount",
-      "conversation_messages",
-      () => safeGetUnreadThreadCount(tenantId),
+      "getUnreadTeamChatThreadCount",
+      "get_team_chat_threads",
+      async () => 0,
       0,
     ),
     optionalOperationQuery(

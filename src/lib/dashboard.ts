@@ -1,8 +1,8 @@
 import { getAutomationRuleCounts } from "@/src/lib/automations";
 import {
-  getConversationThreads,
-  type ConversationThreadType,
-} from "@/src/lib/conversations";
+  getTeamChatThreads,
+  type AcademyChatThreadType,
+} from "@/src/lib/academyChat";
 import type { CourseStatus } from "@/src/lib/courses";
 import { getDelegatedPermissionCounts } from "@/src/lib/delegatedPermissions";
 import type {
@@ -10,7 +10,6 @@ import type {
   FinancePaymentMethod,
   FinancePaymentStatus,
 } from "@/src/lib/finance";
-import { getUnreadThreadCount } from "@/src/lib/messages";
 import { getMemberRoleForTenant } from "@/src/lib/permissions";
 import type {
   SessionDeliveryMode,
@@ -114,7 +113,7 @@ export type DashboardAssignmentSummary = {
 export type DashboardConversationPreview = {
   id: string;
   recentMessage: string | null;
-  threadType: ConversationThreadType;
+  threadType: AcademyChatThreadType;
   title: string;
   updatedAt: string;
 };
@@ -615,21 +614,20 @@ async function getAssignmentDashboardSummary(
 
 async function getConversationDashboardSummary(tenantId: string) {
   try {
-    const [threads, unreadThreads] = await Promise.all([
-      getConversationThreads(tenantId),
-      getUnreadThreadCount(tenantId),
-    ]);
+    const threads = await getTeamChatThreads(tenantId);
 
     return {
       recentThreads: threads.slice(0, 4).map((thread) => ({
         id: thread.id,
-        recentMessage: thread.recentMessage?.message ?? null,
+        recentMessage: thread.recent_message ?? null,
         threadType: thread.thread_type,
         title: thread.title ?? "Conversation",
         updatedAt: thread.updated_at,
       })),
       totalThreads: threads.length,
-      unreadThreads,
+      // Unread counts require a dedicated safe RPC. Avoid legacy direct
+      // participant/message reads because their RLS currently recurses.
+      unreadThreads: 0,
     } satisfies DashboardConversationSummary;
   } catch {
     return emptyConversationSummary;
