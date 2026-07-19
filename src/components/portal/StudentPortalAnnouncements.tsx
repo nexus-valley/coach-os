@@ -84,6 +84,7 @@ export function StudentPortalAnnouncements({
         {announcements.length === 0 ? (
           <PortalEmptyState>
             No announcements have been published for your student portal yet.
+            Coach updates and schedule notes will appear here when available.
           </PortalEmptyState>
         ) : (
           announcements.map((announcement) => (

@@ -52,7 +52,8 @@ export function StudentPortalCourses({ context }: { context: StudentPortalContex
       <div className="grid gap-5 lg:grid-cols-2">
         {overview.courses.length === 0 ? (
           <PortalEmptyState>
-            No programs have been assigned to you yet.
+            No programs have been assigned to you yet. Your coach will add
+            programs here after your access is active.
           </PortalEmptyState>
         ) : (
           overview.courses.map((course) => (

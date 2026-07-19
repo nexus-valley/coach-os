@@ -47,7 +47,10 @@ export function StudentPortalNotifications({ context }: { context: StudentPortal
       />
       <div className="space-y-4">
         {overview.notifications.length === 0 ? (
-          <PortalEmptyState>No notifications yet.</PortalEmptyState>
+          <PortalEmptyState>
+            No notifications yet. Time-sensitive updates from your coach will
+            appear here when available.
+          </PortalEmptyState>
         ) : (
           overview.notifications.map((notification) => (
             <Card className="border-[#D8E8F0] bg-white p-5" key={notification.id}>

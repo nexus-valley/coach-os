@@ -317,8 +317,8 @@ export function StudentPortalCommunity({
 
       {posts.length === 0 ? (
         <PortalEmptyState>
-          No community discussions yet. Start the first conversation for your
-          workspace.
+          No community discussions yet. Start a conversation when you have a
+          question, resource, or update for your private coach community.
         </PortalEmptyState>
       ) : (
         <section className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
@@ -436,7 +436,9 @@ export function StudentPortalCommunity({
                   {commentsLoading ? (
                     <div className="h-32 animate-pulse rounded-xl border border-[#E2E8F0] bg-[#F8FAFC]" />
                   ) : comments.length === 0 ? (
-                    <PortalEmptyState>No comments yet. Start the discussion.</PortalEmptyState>
+                    <PortalEmptyState>
+                      No comments yet. Add a thoughtful reply when you are ready.
+                    </PortalEmptyState>
                   ) : (
                     <div className="space-y-3">
                       {comments.map((comment) => (

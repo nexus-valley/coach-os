@@ -134,11 +134,15 @@ export function StudentPortalDocuments({
 
       {documents.length === 0 ? (
         <div>
-          <PortalEmptyState>No materials have been shared with you yet.</PortalEmptyState>
+          <PortalEmptyState>
+            No materials have been shared with you yet. Program resources,
+            files, and reference links will appear here after your coach shares
+            them.
+          </PortalEmptyState>
         </div>
       ) : (
-        <div className="grid gap-5 lg:grid-cols-[minmax(0,0.95fr)_minmax(360px,1.05fr)]">
-          <div className="space-y-3">
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+          <div className="min-w-0 space-y-3">
             <SectionHeader
               description="Select a resource to see details and available links."
               title="Shared resources"
@@ -169,14 +173,16 @@ export function StudentPortalDocuments({
                   </Badge>
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2 text-xs text-[#66788F]">
-                  <span>{document.file_name ?? "Reference"}</span>
+                  <span className="min-w-0 break-all">
+                    {document.file_name ?? "Reference"}
+                  </span>
                   <span>Updated {formatDocumentDate(document.updated_at)}</span>
                 </div>
               </button>
             ))}
           </div>
 
-          <Card className="border-[#D8E8F0] bg-white p-5">
+          <Card className="min-w-0 border-[#D8E8F0] bg-white p-5">
             {selectedDocument ? (
               <>
                 <SectionHeader
@@ -190,7 +196,7 @@ export function StudentPortalDocuments({
                 />
                 <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
                   <div>
-                    <h2 className="text-xl font-semibold">
+                    <h2 className="break-words text-xl font-semibold">
                       {selectedDocument.title}
                     </h2>
                     <p className="mt-1 text-sm text-[#425B76]">
@@ -213,7 +219,9 @@ export function StudentPortalDocuments({
                       <p className="text-xs font-semibold uppercase text-[#66788F]">
                         {label}
                       </p>
-                      <p className="mt-2 text-sm font-semibold">{value}</p>
+                      <p className="mt-2 break-words text-sm font-semibold">
+                        {value}
+                      </p>
                     </div>
                   ))}
                 </div>
@@ -258,7 +266,9 @@ export function StudentPortalDocuments({
                 )}
               </>
             ) : (
-              <PortalEmptyState>Select a material to view details.</PortalEmptyState>
+              <PortalEmptyState>
+                Select a material to view its details and available links.
+              </PortalEmptyState>
             )}
           </Card>
         </div>

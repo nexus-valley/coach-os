@@ -47,7 +47,10 @@ export function StudentPortalAssignments({ context }: { context: StudentPortalCo
       />
       <div className="space-y-4">
         {overview.assignments.length === 0 ? (
-          <PortalEmptyState>No published assignments yet.</PortalEmptyState>
+          <PortalEmptyState>
+            No assignments have been published for you yet. Your coach will add
+            assignments here when there is work to review.
+          </PortalEmptyState>
         ) : (
           overview.assignments.map((item) => {
             const status = item.submission?.status ?? "pending";

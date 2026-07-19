@@ -195,7 +195,10 @@ export function StudentPortalSessions({ context }: { context: StudentPortalConte
         />
         <div className="mt-4 space-y-4">
           {upcomingSessions.length === 0 ? (
-            <PortalEmptyState>No upcoming live classes scheduled.</PortalEmptyState>
+            <PortalEmptyState>
+              No upcoming live classes are scheduled yet. Your coach will share
+              new sessions here when they are ready.
+            </PortalEmptyState>
           ) : (
             upcomingSessions.map((session) =>
               renderSession(session, "active", { allowJoin: true }),
@@ -211,7 +214,10 @@ export function StudentPortalSessions({ context }: { context: StudentPortalConte
         />
         <div className="mt-4 space-y-4">
           {recentSessions.length === 0 ? (
-            <PortalEmptyState>No recent live classes available yet.</PortalEmptyState>
+            <PortalEmptyState>
+              No recent live classes are available yet. Completed sessions will
+              appear here after they finish.
+            </PortalEmptyState>
           ) : (
             recentSessions.map((session) =>
               renderSession(session, "muted", { allowJoin: false }),
