@@ -44,13 +44,6 @@ function formatDateTime(value: string) {
   }).format(new Date(value));
 }
 
-function formatCurrency(value: number, currency: string) {
-  return new Intl.NumberFormat("en-IN", {
-    currency,
-    style: "currency",
-  }).format(value);
-}
-
 function getErrorMessage(caught: unknown, fallback: string) {
   return caught instanceof Error ? caught.message : fallback;
 }
@@ -238,7 +231,7 @@ export function StudentPortalPreviewClient({
             ["Attendance", overview.summary.attendancePercent === null ? "NA" : `${overview.summary.attendancePercent}%`],
             ["Pending Work", overview.summary.pendingAssignments],
             ["Certificates", overview.summary.completedCertificates],
-            ["Pending Payments", overview.summary.pendingPayments],
+            ["Payment Summary", "Finance Center"],
           ].map(([label, value]) => (
             <div
               className="rounded-3xl border border-white/10 bg-white/5 p-5"
@@ -464,47 +457,11 @@ export function StudentPortalPreviewClient({
             Payments
           </Badge>
           <div className="mt-5 space-y-3">
-            {[...overview.payments.payments, ...overview.payments.paymentLinks]
-              .length === 0 ? (
-              <p className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-400">
-                No payment records visible for this role.
-              </p>
-            ) : (
-              <>
-                {overview.payments.payments.map((payment) => (
-                  <div
-                    className="rounded-2xl border border-white/10 bg-white/5 p-4"
-                    key={payment.id}
-                  >
-                    <p className="font-semibold">
-                      {formatCurrency(payment.amount, payment.currency)}
-                    </p>
-                    <p className="mt-2 text-sm text-slate-400">
-                      {payment.courseTitle || "Course payment"} |{" "}
-                      {formatStatus(payment.status)}
-                    </p>
-                    {payment.receiptNumber ? (
-                      <p className="mt-2 text-sm text-slate-300">
-                        Receipt {payment.receiptNumber}
-                      </p>
-                    ) : null}
-                  </div>
-                ))}
-                {overview.payments.paymentLinks.map((link) => (
-                  <div
-                    className="rounded-2xl border border-white/10 bg-white/5 p-4"
-                    key={link.id}
-                  >
-                    <p className="font-semibold">
-                      {formatCurrency(link.amount, link.currency)}
-                    </p>
-                    <p className="mt-2 text-sm text-slate-400">
-                      Payment link | {formatStatus(link.status)}
-                    </p>
-                  </div>
-                ))}
-              </>
-            )}
+            <p className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-400">
+              Student payment records are shown from Finance Center in the live
+              student payment summary. Online gateway and payment-link previews
+              remain parked.
+            </p>
           </div>
         </Card>
 

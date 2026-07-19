@@ -1196,7 +1196,6 @@ export async function getStudentPortalOverview(params: StudentPortalRequest) {
     attendance,
     assignments,
     certificates,
-    payments,
     sessions,
     notifications,
     conversations,
@@ -1205,11 +1204,18 @@ export async function getStudentPortalOverview(params: StudentPortalRequest) {
       getStudentPortalAttendance(params),
       getStudentPortalAssignments(params),
       getStudentPortalCertificates(params),
-      getStudentPortalPayments(params),
       getStudentPortalSessions(params),
       getStudentPortalNotifications(params),
       getStudentPortalConversations(params),
     ]);
+  // Current student payment UI uses Finance Center summary; keep legacy overview
+  // payment fields empty so portal overview does not read old payments/payment_links.
+  const legacyPayments = {
+    paidCount: 0,
+    paymentLinks: [],
+    payments: [],
+    pendingCount: 0,
+  } satisfies StudentPortalPayments;
   const pendingAssignments = assignments.filter(
     (assignment) =>
       !assignment.submission ||
@@ -1249,16 +1255,16 @@ export async function getStudentPortalOverview(params: StudentPortalRequest) {
     courses: scope.courses,
     conversations,
     notifications,
-    payments,
+    payments: legacyPayments,
     sessions,
     student: scope.student,
     summary: {
       attendancePercent: attendance?.percent ?? null,
       completedCertificates: certificates.length,
       enrolledCourses: scope.courses.length,
-      paidPayments: payments.paidCount,
+      paidPayments: 0,
       pendingAssignments,
-      pendingPayments: payments.pendingCount,
+      pendingPayments: 0,
     },
   } satisfies StudentPortalOverview;
 }
