@@ -41,8 +41,8 @@ const threadFilters: Array<{ label: string; value: AcademyChatThreadType | "all"
   { label: "All student chats", value: "all" },
   { label: "Direct chats", value: "student_direct" },
   { label: "Support requests", value: "student_support" },
-  { label: "Course announcements", value: "course_announcement" },
-  { label: "Cohort announcements", value: "cohort_announcement" },
+  { label: "Program announcements", value: "course_announcement" },
+  { label: "Student group announcements", value: "cohort_announcement" },
 ];
 
 function getErrorMessage(error: unknown, fallback: string) {

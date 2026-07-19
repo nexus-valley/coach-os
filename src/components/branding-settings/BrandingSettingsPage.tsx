@@ -355,8 +355,9 @@ export function BrandingSettingsPage() {
             White Label Branding
           </h1>
           <p className="mt-3 max-w-3xl text-base leading-7 text-[#425B76]">
-            Configure institute identity, portal copy, support details, and
-            brand colors for student-facing and workspace-facing experiences.
+            Configure your coaching brand identity, portal copy, support
+            details, and brand colors for student-facing and workspace-facing
+            experiences.
           </p>
         </div>
         <div className="flex flex-wrap gap-3">

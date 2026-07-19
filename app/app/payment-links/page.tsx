@@ -13,18 +13,17 @@ export default function PaymentLinksPage() {
               Payment gateway on hold
             </div>
             <h1 className="mt-5 text-3xl font-semibold tracking-normal">
-              Payment links are not the active sales workflow
+              Online gateway links are parked
             </h1>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-[#425B76]">
-              CoachFort now manages student payments through Sales. Use Sales
-              for fee plans, invoices, manual payment records,
-              receipts, adjustments, and student payment summaries.
+              CoachFort currently manages student program money through Sales:
+              fee plans, invoices, manual payment records, receipts,
+              adjustments, and student payment summaries.
             </p>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-[#425B76]">
-              Online payment gateway links will return in a future Razorpay or
-              provider integration module after banking details and provider
-              credentials are ready. No gateway call or real money movement is
-              performed here.
+              Native online gateway links are on hold for a later provider
+              module. This page does not create checkout links, call a payment
+              gateway, collect student money, or activate access.
             </p>
             <div className="mt-7 flex flex-wrap gap-3">
               <Button href="/app/finance">Open Sales</Button>

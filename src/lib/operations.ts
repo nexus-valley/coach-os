@@ -801,7 +801,7 @@ function buildOperationalAlerts(params: {
 
   if (params.failedInvites > 0 || params.failedPaymentLinks > 0) {
     alerts.push({
-      description: `${params.failedInvites} failed/revoked invite${params.failedInvites === 1 ? "" : "s"} and ${params.failedPaymentLinks} failed/expired payment link${params.failedPaymentLinks === 1 ? "" : "s"} found.`,
+      description: `${params.failedInvites} failed/revoked invite${params.failedInvites === 1 ? "" : "s"} and ${params.failedPaymentLinks} failed/expired parked online-payment record${params.failedPaymentLinks === 1 ? "" : "s"} found.`,
       key: "failed-operations",
       severity: "attention",
       title: "Recent failed operations",
@@ -1266,9 +1266,9 @@ export async function getOperationsConsoleData(
       value: failedInvites.toLocaleString(),
     },
     {
-      helper: "Failed, expired, or cancelled legacy payment links.",
+      helper: "Failed, expired, or cancelled parked online-payment records.",
       key: "failedPaymentLinks",
-      label: "Legacy payment-link issues",
+      label: "Parked gateway issues",
       tone: failedPaymentLinks > 0 ? "orange" : "emerald",
       value: failedPaymentLinks.toLocaleString(),
     },
