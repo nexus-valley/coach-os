@@ -44,7 +44,7 @@ const reportTabs: { description: string; label: string; value: ReportCategory }[
     value: "assignments",
   },
   {
-    description: "Program, cohort, and live class health",
+    description: "Program, student group, and live class health",
     label: "Programs",
     value: "courses",
   },
@@ -202,14 +202,24 @@ export function ReportsPageClient() {
     };
   }, [filters, router]);
 
-  const section = reportsData?.sections[activeReport] ?? null;
-  const activeTab = useMemo(
-    () => reportTabs.find((tab) => tab.value === activeReport) ?? reportTabs[0],
-    [activeReport],
+  const visibleReportTabs = useMemo(
+    () =>
+      reportTabs.filter(
+        (tab) => tab.value !== "payments" || reportsData?.canViewFinancials,
+      ),
+    [reportsData?.canViewFinancials],
   );
+  const visibleActiveTab = useMemo(
+    () =>
+      visibleReportTabs.find((tab) => tab.value === activeReport) ??
+      visibleReportTabs[0] ??
+      reportTabs[0],
+    [activeReport, visibleReportTabs],
+  );
+  const visibleSection = reportsData?.sections[visibleActiveTab.value] ?? null;
 
   async function handleExport() {
-    if (!tenant || !section || !reportsData?.canExport) {
+    if (!tenant || !visibleSection || !reportsData?.canExport) {
       return;
     }
 
@@ -217,7 +227,7 @@ export function ReportsPageClient() {
     setError("");
 
     try {
-      await exportReportSectionCsv(tenant.id, section, filters);
+      await exportReportSectionCsv(tenant.id, visibleSection, filters);
     } catch (caught) {
       setError(getErrorMessage(caught, "Unable to export report."));
     } finally {
@@ -236,8 +246,11 @@ export function ReportsPageClient() {
             Analytics
           </h2>
           <p className="mt-3 max-w-2xl text-base leading-7 text-[#425B76]">
-            Student, live class, program, payment, trainer, and communication
-            insights for the current workspace.
+            Student, live class, program, trainer, and communication insights
+            for the current workspace.
+            {reportsData?.canViewFinancials
+              ? " Owner/admin users can also review finance reports."
+              : ""}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -302,7 +315,9 @@ export function ReportsPageClient() {
           </label>
 
           <label className="block">
-            <span className="text-sm font-medium text-[#425B76]">Cohort</span>
+            <span className="text-sm font-medium text-[#425B76]">
+              Student group
+            </span>
             <select
               className="mt-2 h-11 w-full rounded-xl border border-[#D8E8F0] bg-white px-3 text-sm text-[#0B1F33] outline-none focus:border-[#2ECBEA]"
               onChange={(event) =>
@@ -313,7 +328,7 @@ export function ReportsPageClient() {
               }
               value={filters.cohortId ?? ""}
             >
-              <option value="">All cohorts</option>
+              <option value="">All student groups</option>
               {reportsData?.filters.cohorts.map((cohort) => (
                 <option key={cohort.id} value={cohort.id}>
                   {cohort.label}
@@ -365,7 +380,12 @@ export function ReportsPageClient() {
           </label>
 
           <Button
-            disabled={!section || !reportsData?.canExport || section.rows.length === 0 || exporting}
+            disabled={
+              !visibleSection ||
+              !reportsData?.canExport ||
+              visibleSection.rows.length === 0 ||
+              exporting
+            }
             onClick={handleExport}
             type="button"
             variant="secondary"
@@ -375,8 +395,8 @@ export function ReportsPageClient() {
         </div>
         <p className="mt-4 text-sm text-[#66788F]">
           Generated {reportsData ? formatDateTime(reportsData.generatedAt) : "after loading"}.
-          Trainer users see assigned-program, assigned-cohort, and scoped-student
-          analytics only.
+          Trainer users see assigned-program, assigned-student-group, and
+          scoped-student analytics only.
         </p>
       </Card>
 
@@ -387,8 +407,8 @@ export function ReportsPageClient() {
       ) : null}
 
       <section className="mt-6 grid gap-3 lg:grid-cols-4">
-        {reportTabs.map((tab) => {
-          const active = tab.value === activeReport;
+        {visibleReportTabs.map((tab) => {
+          const active = tab.value === visibleActiveTab.value;
 
           return (
             <button
@@ -427,23 +447,23 @@ export function ReportsPageClient() {
             </Card>
           ))}
         </section>
-      ) : section ? (
+      ) : visibleSection ? (
         <section className="mt-6 space-y-6">
           <div>
             <Badge className="border-[#14B8C6]/30 bg-[#14B8C6]/10 text-[#0E7490]">
-              {activeTab.label}
+              {visibleActiveTab.label}
             </Badge>
             <h3 className="mt-4 text-2xl font-semibold text-[#0B1F33]">
-              {section.title}
+              {visibleSection.title}
             </h3>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-[#66788F]">
-              {section.description}
+              {visibleSection.description}
             </p>
           </div>
 
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            {section.metrics.map((metric) => (
-              <MetricCard key={`${section.key}-${metric.label}`} metric={metric} />
+            {visibleSection.metrics.map((metric) => (
+              <MetricCard key={`${visibleSection.key}-${metric.label}`} metric={metric} />
             ))}
           </div>
 
@@ -457,9 +477,9 @@ export function ReportsPageClient() {
                   Showing up to 12 high-signal rows for this report.
                 </p>
               </div>
-              <Badge tone="light">{section.rows.length} rows</Badge>
+              <Badge tone="light">{visibleSection.rows.length} rows</Badge>
             </div>
-            <ReportTable section={section} />
+            <ReportTable section={visibleSection} />
           </Card>
         </section>
       ) : (

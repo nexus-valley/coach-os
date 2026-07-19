@@ -32,7 +32,6 @@ import {
   type PlanResource,
   type ResourceLimit,
 } from "@/src/lib/plans";
-import { canAccessPayments } from "@/src/lib/permissions";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 import { getTenantSubscription } from "@/src/lib/subscription";
 import { getCurrentMemberRole, type MemberRole } from "@/src/lib/team";
@@ -166,6 +165,49 @@ function SessionPreviewList({
   );
 }
 
+function RecentStudentsCard({ metrics }: { metrics: DashboardMetrics }) {
+  return (
+    <Card className="border-[#D8E8F0] bg-white p-6 text-[#0B1F33] shadow-2xl shadow-[#0B2A3D]/10">
+      <h3 className="text-xl font-semibold">Recent Students</h3>
+      <p className="mt-2 text-sm leading-6 text-[#425B76]">
+        Latest student and lead records visible to your role.
+      </p>
+
+      {metrics.recentStudents.length === 0 ? (
+        <div className="mt-7 rounded-3xl border border-dashed border-[#C7DDEA] bg-[#F6FBFE] p-6 text-center text-sm text-[#425B76]">
+          No students added yet.
+        </div>
+      ) : (
+        <div className="mt-7 divide-y divide-[#D8E8F0] overflow-hidden rounded-3xl border border-[#D8E8F0]">
+          {metrics.recentStudents.map((student) => (
+            <div
+              className="grid gap-3 bg-[#F6FBFE] p-4 sm:grid-cols-[1fr_auto] sm:items-center"
+              key={student.id}
+            >
+              <div>
+                <p className="font-semibold text-[#0B1F33]">
+                  {student.full_name}
+                </p>
+                <p className="mt-1 text-sm text-[#425B76]">
+                  {student.email || student.phone || "No contact details"}
+                </p>
+              </div>
+              <div className="sm:text-right">
+                <Badge className="border-[#D8E8F0] bg-white text-[#425B76]">
+                  {student.status}
+                </Badge>
+                <p className="mt-2 text-xs text-[#66788F]">
+                  {formatDate(student.created_at)}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+}
+
 export function DashboardPageClient() {
   const router = useRouter();
   const [currentRole, setCurrentRole] = useState<MemberRole | null>(null);
@@ -296,6 +338,7 @@ export function DashboardPageClient() {
     );
   }
 
+  const canViewFinance = currentRole === "owner" || currentRole === "admin";
   const metricCards = [
     {
       detail: "Students and leads in this workspace",
@@ -312,11 +355,15 @@ export function DashboardPageClient() {
       label: "Enrollments",
       value: String(metrics.totalEnrollments),
     },
-    {
-      detail: "Recorded Finance Center payment volume",
-      label: "Total Revenue",
-      value: formatCurrency(metrics.totalRevenue),
-    },
+    ...(canViewFinance
+      ? [
+          {
+            detail: "Recorded Finance Center payment volume",
+            label: "Total Revenue",
+            value: formatCurrency(metrics.totalRevenue),
+          },
+        ]
+      : []),
     {
       detail: "Pending reminders due today or overdue",
       label: "Pending Reminders",
@@ -366,7 +413,11 @@ export function DashboardPageClient() {
             Workspace: {tenant?.name ?? "Current workspace"}
           </div>
         }
-        description="Real-time workspace analytics for students, programs, enrollments, Finance Center activity, and operational health."
+        description={
+          canViewFinance
+            ? "Real-time workspace analytics for students, programs, enrollments, Finance Center activity, and operational health."
+            : "Real-time workspace analytics for students, programs, enrollments, communication, and operational health."
+        }
         eyebrow="Dashboard analytics"
         title="Dashboard"
       />
@@ -384,7 +435,11 @@ export function DashboardPageClient() {
       <Card className="mt-8 border-[#D8E8F0] bg-white p-6 text-[#0B1F33] shadow-sm shadow-[#0B2A3D]/5">
         <div className="grid gap-5 lg:grid-cols-[1fr_auto] lg:items-center">
           <SectionHeader
-            description="Review live workspace data through the hardened module flows for students, programs, sales, analytics, and operations."
+            description={
+              canViewFinance
+                ? "Review live workspace data through the hardened module flows for students, programs, sales, analytics, and operations."
+                : "Review live workspace data through the hardened module flows for students, programs, analytics, and operations."
+            }
             eyebrow="Workspace overview"
             title="Manage core records"
           />
@@ -468,7 +523,7 @@ export function DashboardPageClient() {
         <Button href="/app/courses" size="lg" variant="secondary">
           Create Program
         </Button>
-        {canAccessPayments(currentRole) ? (
+        {canViewFinance ? (
           <Button href="/app/finance" size="lg" variant="secondary">
             Open Sales
           </Button>
@@ -833,220 +888,191 @@ export function DashboardPageClient() {
         ))}
       </section>
 
-      <section className="mt-6 grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-        <Card className="border-[#D8E8F0] bg-white p-6 text-[#0B1F33] shadow-2xl shadow-[#0B2A3D]/10">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <h3 className="text-xl font-semibold">Recorded Payment Summary</h3>
-              <p className="mt-2 text-sm leading-6 text-[#425B76]">
-                Finance Center payment status across recorded manual payments.
-              </p>
-            </div>
-            <Badge className="border-[#14B8C6]/30 bg-[#14B8C6]/10 text-[#0E7490]">
-              {metrics.pendingPayments} open balances
-            </Badge>
-          </div>
-
-          <div className="mt-7 space-y-4">
-            {[
-              {
-                label: "Recorded",
-                tone: "bg-teal-400",
-                value: metrics.paymentStatusSummary.recorded,
-              },
-              {
-                label: "Confirmed",
-                tone: "bg-cyan-400",
-                value: metrics.paymentStatusSummary.confirmed,
-              },
-              {
-                label: "Refunded",
-                tone: "bg-amber-300",
-                value: metrics.paymentStatusSummary.refunded,
-              },
-              {
-                label: "Failed",
-                tone: "bg-red-400",
-                value: metrics.paymentStatusSummary.failed,
-              },
-              {
-                label: "Cancelled",
-                tone: "bg-slate-300",
-                value: metrics.paymentStatusSummary.cancelled,
-              },
-            ].map((item) => {
-              const totalPayments =
-                metrics.paymentStatusSummary.recorded +
-                metrics.paymentStatusSummary.confirmed +
-                metrics.paymentStatusSummary.refunded +
-                metrics.paymentStatusSummary.failed +
-                metrics.paymentStatusSummary.cancelled;
-              const width =
-                totalPayments > 0 ? `${(item.value / totalPayments) * 100}%` : "0%";
-
-              return (
-                <div key={item.label}>
-                  <div className="flex items-center justify-between gap-4 text-sm">
-                    <span className="font-medium text-[#425B76]">
-                      {item.label}
-                    </span>
-                    <span className="font-semibold text-[#0B1F33]">
-                      {item.value}
-                    </span>
-                  </div>
-                  <div className="mt-2 h-2 overflow-hidden rounded-full bg-[#EAF7FC]">
-                    <div
-                      className={`h-full rounded-full ${item.tone}`}
-                      style={{ width }}
-                    />
-                  </div>
+      {canViewFinance ? (
+        <>
+          <section className="mt-6 grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
+            <Card className="border-[#D8E8F0] bg-white p-6 text-[#0B1F33] shadow-2xl shadow-[#0B2A3D]/10">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h3 className="text-xl font-semibold">Recorded Payment Summary</h3>
+                  <p className="mt-2 text-sm leading-6 text-[#425B76]">
+                    Finance Center payment status across recorded manual payments.
+                  </p>
                 </div>
-              );
-            })}
-          </div>
-        </Card>
+                <Badge className="border-[#14B8C6]/30 bg-[#14B8C6]/10 text-[#0E7490]">
+                  {metrics.pendingPayments} open balances
+                </Badge>
+              </div>
 
-        <Card className="border-[#D8E8F0] bg-white p-6 text-[#0B1F33] shadow-2xl shadow-[#0B2A3D]/10">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <h3 className="text-xl font-semibold">Program Sales Overview</h3>
+              <div className="mt-7 space-y-4">
+                {[
+                  {
+                    label: "Recorded",
+                    tone: "bg-teal-400",
+                    value: metrics.paymentStatusSummary.recorded,
+                  },
+                  {
+                    label: "Confirmed",
+                    tone: "bg-cyan-400",
+                    value: metrics.paymentStatusSummary.confirmed,
+                  },
+                  {
+                    label: "Refunded",
+                    tone: "bg-amber-300",
+                    value: metrics.paymentStatusSummary.refunded,
+                  },
+                  {
+                    label: "Failed",
+                    tone: "bg-red-400",
+                    value: metrics.paymentStatusSummary.failed,
+                  },
+                  {
+                    label: "Cancelled",
+                    tone: "bg-slate-300",
+                    value: metrics.paymentStatusSummary.cancelled,
+                  },
+                ].map((item) => {
+                  const totalPayments =
+                    metrics.paymentStatusSummary.recorded +
+                    metrics.paymentStatusSummary.confirmed +
+                    metrics.paymentStatusSummary.refunded +
+                    metrics.paymentStatusSummary.failed +
+                    metrics.paymentStatusSummary.cancelled;
+                  const width =
+                    totalPayments > 0 ? `${(item.value / totalPayments) * 100}%` : "0%";
+
+                  return (
+                    <div key={item.label}>
+                      <div className="flex items-center justify-between gap-4 text-sm">
+                        <span className="font-medium text-[#425B76]">
+                          {item.label}
+                        </span>
+                        <span className="font-semibold text-[#0B1F33]">
+                          {item.value}
+                        </span>
+                      </div>
+                      <div className="mt-2 h-2 overflow-hidden rounded-full bg-[#EAF7FC]">
+                        <div
+                          className={`h-full rounded-full ${item.tone}`}
+                          style={{ width }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+
+            <Card className="border-[#D8E8F0] bg-white p-6 text-[#0B1F33] shadow-2xl shadow-[#0B2A3D]/10">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h3 className="text-xl font-semibold">Program Sales Overview</h3>
+                  <p className="mt-2 text-sm leading-6 text-[#425B76]">
+                    Recorded Finance Center payments grouped by program.
+                  </p>
+                </div>
+                <Badge className="border-[#D8E8F0] bg-[#F6FBFE] text-[#425B76]">
+                  {metrics.courseRevenue.length} programs
+                </Badge>
+              </div>
+
+              {metrics.courseRevenue.length === 0 ? (
+                <div className="mt-7 rounded-3xl border border-dashed border-[#C7DDEA] bg-[#F6FBFE] p-6 text-center">
+                  <p className="text-sm font-semibold text-[#0B1F33]">
+                    No recorded revenue yet
+                  </p>
+                  <p className="mt-2 text-sm leading-6 text-[#425B76]">
+                    Recorded student payments will appear here by program.
+                  </p>
+                </div>
+              ) : (
+                <div className="mt-7 space-y-4">
+                  {metrics.courseRevenue.slice(0, 5).map((course) => {
+                    const width =
+                      maxCourseRevenue > 0
+                        ? `${(course.revenue / maxCourseRevenue) * 100}%`
+                        : "0%";
+
+                    return (
+                      <div
+                        className="rounded-2xl border border-[#D8E8F0] bg-[#F6FBFE] p-4"
+                        key={course.courseId}
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div>
+                            <p className="font-semibold text-[#0B1F33]">
+                              {course.courseTitle}
+                            </p>
+                            <p className="mt-1 text-sm text-[#66788F]">
+                              {course.paymentCount} recorded payments
+                            </p>
+                          </div>
+                          <p className="font-semibold text-[#0E7490]">
+                            {formatCurrency(course.revenue, course.currency)}
+                          </p>
+                        </div>
+                        <div className="mt-4 h-2 overflow-hidden rounded-full bg-[#EAF7FC]">
+                          <div
+                            className="h-full rounded-full bg-teal-400"
+                            style={{ width }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </Card>
+          </section>
+
+          <section className="mt-6 grid gap-6 xl:grid-cols-2">
+            <Card className="border-[#D8E8F0] bg-white p-6 text-[#0B1F33] shadow-2xl shadow-[#0B2A3D]/10">
+              <h3 className="text-xl font-semibold">Recent Recorded Payments</h3>
               <p className="mt-2 text-sm leading-6 text-[#425B76]">
-                Recorded Finance Center payments grouped by program.
+                Latest five payments recorded in this workspace.
               </p>
-            </div>
-            <Badge className="border-[#D8E8F0] bg-[#F6FBFE] text-[#425B76]">
-              {metrics.courseRevenue.length} programs
-            </Badge>
-          </div>
 
-          {metrics.courseRevenue.length === 0 ? (
-            <div className="mt-7 rounded-3xl border border-dashed border-[#C7DDEA] bg-[#F6FBFE] p-6 text-center">
-              <p className="text-sm font-semibold text-[#0B1F33]">
-                No recorded revenue yet
-              </p>
-              <p className="mt-2 text-sm leading-6 text-[#425B76]">
-                Recorded student payments will appear here by program.
-              </p>
-            </div>
-          ) : (
-            <div className="mt-7 space-y-4">
-              {metrics.courseRevenue.slice(0, 5).map((course) => {
-                const width =
-                  maxCourseRevenue > 0
-                    ? `${(course.revenue / maxCourseRevenue) * 100}%`
-                    : "0%";
-
-                return (
-                  <div
-                    className="rounded-2xl border border-[#D8E8F0] bg-[#F6FBFE] p-4"
-                    key={course.courseId}
-                  >
-                    <div className="flex items-start justify-between gap-4">
+              {metrics.recentPayments.length === 0 ? (
+                <div className="mt-7 rounded-3xl border border-dashed border-[#C7DDEA] bg-[#F6FBFE] p-6 text-center text-sm text-[#425B76]">
+                  No payments recorded yet.
+                </div>
+              ) : (
+                <div className="mt-7 divide-y divide-[#D8E8F0] overflow-hidden rounded-3xl border border-[#D8E8F0]">
+                  {metrics.recentPayments.map((payment) => (
+                    <div
+                      className="grid gap-3 bg-[#F6FBFE] p-4 sm:grid-cols-[1fr_auto] sm:items-center"
+                      key={payment.id}
+                    >
                       <div>
                         <p className="font-semibold text-[#0B1F33]">
-                          {course.courseTitle}
+                          {payment.studentName}
                         </p>
-                        <p className="mt-1 text-sm text-[#66788F]">
-                          {course.paymentCount} recorded payments
+                        <p className="mt-1 text-sm text-[#425B76]">
+                          {payment.courseTitle} · {formatDate(payment.payment_date)}
                         </p>
                       </div>
-                      <p className="font-semibold text-[#0E7490]">
-                        {formatCurrency(course.revenue, course.currency)}
-                      </p>
+                      <div className="sm:text-right">
+                        <p className="font-semibold text-[#0E7490]">
+                          {formatCurrency(payment.amount, payment.currency)}
+                        </p>
+                        <p className="mt-1 text-xs uppercase tracking-wide text-[#66788F]">
+                          {payment.status}
+                        </p>
+                      </div>
                     </div>
-                    <div className="mt-4 h-2 overflow-hidden rounded-full bg-[#EAF7FC]">
-                      <div
-                        className="h-full rounded-full bg-teal-400"
-                        style={{ width }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </Card>
-      </section>
-
-      <section className="mt-6 grid gap-6 xl:grid-cols-2">
-        <Card className="border-[#D8E8F0] bg-white p-6 text-[#0B1F33] shadow-2xl shadow-[#0B2A3D]/10">
-          <h3 className="text-xl font-semibold">Recent Recorded Payments</h3>
-          <p className="mt-2 text-sm leading-6 text-[#425B76]">
-            Latest five payments recorded in this workspace.
-          </p>
-
-          {metrics.recentPayments.length === 0 ? (
-            <div className="mt-7 rounded-3xl border border-dashed border-[#C7DDEA] bg-[#F6FBFE] p-6 text-center text-sm text-[#425B76]">
-              No payments recorded yet.
-            </div>
-          ) : (
-            <div className="mt-7 divide-y divide-[#D8E8F0] overflow-hidden rounded-3xl border border-[#D8E8F0]">
-              {metrics.recentPayments.map((payment) => (
-                <div
-                  className="grid gap-3 bg-[#F6FBFE] p-4 sm:grid-cols-[1fr_auto] sm:items-center"
-                  key={payment.id}
-                >
-                  <div>
-                    <p className="font-semibold text-[#0B1F33]">
-                      {payment.studentName}
-                    </p>
-                    <p className="mt-1 text-sm text-[#425B76]">
-                      {payment.courseTitle} · {formatDate(payment.payment_date)}
-                    </p>
-                  </div>
-                  <div className="sm:text-right">
-                    <p className="font-semibold text-[#0E7490]">
-                      {formatCurrency(payment.amount, payment.currency)}
-                    </p>
-                    <p className="mt-1 text-xs uppercase tracking-wide text-[#66788F]">
-                      {payment.status}
-                    </p>
-                  </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          )}
-        </Card>
+              )}
+            </Card>
 
-        <Card className="border-[#D8E8F0] bg-white p-6 text-[#0B1F33] shadow-2xl shadow-[#0B2A3D]/10">
-          <h3 className="text-xl font-semibold">Recent Students</h3>
-          <p className="mt-2 text-sm leading-6 text-[#425B76]">
-            Latest student and lead records added to the CRM.
-          </p>
-
-          {metrics.recentStudents.length === 0 ? (
-            <div className="mt-7 rounded-3xl border border-dashed border-[#C7DDEA] bg-[#F6FBFE] p-6 text-center text-sm text-[#425B76]">
-              No students added yet.
-            </div>
-          ) : (
-            <div className="mt-7 divide-y divide-[#D8E8F0] overflow-hidden rounded-3xl border border-[#D8E8F0]">
-              {metrics.recentStudents.map((student) => (
-                <div
-                  className="grid gap-3 bg-[#F6FBFE] p-4 sm:grid-cols-[1fr_auto] sm:items-center"
-                  key={student.id}
-                >
-                  <div>
-                    <p className="font-semibold text-[#0B1F33]">
-                      {student.full_name}
-                    </p>
-                    <p className="mt-1 text-sm text-[#425B76]">
-                      {student.email || student.phone || "No contact details"}
-                    </p>
-                  </div>
-                  <div className="sm:text-right">
-                    <Badge className="border-[#D8E8F0] bg-white text-[#425B76]">
-                      {student.status}
-                    </Badge>
-                    <p className="mt-2 text-xs text-[#66788F]">
-                      {formatDate(student.created_at)}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </Card>
-      </section>
+            <RecentStudentsCard metrics={metrics} />
+          </section>
+        </>
+      ) : (
+        <section className="mt-6 grid gap-6 xl:grid-cols-2">
+          <RecentStudentsCard metrics={metrics} />
+        </section>
+      )}
 
     </div>
   );
