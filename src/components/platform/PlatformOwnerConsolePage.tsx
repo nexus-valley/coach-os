@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { AccessDeniedCard } from "@/src/components/security/AccessDeniedCard";
+import { ManualActivationPanel } from "@/src/components/platform/ManualActivationPanel";
 import { Badge } from "@/src/components/ui/Badge";
 import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
@@ -1057,6 +1058,24 @@ export function PlatformOwnerConsolePage() {
               setForm={setCanonicalAssignmentForm}
               onSave={handleSaveCanonicalAssignment}
             />
+
+            {canManagePlans(adminContext.role) ? (
+              <ManualActivationPanel
+                adminRole={adminContext.role}
+                canonicalEntitlement={canonicalEntitlementState}
+                detail={selectedTenantDetail}
+                selectedTenant={selectedTenant}
+                onActivated={async () => {
+                  if (selectedTenantId) {
+                    await Promise.all([
+                      loadTenantDetail(selectedTenantId),
+                      loadCanonicalEntitlements(selectedTenantId),
+                      loadPlatform(),
+                    ]);
+                  }
+                }}
+              />
+            ) : null}
 
             <UpgradeRequestReviewPanel
               adminRole={adminContext.role}

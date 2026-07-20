@@ -179,6 +179,28 @@ export type PlatformTenantSubscriptionInput = {
   trialStartedAt?: string | null;
 };
 
+export type ManualSubscriptionActivationInput = {
+  amountMinor: number;
+  billingCycle: "monthly" | "yearly";
+  currency: "INR";
+  customerEmail: string;
+  founderApproval: string;
+  gracePeriodEndsAt?: string | null;
+  idempotencyKey: string;
+  operatorNote?: string | null;
+  paymentMethod: string;
+  paymentReference: string;
+  paymentVerifiedAt: string;
+  planCode: "starter" | "growth";
+  replaceCurrent: boolean;
+  subscriptionEnd: string;
+  subscriptionStart: string;
+  supportTier?: string | null;
+  tenantId: string;
+};
+
+export type ManualSubscriptionActivationResult = Record<string, unknown>;
+
 export type PlatformSupportNoteInput = {
   metadata?: Record<string, unknown>;
   note: string;
@@ -337,6 +359,40 @@ export async function updateTenantSubscription(input: PlatformTenantSubscription
   }
 
   return data as string;
+}
+
+export async function activateTenantSubscriptionManual(
+  input: ManualSubscriptionActivationInput,
+) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.rpc(
+    "activate_tenant_subscription_manual",
+    {
+      p_amount_minor: input.amountMinor,
+      p_billing_cycle: input.billingCycle,
+      p_currency: input.currency,
+      p_customer_email: input.customerEmail,
+      p_founder_approval: input.founderApproval,
+      p_grace_period_ends_at: input.gracePeriodEndsAt ?? null,
+      p_idempotency_key: input.idempotencyKey,
+      p_operator_note: input.operatorNote ?? null,
+      p_payment_method: input.paymentMethod,
+      p_payment_reference: input.paymentReference,
+      p_payment_verified_at: input.paymentVerifiedAt,
+      p_plan_code: input.planCode,
+      p_replace_current: input.replaceCurrent,
+      p_subscription_end: input.subscriptionEnd,
+      p_subscription_start: input.subscriptionStart,
+      p_support_tier: input.supportTier ?? null,
+      p_tenant_id: input.tenantId,
+    },
+  );
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? {}) as ManualSubscriptionActivationResult;
 }
 
 export async function recordPlatformSupportNote(input: PlatformSupportNoteInput) {
