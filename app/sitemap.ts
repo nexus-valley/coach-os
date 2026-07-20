@@ -18,6 +18,21 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.5,
       changeFrequency: "monthly" as const,
     },
+    {
+      path: "/refund-policy",
+      priority: 0.5,
+      changeFrequency: "monthly" as const,
+    },
+    {
+      path: "/acceptable-use",
+      priority: 0.5,
+      changeFrequency: "monthly" as const,
+    },
+    {
+      path: "/support-policy",
+      priority: 0.5,
+      changeFrequency: "monthly" as const,
+    },
     { path: "/terms", priority: 0.5, changeFrequency: "monthly" as const },
     { path: "/privacy", priority: 0.5, changeFrequency: "monthly" as const },
     { path: "/support", priority: 0.6, changeFrequency: "monthly" as const },

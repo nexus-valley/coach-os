@@ -137,11 +137,9 @@ export function DemoPageClient() {
             </Button>
             <a
               className="inline-flex h-12 items-center justify-center rounded-full border border-[#D8E8F0] bg-white px-6 text-base font-semibold text-[#0B2A3D] shadow-sm transition hover:-translate-y-0.5 hover:border-[#2ECBEA]/60 hover:bg-[#F3FAFD]"
-              href="https://wa.me/917338841434"
-              rel="noreferrer"
-              target="_blank"
+              href="mailto:support@coachfort.com"
             >
-              Contact Us on WhatsApp
+              Email support
             </a>
           </div>
 

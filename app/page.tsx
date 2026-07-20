@@ -20,22 +20,22 @@ const valuePills = [
 const pricingPlans = [
   {
     description: "For coaches setting up a branded program business",
-    monthly: "₹1,499 / month",
+    monthly: "INR 1,499 / month",
     name: "Starter",
-    yearly: "₹14,990 / year",
+    yearly: "INR 14,990 / year",
   },
   {
     description:
       "For growing coaching teams with more programs, students, and operations",
-    monthly: "₹5,999 / month",
+    monthly: "INR 5,999 / month",
     name: "Growth",
-    yearly: "₹59,990 / year",
+    yearly: "INR 59,990 / year",
   },
   {
     description: "For larger coaching businesses and advanced needs",
-    monthly: "Custom pricing",
+    monthly: "Contact us",
     name: "Premium",
-    yearly: "Contact CoachFort support",
+    yearly: "Custom scope and activation terms",
   },
 ];
 
@@ -156,7 +156,7 @@ function HeroVisual() {
                 CoachFort command center
               </p>
               <p className="mt-1 text-xs font-medium text-[#66788F]">
-                Testing workspace snapshot
+                Soft-launch workspace snapshot
               </p>
             </div>
             <span className="rounded-full border border-[#9ADDEA] bg-[#EAF8FC] px-3 py-1 text-xs font-semibold text-[#0B6F87]">
@@ -294,8 +294,8 @@ export default function Home() {
               </a>
             </div>
             <p className="mt-5 text-sm font-medium text-[#66788F]">
-              Public signup enabled for testing &bull; Demo workspace ready
-              &bull; Do not use for live student operations yet
+              Founder-led onboarding available &bull; Demo workspace ready
+              &bull; Plans from INR 1,499/month
             </p>
           </div>
 
@@ -447,12 +447,12 @@ export default function Home() {
           <div className="max-w-3xl">
             <Badge>Pricing</Badge>
             <h2 className="mt-5 text-3xl font-semibold tracking-normal text-[#0B1F33] sm:text-4xl">
-              Clear plans for testing and subscription discussions.
+              Plans from INR 1,499/month.
             </h2>
             <p className="mt-4 leading-7 text-[#425B76]">
-              Pick the plan that matches your coaching business stage. During
-              testing, subscription activation is handled through CoachFort
-              support.
+              Soft-launch onboarding is sales-led. Starter and Growth pricing
+              is published for planning; Premium is confirmed only after
+              CoachFort reviews scope, limits, onboarding, and activation terms.
             </p>
           </div>
           <div className="mt-10 grid gap-5 lg:grid-cols-3">
@@ -487,8 +487,9 @@ export default function Home() {
           </div>
           <Card className="mt-6 border-[#F5D48C] bg-[#FFF8E7] p-5">
             <p className="text-sm font-semibold leading-6 text-[#6F4B00]">
-              During testing, subscription activation is handled through
-              CoachFort support. No online payment is started from this page.
+              During soft launch, subscription activation is handled through
+              CoachFort support after payment verification. No online checkout
+              or automatic activation is started from this page.
             </p>
           </Card>
         </div>
@@ -596,15 +597,6 @@ export default function Home() {
                 <p className="text-lg font-semibold text-[#0B1F33]">
                   Nexus Valley Technologies
                 </p>
-                <address className="mt-4 not-italic leading-8 text-[#425B76]">
-                  9/443-3 Pari Nagar Extension
-                  <br />
-                  CAK Road
-                  <br />
-                  Karur, Tamil Nadu 639002
-                  <br />
-                  India
-                </address>
                 <div className="mt-6">
                   <p className="text-sm font-semibold text-[#66788F]">
                     Support email
@@ -614,17 +606,6 @@ export default function Home() {
                     href="mailto:support@coachfort.com"
                   >
                     support@coachfort.com
-                  </a>
-                </div>
-                <div className="mt-6">
-                  <p className="text-sm font-semibold text-[#66788F]">
-                    Mobile / WhatsApp
-                  </p>
-                  <a
-                    className="mt-2 inline-block text-lg font-semibold text-[#145DA0] transition hover:text-[#0F4C81]"
-                    href="tel:+917338841434"
-                  >
-                    +91 7338841434
                   </a>
                 </div>
               </div>

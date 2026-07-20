@@ -5,13 +5,16 @@ const quickLinks = [
   ["Features", "/#features"],
   ["Why CoachFort", "/#why-coachfort"],
   ["About", "/#about"],
-  ["Support", "/support"],
 ];
 
 const policyLinks = [
   ["Terms", "/terms"],
   ["Privacy", "/privacy"],
   ["Payment Policy", "/payment-policy"],
+  ["Refund Policy", "/refund-policy"],
+  ["Acceptable Use", "/acceptable-use"],
+  ["Support Policy", "/support-policy"],
+  ["Support", "/support"],
 ];
 
 export function MarketingFooter() {
@@ -63,27 +66,13 @@ export function MarketingFooter() {
           <address className="mt-4 not-italic leading-7 text-[#425B76]">
             Nexus Valley Technologies
             <br />
-            9/443-3 Pari Nagar Extension
-            <br />
-            CAK Road
-            <br />
-            Karur, Tamil Nadu 639002
-            <br />
-            India
+            CoachFort, operated by Nexus Valley / founder-owned business entity
           </address>
           <a
             className="mt-4 inline-flex font-semibold text-[#145DA0] transition hover:text-[#0F4C81]"
             href="mailto:support@coachfort.com"
           >
             support@coachfort.com
-          </a>
-          <a
-            className="mt-3 block font-semibold text-[#145DA0] transition hover:text-[#0F4C81]"
-            href="https://wa.me/917338841434"
-            rel="noreferrer"
-            target="_blank"
-          >
-            WhatsApp: +91 7338841434
           </a>
         </div>
       </div>
