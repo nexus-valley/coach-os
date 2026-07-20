@@ -1,10 +1,10 @@
 import { Button } from "@/src/components/ui/Button";
 
 export const earlyAccessContactHref = "/support";
-export const maintenanceTestingMessage =
+export const earlyAccessSupportMessage =
   "CoachFort is currently in early access for online coaching businesses setting up branded program pages and student access flows. Explore safely before using it for live student operations.";
 export const earlyAccessMessage =
-  maintenanceTestingMessage;
+  earlyAccessSupportMessage;
 
 type EarlyAccessNoticeProps = {
   className?: string;
@@ -17,7 +17,7 @@ export function EarlyAccessNotice({
 }: EarlyAccessNoticeProps) {
   const isDark = tone === "dark";
 
-  // Temporary testing notice shown while production launch checks continue.
+  // Soft-launch notice shown while founder-led onboarding continues.
   return (
     <section
       className={[
@@ -35,10 +35,10 @@ export function EarlyAccessNotice({
             isDark ? "text-zinc-100" : "text-[#425B76]",
           ].join(" ")}
         >
-          {maintenanceTestingMessage}
+          {earlyAccessSupportMessage}
         </p>
         <Button href="/support" size="sm" variant="secondary">
-          Testing support
+          Founder-led support
         </Button>
       </div>
     </section>

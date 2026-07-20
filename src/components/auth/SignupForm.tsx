@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 import { AuthInput } from "@/src/components/auth/AuthInput";
 import { GoogleOAuthButton } from "@/src/components/auth/GoogleOAuthButton";
 import {
-  maintenanceTestingMessage,
+  earlyAccessSupportMessage,
 } from "@/src/components/marketing/EarlyAccessNotice";
 import { Button } from "@/src/components/ui/Button";
 import { requestAuthOtp, verifyAuthOtp } from "@/src/lib/authOtp";
@@ -115,8 +115,8 @@ export function SignupForm() {
   return (
     <form className="space-y-5" onSubmit={handleSubmit}>
       <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm leading-6 text-amber-950">
-        <p className="font-semibold">Maintenance and testing</p>
-        <p className="mt-1">{maintenanceTestingMessage}</p>
+        <p className="font-semibold">Founder-led onboarding</p>
+        <p className="mt-1">{earlyAccessSupportMessage}</p>
         {isInviteSignup ? (
           <p className="mt-3 font-semibold text-amber-900">
             This invite signup flow remains available for invited workspace users.
