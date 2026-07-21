@@ -1,3 +1,4 @@
+import { isPremiumPlanKey } from "@/src/lib/plans";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 
 type JsonRecord = Record<string, unknown>;
@@ -560,6 +561,12 @@ export async function reviewTenantPlanUpgradeRequest(
 export async function setTenantSubscriptionPlan(
   input: SetTenantSubscriptionPlanInput,
 ): Promise<TenantEntitlementState> {
+  if (isPremiumPlanKey(input.planCode)) {
+    throw new Error(
+      "Premium assignment is deferred until fixed pricing and plan mapping are approved.",
+    );
+  }
+
   const supabase = getSupabaseClient();
   const { data, error } = await supabase.rpc("set_tenant_subscription_plan", {
     p_billing_cycle: input.billingCycle,

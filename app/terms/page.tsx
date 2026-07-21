@@ -15,7 +15,7 @@ export const metadata: Metadata = {
 const sections = [
   {
     body: [
-      "CoachFort is a white-label online coaching platform for coaches, trainers, mentors, course creators, and coaching businesses.",
+      "CoachFort is a branded online coaching platform for coaches, trainers, mentors, course creators, and coaching businesses. Current soft-launch workspaces use CoachFort-hosted branded pages; custom domains are a future add-on unless CoachFort separately approves them.",
       "CoachFort is operated by Nexus Valley / founder-owned business entity. The final registered legal entity name may be updated later.",
       "These terms are practical soft-launch terms for founder-approved customers and are not final legal advice.",
     ],

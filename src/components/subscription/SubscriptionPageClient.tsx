@@ -110,6 +110,13 @@ const emptyUsage: UsageCounts = {
   trainers: 0,
 };
 
+const planComparisonResources: PlanResource[] = [
+  "students",
+  "courses",
+  "team_members",
+  "trainers",
+];
+
 function formatPlan(plan: SubscriptionPlan) {
   return getPlanDisplayName(plan);
 }
@@ -1680,15 +1687,17 @@ export function SubscriptionPageClient() {
               platform owner while gateway billing is not connected.
             </p>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-500">
-              Payment and checkout policies are being prepared for beta launch.
-              Prices may be subject to applicable taxes, and paid plan
-              activation happens only after verified server-side payment
-              confirmation.{" "}
+              Payment and checkout policies are prepared for founder-led soft
+              launch. Prices may be subject to applicable taxes, and paid plan
+              activation happens only after founder-verified payment
+              confirmation. Premium remains contact-sales and is not available
+              for tenant-side selection until fixed pricing and mapping are
+              approved.{" "}
               <Link
                 className="font-semibold text-sky-300 underline-offset-4 transition hover:text-white hover:underline"
                 href="/payment-policy"
               >
-                Review the draft payment policy
+                Review the payment policy
               </Link>
             </p>
           </div>
@@ -1705,6 +1714,7 @@ export function SubscriptionPageClient() {
             const planOptionLimits = getPlanLimits(planOption.plan);
             const currentPlan = planOption.plan === subscription.plan;
             const definition = getPlanDefinition(planOption.plan);
+            const manualLimits = definition.manualLimits;
             const price = definition.billing[billingCycle];
 
             return (
@@ -1750,22 +1760,50 @@ export function SubscriptionPageClient() {
                 </div>
 
                 <div className="mt-6 space-y-3 text-sm">
-                  {(Object.keys(planOptionLimits) as PlanResource[]).map(
-                    (resource) => (
-                      <div
-                        className="flex items-center justify-between gap-4 border-b border-white/10 pb-3 last:border-b-0 last:pb-0"
-                        key={resource}
-                      >
-                        <span className="text-slate-400">
-                          {planResourceLabels[resource]}
-                        </span>
-                        <span className="font-semibold text-white">
-                          {formatLimit(planOptionLimits[resource])}
-                        </span>
-                      </div>
-                    ),
-                  )}
+                  {planComparisonResources.map((resource) => (
+                    <div
+                      className="flex items-center justify-between gap-4 border-b border-white/10 pb-3 last:border-b-0 last:pb-0"
+                      key={resource}
+                    >
+                      <span className="text-slate-400">
+                        {planResourceLabels[resource]}
+                      </span>
+                      <span className="font-semibold text-white">
+                        {formatLimit(planOptionLimits[resource])}
+                      </span>
+                    </div>
+                  ))}
                 </div>
+
+                {manualLimits.length > 0 ? (
+                  <div className="mt-5 rounded-2xl border border-amber-400/20 bg-amber-400/10 p-4 text-sm">
+                    <p className="font-semibold text-amber-100">
+                      Founder-monitored soft-launch limits
+                    </p>
+                    <div className="mt-3 space-y-3">
+                      {manualLimits.map((limit) => (
+                        <div
+                          className="border-b border-amber-100/10 pb-3 last:border-b-0 last:pb-0"
+                          key={`${planOption.plan}-${limit.label}`}
+                        >
+                          <div className="flex items-center justify-between gap-4">
+                            <span className="text-amber-100/80">
+                              {limit.label}
+                            </span>
+                            <span className="font-semibold text-white">
+                              {limit.value}
+                            </span>
+                          </div>
+                          {limit.note ? (
+                            <p className="mt-1 text-xs leading-5 text-amber-100/65">
+                              {limit.note}
+                            </p>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
 
                 <div className="mt-auto pt-7">
                   {currentPlan ? (

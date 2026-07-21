@@ -170,7 +170,8 @@ export const featureDefinitions: FeatureDefinition[] = [
     section: "Operations",
   },
   {
-    description: "White-label public website builder.",
+    description:
+      "CoachFort-hosted branded public site builder. Custom domains are a future add-on.",
     key: "website_builder",
     label: "Website Builder",
     section: "Growth",

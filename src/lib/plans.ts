@@ -8,6 +8,11 @@ export type PlanResource =
   | "trainers";
 export type ResourceLimit = number | "unlimited";
 export type BillingCycle = "monthly" | "yearly";
+export type ManualPlanLimit = {
+  label: string;
+  note?: string;
+  value: string;
+};
 export type FeatureKey =
   | "assignments"
   | "attendance"
@@ -32,6 +37,7 @@ export type PlanDefinition = {
   features: Record<FeatureKey, boolean>;
   key: PlanKey;
   limits: Record<PlanResource, ResourceLimit>;
+  manualLimits: ManualPlanLimit[];
   target: string;
 };
 
@@ -43,7 +49,7 @@ const allFeatures: Record<FeatureKey, boolean> = {
   certificates: true,
   cohorts: true,
   courses: true,
-  live_classes: false,
+  live_classes: true,
   messages: true,
   reports: true,
   students: true,
@@ -57,11 +63,10 @@ export const planDefinitions: Record<PlanKey, PlanDefinition> = {
       yearly: null,
     },
     description:
-      "Contact-sales plan for multi-branch academies and high-scale needs.",
+      "Contact-sales/custom plan. Premium activation is deferred until fixed pricing and plan mapping are approved.",
     displayName: "Premium",
     features: {
       ...allFeatures,
-      live_classes: false,
     },
     key: "enterprise",
     limits: {
@@ -71,7 +76,19 @@ export const planDefinitions: Record<PlanKey, PlanDefinition> = {
       team_members: 100,
       trainers: 75,
     },
-    target: "Large academy or multi-location institute",
+    manualLimits: [
+      {
+        label: "Premium activation",
+        value: "Blocked",
+        note: "Future founder-reviewed plan only.",
+      },
+      {
+        label: "Custom domain",
+        value: "Future add-on",
+        note: "Not included by default.",
+      },
+    ],
+    target: "Future custom plan after founder review",
   },
   free: {
     billing: {
@@ -93,9 +110,23 @@ export const planDefinitions: Record<PlanKey, PlanDefinition> = {
       automations: 0,
       courses: 5,
       students: 100,
-      team_members: 5,
-      trainers: 3,
+      team_members: 2,
+      trainers: 1,
     },
+    manualLimits: [
+      {
+        label: "Storage",
+        value: "5GB",
+        note: "Founder-monitored during soft launch.",
+      },
+      {
+        label: "Live classes",
+        value: "20/month",
+        note: "Founder-monitored during soft launch.",
+      },
+      { label: "Owner/admin seats", value: "1" },
+      { label: "Trainer seats", value: "1" },
+    ],
     target: "Solo coach starting out",
   },
   growth: {
@@ -107,16 +138,33 @@ export const planDefinitions: Record<PlanKey, PlanDefinition> = {
     displayName: "Growth",
     features: {
       ...allFeatures,
-      live_classes: false,
     },
     key: "growth",
     limits: {
       automations: 5000,
       courses: 25,
-      students: 500,
-      team_members: 20,
-      trainers: 15,
+      students: 1000,
+      team_members: 15,
+      trainers: 10,
     },
+    manualLimits: [
+      {
+        label: "Storage",
+        value: "50GB",
+        note: "Founder-monitored during soft launch.",
+      },
+      {
+        label: "Live classes",
+        value: "100/month",
+        note: "Founder-monitored during soft launch.",
+      },
+      {
+        label: "Team users",
+        value: "5",
+        note: "Non-trainer seats are founder-monitored; automatic team-seat counting includes all roles.",
+      },
+      { label: "Trainer seats", value: "10" },
+    ],
     target: "Scaling academy or multi-program business",
   },
   starter: {
@@ -130,27 +178,40 @@ export const planDefinitions: Record<PlanKey, PlanDefinition> = {
       ...allFeatures,
       automations: false,
       branded_portal: false,
-      live_classes: false,
     },
     key: "starter",
     limits: {
       automations: 0,
       courses: 5,
       students: 100,
-      team_members: 5,
-      trainers: 3,
+      team_members: 2,
+      trainers: 1,
     },
+    manualLimits: [
+      {
+        label: "Storage",
+        value: "5GB",
+        note: "Founder-monitored during soft launch.",
+      },
+      {
+        label: "Live classes",
+        value: "20/month",
+        note: "Founder-monitored during soft launch.",
+      },
+      { label: "Owner/admin seats", value: "1" },
+      { label: "Trainer seats", value: "1" },
+    ],
     target: "Active coach with a small team",
   },
 };
 
-export const planOrder: PlanKey[] = ["starter", "growth", "enterprise"];
+export const planOrder: PlanKey[] = ["starter", "growth"];
 
 export const planResourceLabels: Record<PlanResource, string> = {
   automations: "Automations",
-  courses: "Courses",
+  courses: "Active programs",
   students: "Students",
-  team_members: "Team members",
+  team_members: "Total team seats",
   trainers: "Trainers",
 };
 
@@ -168,6 +229,10 @@ export function normalizePlanKey(value: unknown): PlanKey {
   }
 
   return "free";
+}
+
+export function isPremiumPlanKey(value: unknown) {
+  return normalizePlanKey(value) === "enterprise";
 }
 
 export function getStoredPlanForPlanKey(plan: PlanKey) {
@@ -239,11 +304,15 @@ export function getPlanUpgradeRecommendation(
     },
   );
 
-  if (!nearLimit || currentPlan === "enterprise") {
+  if (!nearLimit || currentPlan === "enterprise" || currentIndex < 0) {
     return null;
   }
 
-  const nextPlan = planOrder[Math.min(currentIndex + 1, planOrder.length - 1)];
+  const nextPlan = planOrder[currentIndex + 1];
+
+  if (!nextPlan) {
+    return null;
+  }
 
   return {
     reason: "Workspace usage is nearing one or more current plan limits.",

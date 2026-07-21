@@ -108,7 +108,7 @@ const comparisonRows = [
 const faqs = [
   {
     answer:
-      "CoachFort is a white-label online coaching platform for creating programs, sharing branded public program pages, collecting enrollment requests, managing student access, delivering live classes and materials, and tracking invoices, manual payments, and receipts from one workspace.",
+      "CoachFort is a branded online coaching platform for creating programs, sharing CoachFort-hosted public program pages, collecting enrollment requests, managing student access, delivering live classes and materials, and tracking invoices, manual payments, and receipts from one workspace. Custom domains are a future add-on unless CoachFort separately approves them.",
     question: "What is CoachFort?",
   },
   {
@@ -118,7 +118,7 @@ const faqs = [
   },
   {
     answer:
-      "Yes. Workspaces can configure branding details such as name, logo URL, brand color, website, and support contact information.",
+      "Yes. Workspaces can configure branding details such as name, logo URL, brand color, website, and support contact information on CoachFort-hosted pages. Custom domains are a future add-on and are not included by default.",
     question: "Can I use my own branding?",
   },
   {
@@ -268,7 +268,7 @@ export default function Home() {
         <div className="relative mx-auto grid min-h-[calc(100vh-5rem)] max-w-7xl items-center gap-12 px-5 py-14 sm:px-6 lg:grid-cols-[0.9fr_1.1fr] lg:px-8 lg:py-20">
           <div className="max-w-3xl">
             <Badge className="border-[#9ADDEA] bg-white text-[#0B6F87] shadow-sm">
-              Premium coaching business platform
+              Founder-led coaching business platform
             </Badge>
             <h1 className="mt-7 max-w-4xl text-4xl font-semibold leading-[1.04] tracking-normal text-[#0B1F33] sm:text-6xl lg:text-7xl">
               Run Your Coaching Business from One Powerful Platform
@@ -277,7 +277,7 @@ export default function Home() {
               Create and sell programs, share branded public pages, collect
               enrollment requests, approve student access, deliver live classes
               and materials, and track invoices, manual payments, and receipts
-              under your own brand.
+              on CoachFort-hosted pages under your own brand.
             </p>
             <div className="mt-9 flex flex-col gap-3 sm:flex-row sm:items-center">
               <Button href="/signup" size="lg">
@@ -337,7 +337,7 @@ export default function Home() {
             ["Everything in one platform", "Program pages, enrollment requests, student access, live classes, materials, community, and finance records stay connected."],
             ["Built for coaching businesses", "Coach-approved access, student portals, invoices, manual payments, and receipts match real online coaching operations."],
             ["Coach-owned relationships", "Students request enrollment through your branded page while payment and access decisions stay with your coaching team."],
-            ["Premium operations dashboard", "Track recorded payments, enrollments, student growth, open balances, and workspace progress clearly."],
+            ["Operations dashboard", "Track recorded payments, enrollments, student growth, open balances, and workspace progress clearly."],
           ].map(([title, text]) => (
             <Card className="group p-6 transition hover:-translate-y-1" key={title}>
               <span className="mb-5 block h-1.5 w-12 rounded-full bg-[linear-gradient(90deg,#145DA0,#2ECBEA)]" />

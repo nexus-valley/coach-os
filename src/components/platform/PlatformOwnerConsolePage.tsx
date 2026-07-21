@@ -44,6 +44,7 @@ import {
   type TenantEntitlementLimit,
   type TenantEntitlementState,
 } from "@/src/lib/subscriptionEntitlements";
+import { isPremiumPlanKey } from "@/src/lib/plans";
 
 type PlanFormState = {
   aiMonthlyLimit: string;
@@ -799,6 +800,14 @@ export function PlatformOwnerConsolePage() {
       !canonicalAssignmentForm.note.trim() ||
       !canonicalAssignmentConfirmed
     ) {
+      return;
+    }
+
+    if (isPremiumPlanKey(canonicalAssignmentForm.planCode)) {
+      setCanonicalAssignmentError(
+        "Premium assignment is deferred until fixed pricing and plan mapping are approved.",
+      );
+      setCanonicalAssignmentConfirmed(false);
       return;
     }
 
@@ -1736,7 +1745,13 @@ function CanonicalAssignmentControlsPanel({
   onSave: () => void;
 }) {
   const canEditCanonical = canManagePlans(adminRole);
-  const availablePlans = catalog.filter((plan) => plan.status !== "archived");
+  const activeCatalogPlans = catalog.filter((plan) => plan.status !== "archived");
+  const availablePlans = activeCatalogPlans.filter(
+    (plan) => !isPremiumPlanKey(plan.code),
+  );
+  const blockedPremiumPlans = activeCatalogPlans.filter((plan) =>
+    isPremiumPlanKey(plan.code),
+  );
   const assignment = entitlement?.assignment ?? null;
   const mismatch = hasLegacyCanonicalMismatch(detail, entitlement);
   const keyFeatures = ["payment_gateway", "live_classes"].map((featureKey) => ({
@@ -1759,6 +1774,7 @@ function CanonicalAssignmentControlsPanel({
     Boolean(form.currency) &&
     Boolean(form.billingCycle) &&
     Boolean(form.note.trim()) &&
+    !isPremiumPlanKey(form.planCode) &&
     confirmed &&
     !saving;
 
@@ -1796,6 +1812,13 @@ function CanonicalAssignmentControlsPanel({
           Canonical entitlement assignment may differ from legacy billing records
           during transition. Legacy billing is retained for historical/platform
           operations until a reviewed migration sync is approved.
+        </p>
+      ) : null}
+
+      {blockedPremiumPlans.length > 0 ? (
+        <p className="mt-4 rounded-2xl border border-[#FED7AA] bg-[#FFF7ED] p-3 text-sm text-[#9A3412]">
+          Premium appears in the platform catalog but is hidden from manual
+          canonical assignment until fixed pricing and plan mapping are approved.
         </p>
       ) : null}
 
