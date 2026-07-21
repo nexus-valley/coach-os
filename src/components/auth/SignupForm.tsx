@@ -5,7 +5,6 @@ import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { AuthInput } from "@/src/components/auth/AuthInput";
-import { GoogleOAuthButton } from "@/src/components/auth/GoogleOAuthButton";
 import {
   earlyAccessSupportMessage,
 } from "@/src/components/marketing/EarlyAccessNotice";
@@ -122,20 +121,6 @@ export function SignupForm() {
             This invite signup flow remains available for invited workspace users.
           </p>
         ) : null}
-      </div>
-
-      <GoogleOAuthButton
-        disabled={loading}
-        onError={setError}
-        redirectPath={nextPath ?? undefined}
-      />
-
-      <div className="flex items-center gap-3">
-        <span className="h-px flex-1 bg-zinc-200" />
-        <span className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-400">
-          or
-        </span>
-        <span className="h-px flex-1 bg-zinc-200" />
       </div>
 
       <AuthInput
