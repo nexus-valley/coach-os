@@ -165,7 +165,7 @@ export function buildStudentPortalInviteEmail(input: {
   tenantName?: string | null;
 }) {
   const expiry = formatDate(input.expiresAt);
-  const academyName = input.tenantName?.trim() || "your academy";
+  const coachBrandName = input.tenantName?.trim() || "your coaching business";
   const greeting = input.studentName?.trim()
     ? `${input.studentName.trim()}, your student portal is ready.`
     : "Your student portal is ready.";
@@ -177,13 +177,13 @@ export function buildStudentPortalInviteEmail(input: {
     },
     body: [
       greeting,
-      `${academyName} has enabled your CoachFort student portal for courses, sessions, documents, messages, and academy updates.`,
+      `${coachBrandName} has enabled your CoachFort student portal for courses, sessions, documents, messages, and coaching updates.`,
       expiry ? `This access link expires on ${expiry}.` : "Use the link to sign in with your student account.",
     ],
     footerNote:
       "This is not a payment link. Do not share your password or OTP with anyone.",
-    preheader: `${academyName} invited you to the CoachFort student portal.`,
-    subject: `Your ${academyName} student portal`,
+    preheader: `${coachBrandName} invited you to the CoachFort student portal.`,
+    subject: `Your ${coachBrandName} student portal`,
     title: "Open your CoachFort student portal",
   });
 }

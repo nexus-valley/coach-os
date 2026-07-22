@@ -230,7 +230,7 @@ export function PublicSiteSettingsPage() {
 
     try {
       await updatePublicSiteSettings(tenant.id, form);
-      setMessage("Public website settings saved.");
+      setMessage("Public page settings saved.");
       await load();
     } catch (caught) {
       setError(getErrorMessage(caught, "Unable to save public site settings."));
@@ -252,7 +252,7 @@ export function PublicSiteSettingsPage() {
   if (role && !canManageWorkspace(role)) {
     return (
       <div className="mx-auto max-w-7xl">
-        <AccessDeniedCard description="Public website settings can be edited by workspace owners and admins only." />
+        <AccessDeniedCard description="Public page settings can be edited by workspace owners and admins only." />
       </div>
     );
   }
@@ -266,21 +266,21 @@ export function PublicSiteSettingsPage() {
     <div className="mx-auto max-w-7xl">
       <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
         <div>
-          <Badge tone="owner">Public website</Badge>
+          <Badge tone="owner">Public page</Badge>
           <h1 className="mt-4 text-3xl font-semibold tracking-normal text-[#0B1F33] sm:text-4xl">
-            Public Site Builder
+            Public Page Builder
           </h1>
           <p className="mt-3 max-w-3xl text-base leading-7 text-[#425B76]">
-            Publish a tenant-branded landing page with course previews and safe
-            inquiry capture for prospects.
+            Publish a CoachFort-hosted branded page with program previews and
+            safe inquiry capture for prospects.
           </p>
         </div>
         <div className="flex flex-wrap gap-3">
           <Button href={`/site/${form.slug}`} type="button" variant="secondary">
-            Open Site
+            Open public page
           </Button>
           <Button disabled={saving} form="public-site-form" type="submit">
-            {saving ? "Saving..." : "Save Public Site"}
+            {saving ? "Saving..." : "Save Public Page"}
           </Button>
         </div>
       </div>
@@ -303,7 +303,8 @@ export function PublicSiteSettingsPage() {
               <div>
                 <h2 className="text-xl font-semibold">Publishing</h2>
                 <p className="mt-2 text-sm leading-6 text-[#425B76]">
-                  The public page is unavailable until publishing is enabled.
+                  The CoachFort-hosted public page is unavailable until
+                  publishing is enabled.
                 </p>
               </div>
               <Badge tone={form.publicSiteEnabled ? "success" : "warning"}>
@@ -313,14 +314,14 @@ export function PublicSiteSettingsPage() {
             <div className="mt-5 grid gap-4 md:grid-cols-2">
               <ToggleField
                 checked={form.publicSiteEnabled}
-                description="Allow public visitors to load this institute website."
+                description="Allow public visitors to load this CoachFort-hosted coaching page."
                 label="Enable public site"
                 onChange={(checked) => updateField("publicSiteEnabled", checked)}
               />
               <TextField
                 label="Public slug"
                 onChange={(event) => updateField("slug", event.target.value)}
-                placeholder="academy-name"
+                placeholder="your-coaching-brand"
                 required
                 value={form.slug}
               />
@@ -423,8 +424,8 @@ export function PublicSiteSettingsPage() {
             <div className="mt-5 space-y-3">
               <ToggleField
                 checked={form.publicShowCourses}
-                description="Show only published course preview cards."
-                label="Show course previews"
+                description="Show only published program preview cards."
+                label="Show program previews"
                 onChange={(checked) => updateField("publicShowCourses", checked)}
               />
               <ToggleField
@@ -459,16 +460,19 @@ export function PublicSiteSettingsPage() {
                 {form.publicSiteEnabled ? "Public" : "Private"}
               </Badge>
               <h3 className="mt-4 text-2xl font-semibold">
-                {form.publicHeroTitle || form.publicPageTitle || tenant?.name || "Public site"}
+                {form.publicHeroTitle ||
+                  form.publicPageTitle ||
+                  tenant?.name ||
+                  "Public coaching page"}
               </h3>
               <p className="mt-3 text-sm leading-6 text-[#425B76]">
                 {form.publicHeroSubtitle ||
                   form.publicPageDescription ||
-                  "Add public site copy to preview the landing page."}
+                  "Add public page copy to preview the CoachFort-hosted page."}
               </p>
               <div className="mt-4 flex flex-wrap gap-2">
                 {[
-                  form.publicShowCourses ? "Courses visible" : "Courses hidden",
+                  form.publicShowCourses ? "Programs visible" : "Programs hidden",
                   form.publicShowContactForm ? "Inquiry form" : "No form",
                   form.publicShowSupportContact ? "Support shown" : "Support hidden",
                 ].map((item) => (

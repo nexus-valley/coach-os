@@ -134,7 +134,7 @@ export const planDefinitions: Record<PlanKey, PlanDefinition> = {
       monthly: 5999,
       yearly: 59990,
     },
-    description: "Main paid plan for growing coaching teams and institutes.",
+    description: "Main paid plan for growing coaching teams and businesses.",
     displayName: "Growth",
     features: {
       ...allFeatures,
@@ -165,7 +165,7 @@ export const planDefinitions: Record<PlanKey, PlanDefinition> = {
       },
       { label: "Trainer seats", value: "10" },
     ],
-    target: "Scaling academy or multi-program business",
+    target: "Scaling coaching or multi-program business",
   },
   starter: {
     billing: {

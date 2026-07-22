@@ -320,7 +320,7 @@ export function BrandingSettingsPage() {
         ...tenant,
         name: updatedSettings.name,
       }));
-      setMessage("White label branding saved.");
+      setMessage("CoachFort-hosted branding saved.");
     } catch (caught) {
       setError(getErrorMessage(caught, "Unable to save branding settings."));
     } finally {
@@ -341,7 +341,7 @@ export function BrandingSettingsPage() {
   if (role && !canEdit) {
     return (
       <div className="mx-auto max-w-7xl">
-        <AccessDeniedCard description="White label branding can be edited by workspace owners and admins only." />
+        <AccessDeniedCard description="Branding can be edited by workspace owners and admins only." />
       </div>
     );
   }
@@ -350,14 +350,14 @@ export function BrandingSettingsPage() {
     <div className="mx-auto max-w-7xl">
       <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
         <div>
-          <Badge tone="owner">Tenant customization</Badge>
+          <Badge tone="owner">Brand customization</Badge>
           <h1 className="mt-4 text-3xl font-semibold tracking-normal text-[#0B1F33] sm:text-4xl">
-            White Label Branding
+            CoachFort-hosted Branding
           </h1>
           <p className="mt-3 max-w-3xl text-base leading-7 text-[#425B76]">
             Configure your coaching brand identity, portal copy, support
-            details, and brand colors for student-facing and workspace-facing
-            experiences.
+            details, and brand colors for CoachFort-hosted student-facing and
+            workspace-facing experiences.
           </p>
         </div>
         <div className="flex flex-wrap gap-3">
@@ -392,7 +392,7 @@ export function BrandingSettingsPage() {
             <div className="mt-5 grid gap-4 md:grid-cols-2">
               <TextField
                 disabled={!canEdit || saving}
-                label="Institute / Academy Name"
+                label="Coaching Brand Name"
                 name="workspaceDisplayName"
                 onChange={updateField}
                 required
@@ -403,7 +403,7 @@ export function BrandingSettingsPage() {
                 label="Short Brand Name"
                 name="brandName"
                 onChange={updateField}
-                placeholder="Anand NEET"
+                placeholder="Anand Coaching"
                 value={form.brandName}
               />
               <TextField
@@ -419,7 +419,7 @@ export function BrandingSettingsPage() {
                 label="Contact CTA Text"
                 name="contactCtaText"
                 onChange={updateField}
-                placeholder="Contact admissions"
+                placeholder="Contact coach team"
                 value={form.contactCtaText}
               />
             </div>

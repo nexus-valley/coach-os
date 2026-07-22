@@ -373,7 +373,7 @@ export function TeamOperationsPage() {
     return (
       <div className="mx-auto max-w-4xl">
         <FeedbackAlert>
-          Team Operations is available only to institute owners and admins.
+          Team Operations is available only to workspace owners and admins.
         </FeedbackAlert>
       </div>
     );

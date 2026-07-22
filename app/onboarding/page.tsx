@@ -16,8 +16,8 @@ export default function OnboardingPage() {
               Create the workspace that will run your coaching business.
             </h1>
             <p className="mt-6 max-w-xl text-lg leading-8 text-zinc-400">
-              Every coach, academy, or team starts as its own secure tenant.
-              After workspace creation, CoachFort will guide you through
+              Every coach, coaching business, or team starts as its own secure
+              workspace. After workspace creation, CoachFort will guide you through
               billing readiness, team invites, students, courses, documents,
               announcements, and community setup.
             </p>
@@ -28,7 +28,7 @@ export default function OnboardingPage() {
               First workspace
             </p>
             <h2 className="mt-3 text-3xl font-semibold tracking-normal">
-              Set up your tenant
+              Set up your workspace
             </h2>
             <p className="mt-3 text-sm leading-6 text-zinc-500">
               This creates the secure workspace only. It does not start

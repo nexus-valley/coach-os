@@ -406,7 +406,7 @@ export function BillingProfilePageClient() {
       {!completion?.is_complete && missingLabels.length > 0 ? (
         <Card padding="md" variant="subtle">
           <SectionHeader
-            description="These fields are advisory readiness checks only. Tax ID/GSTIN is optional because requirements vary by academy and jurisdiction."
+            description="These fields are advisory readiness checks only. Tax ID/GSTIN is optional because requirements vary by coaching business and jurisdiction."
             title="Missing readiness fields"
           />
           <div className="mt-4 flex flex-wrap gap-2">
@@ -433,7 +433,7 @@ export function BillingProfilePageClient() {
         <form className="mt-6 grid gap-5" onSubmit={handleSubmit}>
           <div className="grid gap-5 md:grid-cols-2">
             <FormField
-              description="Registered academy, institute, or business name."
+              description="Registered coaching business or legal business name."
               htmlFor="legal_name"
               label="Legal name"
               required

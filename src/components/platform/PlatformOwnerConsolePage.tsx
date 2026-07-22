@@ -1171,7 +1171,7 @@ function PlatformHeader({
         </h1>
         <p className="mt-2 max-w-3xl text-sm text-[#5D7185]">
           Platform-level subscriptions, usage, tenant health, and support. This
-          console manages platform status, not institute finance records.
+          console manages platform status, not workspace finance records.
         </p>
       </div>
       <div className="flex flex-wrap items-center gap-3">
