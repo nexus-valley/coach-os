@@ -49,7 +49,7 @@ export function OnboardingForm() {
         <input
           className="mt-2 h-12 w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 text-sm text-zinc-950 outline-none transition placeholder:text-zinc-400 focus:border-zinc-950 focus:bg-white focus:ring-4 focus:ring-zinc-950/10"
           onChange={(event) => setWorkspaceName(event.target.value)}
-          placeholder="Nexus Valley Academy"
+          placeholder="Nexus Valley Coaching"
           required
           type="text"
           value={workspaceName}

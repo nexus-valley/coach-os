@@ -245,7 +245,7 @@ function normalizeTenantSettingsPayload(
 ) {
   const displayName = normalizeRequiredText(
     data.workspaceDisplayName,
-    "Institute / Academy name",
+    "Coaching brand name",
   );
   const brandColor = normalizeBrandColor(data.brandColor);
 
