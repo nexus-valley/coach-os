@@ -10,11 +10,17 @@ export type Tenant = {
 };
 
 export const coachingCategories = [
-  "Business Coaching",
-  "Fitness Coaching",
-  "Stock Market / Trading",
-  "Education / Exam Prep",
-  "Career Coaching",
+  "Academic / school tutoring",
+  "Competitive exam coaching",
+  "Professional / career coaching",
+  "Business / entrepreneurship coaching",
+  "Fitness / wellness coaching",
+  "Life coaching / personal development",
+  "Language coaching",
+  "Music / arts / creative coaching",
+  "Technology / coding coaching",
+  "Finance / trading coaching",
+  "Spiritual / mindfulness coaching",
   "Other",
 ] as const;
 

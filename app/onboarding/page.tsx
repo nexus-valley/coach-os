@@ -10,16 +10,16 @@ export default function OnboardingPage() {
         <div className="relative mx-auto grid min-h-screen max-w-7xl items-center gap-10 px-5 py-10 sm:px-6 lg:grid-cols-[0.9fr_1.1fr] lg:px-8">
           <section>
             <Badge className="border-white/15 bg-white/10 text-white">
-              Tenant onboarding
+              Coach onboarding
             </Badge>
             <h1 className="mt-6 max-w-2xl text-5xl font-semibold leading-tight tracking-normal">
               Create the workspace that will run your coaching business.
             </h1>
             <p className="mt-6 max-w-xl text-lg leading-8 text-zinc-400">
               Every coach, coaching business, or team starts as its own secure
-              workspace. After workspace creation, CoachFort will guide you through
-              billing readiness, team invites, students, courses, documents,
-              announcements, and community setup.
+              workspace. CoachFort will guide you through branded page setup,
+              program creation, student access, team invites, billing readiness,
+              documents, sessions, and community setup.
             </p>
           </section>
 
@@ -31,9 +31,9 @@ export default function OnboardingPage() {
               Set up your workspace
             </h2>
             <p className="mt-3 text-sm leading-6 text-zinc-500">
-              This creates the secure workspace only. It does not start
-              checkout, change a plan, send invites, or publish student-facing
-              content.
+              This creates the secure workspace and captures setup guidance. It
+              does not start checkout, change a plan, send invites, enable
+              Premium, or publish student-facing content.
             </p>
             <OnboardingForm />
           </section>

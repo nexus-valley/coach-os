@@ -187,3 +187,58 @@ export function buildStudentPortalInviteEmail(input: {
     title: "Open your CoachFort student portal",
   });
 }
+
+export function buildCoachWelcomeEmail(input: {
+  coachName?: string | null;
+  tenantName?: string | null;
+}) {
+  const greetingName = input.coachName?.trim() || "there";
+  const workspaceName = input.tenantName?.trim() || "your coaching workspace";
+
+  return buildCoachFortEmailLayout({
+    body: [
+      `Hi ${greetingName}, welcome to CoachFort.`,
+      `${workspaceName} is set up for email and password access. Google login is not part of the soft-launch sign-in path.`,
+      "Start by reviewing your dashboard, setting up your CoachFort-hosted branded page, and creating your first program.",
+      "Student payments remain coach-managed through manual, offline, or external methods until payment gateway workflows are intentionally enabled.",
+      "Please keep local copies of important uploaded documents while storage backup automation is being planned.",
+    ],
+    footerNote: "For onboarding help, contact support@coachfort.com.",
+    preheader: `Welcome to CoachFort. ${workspaceName} is ready for setup.`,
+    securityNote:
+      "CoachFort will never ask you to share passwords, OTPs, API keys, or private access links.",
+    subject: "Welcome to CoachFort",
+    title: "Welcome to CoachFort",
+  });
+}
+
+export function buildWorkspaceReadyEmail(input: {
+  appUrl: string;
+  publicPageUrl?: string | null;
+  tenantName?: string | null;
+}) {
+  const workspaceName = input.tenantName?.trim() || "your CoachFort workspace";
+  const publicPageLine = input.publicPageUrl?.trim()
+    ? `Your CoachFort-hosted public page starts here: ${input.publicPageUrl.trim()}`
+    : "You can set up your CoachFort-hosted public page from workspace settings.";
+
+  return buildCoachFortEmailLayout({
+    action: {
+      label: "Open CoachFort dashboard",
+      url: input.appUrl,
+    },
+    body: [
+      `${workspaceName} is ready to review.`,
+      "Use your email and password to sign in, then review branding, public page settings, and your first program setup.",
+      publicPageLine,
+      "Starter and Growth activation is completed separately after founder-verified payment. Premium remains contact-sales and is not self-serve during soft launch.",
+      "CoachFort does not collect or refund student program payments during this phase; the coach manages student payments directly.",
+    ],
+    footerNote: "For setup support, contact support@coachfort.com.",
+    preheader: `${workspaceName} is ready on CoachFort.`,
+    securityNote:
+      "Do not share passwords, OTPs, API keys, or private access links with anyone.",
+    subject: `${workspaceName} is ready on CoachFort`,
+    title: "Your workspace is ready",
+  });
+}
