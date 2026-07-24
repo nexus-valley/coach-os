@@ -775,31 +775,31 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
       ) : null}
 
       <section className="mt-6">
-        <Card className="border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/10 sm:p-8">
+        <Card className="border-[#D8E8F0] bg-white p-6 text-[#0B1F33] shadow-xl shadow-[#0B2A3D]/10 sm:p-8">
           <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-start">
             <div>
-              <Badge className="border-[#2ECBEA]/20 bg-[#2ECBEA]/10 text-[#A7F3FF]">
+              <Badge className="border-[#A9E7F2] bg-[#EAFBFE] text-[#075E6F]">
                 Sales settings
               </Badge>
               <h3 className="mt-4 text-2xl font-semibold">
                 Program sales readiness
               </h3>
-              <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-400">
+              <p className="mt-3 max-w-3xl text-sm leading-6 text-[#425B76]">
                 Set the public sales copy, price, and payment instructions for
                 this program. Online checkout is not enabled yet. Use manual
                 instructions or an external payment link for now.
               </p>
-              <div className="mt-5 rounded-2xl border border-white/10 bg-[#15181b] p-4">
-                <p className="text-sm font-semibold text-white">
+              <div className="mt-5 rounded-2xl border border-[#CFE3EC] bg-[#F6FBFE] p-4 shadow-sm">
+                <p className="text-sm font-semibold text-[#0B1F33]">
                   Public program link
                 </p>
                 {publicSalesReady ? (
                   <div className="mt-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                    <p className="break-all rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-3 text-sm font-semibold text-emerald-100">
+                    <p className="break-all rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">
                       {publicProgramPath}
                     </p>
                     <Button
-                      className="shrink-0 border-white/15 bg-transparent text-white hover:bg-white/10"
+                      className="shrink-0 border-[#0B2A3D] bg-[#0B2A3D] text-white hover:bg-[#123A52]"
                       href={publicProgramPath}
                       size="sm"
                       variant="secondary"
@@ -811,22 +811,29 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
                   <div className="mt-3 grid gap-2 sm:grid-cols-2">
                     {salesReadinessItems.map((item) => (
                       <div
-                        className="flex items-center gap-3 rounded-xl border border-white/10 bg-[#101214] px-4 py-3 text-sm"
+                        className={[
+                          "flex items-center gap-3 rounded-xl border px-4 py-3 text-sm shadow-sm",
+                          item.complete
+                            ? "border-emerald-200 bg-emerald-50"
+                            : "border-[#D8E8F0] bg-white",
+                        ].join(" ")}
                         key={item.label}
                       >
                         <span
                           className={[
                             "flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold",
                             item.complete
-                              ? "bg-emerald-400 text-[#052E1A]"
-                              : "bg-white/10 text-slate-400",
+                              ? "bg-emerald-500 text-white"
+                              : "bg-[#E8F1F5] text-[#425B76]",
                           ].join(" ")}
                         >
                           {item.complete ? "OK" : "-"}
                         </span>
                         <span
                           className={
-                            item.complete ? "text-slate-200" : "text-slate-400"
+                            item.complete
+                              ? "font-semibold text-emerald-900"
+                              : "font-semibold text-[#425B76]"
                           }
                         >
                           {item.label}
@@ -835,26 +842,26 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
                     ))}
                   </div>
                 )}
-                <p className="mt-3 text-xs leading-5 text-slate-500">
+                <p className="mt-3 text-xs font-medium leading-5 text-[#526A80]">
                   The public page lets visitors request enrollment. It does not
                   collect payment, generate invoices, or activate access.
                 </p>
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Badge className="border-white/10 bg-white/10 text-slate-200">
+              <Badge className="border-[#CFE3EC] bg-[#F6FBFE] text-[#0B2A3D]">
                 {formatProgramPrice(course)}
               </Badge>
               <Badge
                 className={
                   course.public_sales_enabled
-                    ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-100"
-                    : "border-white/10 bg-white/10 text-slate-300"
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                    : "border-[#D8E8F0] bg-[#F8FAFC] text-[#526A80]"
                 }
               >
                 {course.public_sales_enabled ? "Public sales on" : "Sales off"}
               </Badge>
-              <Badge className="border-white/10 bg-white/10 text-slate-300">
+              <Badge className="border-[#CFE3EC] bg-[#F6FBFE] text-[#0B2A3D]">
                 {course.sales_payment_mode === "external" ? "External" : "Manual"}
               </Badge>
             </div>
@@ -865,8 +872,8 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
               className={[
                 "mt-5 rounded-2xl border p-4 text-sm font-medium",
                 salesFeedback.tone === "success"
-                  ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-100"
-                  : "border-red-400/30 bg-red-500/10 text-red-100",
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                  : "border-red-200 bg-red-50 text-red-700",
               ].join(" ")}
             >
               {salesFeedback.message}
@@ -876,10 +883,10 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
           {salesForm ? (
             <form className="mt-6 grid gap-5" onSubmit={handleSalesSettingsSubmit}>
               <div className="grid gap-4 lg:grid-cols-3">
-                <label className="block text-sm font-semibold text-slate-200">
+                <label className="block text-sm font-semibold text-[#0B1F33]">
                   Pricing type
                   <select
-                    className="mt-2 h-12 w-full rounded-xl border border-white/10 bg-[#15181b] px-4 text-sm text-white outline-none focus:border-[#2ECBEA]/60 focus:ring-4 focus:ring-[#2ECBEA]/10"
+                    className="mt-2 h-12 w-full rounded-xl border border-[#BFD7E3] bg-white px-4 text-sm font-medium text-[#0B1F33] outline-none focus:border-[#2ECBEA]/80 focus:ring-4 focus:ring-[#2ECBEA]/15 disabled:bg-[#EEF4F7] disabled:text-[#66788F]"
                     disabled={!canManage || salesSaving}
                     onChange={(event) =>
                       setSalesForm((current) =>
@@ -901,10 +908,10 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
                     <option value="paid">Paid</option>
                   </select>
                 </label>
-                <label className="block text-sm font-semibold text-slate-200">
+                <label className="block text-sm font-semibold text-[#0B1F33]">
                   Price amount
                   <input
-                    className="mt-2 h-12 w-full rounded-xl border border-white/10 bg-[#15181b] px-4 text-sm text-white outline-none placeholder:text-slate-500 focus:border-[#2ECBEA]/60 focus:ring-4 focus:ring-[#2ECBEA]/10 disabled:text-slate-500"
+                    className="mt-2 h-12 w-full rounded-xl border border-[#BFD7E3] bg-white px-4 text-sm font-medium text-[#0B1F33] outline-none placeholder:text-[#71839A] focus:border-[#2ECBEA]/80 focus:ring-4 focus:ring-[#2ECBEA]/15 disabled:border-[#D8E8F0] disabled:bg-[#EEF4F7] disabled:text-[#66788F]"
                     disabled={
                       !canManage ||
                       salesSaving ||
@@ -924,10 +931,10 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
                     value={salesForm.pricingType === "free" ? "" : salesForm.priceAmount}
                   />
                 </label>
-                <label className="block text-sm font-semibold text-slate-200">
+                <label className="block text-sm font-semibold text-[#0B1F33]">
                   Currency
                   <select
-                    className="mt-2 h-12 w-full rounded-xl border border-white/10 bg-[#15181b] px-4 text-sm text-white outline-none focus:border-[#2ECBEA]/60 focus:ring-4 focus:ring-[#2ECBEA]/10"
+                    className="mt-2 h-12 w-full rounded-xl border border-[#BFD7E3] bg-white px-4 text-sm font-medium text-[#0B1F33] outline-none focus:border-[#2ECBEA]/80 focus:ring-4 focus:ring-[#2ECBEA]/15 disabled:bg-[#EEF4F7] disabled:text-[#66788F]"
                     disabled={!canManage || salesSaving}
                     onChange={(event) =>
                       setSalesForm((current) =>
@@ -947,10 +954,10 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
               </div>
 
               <div className="grid gap-4 lg:grid-cols-3">
-                <label className="flex min-h-24 items-start gap-3 rounded-2xl border border-white/10 bg-[#15181b] p-4 text-sm">
+                <label className="flex min-h-24 items-start gap-3 rounded-2xl border border-[#CFE3EC] bg-[#F6FBFE] p-4 text-sm shadow-sm">
                   <input
                     checked={salesForm.publicSalesEnabled}
-                    className="mt-1 h-4 w-4"
+                    className="mt-1 h-4 w-4 accent-[#0B6B7A]"
                     disabled={!canManage || salesSaving}
                     onChange={(event) =>
                       setSalesForm((current) =>
@@ -965,18 +972,18 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
                     type="checkbox"
                   />
                   <span>
-                    <span className="block font-semibold text-white">
+                    <span className="block font-semibold text-[#0B1F33]">
                       Enable public sales page
                     </span>
-                    <span className="mt-1 block leading-6 text-slate-400">
+                    <span className="mt-1 block leading-6 text-[#526A80]">
                       Marks this program ready for a future public sales page.
                     </span>
                   </span>
                 </label>
-                <label className="block text-sm font-semibold text-slate-200 lg:col-span-2">
+                <label className="block text-sm font-semibold text-[#0B1F33] lg:col-span-2">
                   Payment mode
                   <select
-                    className="mt-2 h-12 w-full rounded-xl border border-white/10 bg-[#15181b] px-4 text-sm text-white outline-none focus:border-[#2ECBEA]/60 focus:ring-4 focus:ring-[#2ECBEA]/10"
+                    className="mt-2 h-12 w-full rounded-xl border border-[#BFD7E3] bg-white px-4 text-sm font-medium text-[#0B1F33] outline-none focus:border-[#2ECBEA]/80 focus:ring-4 focus:ring-[#2ECBEA]/15 disabled:bg-[#EEF4F7] disabled:text-[#66788F]"
                     disabled={!canManage || salesSaving}
                     onChange={(event) =>
                       setSalesForm((current) =>
@@ -1002,10 +1009,10 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
               </div>
 
               <div className="grid gap-4 lg:grid-cols-2">
-                <label className="block text-sm font-semibold text-slate-200">
+                <label className="block text-sm font-semibold text-[#0B1F33]">
                   Sales headline
                   <input
-                    className="mt-2 h-12 w-full rounded-xl border border-white/10 bg-[#15181b] px-4 text-sm text-white outline-none placeholder:text-slate-500 focus:border-[#2ECBEA]/60 focus:ring-4 focus:ring-[#2ECBEA]/10"
+                    className="mt-2 h-12 w-full rounded-xl border border-[#BFD7E3] bg-white px-4 text-sm font-medium text-[#0B1F33] outline-none placeholder:text-[#71839A] focus:border-[#2ECBEA]/80 focus:ring-4 focus:ring-[#2ECBEA]/15 disabled:bg-[#EEF4F7] disabled:text-[#66788F]"
                     disabled={!canManage || salesSaving}
                     maxLength={140}
                     onChange={(event) =>
@@ -1019,10 +1026,10 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
                     value={salesForm.salesHeadline}
                   />
                 </label>
-                <label className="block text-sm font-semibold text-slate-200">
+                <label className="block text-sm font-semibold text-[#0B1F33]">
                   Access duration label
                   <input
-                    className="mt-2 h-12 w-full rounded-xl border border-white/10 bg-[#15181b] px-4 text-sm text-white outline-none placeholder:text-slate-500 focus:border-[#2ECBEA]/60 focus:ring-4 focus:ring-[#2ECBEA]/10"
+                    className="mt-2 h-12 w-full rounded-xl border border-[#BFD7E3] bg-white px-4 text-sm font-medium text-[#0B1F33] outline-none placeholder:text-[#71839A] focus:border-[#2ECBEA]/80 focus:ring-4 focus:ring-[#2ECBEA]/15 disabled:bg-[#EEF4F7] disabled:text-[#66788F]"
                     disabled={!canManage || salesSaving}
                     maxLength={80}
                     onChange={(event) =>
@@ -1041,10 +1048,10 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
                 </label>
               </div>
 
-              <label className="block text-sm font-semibold text-slate-200">
+              <label className="block text-sm font-semibold text-[#0B1F33]">
                 Sales summary
                 <textarea
-                  className="mt-2 min-h-28 w-full resize-none rounded-xl border border-white/10 bg-[#15181b] px-4 py-3 text-sm leading-6 text-white outline-none placeholder:text-slate-500 focus:border-[#2ECBEA]/60 focus:ring-4 focus:ring-[#2ECBEA]/10"
+                  className="mt-2 min-h-28 w-full resize-none rounded-xl border border-[#BFD7E3] bg-white px-4 py-3 text-sm font-medium leading-6 text-[#0B1F33] outline-none placeholder:text-[#71839A] focus:border-[#2ECBEA]/80 focus:ring-4 focus:ring-[#2ECBEA]/15 disabled:bg-[#EEF4F7] disabled:text-[#66788F]"
                   disabled={!canManage || salesSaving}
                   maxLength={600}
                   onChange={(event) =>
@@ -1059,10 +1066,10 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
                 />
               </label>
 
-              <label className="block text-sm font-semibold text-slate-200">
+              <label className="block text-sm font-semibold text-[#0B1F33]">
                 Payment instructions
                 <textarea
-                  className="mt-2 min-h-32 w-full resize-none rounded-xl border border-white/10 bg-[#15181b] px-4 py-3 text-sm leading-6 text-white outline-none placeholder:text-slate-500 focus:border-[#2ECBEA]/60 focus:ring-4 focus:ring-[#2ECBEA]/10"
+                  className="mt-2 min-h-32 w-full resize-none rounded-xl border border-[#BFD7E3] bg-white px-4 py-3 text-sm font-medium leading-6 text-[#0B1F33] outline-none placeholder:text-[#71839A] focus:border-[#2ECBEA]/80 focus:ring-4 focus:ring-[#2ECBEA]/15 disabled:bg-[#EEF4F7] disabled:text-[#66788F]"
                   disabled={!canManage || salesSaving}
                   maxLength={2000}
                   onChange={(event) =>
@@ -1081,10 +1088,10 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
               </label>
 
               {salesForm.salesPaymentMode === "external" ? (
-                <label className="block text-sm font-semibold text-slate-200">
+                <label className="block text-sm font-semibold text-[#0B1F33]">
                   External payment URL
                   <input
-                    className="mt-2 h-12 w-full rounded-xl border border-white/10 bg-[#15181b] px-4 text-sm text-white outline-none placeholder:text-slate-500 focus:border-[#2ECBEA]/60 focus:ring-4 focus:ring-[#2ECBEA]/10"
+                    className="mt-2 h-12 w-full rounded-xl border border-[#BFD7E3] bg-white px-4 text-sm font-medium text-[#0B1F33] outline-none placeholder:text-[#71839A] focus:border-[#2ECBEA]/80 focus:ring-4 focus:ring-[#2ECBEA]/15 disabled:bg-[#EEF4F7] disabled:text-[#66788F]"
                     disabled={!canManage || salesSaving}
                     maxLength={500}
                     onChange={(event) =>
@@ -1104,21 +1111,21 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
                 </label>
               ) : null}
 
-              <div className="flex flex-col gap-3 border-t border-white/10 pt-5 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-sm leading-6 text-slate-400">
+              <div className="flex flex-col gap-3 border-t border-[#D8E8F0] pt-5 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm font-medium leading-6 text-[#425B76]">
                   Saving these settings does not collect payment, generate an
                   invoice, or activate student access.
                 </p>
                 {canManage ? (
                   <Button
-                    className="bg-teal-400 text-black hover:bg-teal-300"
+                    className="bg-[#0B2A3D] text-white hover:bg-[#123A52]"
                     disabled={salesSaving}
                     type="submit"
                   >
                     {salesSaving ? "Saving..." : "Save Sales Settings"}
                   </Button>
                 ) : (
-                  <Badge className="border-white/10 bg-white/10 text-slate-300">
+                  <Badge className="border-[#D8E8F0] bg-[#F8FAFC] text-[#526A80]">
                     Read only
                   </Badge>
                 )}
