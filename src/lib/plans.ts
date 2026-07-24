@@ -172,7 +172,7 @@ export const planDefinitions: Record<PlanKey, PlanDefinition> = {
       monthly: 1499,
       yearly: 14990,
     },
-    description: "Paid launch plan for small coaching centers and teams.",
+    description: "Paid launch plan for small coaching teams and businesses.",
     displayName: "Starter",
     features: {
       ...allFeatures,
@@ -215,6 +215,12 @@ export const planResourceLabels: Record<PlanResource, string> = {
   trainers: "Trainers",
 };
 
+export const publicPricingPlanOrder: PlanKey[] = [
+  "starter",
+  "growth",
+  "enterprise",
+];
+
 export function normalizePlanKey(value: unknown): PlanKey {
   if (value === "enterprise" || value === "premium") {
     return "enterprise";
@@ -253,6 +259,82 @@ export function getPlanDisplayName(plan: StoredPlanKey | PlanKey | unknown) {
 
 export function formatResourceLimit(limit: ResourceLimit) {
   return limit === "unlimited" ? "Unlimited" : limit.toLocaleString();
+}
+
+export function formatInrAmount(amount: number) {
+  return `INR ${amount.toLocaleString("en-IN")}`;
+}
+
+export function formatInrAmountMinor(amountMinor: number) {
+  return formatInrAmount(amountMinor / 100);
+}
+
+export function getPlanBillingAmount(
+  plan: StoredPlanKey | PlanKey | unknown,
+  billingCycle: BillingCycle,
+) {
+  return getPlanDefinition(plan).billing[billingCycle];
+}
+
+export function getPlanAmountMinor(
+  plan: StoredPlanKey | PlanKey | unknown,
+  billingCycle: BillingCycle,
+) {
+  const amount = getPlanBillingAmount(plan, billingCycle);
+
+  return amount === null ? null : amount * 100;
+}
+
+export function getPlanDisplayPrice(
+  plan: StoredPlanKey | PlanKey | unknown,
+  billingCycle: BillingCycle,
+) {
+  const amount = getPlanBillingAmount(plan, billingCycle);
+
+  if (amount === null) {
+    return billingCycle === "monthly"
+      ? "Contact us"
+      : "Custom scope and activation terms";
+  }
+
+  if (amount === 0) {
+    return "Free";
+  }
+
+  return `${formatInrAmount(amount)} / ${
+    billingCycle === "monthly" ? "month" : "year"
+  }`;
+}
+
+export function getPlanLimitSummary(plan: StoredPlanKey | PlanKey | unknown) {
+  const limits = getPlanDefinition(plan).limits;
+
+  return `up to ${formatResourceLimit(limits.students)} students and ${formatResourceLimit(
+    limits.courses,
+  )} active programs`;
+}
+
+export function getPublicStartingPrice() {
+  const amount = getPlanBillingAmount("starter", "monthly");
+
+  return amount === null ? "Contact us" : formatInrAmount(amount);
+}
+
+export function getPublicPlanCards() {
+  return publicPricingPlanOrder.map((plan) => {
+    const definition = getPlanDefinition(plan);
+
+    return {
+      description: definition.description,
+      key: plan,
+      limitSummary: isPremiumPlanKey(plan)
+        ? "Custom scope and activation review"
+        : getPlanLimitSummary(plan),
+      monthly: getPlanDisplayPrice(plan, "monthly"),
+      name: definition.displayName,
+      yearly: getPlanDisplayPrice(plan, "yearly"),
+    };
+  });
 }
 
 export function isWithinLimit(used: number, limit: ResourceLimit) {

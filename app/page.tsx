@@ -4,6 +4,7 @@ import { Card } from "@/src/components/ui/Card";
 import { MarketingFooter } from "@/src/components/layout/MarketingFooter";
 import { MarketingHeader } from "@/src/components/layout/MarketingHeader";
 import { EarlyAccessNotice } from "@/src/components/marketing/EarlyAccessNotice";
+import { getPublicPlanCards, getPublicStartingPrice } from "@/src/lib/plans";
 import { Fragment } from "react";
 
 const valuePills = [
@@ -17,27 +18,8 @@ const valuePills = [
   "Analytics",
 ];
 
-const pricingPlans = [
-  {
-    description: "For coaches setting up a branded program business",
-    monthly: "INR 1,499 / month",
-    name: "Starter",
-    yearly: "INR 14,990 / year",
-  },
-  {
-    description:
-      "For growing coaching teams with more programs, students, and operations",
-    monthly: "INR 5,999 / month",
-    name: "Growth",
-    yearly: "INR 59,990 / year",
-  },
-  {
-    description: "For larger coaching businesses and advanced needs",
-    monthly: "Contact us",
-    name: "Premium",
-    yearly: "Custom scope and activation terms",
-  },
-];
+const pricingPlans = getPublicPlanCards();
+const publicStartingPrice = getPublicStartingPrice();
 
 const features = [
   {
@@ -295,7 +277,7 @@ export default function Home() {
             </div>
             <p className="mt-5 text-sm font-medium text-[#66788F]">
               Founder-led onboarding available &bull; Demo workspace ready
-              &bull; Plans from INR 1,499/month
+              &bull; Plans from {publicStartingPrice}/month
             </p>
           </div>
 
@@ -447,7 +429,7 @@ export default function Home() {
           <div className="max-w-3xl">
             <Badge>Pricing</Badge>
             <h2 className="mt-5 text-3xl font-semibold tracking-normal text-[#0B1F33] sm:text-4xl">
-              Plans from INR 1,499/month.
+              Plans from {publicStartingPrice}/month.
             </h2>
             <p className="mt-4 leading-7 text-[#425B76]">
               Soft-launch onboarding is sales-led. Starter and Growth pricing
@@ -464,6 +446,9 @@ export default function Home() {
                   </h3>
                   <p className="mt-3 min-h-14 text-sm leading-6 text-[#425B76]">
                     {plan.description}
+                  </p>
+                  <p className="mt-3 text-xs font-semibold uppercase tracking-[0.08em] text-[#66788F]">
+                    {plan.limitSummary}
                   </p>
                 </div>
                 <div className="mt-6 rounded-2xl border border-[#D8E8F0] bg-[#F7FCFF] p-5">

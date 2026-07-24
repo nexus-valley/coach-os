@@ -5,6 +5,11 @@ import { MarketingFooter } from "@/src/components/layout/MarketingFooter";
 import { MarketingHeader } from "@/src/components/layout/MarketingHeader";
 import { Badge } from "@/src/components/ui/Badge";
 import { Card } from "@/src/components/ui/Card";
+import {
+  getPlanDisplayName,
+  getPlanDisplayPrice,
+  planOrder,
+} from "@/src/lib/plans";
 
 export const metadata: Metadata = {
   title: "Payment, Refund & Cancellation Policy | CoachFort",
@@ -75,8 +80,12 @@ export default function PaymentPolicyPage() {
 
         <PolicySection title="Current Starter And Growth Pricing">
           <ul className="grid gap-2 pl-5">
-            <li className="list-disc">Starter: INR 1,499/month or INR 14,990/year.</li>
-            <li className="list-disc">Growth: INR 5,999/month or INR 59,990/year.</li>
+            {planOrder.map((plan) => (
+              <li className="list-disc" key={plan}>
+                {getPlanDisplayName(plan)}: {getPlanDisplayPrice(plan, "monthly")}{" "}
+                or {getPlanDisplayPrice(plan, "yearly")}.
+              </li>
+            ))}
           </ul>
           <p>
             Premium remains a custom/contact-sales plan. Premium is available

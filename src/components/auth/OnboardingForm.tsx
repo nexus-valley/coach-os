@@ -5,6 +5,11 @@ import { useState, type FormEvent } from "react";
 
 import { Button } from "@/src/components/ui/Button";
 import {
+  getPlanDisplayName,
+  getPlanDisplayPrice,
+  getPlanLimitSummary,
+} from "@/src/lib/plans";
+import {
   coachingCategories,
   createWorkspace,
   type CoachingCategory,
@@ -75,14 +80,24 @@ const planInterestOptions: {
 }[] = [
   {
     description:
-      "Best for small coaches starting out: ₹1,499/month or ₹14,990/year, up to 100 students and 5 programs.",
-    label: "Interested in Starter",
+      `Best for small coaches starting out: ${getPlanDisplayPrice(
+        "starter",
+        "monthly",
+      )} or ${getPlanDisplayPrice("starter", "yearly")}, ${getPlanLimitSummary(
+        "starter",
+      )}.`,
+    label: `Interested in ${getPlanDisplayName("starter")}`,
     value: "starter",
   },
   {
     description:
-      "Best for growing coaching businesses: ₹5,999/month or ₹59,990/year, up to 1,000 students and 25 programs.",
-    label: "Interested in Growth",
+      `Best for growing coaching businesses: ${getPlanDisplayPrice(
+        "growth",
+        "monthly",
+      )} or ${getPlanDisplayPrice("growth", "yearly")}, ${getPlanLimitSummary(
+        "growth",
+      )}.`,
+    label: `Interested in ${getPlanDisplayName("growth")}`,
     value: "growth",
   },
   {

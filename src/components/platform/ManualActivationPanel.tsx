@@ -6,6 +6,7 @@ import { Badge } from "@/src/components/ui/Badge";
 import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
 import { FeedbackAlert } from "@/src/components/ui/FeedbackAlert";
+import { getPlanAmountMinor } from "@/src/lib/plans";
 import {
   activateTenantSubscriptionManual,
   normalizePlatformError,
@@ -60,12 +61,12 @@ const exactAmounts: Record<
   Record<ManualActivationFormState["billingCycle"], number>
 > = {
   growth: {
-    monthly: 599900,
-    yearly: 5999000,
+    monthly: getPlanAmountMinor("growth", "monthly") ?? 0,
+    yearly: getPlanAmountMinor("growth", "yearly") ?? 0,
   },
   starter: {
-    monthly: 149900,
-    yearly: 1499000,
+    monthly: getPlanAmountMinor("starter", "monthly") ?? 0,
+    yearly: getPlanAmountMinor("starter", "yearly") ?? 0,
   },
 };
 
@@ -342,7 +343,7 @@ export function ManualActivationPanel({
     setActivationMode("regression");
     setForm((current) => ({
       ...current,
-      amountMinor: "149900",
+      amountMinor: String(getPlanAmountMinor("starter", "monthly") ?? ""),
       billingCycle: "monthly",
       confirmationPhrase: "",
       currency: "INR",
