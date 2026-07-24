@@ -1,7 +1,50 @@
 export type CoachFortEmailTemplate = {
   html: string;
+  key?: CoachFortEmailTemplateKey;
+  lifecycle?: CoachFortEmailLifecycle;
   subject: string;
   text: string;
+};
+
+export type CoachFortEmailLifecycle =
+  | "auth"
+  | "billing"
+  | "coach_onboarding"
+  | "student_access"
+  | "support"
+  | "team_invite";
+
+export type CoachFortEmailTemplateKey =
+  | "auth.password_reset_otp"
+  | "auth.signup_otp"
+  | "billing.cancellation_or_expiry"
+  | "billing.manual_activation_receipt"
+  | "billing.payment_failed"
+  | "billing.plan_activated"
+  | "billing.renewal_reminder"
+  | "coach.welcome"
+  | "coach.workspace_ready"
+  | "student.enrollment_approved"
+  | "student.manual_payment_instruction"
+  | "student.message_notification"
+  | "student.portal_invite"
+  | "student.request_received"
+  | "student.session_reminder"
+  | "team.invite";
+
+export type CoachFortEmailWiringStatus =
+  | "missing"
+  | "template_only"
+  | "wired";
+
+export type CoachFortEmailTemplateInventoryItem = {
+  builderName: string | null;
+  firstPaidCustomerRequired: boolean;
+  key: CoachFortEmailTemplateKey;
+  lifecycle: CoachFortEmailLifecycle;
+  manualFallback: string;
+  notes: string;
+  wiringStatus: CoachFortEmailWiringStatus;
 };
 
 type EmailAction = {
@@ -13,6 +56,8 @@ type EmailLayoutInput = {
   action?: EmailAction;
   body: string[];
   footerNote?: string;
+  key?: CoachFortEmailTemplateKey;
+  lifecycle?: CoachFortEmailLifecycle;
   preheader?: string;
   securityNote?: string;
   subject: string;
@@ -22,8 +67,156 @@ type EmailLayoutInput = {
 type InviteRole = "admin" | "staff" | "trainer";
 
 const brandName = "CoachFort";
+export const coachFortSupportEmail = "support@coachfort.com";
 const defaultSecurityNote =
   "If you did not request this email, you can ignore it. Never share passwords, OTPs, or account access links with anyone.";
+
+export const coachFortEmailTemplateInventory = [
+  {
+    builderName: "buildOtpEmail",
+    firstPaidCustomerRequired: true,
+    key: "auth.signup_otp",
+    lifecycle: "auth",
+    manualFallback: "Founder can pause signup and assist through support.",
+    notes: "Wired through sendOtpEmail for signup email verification.",
+    wiringStatus: "wired",
+  },
+  {
+    builderName: "buildOtpEmail",
+    firstPaidCustomerRequired: true,
+    key: "auth.password_reset_otp",
+    lifecycle: "auth",
+    manualFallback: "Founder can verify account ownership and guide reset support.",
+    notes: "Wired through sendOtpEmail for password reset OTP.",
+    wiringStatus: "wired",
+  },
+  {
+    builderName: "buildTeamInviteEmail",
+    firstPaidCustomerRequired: false,
+    key: "team.invite",
+    lifecycle: "team_invite",
+    manualFallback: "Workspace owner/admin can copy the secure invite link.",
+    notes: "Wired through POST /api/team-invitations/send-email; production delivery smoke is still pending.",
+    wiringStatus: "wired",
+  },
+  {
+    builderName: "buildCoachWelcomeEmail",
+    firstPaidCustomerRequired: false,
+    key: "coach.welcome",
+    lifecycle: "coach_onboarding",
+    manualFallback: "Founder sends welcome/setup guidance manually.",
+    notes: "Template exists, but no automatic send path is wired.",
+    wiringStatus: "template_only",
+  },
+  {
+    builderName: "buildWorkspaceReadyEmail",
+    firstPaidCustomerRequired: false,
+    key: "coach.workspace_ready",
+    lifecycle: "coach_onboarding",
+    manualFallback: "Founder sends workspace-ready message manually.",
+    notes: "Template exists, but no automatic send path is wired.",
+    wiringStatus: "template_only",
+  },
+  {
+    builderName: "buildStudentPortalInviteEmail",
+    firstPaidCustomerRequired: false,
+    key: "student.portal_invite",
+    lifecycle: "student_access",
+    manualFallback: "Coach or founder shares student access instructions manually.",
+    notes: "Template exists, but no sender route is wired.",
+    wiringStatus: "template_only",
+  },
+  {
+    builderName: null,
+    firstPaidCustomerRequired: false,
+    key: "billing.plan_activated",
+    lifecycle: "billing",
+    manualFallback: "Founder confirms activation manually after Manual Activation.",
+    notes: "Missing until billing lifecycle email work is approved.",
+    wiringStatus: "missing",
+  },
+  {
+    builderName: null,
+    firstPaidCustomerRequired: false,
+    key: "billing.manual_activation_receipt",
+    lifecycle: "billing",
+    manualFallback: "Founder records and sends payment/reference details manually.",
+    notes: "Missing until manual billing communication is wired.",
+    wiringStatus: "missing",
+  },
+  {
+    builderName: null,
+    firstPaidCustomerRequired: false,
+    key: "billing.renewal_reminder",
+    lifecycle: "billing",
+    manualFallback: "Founder tracks renewals externally during soft launch.",
+    notes: "Missing until billing lifecycle automation is ready.",
+    wiringStatus: "missing",
+  },
+  {
+    builderName: null,
+    firstPaidCustomerRequired: false,
+    key: "billing.payment_failed",
+    lifecycle: "billing",
+    manualFallback: "Founder handles failed payments manually.",
+    notes: "Missing until provider billing lifecycle is implemented.",
+    wiringStatus: "missing",
+  },
+  {
+    builderName: null,
+    firstPaidCustomerRequired: false,
+    key: "billing.cancellation_or_expiry",
+    lifecycle: "billing",
+    manualFallback: "Founder handles cancellation and expiry support manually.",
+    notes: "Missing until cancellation/expiry lifecycle is implemented.",
+    wiringStatus: "missing",
+  },
+  {
+    builderName: null,
+    firstPaidCustomerRequired: false,
+    key: "student.request_received",
+    lifecycle: "student_access",
+    manualFallback: "Coach follows up from public request/inquiry UI.",
+    notes: "Missing; public request records are visible in app but no email is wired.",
+    wiringStatus: "missing",
+  },
+  {
+    builderName: null,
+    firstPaidCustomerRequired: false,
+    key: "student.enrollment_approved",
+    lifecycle: "student_access",
+    manualFallback: "Coach/founder notifies student manually after approval.",
+    notes: "Missing until student access lifecycle is implemented.",
+    wiringStatus: "missing",
+  },
+  {
+    builderName: null,
+    firstPaidCustomerRequired: false,
+    key: "student.manual_payment_instruction",
+    lifecycle: "student_access",
+    manualFallback: "Coach sends their own payment instructions.",
+    notes: "Missing by design; CoachFort does not collect student payments during soft launch.",
+    wiringStatus: "missing",
+  },
+  {
+    builderName: null,
+    firstPaidCustomerRequired: false,
+    key: "student.session_reminder",
+    lifecycle: "student_access",
+    manualFallback: "Coach shares session reminders manually.",
+    notes: "Missing/parked until notification lifecycle is approved.",
+    wiringStatus: "missing",
+  },
+  {
+    builderName: null,
+    firstPaidCustomerRequired: false,
+    key: "student.message_notification",
+    lifecycle: "student_access",
+    manualFallback: "Student checks in-app portal messages.",
+    notes: "Missing/parked until notification lifecycle is approved.",
+    wiringStatus: "missing",
+  },
+] as const satisfies readonly CoachFortEmailTemplateInventoryItem[];
 
 function escapeHtml(value: string) {
   return value
@@ -99,6 +292,8 @@ export function buildCoachFortEmailLayout(
     )}</h1>${htmlBody}${actionHtml}${footerNoteHtml}<div style="margin-top:26px;border-top:1px solid #e5eef4;padding-top:18px;"><p style="margin:0;color:#66788f;font-size:12px;line-height:1.6;">${escapeHtml(
       securityNote,
     )}</p></div></td></tr></table><p style="margin:18px 0 0;color:#8aa0b4;font-size:12px;">${brandName} transactional email</p></td></tr></table></body></html>`,
+    key: input.key,
+    lifecycle: input.lifecycle,
     subject: input.subject,
     text,
   };
@@ -121,6 +316,8 @@ export function buildOtpEmail(input: {
       `This code expires in ${input.expiresInMinutes} minutes.`,
     ],
     preheader: `Your ${brandName} verification code expires in ${input.expiresInMinutes} minutes.`,
+    key: isPasswordReset ? "auth.password_reset_otp" : "auth.signup_otp",
+    lifecycle: "auth",
     subject: isPasswordReset
       ? "Your CoachFort password reset code"
       : "Your CoachFort verification code",
@@ -152,6 +349,8 @@ export function buildTeamInviteEmail(input: {
     ],
     footerNote:
       "This invitation gives access only after sign-in and workspace permission checks are complete.",
+    key: "team.invite",
+    lifecycle: "team_invite",
     preheader: `You have been invited to join ${workspaceName} on ${brandName}.`,
     subject: `Invitation to join ${workspaceName} on ${brandName}`,
     title: "You have a CoachFort team invitation",
@@ -182,6 +381,8 @@ export function buildStudentPortalInviteEmail(input: {
     ],
     footerNote:
       "This is not a payment link. Do not share your password or OTP with anyone.",
+    key: "student.portal_invite",
+    lifecycle: "student_access",
     preheader: `${coachBrandName} invited you to the CoachFort student portal.`,
     subject: `Your ${coachBrandName} student portal`,
     title: "Open your CoachFort student portal",
@@ -203,7 +404,9 @@ export function buildCoachWelcomeEmail(input: {
       "Student payments remain coach-managed through manual, offline, or external methods until payment gateway workflows are intentionally enabled.",
       "Please keep local copies of important uploaded documents while storage backup automation is being planned.",
     ],
-    footerNote: "For onboarding help, contact support@coachfort.com.",
+    footerNote: `For onboarding help, contact ${coachFortSupportEmail}.`,
+    key: "coach.welcome",
+    lifecycle: "coach_onboarding",
     preheader: `Welcome to CoachFort. ${workspaceName} is ready for setup.`,
     securityNote:
       "CoachFort will never ask you to share passwords, OTPs, API keys, or private access links.",
@@ -234,7 +437,9 @@ export function buildWorkspaceReadyEmail(input: {
       "Starter and Growth activation is completed separately after founder-verified payment. Premium remains contact-sales and is not self-serve during soft launch.",
       "CoachFort does not collect or refund student program payments during this phase; the coach manages student payments directly.",
     ],
-    footerNote: "For setup support, contact support@coachfort.com.",
+    footerNote: `For setup support, contact ${coachFortSupportEmail}.`,
+    key: "coach.workspace_ready",
+    lifecycle: "coach_onboarding",
     preheader: `${workspaceName} is ready on CoachFort.`,
     securityNote:
       "Do not share passwords, OTPs, API keys, or private access links with anyone.",
