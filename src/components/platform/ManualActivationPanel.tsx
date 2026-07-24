@@ -269,6 +269,55 @@ function buildInput(form: ManualActivationFormState): ManualSubscriptionActivati
   };
 }
 
+function resultValue(
+  result: ManualSubscriptionActivationResult | null,
+  keys: string[],
+) {
+  if (!result) return null;
+
+  for (const key of keys) {
+    const value = result[key];
+    if (value === null || value === undefined || value === "") continue;
+    if (typeof value === "string" || typeof value === "number") {
+      return String(value);
+    }
+    if (typeof value === "boolean") {
+      return value ? "Yes" : "No";
+    }
+  }
+
+  return null;
+}
+
+function activationResultSummary(
+  result: ManualSubscriptionActivationResult | null,
+) {
+  const rows = [
+    ["Tenant id", ["tenant_id", "tenantId"]],
+    ["Plan", ["plan_code", "planCode", "plan"]],
+    ["Status", ["status", "subscription_status", "subscriptionStatus"]],
+    ["Payment status", ["payment_status", "paymentStatus"]],
+    ["Billing cycle", ["billing_cycle", "billingCycle"]],
+    ["Currency", ["currency"]],
+    ["Amount minor", ["amount_minor", "amountMinor", "amount"]],
+    ["Current period starts", ["current_period_start", "currentPeriodStart"]],
+    ["Current period ends", ["current_period_end", "currentPeriodEnd"]],
+    ["Payment reference", ["payment_reference", "paymentReference"]],
+    ["Idempotency key", ["idempotency_key", "idempotencyKey"]],
+    ["Activation audit id", ["audit_id", "auditId", "activation_audit_id"]],
+  ] as const;
+  const summary: { label: string; value: string }[] = [];
+
+  for (const [label, keys] of rows) {
+    const value = resultValue(result, [...keys]);
+    if (value) {
+      summary.push({ label, value });
+    }
+  }
+
+  return summary;
+}
+
 export function ManualActivationPanel({
   adminRole,
   canonicalEntitlement,
@@ -315,6 +364,7 @@ export function ManualActivationPanel({
     [currentAssignmentExists, form, isTenantSummaryMismatch],
   );
   const canSubmit = canUsePanel && errors.length === 0 && !submitting;
+  const resultSummary = activationResultSummary(result);
 
   if (!canUsePanel) {
     return null;
@@ -493,6 +543,33 @@ export function ManualActivationPanel({
       </div>
 
       <form className="mt-5 space-y-4" onSubmit={handleSubmit}>
+        <div className="rounded-2xl border border-[#FCD34D] bg-white p-4 text-sm text-[#78350F]">
+          <p className="font-semibold text-[#92400E]">
+            Founder pre-submit checklist
+          </p>
+          <ul className="mt-2 list-disc space-y-1 pl-5">
+            <li>Verify the SaaS payment externally before activating.</li>
+            <li>
+              Record payment reference, invoice or receipt reference,
+              idempotency key, activation timestamp, and screenshots outside
+              this UI.
+            </li>
+            <li>
+              Confirm tenant id, customer email, plan, billing cycle, amount
+              minor, and currency before checking the safety box.
+            </li>
+            <li>
+              After submit, verify visible plan, status, limits, and current
+              period dates before telling the customer the subscription is ready.
+            </li>
+            <li>
+              If visible period dates differ from the entered dates, stop real
+              customer onboarding and inspect the database/RPC path before
+              proceeding.
+            </li>
+          </ul>
+        </div>
+
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           <InputField
             label="Tenant id"
@@ -549,12 +626,20 @@ export function ManualActivationPanel({
             type="datetime-local"
             value={form.subscriptionStart}
           />
-          <InputField
-            label="Subscription end"
-            onChange={(value) => setField("subscriptionEnd", value)}
-            type="datetime-local"
-            value={form.subscriptionEnd}
-          />
+          <div>
+            <InputField
+              label="Subscription end"
+              onChange={(value) => setField("subscriptionEnd", value)}
+              type="datetime-local"
+              value={form.subscriptionEnd}
+            />
+            <p className="mt-2 text-xs font-normal text-[#5D7185]">
+              Record the exact local start and end values before submitting.
+              Browser datetime-local values can be interpreted by server or
+              database timezone rules, so the visible current-period date must
+              be verified after activation.
+            </p>
+          </div>
           <div>
             <InputField
               label="Payment verified at"
@@ -577,11 +662,18 @@ export function ManualActivationPanel({
             onChange={(value) => setField("paymentReference", value)}
             value={form.paymentReference}
           />
-          <InputField
-            label="Idempotency key"
-            onChange={(value) => setField("idempotencyKey", value)}
-            value={form.idempotencyKey}
-          />
+          <div>
+            <InputField
+              label="Idempotency key"
+              onChange={(value) => setField("idempotencyKey", value)}
+              value={form.idempotencyKey}
+            />
+            <p className="mt-2 text-xs font-normal text-[#5D7185]">
+              Payment reference, idempotency key, and operator note are sent to
+              Manual Activation, but they may not be visible in every read-only
+              subscription view yet. Keep an external activation record.
+            </p>
+          </div>
           <InputField
             label="Founder approval"
             onChange={(value) => setField("founderApproval", value)}
@@ -653,6 +745,29 @@ export function ManualActivationPanel({
             <p className="text-sm font-semibold text-[#047857]">
               Manual activation RPC returned success.
             </p>
+            {resultSummary.length > 0 ? (
+              <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                {resultSummary.map((row) => (
+                  <SummaryItem key={row.label} label={row.label} value={row.value} />
+                ))}
+              </div>
+            ) : null}
+            <div className="mt-3 rounded-xl border border-[#A7F3D0] bg-white p-3 text-sm text-[#065F46]">
+              <p className="font-semibold">Post-activation verification required</p>
+              <ul className="mt-2 list-disc space-y-1 pl-5">
+                <li>Verify tenant is active/paid on Starter or Growth.</li>
+                <li>Verify amount, limits, billing cycle, and current period dates.</li>
+                <li>
+                  Confirm payment reference, invoice or receipt reference,
+                  idempotency key, and activation timestamp are recorded
+                  externally.
+                </li>
+                <li>
+                  Capture screenshot or notes before starting real customer
+                  onboarding.
+                </li>
+              </ul>
+            </div>
             <pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-white p-3 text-xs text-[#0B1F33]">
               {JSON.stringify(result, null, 2)}
             </pre>

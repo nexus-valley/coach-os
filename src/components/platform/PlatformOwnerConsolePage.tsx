@@ -1417,6 +1417,10 @@ function TenantDetailPanel({
               detail.subscription.currency ?? "INR",
             )}
           />
+          <InfoRow
+            label="Current period starts"
+            value={toDisplayDate(detail.subscription.current_period_start)}
+          />
           <InfoRow label="Trial ends" value={toDisplayDate(detail.subscription.trial_ends_at)} />
           <InfoRow
             label="Current period ends"
@@ -1426,6 +1430,12 @@ function TenantDetailPanel({
             label="Billing notes"
             value={detail.subscription.notes_present ? "Present" : "Not set"}
           />
+          <div className="mt-3 rounded-2xl border border-[#D8E8F0] bg-[#F6FAFD] p-3 text-xs leading-5 text-[#5D7185]">
+            Manual activation payment reference, idempotency key, and operator
+            note are not exposed in this tenant detail response yet. For paid
+            customers, verify period dates here and keep the external activation
+            record until audit/reference fields are added to the platform UI.
+          </div>
         </InfoPanel>
 
         <InfoPanel title="Latest Usage Snapshot">
