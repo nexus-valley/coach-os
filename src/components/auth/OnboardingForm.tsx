@@ -9,6 +9,7 @@ import {
   getPlanDisplayPrice,
   getPlanLimitSummary,
 } from "@/src/lib/plans";
+import { getSupabaseClient } from "@/src/lib/supabaseClient";
 import {
   coachingCategories,
   createWorkspace,
@@ -180,6 +181,39 @@ function getOptionalSettingsInput(workspaceName: string, businessDescription: st
   };
 }
 
+async function sendWorkspaceReadyEmail(tenantId: string) {
+  const supabase = getSupabaseClient();
+  const {
+    data: { session },
+    error,
+  } = await supabase.auth.getSession();
+
+  if (error) {
+    throw error;
+  }
+
+  if (!session?.access_token) {
+    throw new Error("Authentication required.");
+  }
+
+  const response = await fetch("/api/onboarding/workspace-ready-email", {
+    body: JSON.stringify({ tenantId }),
+    headers: {
+      Authorization: `Bearer ${session.access_token}`,
+      "Content-Type": "application/json",
+    },
+    method: "POST",
+  });
+
+  if (!response.ok) {
+    const body = (await response.json().catch(() => null)) as {
+      message?: string;
+    } | null;
+
+    throw new Error(body?.message ?? "Unable to send workspace-ready email.");
+  }
+}
+
 export function OnboardingForm() {
   const router = useRouter();
   const [category, setCategory] = useState<CoachingCategory>(
@@ -251,6 +285,18 @@ export function OnboardingForm() {
                 : "Unknown settings update error",
           });
         }
+      }
+
+      try {
+        await sendWorkspaceReadyEmail(workspace.id);
+      } catch (caught) {
+        console.warn("[CoachFort onboarding] Workspace-ready email was not sent", {
+          message:
+            caught instanceof Error
+              ? caught.message
+              : "Unknown workspace-ready email error",
+          tenantId: workspace.id,
+        });
       }
 
       router.replace("/app");
