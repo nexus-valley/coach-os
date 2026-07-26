@@ -42,6 +42,7 @@ import {
 import {
   buildInvitationLink,
   createTeamInvitation,
+  getTeamInvitationErrorMessage,
   listTeamInvitations,
   resendTeamInvitation,
   revokeTeamInvitation,
@@ -201,6 +202,10 @@ async function buildInviteDeliveryMessage(params: {
       "Unable to send invitation email.",
     )} Copy the secure link and share it only with the intended teammate: ${inviteLink}`;
   }
+}
+
+function getInviteErrorMessage(caught: unknown, fallback: string) {
+  return getTeamInvitationErrorMessage(caught, fallback);
 }
 
 function validateInviteForm(email: string, role: InvitationRole) {
@@ -541,7 +546,10 @@ export function TeamSettingsClient() {
       );
       await refreshInvitations();
     } catch (caught) {
-      const message = getErrorMessage(caught, "Unable to create invitation.");
+      const message = getInviteErrorMessage(
+        caught,
+        "Unable to create invitation.",
+      );
 
       setActionError(message);
       setInviteError(message);
@@ -588,7 +596,10 @@ export function TeamSettingsClient() {
       );
       await refreshInvitations();
     } catch (caught) {
-      const message = getErrorMessage(caught, "Unable to resend invitation.");
+      const message = getInviteErrorMessage(
+        caught,
+        "Unable to resend invitation.",
+      );
 
       setActionError(message);
       setInviteError(message);
@@ -620,7 +631,13 @@ export function TeamSettingsClient() {
       setInviteMessage(`Invitation revoked for ${invitation.email}.`);
       await refreshInvitations();
     } catch (caught) {
-      setActionError(getErrorMessage(caught, "Unable to revoke invitation."));
+      const message = getInviteErrorMessage(
+        caught,
+        "Unable to revoke invitation.",
+      );
+
+      setActionError(message);
+      setInviteError(message);
     } finally {
       setMutatingInvitationId("");
     }

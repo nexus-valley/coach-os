@@ -52,10 +52,7 @@ type SupabaseErrorLike = {
   message?: string;
 };
 
-export function getTeamInvitationErrorMessage(
-  caught: unknown,
-  fallback: string,
-) {
+function getRawTeamInvitationErrorMessage(caught: unknown) {
   if (caught instanceof Error && caught.message) {
     return caught.message;
   }
@@ -63,7 +60,70 @@ export function getTeamInvitationErrorMessage(
   if (caught && typeof caught === "object") {
     const error = caught as SupabaseErrorLike;
 
-    return error.message || error.details || error.hint || fallback;
+    return error.message || error.details || error.hint || "";
+  }
+
+  return "";
+}
+
+function isKnownSafeTeamInvitationMessage(normalizedMessage: string) {
+  return (
+    normalizedMessage.includes("pending invitation already exists") ||
+    normalizedMessage.includes("sign in again") ||
+    normalizedMessage.includes("permission to invite team members") ||
+    normalizedMessage.includes("invitation has expired") ||
+    normalizedMessage.includes("invitation is no longer pending") ||
+    normalizedMessage.includes("invitation could not be found") ||
+    normalizedMessage.includes("invited email address")
+  );
+}
+
+export function getTeamInvitationErrorMessage(
+  caught: unknown,
+  fallback: string,
+) {
+  const rawMessage = getRawTeamInvitationErrorMessage(caught);
+  const normalizedMessage = rawMessage.toLowerCase();
+
+  if (!rawMessage) {
+    return fallback;
+  }
+
+  if (normalizedMessage.includes("canonical subscription assignment")) {
+    return "Team invites require an active workspace plan before team-seat limits can be enforced. Ask support to confirm the workspace subscription setup, then try again.";
+  }
+
+  if (
+    normalizedMessage.includes("canonical team limit is not configured") ||
+    normalizedMessage.includes("canonical entity limit is not configured")
+  ) {
+    return "Team invite limits are not configured for this workspace plan. Ask support to confirm the team-seat limits before inviting teammates.";
+  }
+
+  if (normalizedMessage.includes("only owners and admins can invite")) {
+    return "Only workspace owners and admins can invite team members.";
+  }
+
+  if (
+    normalizedMessage.includes("canonical team usage limit exceeded") ||
+    normalizedMessage.includes("canonical entity usage limit exceeded") ||
+    normalizedMessage.includes("team_members") ||
+    normalizedMessage.includes("staff_trainers") ||
+    normalizedMessage.includes("admins")
+  ) {
+    return "This workspace has reached the team-seat limit for that role. Remove an unused pending invite or ask support to adjust the workspace plan before inviting another teammate.";
+  }
+
+  if (normalizedMessage.includes("valid invitation role")) {
+    return "Select a valid team role.";
+  }
+
+  if (normalizedMessage.includes("valid email")) {
+    return "Enter a valid teammate email address.";
+  }
+
+  if (isKnownSafeTeamInvitationMessage(normalizedMessage)) {
+    return rawMessage;
   }
 
   return fallback;
