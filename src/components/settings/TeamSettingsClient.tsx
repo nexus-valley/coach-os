@@ -203,6 +203,24 @@ async function buildInviteDeliveryMessage(params: {
   }
 }
 
+function validateInviteForm(email: string, role: InvitationRole) {
+  const normalizedEmail = email.trim();
+
+  if (!normalizedEmail) {
+    return "Enter the teammate email address before creating an invite.";
+  }
+
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+    return "Enter a valid teammate email address.";
+  }
+
+  if (!invitationRoles.includes(role)) {
+    return "Select a valid team role.";
+  }
+
+  return "";
+}
+
 function createBrandingForm(settings: TenantSettings): BrandingFormState {
   const branding = getWorkspaceBranding(settings);
 
@@ -264,6 +282,7 @@ export function TeamSettingsClient() {
   const [currentUserId, setCurrentUserId] = useState("");
   const [error, setError] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteError, setInviteError] = useState("");
   const [inviteMessage, setInviteMessage] = useState("");
   const [inviteRole, setInviteRole] = useState<InvitationRole>("staff");
   const [invitations, setInvitations] = useState<TeamInvitation[]>([]);
@@ -487,10 +506,21 @@ export function TeamSettingsClient() {
     event.preventDefault();
 
     if (!tenant || !canInviteTeam(currentRole)) {
+      setInviteError("You do not have permission to invite team members.");
+      return;
+    }
+
+    const validationError = validateInviteForm(inviteEmail, inviteRole);
+
+    if (validationError) {
+      setActionError("");
+      setInviteMessage("");
+      setInviteError(validationError);
       return;
     }
 
     setActionError("");
+    setInviteError("");
     setInviteMessage("");
     setMutatingInvitationId("new");
 
@@ -511,7 +541,10 @@ export function TeamSettingsClient() {
       );
       await refreshInvitations();
     } catch (caught) {
-      setActionError(getErrorMessage(caught, "Unable to create invitation."));
+      const message = getErrorMessage(caught, "Unable to create invitation.");
+
+      setActionError(message);
+      setInviteError(message);
     } finally {
       setMutatingInvitationId("");
     }
@@ -519,6 +552,7 @@ export function TeamSettingsClient() {
 
   async function handleCopyInvitation(invitation: TeamInvitation) {
     setActionError("");
+    setInviteError("");
 
     try {
       await navigator.clipboard.writeText(buildInvitationLink(invitation.token));
@@ -526,9 +560,11 @@ export function TeamSettingsClient() {
         `Invite link copied for ${invitation.email}. Share it only with the invited teammate.`,
       );
     } catch {
-      setActionError(
-        "Unable to copy invite link. Select the displayed link and copy it manually.",
-      );
+      const message =
+        "Unable to copy invite link. Select the displayed link and copy it manually.";
+
+      setActionError(message);
+      setInviteError(message);
     }
   }
 
@@ -538,6 +574,7 @@ export function TeamSettingsClient() {
     }
 
     setActionError("");
+    setInviteError("");
     setInviteMessage("");
     setMutatingInvitationId(invitation.id);
 
@@ -551,7 +588,10 @@ export function TeamSettingsClient() {
       );
       await refreshInvitations();
     } catch (caught) {
-      setActionError(getErrorMessage(caught, "Unable to resend invitation."));
+      const message = getErrorMessage(caught, "Unable to resend invitation.");
+
+      setActionError(message);
+      setInviteError(message);
     } finally {
       setMutatingInvitationId("");
     }
@@ -571,6 +611,7 @@ export function TeamSettingsClient() {
     }
 
     setActionError("");
+    setInviteError("");
     setInviteMessage("");
     setMutatingInvitationId(invitation.id);
 
@@ -1336,7 +1377,10 @@ export function TeamSettingsClient() {
                 <input
                   className="mt-2 h-11 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-teal-400/50 focus:ring-4 focus:ring-teal-400/10"
                   disabled={mutatingInvitationId === "new"}
-                  onChange={(event) => setInviteEmail(event.target.value)}
+                  onChange={(event) => {
+                    setInviteEmail(event.target.value);
+                    setInviteError("");
+                  }}
                   placeholder="trainer@coachbrand.com"
                   required
                   type="email"
@@ -1348,9 +1392,10 @@ export function TeamSettingsClient() {
                 <select
                   className="mt-2 h-11 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition focus:border-teal-400/50 focus:ring-4 focus:ring-teal-400/10"
                   disabled={mutatingInvitationId === "new"}
-                  onChange={(event) =>
-                    setInviteRole(event.target.value as InvitationRole)
-                  }
+                  onChange={(event) => {
+                    setInviteRole(event.target.value as InvitationRole);
+                    setInviteError("");
+                  }}
                   value={inviteRole}
                 >
                   {invitationRoles.map((role) => (
@@ -1364,14 +1409,28 @@ export function TeamSettingsClient() {
                 <Button
                   className="w-full"
                   disabled={mutatingInvitationId === "new"}
+                  isLoading={mutatingInvitationId === "new"}
+                  loadingText="Creating invite..."
                   type="submit"
                 >
-                  {mutatingInvitationId === "new"
-                    ? "Creating..."
-                    : "Create and email invite"}
+                  Create and email invite
                 </Button>
               </div>
             </form>
+
+            <div aria-live="polite" className="mt-4 space-y-3">
+              {inviteError ? (
+                <div className="rounded-2xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">
+                  {inviteError}
+                </div>
+              ) : null}
+
+              {inviteMessage ? (
+                <div className="rounded-2xl border border-teal-400/30 bg-teal-400/10 px-4 py-3 text-sm text-teal-100">
+                  {inviteMessage}
+                </div>
+              ) : null}
+            </div>
 
             <div className="mt-7 divide-y divide-white/10 overflow-hidden rounded-3xl border border-white/10">
               {invitations.length === 0 ? (
