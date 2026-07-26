@@ -191,15 +191,15 @@ async function buildInviteDeliveryMessage(params: {
     const emailResult = await sendTeamInvitationEmail(params.invitation.id);
 
     if (emailResult.delivered) {
-      return `Invitation email sent to ${params.invitation.email}. Copy link: ${inviteLink}`;
+      return `Invitation email sent to ${params.invitation.email}. If it does not arrive, copy the secure link and share it only with that teammate: ${inviteLink}`;
     }
 
-    return `Invitation ${params.verb} for ${params.invitation.email}. Email provider is not configured, so copy this secure link: ${inviteLink}`;
+    return `Invitation ${params.verb} for ${params.invitation.email}. Email provider is not configured, so copy the secure link and share it only with the intended teammate: ${inviteLink}`;
   } catch (caught) {
     return `Invitation ${params.verb} for ${params.invitation.email}, but the email was not sent: ${getErrorMessage(
       caught,
       "Unable to send invitation email.",
-    )} Copy link: ${inviteLink}`;
+    )} Copy the secure link and share it only with the intended teammate: ${inviteLink}`;
   }
 }
 
@@ -522,9 +522,13 @@ export function TeamSettingsClient() {
 
     try {
       await navigator.clipboard.writeText(buildInvitationLink(invitation.token));
-      setInviteMessage(`Invite link copied for ${invitation.email}.`);
+      setInviteMessage(
+        `Invite link copied for ${invitation.email}. Share it only with the invited teammate.`,
+      );
     } catch {
-      setActionError("Unable to copy invite link. Select and copy it manually.");
+      setActionError(
+        "Unable to copy invite link. Select the displayed link and copy it manually.",
+      );
     }
   }
 
@@ -1316,8 +1320,8 @@ export function TeamSettingsClient() {
                 </h3>
                 <p className="mt-2 text-sm leading-6 text-slate-400">
                   CoachFort sends one invitation email when email is
-                  configured. The secure invite link remains available for
-                  manual sharing.
+                  configured. If delivery fails, copy the secure invite link
+                  and share it only with the intended teammate.
                 </p>
               </div>
               <Badge>{invitations.length} invites</Badge>
@@ -1399,9 +1403,16 @@ export function TeamSettingsClient() {
                           Expires {formatDate(invitation.expires_at)}
                         </p>
                         {invitation.status === "pending" ? (
-                          <p className="mt-2 break-all rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-400">
-                            {buildInvitationLink(invitation.token)}
-                          </p>
+                          <div className="mt-2 space-y-2">
+                            <p className="text-xs leading-5 text-slate-400">
+                              Manual fallback link. Only share this with the
+                              intended recipient, who must sign in with the
+                              invited email address before accepting.
+                            </p>
+                            <p className="break-all rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-400">
+                              {buildInvitationLink(invitation.token)}
+                            </p>
+                          </div>
                         ) : null}
                       </div>
 
