@@ -174,8 +174,15 @@ function RecentStudentsCard({ metrics }: { metrics: DashboardMetrics }) {
       </p>
 
       {metrics.recentStudents.length === 0 ? (
-        <div className="mt-7 rounded-3xl border border-dashed border-[#C7DDEA] bg-[#F6FBFE] p-6 text-center text-sm text-[#425B76]">
-          No students added yet.
+        <div className="mt-7 rounded-lg border border-dashed border-[#C7DDEA] bg-[#F6FBFE] p-6 text-center">
+          <p className="font-semibold text-[#0B1F33]">No students yet</p>
+          <p className="mt-2 text-sm leading-6 text-[#425B76]">
+            Add a student record or review enrollment requests from your
+            programs.
+          </p>
+          <Button className="mt-4" href="/app/students" size="sm" variant="secondary">
+            Open students
+          </Button>
         </div>
       ) : (
         <div className="mt-7 divide-y divide-[#D8E8F0] overflow-hidden rounded-3xl border border-[#D8E8F0]">
@@ -407,20 +414,22 @@ export function DashboardPageClient() {
 
   return (
     <div className="mx-auto max-w-7xl">
-      <PageHeader
-        actions={
-          <div className="rounded-full border border-[#14B8C6]/30 bg-[#14B8C6]/10 px-4 py-2 text-sm font-medium text-[#0E7490]">
-            Workspace: {tenant?.name ?? "Current workspace"}
-          </div>
-        }
-        description={
-          canViewFinance
-            ? "Real-time workspace analytics for students, programs, enrollments, Finance Center activity, and operational health."
-            : "Real-time workspace analytics for students, programs, enrollments, communication, and operational health."
-        }
-        eyebrow="Dashboard analytics"
-        title="Dashboard"
-      />
+      {currentRole !== "owner" ? (
+        <PageHeader
+          actions={
+            <div className="rounded-full border border-[#14B8C6]/30 bg-[#14B8C6]/10 px-4 py-2 text-sm font-medium text-[#0E7490]">
+              Workspace: {tenant?.name ?? "Current workspace"}
+            </div>
+          }
+          description={
+            canViewFinance
+              ? "Review students, programs, enrollments, student finance, and daily workspace activity."
+              : "Review students, programs, enrollments, communication, and daily workspace activity."
+          }
+          eyebrow="Workspace home"
+          title="Dashboard"
+        />
+      ) : null}
 
       {currentRole === "owner" ? (
         <OwnerDashboard metrics={metrics} tenant={tenant} />
@@ -432,27 +441,29 @@ export function DashboardPageClient() {
         <TrainerDashboard metrics={metrics} />
       ) : null}
 
-      <Card className="mt-8 border-[#D8E8F0] bg-white p-6 text-[#0B1F33] shadow-sm shadow-[#0B2A3D]/5">
-        <div className="grid gap-5 lg:grid-cols-[1fr_auto] lg:items-center">
-          <SectionHeader
-            description={
-              canViewFinance
-                ? "Review live workspace data through the hardened module flows for students, programs, sales, analytics, and operations."
-                : "Review live workspace data through the hardened module flows for students, programs, analytics, and operations."
-            }
-            eyebrow="Workspace overview"
-            title="Manage core records"
-          />
-          <div className="flex flex-col gap-3 sm:flex-row lg:justify-end">
-            <Button href="/app/students" type="button" variant="secondary">
-              View Students
-            </Button>
-            <Button href="/app/courses" type="button" variant="secondary">
-              View Programs
-            </Button>
+      {currentRole !== "owner" ? (
+        <Card className="mt-8 border-[#D8E8F0] bg-white p-6 text-[#0B1F33] shadow-sm shadow-[#0B2A3D]/5">
+          <div className="grid gap-5 lg:grid-cols-[1fr_auto] lg:items-center">
+            <SectionHeader
+              description={
+                canViewFinance
+                  ? "Review students, programs, student finance, analytics, and daily operations."
+                  : "Review students, programs, analytics, and daily operations."
+              }
+              eyebrow="Workspace overview"
+              title="Manage core records"
+            />
+            <div className="flex flex-col gap-3 sm:flex-row lg:justify-end">
+              <Button href="/app/students" type="button" variant="secondary">
+                View Students
+              </Button>
+              <Button href="/app/courses" type="button" variant="secondary">
+                View Programs
+              </Button>
+            </div>
           </div>
-        </div>
-      </Card>
+        </Card>
+      ) : null}
 
       {canViewUsage && (trialStatus?.expired || nearLimitResources.length > 0) ? (
         <Card className="mt-8 border-[#FED7AA] bg-[#FFFBF7] p-5 text-[#0B1F33] shadow-sm">
@@ -481,7 +492,7 @@ export function DashboardPageClient() {
         <Card className="mt-8 border-[#D8E8F0] bg-white p-6 text-[#0B1F33] shadow-sm shadow-[#0B2A3D]/5">
           <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
             <SectionHeader
-              description="Usage is refreshed from tenant-scoped counts and cached for billing readiness. Upgrade prompts are available to owner/admin users when limits are reached."
+              description="See how current workspace usage compares with your plan. Owners and admins can review plan options when capacity is running low."
               eyebrow="Workspace usage"
               title={`${getPlanDisplayName(plan)} plan limits`}
             />
@@ -516,20 +527,24 @@ export function DashboardPageClient() {
         </div>
       ) : null}
 
-      <section className="mt-8 grid gap-4 md:grid-cols-3">
-        <Button href="/app/students" size="lg">
-          Add Student
-        </Button>
-        <Button href="/app/courses" size="lg" variant="secondary">
-          Create Program
-        </Button>
-        {canViewFinance ? (
-          <Button href="/app/finance" size="lg" variant="secondary">
-            Open Sales
+      {currentRole !== "owner" ? (
+        <section className="mt-8 grid gap-4 md:grid-cols-3">
+          <Button href="/app/students" size="lg">
+            Add Student
           </Button>
-        ) : null}
-      </section>
+          <Button href="/app/courses" size="lg" variant="secondary">
+            Create Program
+          </Button>
+          {canViewFinance ? (
+            <Button href="/app/finance" size="lg" variant="secondary">
+              Open Student Finance
+            </Button>
+          ) : null}
+        </section>
+      ) : null}
 
+      {currentRole !== "owner" ? (
+        <>
       <section className="mt-8 grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
         <Card className="border-[#D8E8F0] bg-white p-6 text-[#0B1F33] shadow-2xl shadow-[#0B2A3D]/10">
           <div className="flex items-start justify-between gap-4">
@@ -539,8 +554,8 @@ export function DashboardPageClient() {
                 Attendance Snapshot
               </h3>
               <p className="mt-2 text-sm leading-6 text-[#425B76]">
-                Foundation metrics from marked live classes. Present and late count
-                as attended.
+                Attendance recorded from live classes. Present and late count as
+                attended.
               </p>
             </div>
             <Button href="/app/sessions" size="sm" variant="secondary">
@@ -630,8 +645,7 @@ export function DashboardPageClient() {
                 Assignment Snapshot
               </h3>
               <p className="mt-2 text-sm leading-6 text-[#425B76]">
-                Foundation metrics for submissions, reviews, overdue work, and
-                grading readiness.
+                Track submissions, reviews, overdue work, and grading progress.
               </p>
             </div>
             <Button href="/app/assignments" size="sm" variant="secondary">
@@ -1073,6 +1087,8 @@ export function DashboardPageClient() {
           <RecentStudentsCard metrics={metrics} />
         </section>
       )}
+        </>
+      ) : null}
 
     </div>
   );

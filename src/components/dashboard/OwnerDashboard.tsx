@@ -1,9 +1,8 @@
 import Link from "next/link";
 
-import { Button } from "@/src/components/ui/Button";
 import { Badge } from "@/src/components/ui/Badge";
+import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
-import { SectionHeader } from "@/src/components/ui/SectionHeader";
 import { StatCard } from "@/src/components/ui/StatCard";
 import type { DashboardMetrics } from "@/src/lib/dashboard";
 import type { Tenant } from "@/src/lib/tenant";
@@ -16,8 +15,54 @@ function formatCurrency(value: number) {
   }).format(value);
 }
 
-function formatPercent(value: number | null) {
-  return value === null ? "N/A" : `${value}%`;
+function getNextAction(metrics: DashboardMetrics) {
+  if (metrics.activeCourses === 0) {
+    return {
+      description:
+        "Create a clear program offer before inviting students or sharing your public page.",
+      href: "/app/courses",
+      label: "Create your first program",
+      status: "Start here",
+    };
+  }
+
+  if (metrics.totalStudents === 0) {
+    return {
+      description:
+        "Review your program's publish and sharing status, then use its public link to receive enrollment requests.",
+      href: "/app/courses",
+      label: "Prepare your program for students",
+      status: "Next step",
+    };
+  }
+
+  if (metrics.totalEnrollments === 0) {
+    return {
+      description:
+        "Open Programs to review enrollment requests and confirm the right program access for each student.",
+      href: "/app/courses",
+      label: "Review requests and enrollments",
+      status: "Next step",
+    };
+  }
+
+  if (metrics.attendance.upcomingSessions.length === 0) {
+    return {
+      description:
+        "Your student and program foundation is in place. Schedule the next live class or review learning materials.",
+      href: "/app/sessions",
+      label: "Plan the next live class",
+      status: "Keep moving",
+    };
+  }
+
+  return {
+    description:
+      "Review student follow-ups, upcoming classes, and anything that needs attention today.",
+    href: "/app/students",
+    label: "Review today's workspace",
+    status: "Today",
+  };
 }
 
 export function OwnerDashboard({
@@ -27,32 +72,34 @@ export function OwnerDashboard({
   metrics: DashboardMetrics;
   tenant: Tenant | null;
 }) {
+  const nextAction = getNextAction(metrics);
+  const workspaceStage =
+    metrics.activeCourses === 0
+      ? "Getting started"
+      : metrics.totalStudents === 0
+        ? "Program started"
+        : metrics.totalEnrollments === 0
+          ? "Building your audience"
+          : "Running";
   const attentionItems = [
     {
-      description: "Outstanding invoices need owner review.",
+      description: "Student payment records need a follow-up.",
       href: "/app/finance",
-      label: "Open balances",
+      label: "Open student balances",
       tone: "warning" as const,
       value: metrics.pendingPayments,
     },
     {
-      description: "Homework submissions are waiting for review.",
+      description: "Assignment submissions are waiting for review.",
       href: "/app/assignments",
       label: "Assignment reviews",
       tone: "warning" as const,
       value: metrics.assignments.pendingReviews,
     },
     {
-      description: "Published assignments are past due.",
-      href: "/app/assignments",
-      label: "Overdue assignments",
-      tone: "danger" as const,
-      value: metrics.assignments.overdueAssignments,
-    },
-    {
       description: "Marked absences may need coach follow-up.",
       href: "/app/sessions",
-      label: "Attendance alerts",
+      label: "Attendance follow-ups",
       tone: "warning" as const,
       value: metrics.attendance.lowAttendanceAlerts,
     },
@@ -63,162 +110,160 @@ export function OwnerDashboard({
       tone: "info" as const,
       value: metrics.conversations.unreadThreads,
     },
-    {
-      description: "Automation runs failed and should be checked.",
-      href: "/app/automations",
-      label: "Automation failures",
-      tone: "danger" as const,
-      value: metrics.failedAutomationRuns,
-    },
-    {
-      description: "Due reminders can unblock follow-ups.",
-      href: "/app/reminders",
-      label: "Reminders due",
-      tone: "warning" as const,
-      value: metrics.pendingRemindersDue,
-    },
-    {
-      description: "Temporary permission exceptions are active.",
-      href: "/app/permissions",
-      label: "Extra permissions",
-      tone: "info" as const,
-      value: metrics.delegatedPermissions,
-    },
   ].filter((item) => item.value > 0);
-
-  const quickActions = [
+  const setupChecklist = [
     {
-      description: "Complete legal, tax, and invoice contact readiness.",
-      href: "/app/billing-profile",
-      label: "Billing profile",
-    },
-    {
-      description: "Add or review student records.",
-      href: "/app/students",
-      label: "Manage students",
-    },
-    {
-      description: "Update published and draft programs.",
-      href: "/app/courses",
-      label: "Review programs",
-    },
-    {
-      description: "Check fee plans, invoices, recorded payments, and receipts.",
-      href: "/app/finance",
-      label: "Open sales",
-    },
-    {
-      description: "Review public program requests and approve access from Programs.",
-      href: "/app/courses",
-      label: "Program sales requests",
-    },
-    {
-      description: "Review coaching materials and uploads.",
-      href: "/app/documents",
-      label: "Manage content",
-    },
-    {
-      description: "Review plan, usage, and billing readiness.",
-      href: "/app/subscription",
-      label: "CoachFort billing",
-    },
-    {
-      description: "Review staff operations and team metadata.",
-      href: "/app/team-operations",
-      label: "Team operations",
-    },
-  ];
-  const launchChecklist = [
-    {
-      description:
-        "Add the legal, tax, billing contact, and invoice details CoachFort will need before payment support goes live.",
-      href: "/app/billing-profile",
-      label: "Complete billing profile",
-      status: "Open",
-      tone: "info" as const,
-    },
-    {
-      description:
-        "Invite admins, staff, or trainers and confirm every role has the right workspace access.",
+      description: "Confirm your workspace name, contact details, and team settings.",
       href: "/app/settings",
-      label: "Invite your team",
-      status: "Open",
+      label: "Complete workspace profile",
+      status: "Review",
       tone: "info" as const,
     },
     {
-      description:
-        "Create the first student records so programs, payments, and portal access have real context.",
-      href: "/app/students",
-      label: "Add students",
-      status: metrics.totalStudents > 0 ? "Started" : "Start",
-      tone: metrics.totalStudents > 0 ? ("success" as const) : ("warning" as const),
+      description: "Add the coach details and sections visitors should see.",
+      href: "/app/settings/public-site",
+      label: "Configure public page",
+      status: "Review",
+      tone: "info" as const,
     },
     {
-      description:
-        "Publish a program so learning delivery is ready for student portal use.",
+      description: "Define the offer, delivery format, and student outcome.",
       href: "/app/courses",
-      label: "Create programs",
+      label: "Create first program",
       status: metrics.activeCourses > 0 ? "Started" : "Start",
       tone: metrics.activeCourses > 0 ? ("success" as const) : ("warning" as const),
     },
     {
-      description:
-        "Upload resources, policies, or learning material when the content library is ready.",
-      href: "/app/documents",
-      label: "Prepare materials",
-      status: "Open",
+      description: "Check publish readiness and copy the program link when ready.",
+      href: "/app/courses",
+      label: "Publish and share program",
+      status: "Review",
       tone: "info" as const,
     },
     {
-      description:
-        "Use announcements for official updates and community for controlled student discussion.",
-      href: "/app/announcements",
-      label: "Publish communication",
-      status: "Open",
+      description: "Open Programs to review new requests and confirm access.",
+      href: "/app/courses",
+      label: "Review student requests",
+      status: "Review",
       tone: "info" as const,
+    },
+    {
+      description: "Invite a teammate only when someone else needs workspace access.",
+      href: "/app/settings",
+      label: "Invite team if needed",
+      status: "Optional",
+      tone: "light" as const,
+    },
+  ];
+  const quickActions = [
+    {
+      description: "Create, publish, and manage coaching programs.",
+      href: "/app/courses",
+      label: "Programs",
+    },
+    {
+      description: "Edit the CoachFort-hosted page you share with visitors.",
+      href: "/app/settings/public-site",
+      label: "Public page",
+    },
+    {
+      description: "Review public program requests before confirming access.",
+      href: "/app/courses",
+      label: "Student requests",
+    },
+    {
+      description: "See enrollment status across all programs.",
+      href: "/app/enrollments",
+      label: "Enrollments",
+    },
+    {
+      description: "Invite teammates and review workspace roles.",
+      href: "/app/settings",
+      label: "Team",
+    },
+    {
+      description: "Review your Starter or Growth workspace plan.",
+      href: "/app/subscription",
+      label: "CoachFort plan",
+    },
+    {
+      description: "Schedule classes and review upcoming delivery.",
+      href: "/app/sessions",
+      label: "Live classes",
+    },
+    {
+      description: "Organize learning resources for your students.",
+      href: "/app/documents",
+      label: "Content library",
+    },
+    {
+      description: "Publish updates and manage student discussions.",
+      href: "/app/community",
+      label: "Community",
     },
   ];
 
   return (
-    <Card className="mb-8 mt-8 border-[#D8E8F0] bg-white p-6 shadow-sm shadow-[#0B2A3D]/5">
-      <div className="grid gap-6 lg:grid-cols-[1fr_auto] lg:items-center">
-        <SectionHeader
-          description="A focused operating view for sales, program delivery, student growth, risk signals, and the next owner actions."
-          eyebrow="Command Center"
-          title={`Home for ${tenant?.name ?? "this workspace"}`}
-        />
-        <div className="flex flex-wrap gap-3">
-          <Button href="/app/students" size="sm" variant="secondary">
-            Students
-          </Button>
-          <Button href="/app/finance" size="sm" variant="secondary">
-            Sales
-          </Button>
-          <Button href="/app/subscription" size="sm" variant="secondary">
-            CoachFort Billing
-          </Button>
+    <div className="mt-2">
+      <section className="border-b border-[#D8E8F0] pb-6">
+        <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
+          <div className="max-w-3xl">
+            <Badge tone="light">{workspaceStage}</Badge>
+            <h1 className="mt-4 text-3xl font-semibold text-[#0B1F33] sm:text-4xl">
+              {tenant?.name ?? "Your CoachFort workspace"}
+            </h1>
+            <p className="mt-3 max-w-2xl text-base leading-7 text-[#425B76]">
+              Set up your coaching offer, welcome students, and manage delivery
+              from one clear workspace.
+            </p>
+          </div>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <Button href="/app/settings/public-site" variant="secondary">
+              View public page
+            </Button>
+            <Button href="/app/subscription" variant="secondary">
+              View CoachFort plan
+            </Button>
+          </div>
         </div>
-      </div>
+      </section>
 
-      <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="mt-6 rounded-lg border border-[#9ADDEA] bg-[#EAF8FC] p-5 sm:p-6">
+        <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-center">
+          <div className="max-w-2xl">
+            <p className="text-xs font-semibold uppercase text-[#0E7490]">
+              {nextAction.status}
+            </p>
+            <h2 className="mt-2 text-2xl font-semibold text-[#0B1F33]">
+              {nextAction.label}
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-[#425B76]">
+              {nextAction.description}
+            </p>
+          </div>
+          <Button href={nextAction.href}>Continue</Button>
+        </div>
+      </section>
+
+      <section className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
-          description="Recorded Finance Center payment revenue in the workspace."
-          label="Revenue"
-          value={formatCurrency(metrics.totalRevenue)}
-        />
-        <StatCard
-          description={`${metrics.totalEnrollments.toLocaleString()} enrollments across active learning programs.`}
+          description={`${metrics.totalEnrollments.toLocaleString()} program enrollments.`}
           label="Students"
           value={metrics.totalStudents.toLocaleString()}
         />
         <StatCard
-          description="Published programs, or drafts if none are published."
+          description="Published programs, or drafts when none are published."
           label="Programs"
           value={metrics.activeCourses.toLocaleString()}
         />
         <StatCard
-          description="Outstanding invoice records that may need follow-up."
-          label="Open balances"
+          description="Student payments recorded by your workspace."
+          label="Recorded student revenue"
+          value={formatCurrency(metrics.totalRevenue)}
+        />
+        <StatCard
+          description="Student payment records that may need follow-up."
+          label="Open student balances"
           status={
             metrics.pendingPayments > 0 ? (
               <Badge tone="warning">Review</Badge>
@@ -228,124 +273,84 @@ export function OwnerDashboard({
           }
           value={metrics.pendingPayments.toLocaleString()}
         />
-      </div>
+      </section>
 
-      <div className="mt-6 grid gap-5 xl:grid-cols-[1.05fr_0.95fr]">
-        <Card className="border-[#D8E8F0] bg-[#F7FCFF] p-5 shadow-none">
-          <SectionHeader
-            actions={
-              attentionItems.length > 0 ? (
-                <Badge tone="warning">{attentionItems.length} signals</Badge>
-              ) : (
-                <Badge tone="success">Clear</Badge>
-              )
-            }
-            description="The strongest owner-facing signals already available from workspace activity."
-            title="Attention needed"
-          />
-
-          {attentionItems.length > 0 ? (
-            <div className="mt-5 grid gap-3">
-              {attentionItems.slice(0, 5).map((item) => (
-                <Link
-                  className="group rounded-lg border border-[#D8E8F0] bg-white p-4 transition hover:-translate-y-0.5 hover:border-[#2ECBEA]/60 hover:shadow-sm hover:shadow-[#0B2A3D]/8"
-                  href={item.href}
-                  key={item.label}
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <p className="font-semibold text-[#0B1F33]">{item.label}</p>
-                      <p className="mt-1 text-sm leading-6 text-[#5D7185]">
-                        {item.description}
-                      </p>
-                    </div>
-                    <Badge tone={item.tone}>{item.value}</Badge>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          ) : (
-            <div className="mt-5 rounded-lg border border-[#D8E8F0] bg-white p-5">
-              <Badge tone="success">No urgent owner signals</Badge>
-              <p className="mt-3 text-sm leading-6 text-[#5D7185]">
-                Open balances, reviews, attendance alerts, reminders, conversations,
-                permissions, and automation failures are clear based on the
-                current dashboard data.
-              </p>
-            </div>
-          )}
-        </Card>
-
-        <Card className="border-[#D8E8F0] bg-white p-5 shadow-sm shadow-[#0B2A3D]/5">
-          <SectionHeader
-            description="A compact view of business and delivery momentum."
-            title="Business and learning health"
-          />
-          <div className="mt-5 grid gap-3 sm:grid-cols-2">
-            <div className="rounded-lg border border-[#D8E8F0] bg-[#F7FCFF] p-4">
-              <p className="text-2xl font-semibold text-[#0B1F33]">
-                {(
-                  metrics.paymentStatusSummary.recorded +
-                  metrics.paymentStatusSummary.confirmed
-                ).toLocaleString()}
-              </p>
-              <p className="mt-1 text-sm text-[#5D7185]">Recorded payments</p>
-            </div>
-            <div className="rounded-lg border border-[#D8E8F0] bg-[#F7FCFF] p-4">
-              <p className="text-2xl font-semibold text-[#0B1F33]">
-                {formatPercent(metrics.attendance.attendancePercent)}
-              </p>
-              <p className="mt-1 text-sm text-[#5D7185]">Attendance rate</p>
-            </div>
-            <div className="rounded-lg border border-[#D8E8F0] bg-[#F7FCFF] p-4">
-              <p className="text-2xl font-semibold text-[#0B1F33]">
-                {metrics.assignments.totalAssignments.toLocaleString()}
-              </p>
-              <p className="mt-1 text-sm text-[#5D7185]">Assignments tracked</p>
-            </div>
-            <div className="rounded-lg border border-[#D8E8F0] bg-[#F7FCFF] p-4">
-              <p className="text-2xl font-semibold text-[#0B1F33]">
-                {metrics.activeAutomations.toLocaleString()}
-              </p>
-              <p className="mt-1 text-sm text-[#5D7185]">Active automations</p>
-            </div>
+      <section className="mt-8">
+        <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
+          <div>
+            <h2 className="text-2xl font-semibold text-[#0B1F33]">
+              Set up your workspace
+            </h2>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-[#425B76]">
+              Follow these guided actions in order. Review steps stay open when
+              CoachFort cannot confirm completion from current dashboard data.
+            </p>
           </div>
-        </Card>
-      </div>
-
-      <Card className="mt-6 border-[#D8E8F0] bg-[#F7FCFF] p-5 shadow-none">
-        <SectionHeader
-          description="A launch-readiness guide for owners. These links use existing workspace pages and do not create tasks or change data by themselves."
-          title="Coaching launch checklist"
-        />
+          <Badge tone="light">6 guided steps</Badge>
+        </div>
         <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {launchChecklist.map((item) => (
+          {setupChecklist.map((item, index) => (
             <Link
-              className="rounded-lg border border-[#D8E8F0] bg-white p-4 transition hover:-translate-y-0.5 hover:border-[#2ECBEA]/60 hover:shadow-sm hover:shadow-[#0B2A3D]/8"
+              className="rounded-lg border border-[#D8E8F0] bg-white p-4 shadow-sm shadow-[#0B2A3D]/5 transition hover:border-[#2ECBEA] hover:shadow-md"
               href={item.href}
               key={item.label}
             >
               <div className="flex items-start justify-between gap-3">
-                <p className="font-semibold text-[#0B1F33]">{item.label}</p>
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#0B2A3D] text-sm font-semibold text-white">
+                    {index + 1}
+                  </span>
+                  <p className="font-semibold text-[#0B1F33]">{item.label}</p>
+                </div>
                 <Badge tone={item.tone}>{item.status}</Badge>
               </div>
-              <p className="mt-2 text-sm leading-6 text-[#5D7185]">
+              <p className="mt-3 text-sm leading-6 text-[#425B76]">
                 {item.description}
               </p>
             </Link>
           ))}
         </div>
-      </Card>
+      </section>
 
-      <Card className="mt-6 border-[#D8E8F0] bg-white p-5 shadow-sm shadow-[#0B2A3D]/5">
-        <SectionHeader
-          description="Common owner actions, grouped so the dashboard points to the next workspace task."
-          title="What to do next"
-        />
-        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      {attentionItems.length > 0 ? (
+        <section className="mt-8">
+          <div className="flex items-center justify-between gap-4">
+            <h2 className="text-2xl font-semibold text-[#0B1F33]">
+              Needs attention
+            </h2>
+            <Badge tone="warning">{attentionItems.length}</Badge>
+          </div>
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            {attentionItems.map((item) => (
+              <Link
+                className="rounded-lg border border-[#FED7AA] bg-[#FFFBF7] p-4 transition hover:border-[#F59E0B]"
+                href={item.href}
+                key={item.label}
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="font-semibold text-[#0B1F33]">{item.label}</p>
+                    <p className="mt-1 text-sm leading-6 text-[#5D7185]">
+                      {item.description}
+                    </p>
+                  </div>
+                  <Badge tone={item.tone}>{item.value}</Badge>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      <section className="mt-8">
+        <h2 className="text-2xl font-semibold text-[#0B1F33]">Quick actions</h2>
+        <p className="mt-2 text-sm leading-6 text-[#425B76]">
+          Go directly to the workspace area you need.
+        </p>
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {quickActions.map((action) => (
             <Link
-              className="rounded-lg border border-[#D8E8F0] bg-[#F7FCFF] p-4 transition hover:-translate-y-0.5 hover:border-[#2ECBEA]/60 hover:bg-white hover:shadow-sm hover:shadow-[#0B2A3D]/8"
+              className="rounded-lg border border-[#D8E8F0] bg-white p-4 shadow-sm shadow-[#0B2A3D]/5 transition hover:border-[#2ECBEA] hover:bg-[#F7FCFF]"
               href={action.href}
               key={action.href}
             >
@@ -356,7 +361,35 @@ export function OwnerDashboard({
             </Link>
           ))}
         </div>
-      </Card>
-    </Card>
+      </section>
+
+      <section className="mt-8 grid gap-4 lg:grid-cols-2">
+        <Card className="border-[#D8E8F0] bg-white p-5 shadow-sm shadow-[#0B2A3D]/5">
+          <p className="text-sm font-semibold text-[#0B1F33]">
+            Your CoachFort plan
+          </p>
+          <p className="mt-2 text-sm leading-6 text-[#425B76]">
+            Starter or Growth controls what is available in this workspace.
+            Review plan status and usage from CoachFort Plan.
+          </p>
+          <Button className="mt-4" href="/app/subscription" size="sm" variant="secondary">
+            Review CoachFort plan
+          </Button>
+        </Card>
+        <Card className="border-[#D8E8F0] bg-white p-5 shadow-sm shadow-[#0B2A3D]/5">
+          <p className="text-sm font-semibold text-[#0B1F33]">
+            Student finance
+          </p>
+          <p className="mt-2 text-sm leading-6 text-[#425B76]">
+            Record payments handled directly between your coaching business and
+            students. CoachFort does not collect, hold, or refund those payments
+            in this phase.
+          </p>
+          <Button className="mt-4" href="/app/finance" size="sm" variant="secondary">
+            Open student finance
+          </Button>
+        </Card>
+      </section>
+    </div>
   );
 }

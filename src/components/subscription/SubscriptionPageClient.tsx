@@ -202,7 +202,7 @@ function entitlementTone(value: string | null | undefined) {
 
 function requestBlockingLabel(plan: TenantRequestablePlan) {
   if (plan.blocking_request_status === "approved") {
-    return "Approved - waiting for platform follow-up";
+    return "Approved - waiting for CoachFort";
   }
 
   if (
@@ -214,7 +214,7 @@ function requestBlockingLabel(plan: TenantRequestablePlan) {
   }
 
   if (plan.has_blocking_request) {
-    return "Platform follow-up pending";
+    return "CoachFort follow-up pending";
   }
 
   return "Requestable";
@@ -222,7 +222,7 @@ function requestBlockingLabel(plan: TenantRequestablePlan) {
 
 function requestBlockingDescription(plan: TenantRequestablePlan) {
   if (plan.blocking_request_status === "approved") {
-    return "The platform has approved this request. Your current plan is unchanged until CoachFort completes the separate activation/assignment step. No checkout or payment has been started from this approval.";
+    return "CoachFort approved this request for follow-up. Your current plan and billing remain unchanged until the update is confirmed.";
   }
 
   if (
@@ -233,7 +233,7 @@ function requestBlockingDescription(plan: TenantRequestablePlan) {
     return "Request already open/in review for this plan.";
   }
 
-  return "Request is already being handled by platform operations.";
+  return "CoachFort is already reviewing this request.";
 }
 
 function getErrorMessage(caught: unknown, fallback: string) {
@@ -387,8 +387,8 @@ function BillingProfileReadinessCard({
           </h3>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
             Complete your legal, tax, and billing contact details before payment
-            support and invoice workflows go live. This does not start checkout,
-            create a Razorpay order, or change your plan.
+            support and invoice workflows go live. This does not change your
+            plan or record a payment.
           </p>
         </div>
         <Button href="/app/billing-profile" type="button" variant="secondary">
@@ -440,16 +440,15 @@ function PaymentGatewayParkedCard() {
       <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
         <div>
           <Badge className="border-amber-300/30 bg-amber-300/10 text-amber-100">
-            Checkout parked
+            Online payment unavailable
           </Badge>
           <h3 className="mt-4 text-2xl font-semibold">
-            Online checkout is not active yet
+            Online plan payment is not available yet
           </h3>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-amber-100/85">
-            CoachFort will enable verified payment checkout after
-            payment-provider setup and final testing. This page is currently
-            read-only for plan, usage, billing readiness, and upgrade request
-            review.
+            You can review your current plan, usage, billing profile, and plan
+            requests here. CoachFort support will confirm any plan change
+            separately until online subscription payment is ready.
           </p>
         </div>
         <Button href="/payment-policy" type="button" variant="secondary">
@@ -491,34 +490,35 @@ function CanonicalEntitlementSummary({
       <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
         <div>
           <Badge className="border-white/15 bg-white/10 text-white">
-            Read-only entitlement summary
+            Plan details
           </Badge>
           <h3 className="mt-4 text-2xl font-semibold">
-            Canonical plan, usage, and feature access
+            Plan access and usage
           </h3>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
-            This does not change your plan or billing. Payment gateway is not
-            active. Checkout is not enabled.
+            This read-only summary shows your current plan access, usage, and
+            limits. It cannot change billing or workspace access.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Badge className="border-white/15 bg-white/10 text-white">Read-only</Badge>
           <Badge className="border-amber-400/30 bg-amber-400/10 text-amber-200">
-            Checkout off
+            No plan change
           </Badge>
         </div>
       </div>
 
       {error ? (
         <div className="mt-5 rounded-3xl border border-amber-400/30 bg-amber-400/10 p-4 text-sm leading-6 text-amber-100">
-          Canonical entitlement summary is currently unavailable: {error}
+          Detailed plan access is currently unavailable. Your current plan
+          summary remains unchanged.
         </div>
       ) : null}
 
       {!entitlement ? (
         <div className="mt-5 rounded-3xl border border-white/10 bg-[#15181b] p-5 text-sm leading-6 text-slate-400">
-          No canonical entitlement assignment is available yet. The existing
-          subscription summary above remains the active tenant-facing reference.
+          Detailed plan access is not available yet. The current subscription
+          summary above remains your plan reference.
         </div>
       ) : (
         <div className="mt-6 grid gap-5">
@@ -535,11 +535,11 @@ function CanonicalEntitlementSummary({
               value={formatCanonicalStatus(assignment?.billing_cycle)}
             />
             <ReadOnlyField
-              label="Payment forced"
+              label="Payment required"
               value={booleanLabel(entitlement.payment_forced)}
             />
             <ReadOnlyField
-              label="Gateway required"
+              label="Online payment required"
               value={booleanLabel(entitlement.gateway_required)}
             />
             <ReadOnlyField
@@ -553,7 +553,7 @@ function CanonicalEntitlementSummary({
               <p className="text-sm font-semibold text-white">Latest usage</p>
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
                 {usageEntries.length === 0 ? (
-                  <p className="text-sm text-slate-400">No canonical usage snapshot.</p>
+                  <p className="text-sm text-slate-400">No usage summary is available yet.</p>
                 ) : (
                   usageEntries.slice(0, 10).map(([key, value]) => (
                     <CanonicalInfoRow
@@ -570,7 +570,7 @@ function CanonicalEntitlementSummary({
               <p className="text-sm font-semibold text-white">Usage limits</p>
               <div className="mt-4 space-y-3">
                 {visibleLimits.length === 0 ? (
-                  <p className="text-sm text-slate-400">No canonical limits configured.</p>
+                  <p className="text-sm text-slate-400">No plan limits are available yet.</p>
                 ) : (
                   visibleLimits.map((limit, index) => (
                     <CanonicalLimitRow
@@ -673,8 +673,7 @@ function CanonicalFeatureRow({
         </Badge>
       </div>
       <p className="mt-2 text-xs leading-5 text-slate-500">
-        Reason: {formatCanonicalStatus(feature?.reason)} | Plan:{" "}
-        {formatCanonicalStatus(feature?.plan_status)}
+        This feature follows your current plan settings.
       </p>
     </div>
   );
@@ -738,12 +737,12 @@ function RequestPlanUpgradePanel({
             Request plan upgrade
           </Badge>
           <h3 className="mt-4 text-2xl font-semibold">
-            Send a request to platform operations
+            Ask CoachFort to review a plan change
           </h3>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
-            This only sends a request to CoachFort platform operations. It does
-            not change your plan, start checkout, charge money, or activate the
-            payment gateway. Platform review is required.
+            This sends a review request only. Your current plan, payment status,
+            and workspace access stay unchanged until CoachFort confirms a
+            separate plan update.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -751,21 +750,21 @@ function RequestPlanUpgradePanel({
             Request only
           </Badge>
           <Badge className="border-amber-400/30 bg-amber-400/10 text-amber-200">
-            No checkout
+            No plan change
           </Badge>
         </div>
       </div>
 
       {error ? (
         <div className="mt-5 rounded-3xl border border-amber-400/30 bg-amber-400/10 p-4 text-sm leading-6 text-amber-100">
-          Requestable plans are currently unavailable: {error}
+          Plan requests are currently unavailable. Try again later or contact
+          CoachFort support.
         </div>
       ) : null}
 
       {!error && plans.length === 0 ? (
         <div className="mt-5 rounded-3xl border border-white/10 bg-[#15181b] p-5 text-sm leading-6 text-slate-400">
-          Plan upgrade requests are not enabled yet. Public requestable plans are
-          pending platform review.
+          Available plan requests are still being prepared.
         </div>
       ) : null}
 
@@ -837,7 +836,7 @@ function RequestPlanUpgradePanel({
                   </p>
                   <p className="mt-2 text-sm leading-6 text-slate-400">
                     {selectedPlan.request_description ??
-                      "Request access to this plan. Platform review is required before any plan change."}
+                      "Request access to this plan. CoachFort review is required before any plan change."}
                   </p>
                 </div>
                 <Badge tone={selectedPlan.has_blocking_request ? "warning" : "success"}>
@@ -852,13 +851,12 @@ function RequestPlanUpgradePanel({
               {selectedPlan.blocking_request_status === "approved" ? (
                 <div className="mt-4 rounded-2xl border border-teal-400/30 bg-teal-400/10 p-4 text-sm leading-6 text-teal-100">
                   <p className="font-semibold">
-                    Approved - waiting for platform follow-up/manual assignment.
+                    Approved - waiting for CoachFort confirmation.
                   </p>
                   <p className="mt-1">
-                    This approval does not activate the requested plan, start
-                    checkout, or change billing. The canonical entitlement summary
-                    remains the source of truth until CoachFort completes the
-                    separate assignment step.
+                    Approval does not activate the requested plan or change
+                    billing. Keep using the current plan shown above until
+                    CoachFort confirms the update.
                   </p>
                   {selectedPlan.latest_reviewed_at ? (
                     <p className="mt-2 text-teal-200">
@@ -879,7 +877,7 @@ function RequestPlanUpgradePanel({
               id="request-reason"
               maxLength={1200}
               onChange={(event) => setReason(event.target.value)}
-              placeholder="Share why this plan is needed, expected growth, or any setup context for platform review."
+              placeholder="Share why this plan is needed, expected growth, or any setup context for CoachFort review."
               value={reason}
             />
             <p className="mt-2 text-xs text-slate-500">
@@ -895,9 +893,8 @@ function RequestPlanUpgradePanel({
               type="checkbox"
             />
             <span>
-              I understand this only sends a request, does not change the plan,
-              does not start checkout, does not charge money, and payment
-              gateway remains inactive until platform review is completed.
+              I understand this only sends a request. It does not change the
+              plan, record a payment, or change workspace access.
             </span>
           </label>
 
@@ -918,7 +915,7 @@ function RequestPlanUpgradePanel({
               {submitting ? "Sending request..." : "Submit upgrade request"}
             </Button>
             <p className="text-sm text-slate-500">
-              No payment, checkout, billing, or assignment action is performed.
+              Your current plan and billing remain unchanged.
             </p>
           </div>
         </form>
@@ -943,28 +940,28 @@ function UpgradeRequestStatusPanel({
           </Badge>
           <h3 className="mt-4 text-2xl font-semibold">Plan upgrade request history</h3>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
-            Read-only request history. This does not submit a request, change your
-            plan, start checkout, or activate payment gateway billing.
+            Review earlier plan requests and their current status. This section
+            cannot submit a request or change your plan.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Badge className="border-white/15 bg-white/10 text-white">Read-only</Badge>
           <Badge className="border-amber-400/30 bg-amber-400/10 text-amber-200">
-            No checkout
+            No plan change
           </Badge>
         </div>
       </div>
 
       {error ? (
         <div className="mt-5 rounded-3xl border border-amber-400/30 bg-amber-400/10 p-4 text-sm leading-6 text-amber-100">
-          Upgrade request history is currently unavailable: {error}
+          Plan request history is currently unavailable. Try again later or
+          contact CoachFort support.
         </div>
       ) : null}
 
       {!error && requests.length === 0 ? (
         <div className="mt-5 rounded-3xl border border-white/10 bg-[#15181b] p-5 text-sm leading-6 text-slate-400">
-          Plan upgrade requests are not enabled yet. Public requestable plans are
-          pending platform review.
+          No plan requests have been submitted yet.
         </div>
       ) : null}
 
@@ -1016,20 +1013,19 @@ function UpgradeRequestHistoryCard({
           value={request.review_note ?? ""}
         />
         <ReadOnlyField
-          label="Entitlement changed"
+          label="Plan updated"
           value={booleanLabel(request.entitlement_changed)}
         />
         <ReadOnlyField
-          label="Payment gateway called"
+          label="Online payment started"
           value={booleanLabel(request.payment_gateway_called)}
         />
       </div>
 
       {request.status === "approved" ? (
         <div className="mt-5 rounded-3xl border border-teal-400/30 bg-teal-400/10 p-4 text-sm leading-6 text-teal-100">
-          Approved for platform follow-up only. This does not activate the
-          requested plan, change billing, start checkout, or charge money.
-          Canonical entitlement assignment remains the source of truth.
+          Approved for CoachFort follow-up only. Your requested plan and billing
+          remain unchanged until CoachFort confirms the update.
         </div>
       ) : null}
     </div>
@@ -1143,7 +1139,7 @@ export function SubscriptionPageClient() {
               data: null,
               error: getErrorMessage(
                 caught,
-                "Unable to load canonical entitlement summary.",
+                "Unable to load detailed plan access.",
               ),
             })),
           getTenantBillingProfileCompletion(currentTenant.id)
@@ -1245,7 +1241,7 @@ export function SubscriptionPageClient() {
       setRequestablePlans(nextRequestablePlans);
       setRequestablePlanError(null);
       setUpgradeRequestSubmitSuccess(
-        "Upgrade request sent for platform review. No plan, billing, or checkout change was made.",
+        "Plan request sent for CoachFort review. Your current plan and billing remain unchanged.",
       );
       return true;
     } catch (caught) {
@@ -1290,24 +1286,24 @@ export function SubscriptionPageClient() {
     <div className="mx-auto max-w-7xl">
       <PageHeader
         actions={<StatusBadge status={subscription.subscription_status} />}
-        description="Track workspace usage against the current SaaS plan. Payment gateway billing is intentionally not connected in this foundation module."
-        eyebrow="Subscription"
-        title="Plans & limits"
+        description="Review your CoachFort plan, usage, billing profile, and plan request status. Online subscription payment is not available yet."
+        eyebrow="CoachFort plan"
+        title="Plan & usage"
       />
 
       <Card className="mt-6 border-teal-400/30 bg-teal-400/10 p-5 text-teal-50">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-sm font-semibold">
-              Subscription is managed by the platform owner.
+              Plan changes require CoachFort review.
             </p>
             <p className="mt-2 text-sm leading-6 text-teal-100/80">
-              Contact platform support or your platform admin to change plans.
-              Payment gateway billing is not connected yet.
+              Use the plan request section below or contact CoachFort support.
+              Your current plan remains active until a change is confirmed.
             </p>
           </div>
-          <Button href="/app/finance" type="button" variant="secondary">
-            Open Finance Center
+          <Button href="/app/billing-profile" type="button" variant="secondary">
+            Open billing profile
           </Button>
         </div>
       </Card>
@@ -1372,7 +1368,7 @@ export function SubscriptionPageClient() {
             </div>
           </div>
           <div className="mt-5 rounded-3xl border border-amber-400/30 bg-amber-400/10 p-4 text-sm leading-6 text-amber-100">
-            Read-only - payment gateway billing is not connected yet.
+            Online plan payment is not available yet.
           </div>
           <div className="mt-5 rounded-3xl border border-white/10 bg-[#15181b] p-5 text-sm leading-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1414,14 +1410,14 @@ export function SubscriptionPageClient() {
           <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
             <div>
               <Badge className="border-teal-400/30 bg-teal-400/10 text-teal-300">
-                Billing lifecycle
+                Subscription status
               </Badge>
               <h3 className="mt-4 text-2xl font-semibold">
-                Subscription foundation
+                CoachFort billing
               </h3>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
-                Billing records are ready for future Razorpay or Stripe
-                integration. No live gateway calls are made yet.
+                Review the current plan, billing cycle, payment status, and
+                renewal information recorded for this workspace.
               </p>
             </div>
             {billingSummary ? (
@@ -1637,8 +1633,8 @@ export function SubscriptionPageClient() {
             <div className="p-8 text-center">
               <p className="font-semibold">No billing payments yet</p>
               <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-400">
-                Manual, Razorpay, and Stripe transaction records will appear
-                here after payment collection is connected.
+                CoachFort subscription payment records will appear here when
+                they are available.
               </p>
             </div>
           ) : (
@@ -1683,16 +1679,13 @@ export function SubscriptionPageClient() {
               Plan comparison
             </h3>
             <p className="mt-2 text-sm text-slate-400">
-              Compare available plan limits. Plan changes are handled by the
-              platform owner while gateway billing is not connected.
+              Compare available plan limits. Ask CoachFort support to review a
+              plan change.
             </p>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-500">
-              Payment and checkout policies are prepared for founder-led soft
-              launch. Prices may be subject to applicable taxes, and paid plan
-              activation happens only after founder-verified payment
-              confirmation. Premium remains contact-sales and is not available
-              for tenant-side selection until fixed pricing and mapping are
-              approved.{" "}
+              Prices may be subject to applicable taxes. Starter and Growth
+              plan changes require CoachFort confirmation. Premium remains
+              contact-sales and is not available for self-service selection.{" "}
               <Link
                 className="font-semibold text-sky-300 underline-offset-4 transition hover:text-white hover:underline"
                 href="/payment-policy"
@@ -1702,7 +1695,7 @@ export function SubscriptionPageClient() {
             </p>
           </div>
           <p className="rounded-full border border-white/10 bg-white/10 px-4 py-2 text-sm text-slate-300">
-            Platform-managed
+            CoachFort-reviewed
           </p>
         </div>
         <p className="mt-5 text-sm font-semibold uppercase text-slate-500">
@@ -1778,7 +1771,7 @@ export function SubscriptionPageClient() {
                 {manualLimits.length > 0 ? (
                   <div className="mt-5 rounded-2xl border border-amber-400/20 bg-amber-400/10 p-4 text-sm">
                     <p className="font-semibold text-amber-100">
-                      Founder-monitored soft-launch limits
+                      Additional plan limits
                     </p>
                     <div className="mt-3 space-y-3">
                       {manualLimits.map((limit) => (
@@ -1794,11 +1787,6 @@ export function SubscriptionPageClient() {
                               {limit.value}
                             </span>
                           </div>
-                          {limit.note ? (
-                            <p className="mt-1 text-xs leading-5 text-amber-100/65">
-                              {limit.note}
-                            </p>
-                          ) : null}
                         </div>
                       ))}
                     </div>
@@ -1812,11 +1800,11 @@ export function SubscriptionPageClient() {
                     </Button>
                   ) : (
                     <Button disabled className="w-full" type="button">
-                      Contact platform admin
+                      Contact CoachFort
                     </Button>
                   )}
                   <p className="mt-3 text-center text-xs text-slate-500">
-                    Tenant-side checkout and plan changes are not enabled.
+                    Online plan changes are not available yet.
                   </p>
                 </div>
               </Card>

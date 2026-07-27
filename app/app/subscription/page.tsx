@@ -5,7 +5,7 @@ import { SubscriptionPageClient } from "@/src/components/subscription/Subscripti
 export default function SubscriptionPage() {
   return (
     <RouteGuard mode="app">
-      <AppShell activeItem="Settings">
+      <AppShell activeItem="Subscription">
         <SubscriptionPageClient />
       </AppShell>
     </RouteGuard>

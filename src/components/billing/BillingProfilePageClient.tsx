@@ -305,7 +305,7 @@ export function BillingProfilePageClient() {
       setCompletion(nextCompletion);
       setForm(profileToForm(nextProfile));
       setSuccess(
-        "Billing profile saved. This did not start checkout or change your plan.",
+        "Billing profile saved. Your CoachFort plan and payment status were not changed.",
       );
     } catch (caught) {
       setActionError(
@@ -351,7 +351,7 @@ export function BillingProfilePageClient() {
             Refresh
           </Button>
         }
-        description="Prepare the legal, tax, and invoice contact details CoachFort will use for receipt, invoice, renewal, and payment support readiness. Saving this profile does not start checkout or change your plan."
+        description="Prepare the legal, tax, and invoice contact details CoachFort will use for subscription receipts, invoices, renewals, and payment support. Saving this profile does not change your plan or payment status."
         eyebrow="Billing readiness"
         metadata={
           <>
@@ -359,7 +359,7 @@ export function BillingProfilePageClient() {
               {completion?.is_complete ? "Complete" : "Incomplete"}
             </Badge>
             <Badge tone="outline">Owner/admin only</Badge>
-            <Badge tone="outline">No checkout</Badge>
+            <Badge tone="outline">Profile only</Badge>
           </>
         }
         title="Billing profile"
@@ -397,7 +397,7 @@ export function BillingProfilePageClient() {
           value={form.preferred_currency}
         />
         <StatCard
-          description="Last profile save timestamp from the billing profile RPC."
+          description="Most recent time these billing details were saved."
           label="Last updated"
           value={formatDate(profile?.updated_at ?? null)}
         />
@@ -426,7 +426,7 @@ export function BillingProfilePageClient() {
               Back to subscription
             </Button>
           }
-          description="Use plain text only. CoachFort stores this through owner/admin RPCs and keeps direct table access closed."
+          description="Add the business details CoachFort should use for your workspace subscription records."
           title="Billing identity"
         />
 
@@ -623,9 +623,9 @@ export function BillingProfilePageClient() {
 
           <div className="flex flex-col gap-3 border-t border-[#D8E8F0] pt-6 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm leading-6 text-[#5D7185]">
-              Saving updates billing readiness only. It does not open checkout,
-              create Razorpay orders, activate plans, or modify tenant finance
-              invoices.
+              Saving updates CoachFort subscription billing details only. It
+              does not change your plan, record a payment, or modify student
+              finance records.
             </p>
             <Button isLoading={saving} loadingText="Saving..." type="submit">
               Save billing profile

@@ -29,41 +29,81 @@ type AppShellProps = {
   children: ReactNode;
 };
 
+type NavItem = {
+  displayLabel?: string;
+  href: string;
+  label: string;
+  mobileLabel?: string;
+};
+
 const navItems = [
   { href: "/app", label: "Home" },
   { href: "/app/courses", label: "Programs" },
-  { href: "/app/sessions", label: "Live Classes" },
+  {
+    displayLabel: "Public Page",
+    href: "/app/settings/public-site",
+    label: "Branding",
+  },
   { href: "/app/students", label: "Students" },
-  { href: "/app/enrollments", label: "Enrollments" },
+  { href: "/app/enrollments", label: "Enrollments", mobileLabel: "Enroll" },
+  { href: "/app/sessions", label: "Live Classes" },
   { href: "/app/documents", label: "Content Library" },
-  { href: "/app/finance", label: "Sales" },
   { href: "/app/community", label: "Community" },
   { href: "/app/announcements", label: "Announcements" },
+  {
+    displayLabel: "Student Finance",
+    href: "/app/finance",
+    label: "Sales",
+  },
+  {
+    displayLabel: "CoachFort Plan",
+    href: "/app/subscription",
+    label: "Subscription",
+  },
   { href: "/app/reports", label: "Analytics" },
-  { href: "/app/settings/branding", label: "Branding" },
-  { href: "/app/settings", label: "Settings" },
-];
+  {
+    displayLabel: "Team & Settings",
+    href: "/app/settings",
+    label: "Settings",
+  },
+] satisfies NavItem[];
 
 const navGroups = [
   {
-    label: "Command",
-    items: ["Home", "Analytics"],
+    label: "Overview",
+    items: ["Home"],
   },
   {
-    label: "Learning",
-    items: ["Programs", "Live Classes", "Enrollments", "Content Library"],
+    label: "Grow",
+    items: ["Programs", "Branding"],
   },
   {
-    label: "Audience",
-    items: ["Students", "Community", "Announcements"],
+    label: "Students",
+    items: ["Students", "Enrollments"],
+  },
+  {
+    label: "Deliver",
+    items: ["Live Classes", "Content Library", "Community", "Announcements"],
   },
   {
     label: "Business",
-    items: ["Sales", "Branding", "Settings"],
+    items: ["Sales", "Subscription", "Analytics"],
+  },
+  {
+    label: "Workspace",
+    items: ["Settings"],
   },
 ];
 
-const mobilePrimaryLabels = ["Home", "Students", "Programs", "Sales"];
+const mobilePrimaryLabels = ["Home", "Programs", "Students", "Enrollments"];
+
+function getNavItemLabel(item: NavItem) {
+  return item.displayLabel ?? item.label;
+}
+
+function getMobileNavItemLabel(item: NavItem) {
+  return item.mobileLabel ?? getNavItemLabel(item);
+}
 
 function NavIcon({ label }: { label: string }) {
   const iconLabelByAlias: Record<string, string> = {
@@ -526,16 +566,16 @@ export function AppShell({ activeItem = "Home", children }: AppShellProps) {
           This module is not enabled for your workspace.
         </h2>
         <p className="mt-3 text-sm leading-6 text-[#5D7185]">
-          This route is protected by feature access settings. Existing data
-          remains protected, and owner/admin users can review the setting in
-          Feature Settings.
+          This area is currently unavailable for your workspace. Your existing
+          information is unchanged, and an owner or admin can review workspace
+          availability in Settings.
         </p>
         {currentRole === "owner" || currentRole === "admin" ? (
           <Link
             className="mt-6 inline-flex rounded-xl bg-[#145DA0] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#0B2A3D]"
             href="/app/settings/features"
           >
-            Open Feature Settings
+            Review workspace settings
           </Link>
         ) : null}
       </div>
@@ -579,7 +619,7 @@ export function AppShell({ activeItem = "Home", children }: AppShellProps) {
               Navigation
             </p>
             <p className="mt-1 text-xs font-medium text-cyan-50/80">
-              Modules are grouped by daily workflow.
+              Choose the next task for your workspace.
             </p>
           </div>
 
@@ -620,7 +660,7 @@ export function AppShell({ activeItem = "Home", children }: AppShellProps) {
                         >
                           <NavIcon label={item.label} />
                         </span>
-                        <span className="truncate">{item.label}</span>
+                        <span className="truncate">{getNavItemLabel(item)}</span>
                       </Link>
                     );
                   })}
@@ -662,7 +702,7 @@ export function AppShell({ activeItem = "Home", children }: AppShellProps) {
                   className="hidden items-center gap-3 rounded-lg border border-[#9ADDEA] bg-[#EAF8FC] px-3 py-2 text-sm font-semibold text-[#0B2A3D] shadow-sm shadow-[#0B2A3D]/5 sm:flex"
                 >
                   <span className="h-2 w-2 rounded-full bg-[#14B8C6]" />
-                  Workspace ready
+                  Workspace open
                 </div>
               </div>
             </div>
@@ -729,7 +769,7 @@ export function AppShell({ activeItem = "Home", children }: AppShellProps) {
                         >
                           <NavIcon label={item.label} />
                         </span>
-                        <span>{item.label}</span>
+                        <span>{getNavItemLabel(item)}</span>
                       </Link>
                     );
                   })}
@@ -768,7 +808,9 @@ export function AppShell({ activeItem = "Home", children }: AppShellProps) {
                   <span className="text-[10px] font-bold">
                     <NavIcon label={item.label} />
                   </span>
-                  <span className="max-w-full truncate">{item.label}</span>
+                  <span className="max-w-full truncate">
+                    {getMobileNavItemLabel(item)}
+                  </span>
                 </Link>
               );
             })}
