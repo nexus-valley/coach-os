@@ -57,9 +57,13 @@ function formatPrice(page: PublicProgramSalesPagePayload) {
 }
 
 function getPaymentModeLabel(page: PublicProgramSalesPagePayload) {
+  if (page.program.pricing_type === "free") {
+    return "No payment required";
+  }
+
   return page.program.sales_payment_mode === "external"
     ? "Coach's external payment page"
-    : "Manual payment";
+    : "Arranged directly with coach";
 }
 
 export function PublicProgramSalesPage({
@@ -112,14 +116,17 @@ export function PublicProgramSalesPage({
     page?.tenant.accent_color || page?.tenant.brand_color,
   );
 
+  const paymentRequired = page?.program.pricing_type === "paid";
   const nextSteps = useMemo(
     () => [
       "Request enrollment with your contact details.",
       "The coach reviews your request and contacts you.",
-      "Payment and access details are confirmed directly with the coach.",
+      paymentRequired
+        ? "Payment and access details are confirmed directly with the coach."
+        : "The coach confirms enrollment and access details with you.",
       "Student access is activated later by the coach or team.",
     ],
-    [],
+    [paymentRequired],
   );
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -154,7 +161,9 @@ export function PublicProgramSalesPage({
 
       setForm(emptyLeadForm);
       setSuccess(
-        "Request received. The coach will contact you with payment and access details.",
+        page.program.pricing_type === "paid"
+          ? "Request received. The coach will contact you with payment and access details."
+          : "Request received. The coach will contact you with enrollment and access details.",
       );
     } catch (caught) {
       setError(getErrorMessage(caught, "Unable to send your request."));
@@ -200,7 +209,9 @@ export function PublicProgramSalesPage({
   const heroSummary =
     page.program.sales_summary?.trim() ||
     page.program.description?.trim() ||
-    "Request enrollment and the coach will guide you through payment and access details.";
+    (paymentRequired
+      ? "Request enrollment and the coach will guide you through payment and access details."
+      : "Request enrollment and the coach will guide you through access details.");
 
   return (
     <main
@@ -333,9 +344,11 @@ export function PublicProgramSalesPage({
           <Badge tone="premium">Price and access</Badge>
           <h2 className="mt-4 text-3xl font-semibold">{formatPrice(page)}</h2>
           <p className="mt-4 text-sm leading-7 text-[#334155]">
-            Enrollment is confirmed by the coach after payment and access
-            review. Submitting this request does not create a student account,
-            collect payment, generate an invoice, or activate access.
+            {paymentRequired
+              ? "Enrollment is confirmed by the coach after payment and access review."
+              : "Enrollment and access are confirmed by the coach after reviewing your request."}{" "}
+            Submitting this request does not create a student account, collect
+            payment, generate an invoice, or activate access.
           </p>
           <div className="mt-5 rounded-2xl border border-[#D8E8F0] bg-[#F6FBFE] p-4 text-sm leading-7 text-[#334155]">
             {page.program.access_duration_label ? (
@@ -374,9 +387,10 @@ export function PublicProgramSalesPage({
         </div>
       </section>
 
-      {page.program.payment_instructions ||
-      (page.program.sales_payment_mode === "external" &&
-        page.program.external_payment_url) ? (
+      {paymentRequired &&
+      (page.program.payment_instructions ||
+        (page.program.sales_payment_mode === "external" &&
+          page.program.external_payment_url)) ? (
         <section className="mx-auto max-w-7xl px-5 pb-10 sm:px-6 lg:px-8">
           <div className="rounded-3xl border border-[#D8E8F0] bg-white p-6 shadow-xl shadow-[#0B2A3D]/5">
             <Badge tone="admin">Payment guidance from coach</Badge>
@@ -417,8 +431,9 @@ export function PublicProgramSalesPage({
             Ask to join this program
           </h2>
           <p className="mt-4 text-sm leading-7 text-[#334155]">
-            Share your details and the coach will contact you with payment and
-            access details. Online payment is not handled on this page.
+            {paymentRequired
+              ? "Share your details and the coach will contact you with payment and access details. Online payment is not handled on this page."
+              : "Share your details and the coach will contact you with enrollment and access details."}
           </p>
           {page.tenant.support_email || page.tenant.support_phone ? (
             <div className="mt-5 rounded-3xl border border-[#D8E8F0] bg-white p-5 text-sm leading-7 text-[#334155] shadow-lg shadow-[#0B2A3D]/5">

@@ -7,7 +7,6 @@ import { useEffect, useState } from "react";
 import { Badge } from "@/src/components/ui/Badge";
 import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
-import { EmptyState } from "@/src/components/ui/EmptyState";
 import { FeedbackAlert } from "@/src/components/ui/FeedbackAlert";
 import { FormField } from "@/src/components/ui/FormField";
 import { SectionHeader } from "@/src/components/ui/SectionHeader";
@@ -42,7 +41,7 @@ function StatusBadge({ status }: { status: Course["status"] }) {
   }
 
   return (
-    <Badge className="border-white/10 bg-white/10 text-slate-200">Draft</Badge>
+    <Badge className="border-amber-200 bg-amber-50 text-amber-800">Draft</Badge>
   );
 }
 
@@ -59,7 +58,80 @@ function formatProgramPrice(course: Course) {
 }
 
 function getPaymentModeLabel(course: Course) {
-  return course.sales_payment_mode === "external" ? "External" : "Manual";
+  if (course.pricing_type === "free") {
+    return "No payment required";
+  }
+
+  return course.sales_payment_mode === "external"
+    ? "Coach payment link"
+    : "Coach handled";
+}
+
+function isPublicProgramAvailable(course: Course) {
+  return course.status === "published" && course.public_sales_enabled;
+}
+
+function hasStudentFacingSummary(course: Course) {
+  return Boolean(
+    course.sales_headline?.trim() ||
+      course.sales_summary?.trim() ||
+      course.description?.trim(),
+  );
+}
+
+function hasPaymentGuidance(course: Course) {
+  return (
+    course.pricing_type === "free" ||
+    Boolean(
+      course.payment_instructions?.trim() ||
+        (course.sales_payment_mode === "external" &&
+          course.external_payment_url?.trim()),
+    )
+  );
+}
+
+function isPublicProgramReady(course: Course) {
+  return (
+    isPublicProgramAvailable(course) &&
+    hasStudentFacingSummary(course) &&
+    hasPaymentGuidance(course)
+  );
+}
+
+function getPublicProgramStatus(course: Course) {
+  if (course.status !== "published") {
+    return "Private draft";
+  }
+
+  if (!course.public_sales_enabled) {
+    return "Public request page off";
+  }
+
+  return isPublicProgramReady(course)
+    ? "Ready to share"
+    : "Public page needs review";
+}
+
+function getProgramNextStep(course: Course, canManage: boolean) {
+  if (!canManage) {
+    return isPublicProgramAvailable(course)
+      ? "Preview the student page or review the program details."
+      : "Review the program details; an owner or admin manages public visibility.";
+  }
+
+  if (course.status !== "published") {
+    return "This draft is private. Complete its details before publishing.";
+  }
+
+  if (!course.public_sales_enabled) {
+    return "Configure the public request page before sharing.";
+  }
+
+  if (!isPublicProgramReady(course)) {
+    return "Complete the student summary and payment guidance, then preview the page.";
+  }
+
+  return "Preview the student page, copy its link, and review new requests.";
 }
 
 export function CoursesPageClient() {
@@ -182,52 +254,50 @@ export function CoursesPageClient() {
     <div className="mx-auto max-w-7xl">
       <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
         <div>
-          <Badge className="border-white/15 bg-white/10 text-white">
-            Program workflow
-          </Badge>
-          <h2 className="mt-5 text-3xl font-semibold tracking-normal text-white sm:text-4xl">
-            Programs
-          </h2>
-          <p className="mt-3 max-w-2xl text-base leading-7 text-slate-400">
-            Shape the learning products your coaching brand sells, teaches, and
-            connects to enrollments.
+          <Badge tone="owner">Programs</Badge>
+          <h1 className="mt-4 text-3xl font-semibold tracking-normal text-[#0B1F33] sm:text-4xl">
+            Create, publish, and share programs
+          </h1>
+          <p className="mt-3 max-w-3xl text-base leading-7 text-[#425B76]">
+            Build each coaching offer, prepare the page students will see, and
+            follow enrollment requests through to access.
           </p>
         </div>
         {canManage ? (
           <Button onClick={() => setFormOpen(true)} size="lg" type="button">
-            Create Program
+            Create program
           </Button>
         ) : null}
       </div>
 
-      <Card className="mt-8 border-white/10 bg-[#101214] p-5 text-white shadow-2xl shadow-black/10 sm:p-6">
+      <Card className="mt-8 border-[#D8E8F0] bg-white p-5 text-[#0B1F33] shadow-sm shadow-[#0B2A3D]/5 sm:p-6">
         <div className="grid gap-5 lg:grid-cols-[1.1fr_1.4fr] lg:items-center">
           <div>
-            <p className="text-sm font-medium text-slate-400">Current workspace</p>
+            <p className="text-sm font-medium text-[#5D7185]">Current workspace</p>
             <p className="mt-1 text-xl font-semibold">
               {tenant?.name ?? "Loading workspace..."}
             </p>
-            <p className="mt-3 text-sm leading-6 text-slate-400">
-              Start by creating a program, then add students and enroll them
-              from each student profile when the learning path is ready.
+            <p className="mt-3 text-sm leading-6 text-[#425B76]">
+              Open a program to prepare its public request page, preview what
+              students will see, and review enrollment requests.
             </p>
           </div>
           <div className="grid gap-3 sm:grid-cols-3">
-            <div className="rounded-lg border border-white/10 bg-white/10 p-4">
+            <div className="rounded-lg border border-[#D8E8F0] bg-[#F6FBFE] p-4">
               <p className="text-2xl font-semibold">{courses.length}</p>
-              <p className="mt-1 text-sm text-slate-400">Total programs</p>
+              <p className="mt-1 text-sm text-[#5D7185]">Total programs</p>
             </div>
-            <div className="rounded-lg border border-emerald-400/20 bg-emerald-400/10 p-4">
-              <p className="text-2xl font-semibold text-emerald-200">
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+              <p className="text-2xl font-semibold text-emerald-800">
                 {publishedCourses}
               </p>
-              <p className="mt-1 text-sm text-emerald-100/80">Published</p>
+              <p className="mt-1 text-sm text-emerald-700">Published</p>
             </div>
-            <div className="rounded-lg border border-amber-400/20 bg-amber-400/10 p-4">
-              <p className="text-2xl font-semibold text-amber-200">
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+              <p className="text-2xl font-semibold text-amber-800">
                 {draftCourses}
               </p>
-              <p className="mt-1 text-sm text-amber-100/80">Drafts</p>
+              <p className="mt-1 text-sm text-amber-700">Private drafts</p>
             </div>
           </div>
         </div>
@@ -245,29 +315,45 @@ export function CoursesPageClient() {
         <section className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {[0, 1, 2].map((item) => (
             <Card
-              className="border-white/10 bg-[#101214] p-6"
+              className="border-[#D8E8F0] bg-white p-6"
               key={item}
             >
               <span className="sr-only">Loading program</span>
-              <Skeleton className="h-6 w-24 bg-white/10" />
-              <Skeleton className="mt-8 h-8 w-3/4 bg-white/10" />
-              <Skeleton className="mt-5 h-4 w-full bg-white/10" />
-              <Skeleton className="mt-3 h-4 w-5/6 bg-white/10" />
-              <Skeleton className="mt-10 h-10 w-full bg-white/10" />
+              <Skeleton className="h-6 w-24 bg-[#D8E8F0]" />
+              <Skeleton className="mt-8 h-8 w-3/4 bg-[#D8E8F0]" />
+              <Skeleton className="mt-5 h-4 w-full bg-[#D8E8F0]" />
+              <Skeleton className="mt-3 h-4 w-5/6 bg-[#D8E8F0]" />
+              <Skeleton className="mt-10 h-10 w-full bg-[#D8E8F0]" />
             </Card>
           ))}
         </section>
       ) : courses.length === 0 ? (
-        <EmptyState
-          action={
-            canManage
-              ? { label: "Create Program", onClick: () => setFormOpen(true) }
-              : undefined
-          }
-          description="Create a program first, then add students and enroll them from each student profile."
-          icon="CU"
-          title="No programs created yet"
-        />
+        <Card className="mt-6 border-dashed border-[#BFD7E6] bg-white p-7 text-center text-[#0B1F33] shadow-sm sm:p-10">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg bg-[#EAF7FC] text-sm font-bold text-[#0E7490]">
+            01
+          </div>
+          <h2 className="mt-5 text-2xl font-semibold">Create your first program</h2>
+          <p className="mx-auto mt-3 max-w-2xl text-sm leading-6 text-[#425B76]">
+            Start with the offer students will request. After creation, add the
+            public summary, pricing or payment guidance, and shareable page.
+          </p>
+          <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
+            {canManage ? (
+              <Button onClick={() => setFormOpen(true)} type="button">
+                Create program
+              </Button>
+            ) : null}
+            {canManage ? (
+              <Button
+                href="/app/settings/public-site"
+                type="button"
+                variant="secondary"
+              >
+                Configure public page
+              </Button>
+            ) : null}
+          </div>
+        </Card>
       ) : (
         <section className="mt-6">
           <SectionHeader
@@ -275,66 +361,101 @@ export function CoursesPageClient() {
               draftCourses > 0 ? (
                 <Badge tone="warning">{draftCourses} drafts</Badge>
               ) : (
-                <Badge className="border-white/15 bg-white/10 text-white">
-                  Catalog ready
-                </Badge>
+                <Badge tone="success">All programs published</Badge>
               )
             }
             className="mb-4"
             description={
-              <span className="text-slate-400">
-                Review published programs and drafts before linking them to
-                batches, live classes, assignments, and enrollments.
+              <span className="text-[#425B76]">
+                Open a program to prepare its public page, preview the student
+                experience, and follow enrollment requests.
               </span>
             }
-            title={<span className="text-white">Program catalog</span>}
+            title={<span className="text-[#0B1F33]">Your programs</span>}
           />
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {courses.map((course) => (
-              <Link href={`/app/courses/${course.id}`} key={course.id}>
-                <Card className="h-full border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/10 transition hover:-translate-y-1 hover:bg-[#15181b]">
-                  <div className="flex h-full min-h-60 flex-col justify-between">
+            {courses.map((course) => {
+              const publicAvailable = isPublicProgramAvailable(course);
+              const publicReady = isPublicProgramReady(course);
+              const publicProgramPath = tenant
+                ? `/site/${tenant.slug}/programs/${course.slug}`
+                : "";
+
+              return (
+                <Card
+                  className="h-full border-[#D8E8F0] bg-white p-5 text-[#0B1F33] shadow-sm shadow-[#0B2A3D]/5"
+                  key={course.id}
+                >
+                  <article className="flex h-full min-h-72 flex-col justify-between">
                     <div>
                       <div className="flex items-start justify-between gap-4">
                         <StatusBadge status={course.status} />
-                        <span className="text-xs text-slate-500">
+                        <span className="text-xs text-[#71839A]">
                           {formatDate(course.created_at)}
                         </span>
                       </div>
                       <div className="mt-5 flex flex-wrap gap-2">
-                        <Badge className="border-[#2ECBEA]/20 bg-[#2ECBEA]/10 text-[#A7F3FF]">
+                        <Badge className="border-[#A9E7F2] bg-[#EAFBFE] text-[#075E6F]">
                           {formatProgramPrice(course)}
                         </Badge>
                         <Badge
                           className={
-                            course.public_sales_enabled
-                              ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-100"
-                              : "border-white/10 bg-white/10 text-slate-300"
+                            publicReady
+                              ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                              : "border-[#D8E8F0] bg-[#F6FBFE] text-[#526A80]"
                           }
                         >
-                          {course.public_sales_enabled
-                            ? "Public sales on"
-                            : "Sales off"}
+                          {getPublicProgramStatus(course)}
                         </Badge>
-                        <Badge className="border-white/10 bg-white/10 text-slate-300">
+                        <Badge className="border-[#D8E8F0] bg-[#F6FBFE] text-[#526A80]">
                           {getPaymentModeLabel(course)}
                         </Badge>
                       </div>
                       <h3 className="mt-6 text-2xl font-semibold leading-tight">
                         {course.title}
                       </h3>
-                      <p className="mt-4 line-clamp-3 text-sm leading-6 text-slate-400">
+                      <p className="mt-3 line-clamp-3 text-sm leading-6 text-[#425B76]">
                         {course.description || "No description added yet."}
                       </p>
+                      <p className="mt-4 rounded-lg border border-[#D8E8F0] bg-[#F6FBFE] p-3 text-sm leading-6 text-[#425B76]">
+                        <span className="font-semibold text-[#0B1F33]">Next:</span>{" "}
+                        {getProgramNextStep(course, canManage)}
+                      </p>
                     </div>
-                    <div className="mt-8 flex items-center justify-between border-t border-white/10 pt-5 text-sm">
-                      <span className="text-slate-500">/{course.slug}</span>
-                      <span className="font-semibold text-white">Open</span>
+                    <div className="mt-6 flex flex-wrap gap-2 border-t border-[#D8E8F0] pt-5">
+                      <Button href={`/app/courses/${course.id}`} size="sm">
+                        {canManage ? "Manage program" : "View program"}
+                      </Button>
+                      {publicAvailable && publicProgramPath ? (
+                        <Button
+                          href={publicProgramPath}
+                          size="sm"
+                          variant="secondary"
+                        >
+                          Preview student page
+                        </Button>
+                      ) : canManage ? (
+                        <Button
+                          href={`/app/courses/${course.id}#public-program-setup`}
+                          size="sm"
+                          variant="secondary"
+                        >
+                          Prepare public page
+                        </Button>
+                      ) : null}
+                      {canManage ? (
+                        <Link
+                          className="inline-flex h-10 items-center px-2 text-sm font-semibold text-[#145DA0] hover:underline"
+                          href={`/app/courses/${course.id}#enrollment-requests`}
+                        >
+                          Review requests
+                        </Link>
+                      ) : null}
                     </div>
-                  </div>
+                  </article>
                 </Card>
-              </Link>
-            ))}
+              );
+            })}
           </div>
         </section>
       )}
@@ -347,7 +468,11 @@ export function CoursesPageClient() {
                 <p className="text-sm font-semibold text-[#475569]">
                   New program
                 </p>
-                <h3 className="mt-2 text-2xl font-semibold">Create Program</h3>
+                <h3 className="mt-2 text-2xl font-semibold">Create a program</h3>
+                <p className="mt-2 max-w-md text-sm leading-6 text-[#5D7185]">
+                  Start private while preparing details, or publish immediately
+                  only when the program is ready to appear on your public page.
+                </p>
               </div>
               <button
                 className="flex h-10 w-10 items-center justify-center rounded-full border border-[#CBD5E1] text-sm font-semibold text-[#475569] transition hover:bg-[#F8FAFC] hover:text-[#0B1F33]"
@@ -389,7 +514,7 @@ export function CoursesPageClient() {
                 />
               </FormField>
 
-              <FormField label="Status">
+              <FormField label="Starting visibility">
                 <div className="mt-2 grid grid-cols-2 gap-2 rounded-xl border border-[#CBD5E1] bg-[#F8FAFC] p-1">
                   {(["draft", "published"] as const).map((item) => (
                     <button
@@ -407,6 +532,10 @@ export function CoursesPageClient() {
                     </button>
                   ))}
                 </div>
+                <p className="mt-2 text-xs leading-5 text-[#5D7185]">
+                  Draft stays private. Published makes the program eligible for
+                  public display; its request page still needs separate setup.
+                </p>
               </FormField>
 
               <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end">
@@ -418,7 +547,7 @@ export function CoursesPageClient() {
                   Cancel
                 </Button>
                 <Button disabled={saving} type="submit">
-                  {saving ? "Creating..." : "Create Program"}
+                  {saving ? "Creating..." : "Create program"}
                 </Button>
               </div>
             </form>

@@ -334,7 +334,7 @@ export function PublicSitePage({ tenantSlug }: PublicSitePageProps) {
             </h2>
             <p className="mt-4 text-sm leading-7 text-[#425B76]">
               {site.site.public_about_body ||
-                "This coach uses CoachFort to organize programs, live classes, materials, payments, and student communication."}
+                "This coach uses CoachFort to organize programs, live classes, materials, and student communication."}
             </p>
           </div>
           <div className="grid gap-4 md:grid-cols-3">

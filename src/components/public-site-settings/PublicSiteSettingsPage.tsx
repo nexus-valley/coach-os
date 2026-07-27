@@ -276,6 +276,9 @@ export function PublicSiteSettingsPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-3">
+          <Button href="/app/courses" type="button" variant="secondary">
+            Manage programs
+          </Button>
           <Button href={`/site/${form.slug}`} type="button" variant="secondary">
             Open public page
           </Button>

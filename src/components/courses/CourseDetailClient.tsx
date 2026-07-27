@@ -191,6 +191,7 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
   } | null>(null);
   const [salesForm, setSalesForm] = useState<SalesSettingsForm | null>(null);
   const [salesSaving, setSalesSaving] = useState(false);
+  const [shareFeedback, setShareFeedback] = useState("");
   const [requestFeedback, setRequestFeedback] = useState<{
     message: string;
     tone: "error" | "success";
@@ -540,6 +541,7 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
     }
 
     setSalesFeedback(null);
+    setShareFeedback("");
     setSalesSaving(true);
 
     try {
@@ -579,16 +581,36 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
       setCourse(updatedCourse);
       setSalesForm(createSalesSettingsForm(updatedCourse));
       setSalesFeedback({
-        message: "Sales settings saved.",
+        message: "Public program settings saved.",
         tone: "success",
       });
     } catch (caught) {
       setSalesFeedback({
-        message: getErrorMessage(caught, "Unable to save sales settings."),
+        message: getErrorMessage(
+          caught,
+          "Unable to save public program settings.",
+        ),
         tone: "error",
       });
     } finally {
       setSalesSaving(false);
+    }
+  }
+
+  async function handleCopyPublicProgramLink() {
+    if (!publicProgramReady || !publicProgramPath) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(
+        `${window.location.origin}${publicProgramPath}`,
+      );
+      setShareFeedback("Public program link copied.");
+    } catch {
+      setShareFeedback(
+        "Unable to copy automatically. Open the student page and copy its address.",
+      );
     }
   }
 
@@ -677,39 +699,50 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
   const publicProgramPath = tenant
     ? `/site/${tenant.slug}/programs/${course.slug}`
     : "";
-  const publicSalesReady =
+  const studentSummaryReady = Boolean(
+    course.sales_headline?.trim() ||
+      course.sales_summary?.trim() ||
+      course.description?.trim(),
+  );
+  const paymentGuidanceReady =
+    course.pricing_type === "free" ||
+    Boolean(
+      course.payment_instructions?.trim() ||
+        (course.sales_payment_mode === "external" &&
+          course.external_payment_url?.trim()),
+    );
+  const publicPageAvailable =
     Boolean(publicProgramPath) &&
     course.status === "published" &&
     course.public_sales_enabled;
+  const publicProgramReady =
+    publicPageAvailable && studentSummaryReady && paymentGuidanceReady;
   const salesReadinessItems = [
     {
       complete: course.status === "published",
-      label: "Publish program",
+      label: "Program is published",
     },
     {
       complete: course.public_sales_enabled,
-      label: "Enable public sales page",
+      label: "Public request page is enabled",
     },
     {
-      complete: Boolean(
-        course.sales_headline?.trim() || course.sales_summary?.trim(),
-      ),
-      label: "Add sales headline or summary",
+      complete: studentSummaryReady,
+      label: "Student-facing summary is ready",
     },
     {
-      complete: Boolean(
-        course.payment_instructions?.trim() ||
-          (course.sales_payment_mode === "external" &&
-            course.external_payment_url?.trim()),
-      ),
-      label: "Add payment guidance",
+      complete: paymentGuidanceReady,
+      label:
+        course.pricing_type === "free"
+          ? "No payment instructions needed"
+          : "Student payment guidance is ready",
     },
   ];
 
   return (
     <div className="mx-auto max-w-7xl">
       <Link
-        className="text-sm font-semibold text-slate-400 transition hover:text-white"
+        className="text-sm font-semibold text-[#425B76] transition hover:text-[#0B1F33] hover:underline"
         href="/app/courses"
       >
         Back to programs
@@ -739,8 +772,14 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
               <p className="mt-2 font-semibold">{tenant?.name}</p>
             </div>
             <div>
-              <p className="text-sm text-slate-500">Slug</p>
-              <p className="mt-2 font-semibold">/{course.slug}</p>
+              <p className="text-sm text-slate-500">Public page</p>
+              <p className="mt-2 font-semibold">
+                {publicProgramReady
+                  ? "Ready to share"
+                  : publicPageAvailable
+                    ? "Available, needs review"
+                    : "Not available"}
+              </p>
             </div>
             <div>
               <p className="text-sm text-slate-500">Created</p>
@@ -774,74 +813,100 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
         </div>
       ) : null}
 
-      <section className="mt-6">
+      <section className="mt-6 scroll-mt-24" id="public-program-setup">
         <Card className="border-[#D8E8F0] bg-white p-6 text-[#0B1F33] shadow-xl shadow-[#0B2A3D]/10 sm:p-8">
           <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-start">
             <div>
               <Badge className="border-[#A9E7F2] bg-[#EAFBFE] text-[#075E6F]">
-                Sales settings
+                Student-facing page
               </Badge>
               <h3 className="mt-4 text-2xl font-semibold">
-                Program sales readiness
+                Prepare the public enrollment page
               </h3>
               <p className="mt-3 max-w-3xl text-sm leading-6 text-[#425B76]">
-                Set the public sales copy, price, and payment instructions for
-                this program. Online checkout is not enabled yet. Use manual
-                instructions or an external payment link for now.
+                Set what students will see, explain price and access clearly,
+                then preview the page before sharing it. CoachFort does not
+                collect, hold, or refund student program payments in this phase.
               </p>
               <div className="mt-5 rounded-2xl border border-[#CFE3EC] bg-[#F6FBFE] p-4 shadow-sm">
                 <p className="text-sm font-semibold text-[#0B1F33]">
                   Public program link
                 </p>
-                {publicSalesReady ? (
-                  <div className="mt-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                {publicPageAvailable ? (
+                  <div className="mt-3">
                     <p className="break-all rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">
                       {publicProgramPath}
                     </p>
-                    <Button
-                      className="shrink-0 border-[#0B2A3D] bg-[#0B2A3D] text-white hover:bg-[#123A52]"
-                      href={publicProgramPath}
-                      size="sm"
-                      variant="secondary"
-                    >
-                      Open public page
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                    {salesReadinessItems.map((item) => (
-                      <div
-                        className={[
-                          "flex items-center gap-3 rounded-xl border px-4 py-3 text-sm shadow-sm",
-                          item.complete
-                            ? "border-emerald-200 bg-emerald-50"
-                            : "border-[#D8E8F0] bg-white",
-                        ].join(" ")}
-                        key={item.label}
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Button
+                        className="border-[#0B2A3D] bg-[#0B2A3D] text-white hover:bg-[#123A52]"
+                        href={publicProgramPath}
+                        size="sm"
+                        variant="secondary"
                       >
-                        <span
-                          className={[
-                            "flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold",
-                            item.complete
-                              ? "bg-emerald-500 text-white"
-                              : "bg-[#E8F1F5] text-[#425B76]",
-                          ].join(" ")}
+                        Preview student page
+                      </Button>
+                      {publicProgramReady ? (
+                        <Button
+                          onClick={handleCopyPublicProgramLink}
+                          size="sm"
+                          type="button"
+                          variant="secondary"
                         >
-                          {item.complete ? "OK" : "-"}
-                        </span>
-                        <span
-                          className={
-                            item.complete
-                              ? "font-semibold text-emerald-900"
-                              : "font-semibold text-[#425B76]"
-                          }
-                        >
-                          {item.label}
-                        </span>
-                      </div>
-                    ))}
+                          Copy share link
+                        </Button>
+                      ) : null}
+                      <Button
+                        href="#enrollment-requests"
+                        size="sm"
+                        variant="secondary"
+                      >
+                        Review requests
+                      </Button>
+                    </div>
+                    {shareFeedback ? (
+                      <p
+                        aria-live="polite"
+                        className="mt-3 text-sm font-medium text-[#425B76]"
+                      >
+                        {shareFeedback}
+                      </p>
+                    ) : null}
                   </div>
-                )}
+                ) : null}
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  {salesReadinessItems.map((item) => (
+                    <div
+                      className={[
+                        "flex items-center gap-3 rounded-xl border px-4 py-3 text-sm shadow-sm",
+                        item.complete
+                          ? "border-emerald-200 bg-emerald-50"
+                          : "border-[#D8E8F0] bg-white",
+                      ].join(" ")}
+                      key={item.label}
+                    >
+                      <span
+                        className={[
+                          "flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold",
+                          item.complete
+                            ? "bg-emerald-500 text-white"
+                            : "bg-[#E8F1F5] text-[#425B76]",
+                        ].join(" ")}
+                      >
+                        {item.complete ? "OK" : "-"}
+                      </span>
+                      <span
+                        className={
+                          item.complete
+                            ? "font-semibold text-emerald-900"
+                            : "font-semibold text-[#425B76]"
+                        }
+                      >
+                        {item.label}
+                      </span>
+                    </div>
+                  ))}
+                </div>
                 <p className="mt-3 text-xs font-medium leading-5 text-[#526A80]">
                   The public page lets visitors request enrollment. It does not
                   collect payment, generate invoices, or activate access.
@@ -859,10 +924,16 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
                     : "border-[#D8E8F0] bg-[#F8FAFC] text-[#526A80]"
                 }
               >
-                {course.public_sales_enabled ? "Public sales on" : "Sales off"}
+                {course.public_sales_enabled
+                  ? "Public page enabled"
+                  : "Public page off"}
               </Badge>
               <Badge className="border-[#CFE3EC] bg-[#F6FBFE] text-[#0B2A3D]">
-                {course.sales_payment_mode === "external" ? "External" : "Manual"}
+                {course.pricing_type === "free"
+                  ? "No payment required"
+                  : course.sales_payment_mode === "external"
+                    ? "Coach payment link"
+                    : "Coach handled"}
               </Badge>
             </div>
           </div>
@@ -973,44 +1044,52 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
                   />
                   <span>
                     <span className="block font-semibold text-[#0B1F33]">
-                      Enable public sales page
+                      Enable public request page
                     </span>
                     <span className="mt-1 block leading-6 text-[#526A80]">
-                      Marks this program ready for a future public sales page.
+                      For a published program, this allows students to review
+                      the page and request enrollment.
                     </span>
                   </span>
                 </label>
-                <label className="block text-sm font-semibold text-[#0B1F33] lg:col-span-2">
-                  Payment mode
-                  <select
-                    className="mt-2 h-12 w-full rounded-xl border border-[#BFD7E3] bg-white px-4 text-sm font-medium text-[#0B1F33] outline-none focus:border-[#2ECBEA]/80 focus:ring-4 focus:ring-[#2ECBEA]/15 disabled:bg-[#EEF4F7] disabled:text-[#66788F]"
-                    disabled={!canManage || salesSaving}
-                    onChange={(event) =>
-                      setSalesForm((current) =>
-                        current
-                          ? {
-                              ...current,
-                              externalPaymentUrl:
-                                event.target.value === "external"
-                                  ? current.externalPaymentUrl
-                                  : "",
-                              salesPaymentMode:
-                                event.target.value as CourseSalesPaymentMode,
-                            }
-                          : current,
-                      )
-                    }
-                    value={salesForm.salesPaymentMode}
-                  >
-                    <option value="manual">Manual instructions</option>
-                    <option value="external">External payment link</option>
-                  </select>
-                </label>
+                {salesForm.pricingType === "paid" ? (
+                  <label className="block text-sm font-semibold text-[#0B1F33] lg:col-span-2">
+                    Payment guidance
+                    <select
+                      className="mt-2 h-12 w-full rounded-xl border border-[#BFD7E3] bg-white px-4 text-sm font-medium text-[#0B1F33] outline-none focus:border-[#2ECBEA]/80 focus:ring-4 focus:ring-[#2ECBEA]/15 disabled:bg-[#EEF4F7] disabled:text-[#66788F]"
+                      disabled={!canManage || salesSaving}
+                      onChange={(event) =>
+                        setSalesForm((current) =>
+                          current
+                            ? {
+                                ...current,
+                                externalPaymentUrl:
+                                  event.target.value === "external"
+                                    ? current.externalPaymentUrl
+                                    : "",
+                                salesPaymentMode:
+                                  event.target.value as CourseSalesPaymentMode,
+                              }
+                            : current,
+                        )
+                      }
+                      value={salesForm.salesPaymentMode}
+                    >
+                      <option value="manual">Instructions from coach</option>
+                      <option value="external">Coach payment link</option>
+                    </select>
+                  </label>
+                ) : (
+                  <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm leading-6 text-emerald-800 lg:col-span-2">
+                    This is a free program, so students will not see payment
+                    instructions.
+                  </div>
+                )}
               </div>
 
               <div className="grid gap-4 lg:grid-cols-2">
                 <label className="block text-sm font-semibold text-[#0B1F33]">
-                  Sales headline
+                  Public page headline
                   <input
                     className="mt-2 h-12 w-full rounded-xl border border-[#BFD7E3] bg-white px-4 text-sm font-medium text-[#0B1F33] outline-none placeholder:text-[#71839A] focus:border-[#2ECBEA]/80 focus:ring-4 focus:ring-[#2ECBEA]/15 disabled:bg-[#EEF4F7] disabled:text-[#66788F]"
                     disabled={!canManage || salesSaving}
@@ -1049,7 +1128,7 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
               </div>
 
               <label className="block text-sm font-semibold text-[#0B1F33]">
-                Sales summary
+                Public page summary
                 <textarea
                   className="mt-2 min-h-28 w-full resize-none rounded-xl border border-[#BFD7E3] bg-white px-4 py-3 text-sm font-medium leading-6 text-[#0B1F33] outline-none placeholder:text-[#71839A] focus:border-[#2ECBEA]/80 focus:ring-4 focus:ring-[#2ECBEA]/15 disabled:bg-[#EEF4F7] disabled:text-[#66788F]"
                   disabled={!canManage || salesSaving}
@@ -1066,28 +1145,31 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
                 />
               </label>
 
-              <label className="block text-sm font-semibold text-[#0B1F33]">
-                Payment instructions
-                <textarea
-                  className="mt-2 min-h-32 w-full resize-none rounded-xl border border-[#BFD7E3] bg-white px-4 py-3 text-sm font-medium leading-6 text-[#0B1F33] outline-none placeholder:text-[#71839A] focus:border-[#2ECBEA]/80 focus:ring-4 focus:ring-[#2ECBEA]/15 disabled:bg-[#EEF4F7] disabled:text-[#66788F]"
-                  disabled={!canManage || salesSaving}
-                  maxLength={2000}
-                  onChange={(event) =>
-                    setSalesForm((current) =>
-                      current
-                        ? {
-                            ...current,
-                            paymentInstructions: event.target.value,
-                          }
-                        : current,
-                    )
-                  }
-                  placeholder="Share bank transfer, UPI, or offline payment steps students should follow."
-                  value={salesForm.paymentInstructions}
-                />
-              </label>
+              {salesForm.pricingType === "paid" ? (
+                <label className="block text-sm font-semibold text-[#0B1F33]">
+                  Payment instructions
+                  <textarea
+                    className="mt-2 min-h-32 w-full resize-none rounded-xl border border-[#BFD7E3] bg-white px-4 py-3 text-sm font-medium leading-6 text-[#0B1F33] outline-none placeholder:text-[#71839A] focus:border-[#2ECBEA]/80 focus:ring-4 focus:ring-[#2ECBEA]/15 disabled:bg-[#EEF4F7] disabled:text-[#66788F]"
+                    disabled={!canManage || salesSaving}
+                    maxLength={2000}
+                    onChange={(event) =>
+                      setSalesForm((current) =>
+                        current
+                          ? {
+                              ...current,
+                              paymentInstructions: event.target.value,
+                            }
+                          : current,
+                      )
+                    }
+                    placeholder="Share bank transfer, UPI, or offline payment steps students should follow."
+                    value={salesForm.paymentInstructions}
+                  />
+                </label>
+              ) : null}
 
-              {salesForm.salesPaymentMode === "external" ? (
+              {salesForm.pricingType === "paid" &&
+              salesForm.salesPaymentMode === "external" ? (
                 <label className="block text-sm font-semibold text-[#0B1F33]">
                   External payment URL
                   <input
@@ -1122,7 +1204,7 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
                     disabled={salesSaving}
                     type="submit"
                   >
-                    {salesSaving ? "Saving..." : "Save Sales Settings"}
+                    {salesSaving ? "Saving..." : "Save public page settings"}
                   </Button>
                 ) : (
                   <Badge className="border-[#D8E8F0] bg-[#F8FAFC] text-[#526A80]">
@@ -1136,7 +1218,7 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
       </section>
 
       {canManage ? (
-        <section className="mt-6">
+        <section className="mt-6 scroll-mt-24" id="enrollment-requests">
           <Card className="border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/10 sm:p-8">
             <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-start">
               <div>
@@ -1148,8 +1230,8 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
                 </h3>
                 <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-400">
                   Requests submitted from this program&apos;s public page appear
-                  here. This does not create enrollment, payment, invoice, or
-                  access automatically.
+                  here. Review the student, confirm any payment directly when
+                  required, then approve access when everything is ready.
                 </p>
               </div>
               <Badge className="border-white/10 bg-white/10 text-slate-200">
@@ -1158,9 +1240,18 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
             </div>
 
             <p className="mt-5 rounded-2xl border border-white/10 bg-[#15181b] px-4 py-3 text-sm leading-6 text-slate-300">
-              Enrollment, payment, invoices, and access are handled in later
-              steps by the coach/admin.
+              A request does not create enrollment, record payment, or activate
+              access automatically. Use Enrollments and Student Finance to
+              follow the next steps.
             </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Button href="/app/enrollments" size="sm" variant="secondary">
+                Open enrollments
+              </Button>
+              <Button href="/app/finance" size="sm" variant="secondary">
+                Open Student Finance
+              </Button>
+            </div>
 
             {requestFeedback ? (
               <div
@@ -1486,7 +1577,7 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
               </Button>
               {canApproveRequests ? (
                 <Button href="/app/finance" size="sm" variant="secondary">
-                  Open Finance Center
+                  Open Student Finance
                 </Button>
               ) : null}
               <div className="rounded-full border border-white/10 bg-[#101214] px-4 py-2 text-sm text-slate-300">
@@ -1541,8 +1632,8 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
                   {canApproveRequests ? (
                     <div className="rounded-2xl border border-white/10 bg-white/5 p-3 text-sm text-slate-300">
                       <p className="leading-5">
-                        Use Finance Center to create invoices, record manual
-                        payments, and issue receipts for this student/program.
+                        Use Student Finance to record coach-managed payments,
+                        create invoices, and issue receipts for this enrollment.
                       </p>
                       <Button
                         className="mt-3"
@@ -1550,7 +1641,7 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
                         size="sm"
                         variant="secondary"
                       >
-                        Open Finance Center
+                        Open Student Finance
                       </Button>
                     </div>
                   ) : null}
