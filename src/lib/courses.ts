@@ -40,6 +40,16 @@ export type CreateCourseInput = {
   title: string;
 };
 
+export type PublishCourseResult = {
+  courseId: string;
+  tenantId: string;
+  title: string;
+  slug: string;
+  status: "published";
+  updatedAt: string;
+  publicationResult: "already_published" | "published";
+};
+
 export type UpdateCourseSalesSettingsInput = {
   accessDurationLabel: string;
   courseId: string;
@@ -133,6 +143,56 @@ const courseSelect =
   "id,tenant_id,title,slug,description,status,thumbnail_url,pricing_type,price_amount,sales_currency,public_sales_enabled,sales_payment_mode,payment_instructions,external_payment_url,sales_headline,sales_summary,access_duration_label,created_by,created_at,updated_at";
 
 const unsafeTextPattern = /[<>]/;
+
+type CoursePublishErrorLike = {
+  code?: string;
+  details?: string;
+  hint?: string;
+  message?: string;
+};
+
+type RawPublishCourseResult = {
+  course_id?: unknown;
+  publication_result?: unknown;
+  slug?: unknown;
+  status?: unknown;
+  tenant_id?: unknown;
+  title?: unknown;
+  updated_at?: unknown;
+};
+
+const publishCourseFallbackMessage =
+  "We could not confirm the final result. Refresh the page to check whether the program is now published before trying again.";
+
+function getPublishCourseErrorMessage(caught: CoursePublishErrorLike) {
+  const normalizedMessage = [
+    caught.message,
+    caught.details,
+    caught.hint,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  if (
+    caught.code === "42501" ||
+    normalizedMessage.includes("authentication required") ||
+    normalizedMessage.includes("membership is required") ||
+    normalizedMessage.includes("permission")
+  ) {
+    return "You do not have permission to publish this program.";
+  }
+
+  if (normalizedMessage.includes("archived programs cannot be published")) {
+    return "Archived programs cannot be published.";
+  }
+
+  if (normalizedMessage.includes("program not found")) {
+    return "This program could not be found. Refresh the page and try again.";
+  }
+
+  return publishCourseFallbackMessage;
+}
 
 function normalizeSalesText(value: string, label: string, maxLength: number) {
   const trimmed = value.trim();
@@ -252,6 +312,52 @@ export async function createCourse(input: CreateCourseInput) {
   await refreshWorkspaceUsageSnapshot(course.tenant_id);
 
   return course;
+}
+
+export async function publishCourse(courseId: string): Promise<PublishCourseResult> {
+  const normalizedCourseId = courseId.trim();
+
+  if (!normalizedCourseId) {
+    throw new Error("Program id is required.");
+  }
+
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .rpc("publish_course_secure", {
+      p_course_id: normalizedCourseId,
+    })
+    .single();
+
+  if (error) {
+    throw new Error(getPublishCourseErrorMessage(error));
+  }
+
+  const result = data as RawPublishCourseResult | null;
+  const publicationResult = result?.publication_result;
+
+  if (
+    !result ||
+    result.course_id !== normalizedCourseId ||
+    typeof result.tenant_id !== "string" ||
+    typeof result.title !== "string" ||
+    typeof result.slug !== "string" ||
+    result.status !== "published" ||
+    typeof result.updated_at !== "string" ||
+    (publicationResult !== "published" &&
+      publicationResult !== "already_published")
+  ) {
+    throw new Error(publishCourseFallbackMessage);
+  }
+
+  return {
+    courseId: result.course_id,
+    publicationResult,
+    slug: result.slug,
+    status: result.status,
+    tenantId: result.tenant_id,
+    title: result.title,
+    updatedAt: result.updated_at,
+  };
 }
 
 export async function getCourseById(params: {

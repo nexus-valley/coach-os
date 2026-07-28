@@ -228,6 +228,7 @@ test.describe("static route guard coverage", () => {
         path: "src/lib/courses.ts",
         requiredRpcs: [
           "create_course_secure",
+          "publish_course_secure",
           "create_course_section_secure",
           "update_course_section_secure",
           "delete_course_section_secure",
@@ -273,6 +274,78 @@ test.describe("static route guard coverage", () => {
         expect(source).not.toMatch(pattern);
       }
     }
+  });
+
+  test("draft publication is RPC-only and owner-admin presented", () => {
+    const courses = read("src/lib/courses.ts");
+    const courseDetail = read(
+      "src/components/courses/CourseDetailClient.tsx",
+    );
+    const permissions = read("src/lib/permissions.ts");
+    const helperStart = courses.indexOf(
+      "export async function publishCourse",
+    );
+    const helperEnd = courses.indexOf(
+      "export async function getCourseById",
+      helperStart,
+    );
+    const publishHelper = courses.slice(helperStart, helperEnd);
+    const handlerStart = courseDetail.indexOf(
+      "async function handlePublishCourse",
+    );
+    const handlerEnd = courseDetail.indexOf(
+      "async function handleCopyPublicProgramLink",
+      handlerStart,
+    );
+    const publishHandler = courseDetail.slice(handlerStart, handlerEnd);
+
+    expect(helperStart).toBeGreaterThan(-1);
+    expect(helperEnd).toBeGreaterThan(helperStart);
+    expect(handlerStart).toBeGreaterThan(-1);
+    expect(handlerEnd).toBeGreaterThan(handlerStart);
+    expect(publishHelper).toContain('.rpc("publish_course_secure"');
+    expect(publishHelper).toContain("p_course_id: normalizedCourseId");
+    expect(publishHelper).toContain(".single()");
+    expect(publishHelper).not.toContain('.from("courses")');
+    expect(publishHelper).not.toMatch(
+      /enrollment|invoice|payment|receipt|portal|invitation|email|razorpay|stripe/i,
+    );
+    expect(publishHandler).toContain("await publishCourse(course.id)");
+    expect(publishHandler).toContain("publishSaving");
+    expect(publishHandler).not.toMatch(
+      /createEnrollment|createStudent|createInvoice|createPayment|createReceipt|createPortal|sendInvitation|sendEmail|razorpay|stripe/i,
+    );
+
+    expect(courseDetail).toContain(
+      'canManage && course.status === "draft"',
+    );
+    expect(courseDetail).toContain('course.status === "archived"');
+    expect(courseDetail).toContain("Archived programs cannot be published.");
+    expect(courseDetail).toContain("publishSaving");
+    expect(courseDetail).toContain('loadingText="Publishing..."');
+    expect(courseDetail).toContain("Program published successfully.");
+    expect(courseDetail).toContain(
+      "This program is already published. Its latest status has been refreshed.",
+    );
+    expect(publishHandler).toContain(
+      "focusPublishFeedbackAfterSuccessRef.current = true",
+    );
+    expect(courseDetail).toContain("publishFeedbackRef.current?.focus()");
+    expect(courseDetail).toContain("ref={publishFeedbackRef}");
+    expect(courseDetail).toContain('aria-modal="true"');
+    expect(courseDetail).toContain('event.key === "Escape"');
+
+    const managerPermissions = permissions.slice(
+      permissions.indexOf("admin: ["),
+      permissions.indexOf("staff: ["),
+    );
+    const delegatedPermissions = permissions.slice(
+      permissions.indexOf("staff: ["),
+      permissions.indexOf("const navAccess"),
+    );
+
+    expect(managerPermissions.match(/"manage_courses"/g)).toHaveLength(2);
+    expect(delegatedPermissions).not.toContain('"manage_courses"');
   });
 
   test("session and attendance writes use RPCs instead of direct browser table mutations", () => {
@@ -586,8 +659,8 @@ test.describe("static route guard coverage", () => {
   test("tenant subscription page is read-only and platform-managed", () => {
     const source = read("src/components/subscription/SubscriptionPageClient.tsx");
 
-    expect(source).toContain("Subscription is managed by the platform owner.");
-    expect(source).toContain("Contact platform support or your platform admin");
+    expect(source).toContain("Plan changes require CoachFort review.");
+    expect(source).toContain("These details are read-only for tenant users.");
     expect(source).toContain("Platform-managed");
 
     for (const forbidden of [

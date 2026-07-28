@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { EnrollmentStatusBadge } from "@/src/components/enrollments/EnrollmentStatusBadge";
 import { Badge } from "@/src/components/ui/Badge";
 import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
+import { FeedbackAlert } from "@/src/components/ui/FeedbackAlert";
 import {
   createCourseSection,
   createLesson,
@@ -14,6 +15,7 @@ import {
   deleteLesson,
   getCourseById,
   getCourseStructure,
+  publishCourse,
   updateCourseSection,
   updateCourseSalesSettings,
   updateLesson,
@@ -121,6 +123,10 @@ function CourseStatusBadge({ status }: { status: Course["status"] }) {
     return <Badge tone="success">Published</Badge>;
   }
 
+  if (status === "archived") {
+    return <Badge className="border-white/15 bg-white/10 text-slate-300">Archived</Badge>;
+  }
+
   return <Badge className="border-white/10 bg-white/10 text-white">Draft</Badge>;
 }
 
@@ -185,6 +191,14 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
   const [lessonModal, setLessonModal] = useState<LessonModalState | null>(null);
   const [loading, setLoading] = useState(true);
   const [mutating, setMutating] = useState(false);
+  const [publishConfirmOpen, setPublishConfirmOpen] = useState(false);
+  const [publishFeedback, setPublishFeedback] = useState<{
+    message: string;
+    tone: "error" | "info" | "success";
+  } | null>(null);
+  const publishFeedbackRef = useRef<HTMLDivElement>(null);
+  const focusPublishFeedbackAfterSuccessRef = useRef(false);
+  const [publishSaving, setPublishSaving] = useState(false);
   const [salesFeedback, setSalesFeedback] = useState<{
     message: string;
     tone: "error" | "success";
@@ -310,6 +324,82 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
       active = false;
     };
   }, [courseId]);
+
+  useEffect(() => {
+    if (!publishConfirmOpen) {
+      return;
+    }
+
+    const dialog = document.getElementById("publish-course-dialog");
+    const previousOverflow = document.body.style.overflow;
+
+    document.body.style.overflow = "hidden";
+    dialog?.focus();
+
+    function handleDialogKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape" && !publishSaving) {
+        setPublishConfirmOpen(false);
+        window.requestAnimationFrame(() => {
+          document.getElementById("publish-course-trigger")?.focus();
+        });
+        return;
+      }
+
+      if (event.key !== "Tab" || !dialog) {
+        return;
+      }
+
+      const focusableElements = Array.from(
+        dialog.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ),
+      );
+
+      if (focusableElements.length === 0) {
+        event.preventDefault();
+        dialog.focus();
+        return;
+      }
+
+      const firstElement = focusableElements[0];
+      const lastElement = focusableElements[focusableElements.length - 1];
+
+      if (event.shiftKey && document.activeElement === firstElement) {
+        event.preventDefault();
+        lastElement.focus();
+      } else if (!event.shiftKey && document.activeElement === lastElement) {
+        event.preventDefault();
+        firstElement.focus();
+      }
+    }
+
+    document.addEventListener("keydown", handleDialogKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", handleDialogKeyDown);
+    };
+  }, [publishConfirmOpen, publishSaving]);
+
+  useEffect(() => {
+    if (
+      publishConfirmOpen ||
+      !publishFeedback ||
+      publishFeedback.tone === "error" ||
+      !focusPublishFeedbackAfterSuccessRef.current
+    ) {
+      return;
+    }
+
+    focusPublishFeedbackAfterSuccessRef.current = false;
+    const frame = window.requestAnimationFrame(() => {
+      publishFeedbackRef.current?.focus();
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+    };
+  }, [publishConfirmOpen, publishFeedback]);
 
   async function refreshStructure() {
     if (!tenant) {
@@ -597,6 +687,76 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
     }
   }
 
+  function closePublishConfirmation() {
+    if (publishSaving) {
+      return;
+    }
+
+    setPublishConfirmOpen(false);
+    window.requestAnimationFrame(() => {
+      document.getElementById("publish-course-trigger")?.focus();
+    });
+  }
+
+  async function handlePublishCourse() {
+    if (
+      !course ||
+      !canManage ||
+      course.status !== "draft" ||
+      publishSaving
+    ) {
+      return;
+    }
+
+    focusPublishFeedbackAfterSuccessRef.current = false;
+    setPublishFeedback(null);
+    setPublishSaving(true);
+
+    try {
+      const result = await publishCourse(course.id);
+      const refreshedCourse = await getCourseById({
+        courseId: result.courseId,
+        tenantId: result.tenantId,
+      }).catch(() => null);
+
+      if (refreshedCourse) {
+        setCourse(refreshedCourse);
+        setSalesForm(createSalesSettingsForm(refreshedCourse));
+      } else {
+        setCourse((current) =>
+          current && current.id === result.courseId
+            ? {
+                ...current,
+                slug: result.slug,
+                status: result.status,
+                title: result.title,
+                updated_at: result.updatedAt,
+              }
+            : current,
+        );
+      }
+      focusPublishFeedbackAfterSuccessRef.current = true;
+      setPublishConfirmOpen(false);
+      setPublishFeedback({
+        message:
+          result.publicationResult === "already_published"
+            ? "This program is already published. Its latest status has been refreshed."
+            : "Program published successfully.",
+        tone: result.publicationResult === "already_published" ? "info" : "success",
+      });
+    } catch (caught) {
+      setPublishFeedback({
+        message: getErrorMessage(
+          caught,
+          "This program could not be published. Refresh the page to check its latest status.",
+        ),
+        tone: "error",
+      });
+    } finally {
+      setPublishSaving(false);
+    }
+  }
+
   async function handleCopyPublicProgramLink() {
     if (!publicProgramReady || !publicProgramPath) {
       return;
@@ -717,6 +877,37 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
     course.public_sales_enabled;
   const publicProgramReady =
     publicPageAvailable && studentSummaryReady && paymentGuidanceReady;
+  const lessonCount = sections.reduce(
+    (total, section) => total + section.lessons.length,
+    0,
+  );
+  const publishReadinessItems = [
+    {
+      complete: studentSummaryReady,
+      label: studentSummaryReady
+        ? "Student-facing summary is ready"
+        : "Add a student-facing summary before sharing",
+    },
+    {
+      complete: sections.length > 0 && lessonCount > 0,
+      label:
+        sections.length > 0 && lessonCount > 0
+          ? "Program structure has content"
+          : "Add sections and lessons before sharing",
+    },
+    {
+      complete: course.public_sales_enabled,
+      label: course.public_sales_enabled
+        ? "Public request page is enabled"
+        : "Public request page will remain off",
+    },
+    {
+      complete: paymentGuidanceReady,
+      label: paymentGuidanceReady
+        ? "Payment guidance is ready"
+        : "Review payment guidance before sharing",
+    },
+  ];
   const salesReadinessItems = [
     {
       complete: course.status === "published",
@@ -759,12 +950,50 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
                 {course.title}
               </h2>
             </div>
-            <CourseStatusBadge status={course.status} />
+            <div className="flex max-w-xs flex-col items-start gap-3 sm:items-end">
+              <CourseStatusBadge status={course.status} />
+              <p className="text-left text-xs leading-5 text-slate-400 sm:text-right">
+                {course.status === "published"
+                  ? "Published programs are visible only when current public-page settings allow it."
+                  : course.status === "archived"
+                    ? "Archived programs cannot be published."
+                    : "This program stays private until an owner or admin publishes it."}
+              </p>
+              {canManage && course.status === "draft" ? (
+                <Button
+                  className="bg-teal-400 text-black hover:bg-teal-300"
+                  disabled={publishSaving}
+                  id="publish-course-trigger"
+                  onClick={() => {
+                    focusPublishFeedbackAfterSuccessRef.current = false;
+                    setPublishFeedback(null);
+                    setPublishConfirmOpen(true);
+                  }}
+                  size="sm"
+                  type="button"
+                >
+                  Publish program
+                </Button>
+              ) : null}
+            </div>
           </div>
 
           <p className="mt-6 max-w-3xl text-base leading-7 text-slate-400">
             {course.description || "No description added yet."}
           </p>
+
+          {publishFeedback ? (
+            <div
+              aria-live="polite"
+              className="mt-6 focus:outline-none"
+              ref={publishFeedbackRef}
+              tabIndex={-1}
+            >
+              <FeedbackAlert tone={publishFeedback.tone}>
+                {publishFeedback.message}
+              </FeedbackAlert>
+            </div>
+          ) : null}
 
           <div className="mt-8 grid gap-4 border-t border-white/10 pt-6 sm:grid-cols-3">
             <div>
@@ -806,6 +1035,96 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
           </p>
         </Card>
       </section>
+
+      {publishConfirmOpen && canManage && course.status === "draft" ? (
+        <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-[#0B1F33]/75 px-4 py-4 backdrop-blur-sm sm:items-center">
+          <Card
+            aria-describedby="publish-course-description"
+            aria-labelledby="publish-course-title"
+            aria-modal="true"
+            className="max-h-[calc(100dvh-2rem)] w-full max-w-2xl overflow-y-auto border-[#CBD5E1] bg-white p-5 text-[#0B1F33] shadow-2xl shadow-slate-950/30 sm:p-7"
+            id="publish-course-dialog"
+            role="dialog"
+            tabIndex={-1}
+          >
+            <Badge className="border-amber-200 bg-amber-50 text-amber-800">
+              Draft to published
+            </Badge>
+            <h3 className="mt-4 text-2xl font-semibold" id="publish-course-title">
+              Publish this program?
+            </h3>
+            <p
+              className="mt-3 text-sm leading-6 text-[#425B76]"
+              id="publish-course-description"
+            >
+              This changes the program from Draft to Published. Its public
+              availability will still depend on your Public Page and enrollment
+              settings.
+            </p>
+
+            {publishFeedback?.tone === "error" ? (
+              <div aria-live="polite" className="mt-5">
+                <FeedbackAlert>{publishFeedback.message}</FeedbackAlert>
+              </div>
+            ) : null}
+
+            <div className="mt-5 rounded-lg border border-[#D8E8F0] bg-[#F6FBFE] p-4">
+              <p className="text-sm font-semibold text-[#0B1F33]">
+                Before you publish
+              </p>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                {publishReadinessItems.map((item) => (
+                  <div
+                    className={[
+                      "rounded-lg border px-3 py-2 text-sm",
+                      item.complete
+                        ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                        : "border-amber-200 bg-amber-50 text-amber-800",
+                    ].join(" ")}
+                    key={item.label}
+                  >
+                    {item.label}
+                  </div>
+                ))}
+              </div>
+              <p className="mt-3 text-xs leading-5 text-[#526A80]">
+                These checks are guidance only and do not block publication.
+              </p>
+            </div>
+
+            <FeedbackAlert className="mt-5" tone="warning">
+              {course.public_sales_enabled
+                ? "The public request page is enabled, so publishing may make this program available on your public site immediately."
+                : "The public request page is off and will remain off after publication. You can enable it separately when the page is ready."}
+            </FeedbackAlert>
+
+            <p className="mt-5 text-sm leading-6 text-[#425B76]">
+              Publishing does not collect payment, create a student or
+              enrollment, generate an invoice, payment, or receipt, create a
+              portal account, send an invitation, or activate student access.
+            </p>
+
+            <div className="mt-7 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <Button
+                disabled={publishSaving}
+                onClick={closePublishConfirmation}
+                type="button"
+                variant="secondary"
+              >
+                Keep as draft
+              </Button>
+              <Button
+                isLoading={publishSaving}
+                loadingText="Publishing..."
+                onClick={handlePublishCourse}
+                type="button"
+              >
+                Publish program
+              </Button>
+            </div>
+          </Card>
+        </div>
+      ) : null}
 
       {actionError ? (
         <div className="mt-6 rounded-3xl border border-red-400/30 bg-red-500/10 p-4 text-sm text-red-100">

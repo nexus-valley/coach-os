@@ -40,6 +40,14 @@ function StatusBadge({ status }: { status: Course["status"] }) {
     return <Badge tone="success">Published</Badge>;
   }
 
+  if (status === "archived") {
+    return (
+      <Badge className="border-slate-300 bg-slate-100 text-slate-700">
+        Archived
+      </Badge>
+    );
+  }
+
   return (
     <Badge className="border-amber-200 bg-amber-50 text-amber-800">Draft</Badge>
   );
@@ -99,6 +107,10 @@ function isPublicProgramReady(course: Course) {
 }
 
 function getPublicProgramStatus(course: Course) {
+  if (course.status === "archived") {
+    return "Archived";
+  }
+
   if (course.status !== "published") {
     return "Private draft";
   }
@@ -113,6 +125,10 @@ function getPublicProgramStatus(course: Course) {
 }
 
 function getProgramNextStep(course: Course, canManage: boolean) {
+  if (course.status === "archived") {
+    return "This program is archived and cannot be published.";
+  }
+
   if (!canManage) {
     return isPublicProgramAvailable(course)
       ? "Preview the student page or review the program details."
@@ -434,7 +450,7 @@ export function CoursesPageClient() {
                         >
                           Preview student page
                         </Button>
-                      ) : canManage ? (
+                      ) : canManage && course.status !== "archived" ? (
                         <Button
                           href={`/app/courses/${course.id}#public-program-setup`}
                           size="sm"
