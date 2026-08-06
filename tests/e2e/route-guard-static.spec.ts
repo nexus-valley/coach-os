@@ -1,6 +1,8 @@
-import { expect, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
+
+import { expectProgramsAccessibleState } from "./helpers/auth";
 
 const root = process.cwd();
 
@@ -27,6 +29,96 @@ function listSourceFiles(dir: string): string[] {
 
   return files;
 }
+
+const isolatedProgramsReadinessOptions = {
+  indicatorGraceMs: 20,
+  timeoutMs: 1_000,
+};
+
+async function expectIsolatedProgramsFailure(
+  page: Page,
+  body: string,
+  state: "access_denied" | "load_error" | "module_unavailable",
+) {
+  let requestCount = 0;
+  page.on("request", () => {
+    requestCount += 1;
+  });
+  await page.setContent(body);
+
+  await expect(
+    expectProgramsAccessibleState(page, isolatedProgramsReadinessOptions),
+  ).rejects.toThrow(`Programs readiness failed: ${state}.`);
+  expect(requestCount).toBe(0);
+}
+
+test.describe("Programs readiness behavior", () => {
+  test("delayed loaded state passes without a pre-hydration false positive", async ({
+    page,
+  }) => {
+    let requestCount = 0;
+    page.on("request", () => {
+      requestCount += 1;
+    });
+    await page.setContent('<main id="programs"></main>');
+    await page.evaluate(() => {
+      window.setTimeout(() => {
+        const link = document.createElement("a");
+        link.href = "/app/courses/local-program";
+        link.textContent = "Manage program";
+        document.querySelector("#programs")?.append(link);
+      }, 75);
+    });
+
+    const state = await expectProgramsAccessibleState(
+      page,
+      isolatedProgramsReadinessOptions,
+    );
+
+    expect(state).toBe("loaded");
+    expect(requestCount).toBe(0);
+  });
+
+  test("legitimate empty state passes", async ({ page }) => {
+    let requestCount = 0;
+    page.on("request", () => {
+      requestCount += 1;
+    });
+    await page.setContent("<h1>Create your first program</h1>");
+
+    const state = await expectProgramsAccessibleState(
+      page,
+      isolatedProgramsReadinessOptions,
+    );
+
+    expect(state).toBe("empty");
+    expect(requestCount).toBe(0);
+  });
+
+  test("Retry load error is terminal but fails", async ({ page }) => {
+    await expectIsolatedProgramsFailure(
+      page,
+      "<button>Retry</button>",
+      "load_error",
+    );
+  });
+
+  test("access denial is terminal but fails", async ({ page }) => {
+    await expectIsolatedProgramsFailure(
+      page,
+      "<p>You do not have access to this workspace area.</p>",
+      "access_denied",
+    );
+  });
+
+  test("module unavailable is terminal but fails", async ({ page }) => {
+    await expectIsolatedProgramsFailure(
+      page,
+      "<p>This module is not enabled for your workspace.</p>",
+      "module_unavailable",
+    );
+  });
+});
 
 test.describe("static route guard coverage", () => {
   test("AppShell enforces direct route role and feature access", () => {
@@ -141,6 +233,126 @@ test.describe("static route guard coverage", () => {
 
     expect(source).not.toMatch(/https:\/\/[a-z0-9]+@/i);
     expect(source).not.toMatch(/sntrys_|[A-Za-z0-9_-]{60,}/);
+  });
+
+  test("regression credential infrastructure is local-only and role-specific", () => {
+    const provisioning = read("scripts/create-regression-accounts.ts");
+    const authHelper = read("tests/e2e/helpers/auth.ts");
+
+    expect(provisioning).toContain(
+      'const LOCAL_PROVISIONING_FLAG =\n  "COACHFORT_ALLOW_LOCAL_REGRESSION_PROVISIONING"',
+    );
+    expect(provisioning).toContain(
+      "assertLocalProvisioningAllowed(supabaseUrl)",
+    );
+    expect(
+      provisioning.indexOf("assertLocalProvisioningAllowed(supabaseUrl)"),
+    ).toBeLessThan(provisioning.indexOf("createClient(supabaseUrl"));
+    expect(provisioning).toContain(
+      'parsedUrl.protocol !== "http:"',
+    );
+    expect(provisioning).toContain(
+      "!localSupabaseHosts.has(parsedUrl.hostname)",
+    );
+    expect(provisioning).toContain('process.env.NODE_ENV === "production"');
+    expect(provisioning).toContain("process.env.VERCEL_ENV");
+    expect(provisioning).toContain(
+      'const TENANT_NAME = "CoachFort Regression Coaching"',
+    );
+    expect(provisioning).toContain("maskEmail(result.email)");
+    expect(provisioning).toContain("maskUuid(tenant.id)");
+    expect(provisioning).toContain(
+      "Each local regression role must use a distinct password.",
+    );
+    expect(provisioning).not.toContain("DEFAULT_PASSWORD");
+    expect(provisioning).not.toContain("REGRESSION_TEST_PASSWORD");
+    expect(provisioning).not.toContain("updateUserById");
+    expect(provisioning).not.toContain("CoachFort Regression Academy");
+    expect(provisioning).not.toContain("isOptionalSchemaError");
+    expect(provisioning).not.toMatch(
+      /\b[A-Z0-9._%+-]+@coachfort\.demo\b/i,
+    );
+
+    for (const envName of [
+      "COACHFORT_OWNER_PASSWORD",
+      "COACHFORT_ADMIN_PASSWORD",
+      "COACHFORT_STAFF_PASSWORD",
+      "COACHFORT_TRAINER_PASSWORD",
+      "COACHFORT_STUDENT_PASSWORD",
+      "COACHFORT_PLATFORM_OWNER_PASSWORD",
+    ]) {
+      expect(authHelper).toContain(envName);
+    }
+
+    for (const mapping of [
+      'admin: "COACHFORT_ADMIN_PASSWORD"',
+      'owner: "COACHFORT_OWNER_PASSWORD"',
+      'platformOwner: "COACHFORT_PLATFORM_OWNER_PASSWORD"',
+      'staff: "COACHFORT_STAFF_PASSWORD"',
+      'student: "COACHFORT_STUDENT_PASSWORD"',
+      'trainer: "COACHFORT_TRAINER_PASSWORD"',
+    ]) {
+      expect(authHelper).toContain(mapping);
+    }
+
+    expect(authHelper).toContain("getRegressionCredential(role)");
+    expect(authHelper).toContain(
+      "const passwordEnvName = passwordEnvNameByRole[role]",
+    );
+    expect(authHelper).not.toContain("COACHFORT_TEST_PASSWORD");
+    expect(authHelper).not.toContain("storageState");
+    expect(authHelper).not.toMatch(
+      /(?:console\.(?:log|error)|test\.info\(\)\.attach).*password/i,
+    );
+  });
+
+  test("Programs route readiness separates accessible and failure states", () => {
+    const authHelper = read("tests/e2e/helpers/auth.ts");
+    const authenticatedSmoke = read(
+      "tests/e2e/authenticated-smoke.spec.ts",
+    );
+
+    expect(authHelper).toContain(
+      "export async function expectProgramsRouteReady",
+    );
+    expect(authHelper).toContain(
+      'export type ProgramsAccessibleState = "empty" | "loaded"',
+    );
+    expect(authHelper).toContain("type ProgramsFailureState =");
+    expect(authHelper).toContain("getProgramsStateLocators(page)");
+    expect(authHelper).toContain('return "loaded"');
+    expect(authHelper).toContain('return "empty"');
+    expect(authHelper).toContain(
+      'throw new ProgramsReadinessError("timeout", diagnostics.summary())',
+    );
+    expect(authHelper).toContain(
+      "throw new ProgramsReadinessError(state, diagnostics.summary())",
+    );
+    expect(authHelper).toContain('["load_error", states.loadError]');
+    expect(authHelper).toContain('["access_denied", states.accessDenied]');
+    expect(authHelper).toContain(
+      '["module_unavailable", states.moduleUnavailable]',
+    );
+    expect(authHelper).toContain('["hard_failure", states.hardFailure]');
+    expect(authHelper).toContain("appReadinessTimeout = 20_000");
+    expect(authHelper).toContain("createSanitizedRouteDiagnostics(page)");
+    expect(authHelper).toContain("request.method()");
+    expect(authHelper).toContain("response.status()");
+    expect(authHelper).toContain("getSafeUrlCategory");
+    expect(authHelper).toContain("<masked-id>");
+    expect(authHelper).not.toMatch(
+      /\.(?:allHeaders|headers|headerValue|postData|postDataBuffer)\s*\(/,
+    );
+    expect(authHelper).not.toMatch(
+      /(?:localStorage|sessionStorage|storageState|authorizationHeader|cookieHeader)/,
+    );
+    expect(authHelper).not.toContain("url.search");
+    expect(authenticatedSmoke).toContain(
+      "await expectProgramsRouteReady(page)",
+    );
+    expect(authenticatedSmoke).not.toContain(
+      "expectProgramsAccessibleState(page",
+    );
   });
 
   test("security sweep keeps malformed JSON and assistant errors safe", () => {

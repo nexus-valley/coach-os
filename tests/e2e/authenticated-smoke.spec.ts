@@ -2,18 +2,17 @@ import { expect, test } from "@playwright/test";
 
 import {
   expectNoHardFailure,
+  expectProgramsRouteReady,
   expectProtectedPageLoaded,
   expectUnavailableOrDenied,
   loginToPortal,
   loginToWorkspace,
-  regressionEnv,
   requireRegressionEnv,
 } from "./helpers/auth";
 
 const ownerAdminRoutes = [
   { path: "/app", text: /Dashboard|Workspace/i },
   { path: "/app/students", text: /Students/i },
-  { path: "/app/courses", text: /Courses/i },
   { path: "/app/finance", text: /Finance|Invoice|Payment/i },
   { path: "/app/reports", text: /Reports|Overview/i },
   { path: "/app/documents", text: /Documents/i },
@@ -39,7 +38,8 @@ test.describe("authenticated role and module smoke", () => {
   test("owner can reach key app routes", async ({ page }) => {
     requireRegressionEnv(["owner"]);
 
-    await loginToWorkspace(page, regressionEnv.owner ?? "");
+    await loginToWorkspace(page, "owner");
+    await expectProgramsRouteReady(page);
 
     for (const route of ownerAdminRoutes) {
       await expectProtectedPageLoaded(page, route.path, route.text);
@@ -49,7 +49,8 @@ test.describe("authenticated role and module smoke", () => {
   test("admin can reach key app routes", async ({ page }) => {
     requireRegressionEnv(["admin"]);
 
-    await loginToWorkspace(page, regressionEnv.admin ?? "");
+    await loginToWorkspace(page, "admin");
+    await expectProgramsRouteReady(page);
 
     for (const route of ownerAdminRoutes) {
       await expectProtectedPageLoaded(page, route.path, route.text);
@@ -59,7 +60,7 @@ test.describe("authenticated role and module smoke", () => {
   test("staff is blocked from restricted admin routes", async ({ page }) => {
     requireRegressionEnv(["staff"]);
 
-    await loginToWorkspace(page, regressionEnv.staff ?? "");
+    await loginToWorkspace(page, "staff");
 
     for (const path of restrictedForStaffTrainer) {
       await page.goto(path, { waitUntil: "networkidle" });
@@ -71,7 +72,7 @@ test.describe("authenticated role and module smoke", () => {
   test("trainer is blocked from restricted admin routes", async ({ page }) => {
     requireRegressionEnv(["trainer"]);
 
-    await loginToWorkspace(page, regressionEnv.trainer ?? "");
+    await loginToWorkspace(page, "trainer");
 
     for (const path of restrictedForStaffTrainer) {
       await page.goto(path, { waitUntil: "networkidle" });
@@ -85,7 +86,7 @@ test.describe("authenticated role and module smoke", () => {
   }) => {
     requireRegressionEnv(["student"]);
 
-    await loginToPortal(page, regressionEnv.student ?? "");
+    await loginToPortal(page);
 
     for (const route of studentPortalRoutes) {
       await expectProtectedPageLoaded(page, route.path, route.text);
@@ -106,7 +107,7 @@ test.describe("authenticated role and module smoke", () => {
 
     const platformContext = await browser.newContext();
     const platformPage = await platformContext.newPage();
-    await loginToWorkspace(platformPage, regressionEnv.platformOwner ?? "", "/platform");
+    await loginToWorkspace(platformPage, "platformOwner", "/platform");
     await platformPage.goto("/platform", { waitUntil: "networkidle" });
     await expectNoHardFailure(platformPage);
     await expect(platformPage.locator("body")).toContainText(
@@ -114,18 +115,13 @@ test.describe("authenticated role and module smoke", () => {
     );
     await platformContext.close();
 
-    for (const [label, email] of [
-      ["owner", regressionEnv.owner],
-      ["admin", regressionEnv.admin],
-      ["staff", regressionEnv.staff],
-      ["trainer", regressionEnv.trainer],
-    ] as const) {
+    for (const role of ["owner", "admin", "staff", "trainer"] as const) {
       const context = await browser.newContext();
       const page = await context.newPage();
-      await loginToWorkspace(page, email ?? "", "/platform");
+      await loginToWorkspace(page, role, "/platform");
       await page.goto("/platform", { waitUntil: "networkidle" });
       await expectNoHardFailure(page);
-      await expect(page.locator("body"), `${label} should not access platform`).not.toContainText(
+      await expect(page.locator("body"), `${role} should not access platform`).not.toContainText(
         /Platform overview|Tenant directory/i,
       );
       await expect(page.locator("body")).toContainText(
@@ -142,7 +138,7 @@ test.describe("authenticated module regressions", () => {
   }) => {
     requireRegressionEnv(["owner"]);
 
-    await loginToWorkspace(page, regressionEnv.owner ?? "");
+    await loginToWorkspace(page, "owner");
 
     await page.goto("/app/payments", { waitUntil: "networkidle" });
     await expect(page).toHaveURL(/\/app\/finance/);
@@ -163,7 +159,7 @@ test.describe("authenticated module regressions", () => {
   }) => {
     requireRegressionEnv(["owner"]);
 
-    await loginToWorkspace(page, regressionEnv.owner ?? "");
+    await loginToWorkspace(page, "owner");
 
     for (const route of [
       { path: "/app/finance", blocked: /Application error|Unable to load finance/i },
@@ -182,7 +178,7 @@ test.describe("authenticated module regressions", () => {
   }) => {
     requireRegressionEnv(["student"]);
 
-    await loginToPortal(page, regressionEnv.student ?? "");
+    await loginToPortal(page);
 
     for (const path of ["/portal/payments", "/portal/documents", "/portal/messages"]) {
       await page.goto(path, { waitUntil: "networkidle" });
