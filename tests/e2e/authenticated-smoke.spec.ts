@@ -15,7 +15,10 @@ const ownerAdminRoutes = [
   { path: "/app/students", text: /Students/i },
   { path: "/app/finance", text: /Finance|Invoice|Payment/i },
   { path: "/app/reports", text: /Reports|Overview/i },
-  { path: "/app/documents", text: /Documents/i },
+  {
+    path: "/app/documents",
+    text: /Content foundation|Find and review materials|New content item/i,
+  },
   { path: "/app/messages", text: /Messages|Chat|Thread/i },
   { path: "/app/settings/features", text: /Feature|Module/i },
 ];
@@ -29,7 +32,7 @@ const restrictedForStaffTrainer = [
 const studentPortalRoutes = [
   { path: "/portal", text: /Overview|Portal|Courses/i },
   { path: "/portal/payments", text: /Payment|Finance|Invoice|Receipt/i },
-  { path: "/portal/documents", text: /Documents/i },
+  { path: "/portal/documents", text: /Shared resources|Resource details/i },
   { path: "/portal/messages", text: /Messages|Chat|Support/i },
   { path: "/portal/assignments", text: /Assignments/i },
 ];
