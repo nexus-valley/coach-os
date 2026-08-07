@@ -1,4 +1,8 @@
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
+import {
+  StudentPortalInvitationActionError,
+  type StudentPortalInvitationSendErrorCode,
+} from "@/src/lib/studentPortalInvitationDiagnostics";
 
 export type StudentPortalInvitationStatus =
   | "access_active"
@@ -18,7 +22,9 @@ export type StudentPortalInvitationSummary = {
 };
 
 export type StudentPortalInvitationActionResult = {
+  error_code?: StudentPortalInvitationSendErrorCode;
   message: string;
+  safe_provider_code?: string;
   status: StudentPortalInvitationStatus;
 };
 
@@ -85,11 +91,14 @@ export async function sendStudentPortalInvitation(params: {
   >;
 
   if (!response.ok || !result.status || !result.message) {
-    throw new Error(
-      typeof result.message === "string"
-        ? result.message
-        : "Unable to send the portal invitation right now.",
-    );
+    throw new StudentPortalInvitationActionError({
+      errorCode: result.error_code,
+      message:
+        typeof result.message === "string"
+          ? result.message
+          : "Unable to send the portal invitation right now.",
+      safeProviderCode: result.safe_provider_code,
+    });
   }
 
   return result as StudentPortalInvitationActionResult;

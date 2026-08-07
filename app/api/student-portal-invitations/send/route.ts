@@ -2,6 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 
 import { sendCoachFortTransactionalEmail } from "@/src/lib/server/email";
 import { buildStudentPortalInviteEmail } from "@/src/lib/server/emailTemplates";
+import { captureServerException } from "@/src/lib/server/monitoring";
 import {
   getBearerToken,
   getUserScopedSupabase,
@@ -12,6 +13,11 @@ import {
   parseJsonBody,
 } from "@/src/lib/server/requestJson";
 import { getSupabaseAdminClient } from "@/src/lib/server/supabaseAdmin";
+import {
+  createStudentPortalInvitationErrorPayload,
+  getSafePostgrestCode,
+  type StudentPortalInvitationSendErrorCode,
+} from "@/src/lib/studentPortalInvitationDiagnostics";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -34,8 +40,39 @@ type PreparedInvitation = {
   token_ready: boolean;
 };
 
-function jsonError(message: string, status = 400) {
-  return Response.json({ message, status: "needs_attention" }, { status });
+function captureInvitationSendDiagnostic(params: {
+  errorCode: StudentPortalInvitationSendErrorCode;
+  httpStatus: number;
+  operation: string;
+  providerError?: unknown;
+}) {
+  const safeProviderCode = getSafePostgrestCode(params.providerError);
+
+  captureServerException(new Error(params.errorCode), {
+    errorCategory: params.errorCode,
+    httpStatus: params.httpStatus,
+    operation: params.operation,
+    providerCode: safeProviderCode,
+    route: "/api/student-portal-invitations/send",
+  });
+
+  return safeProviderCode;
+}
+
+function jsonError(
+  message: string,
+  status = 400,
+  errorCode: StudentPortalInvitationSendErrorCode = "invalid_request",
+  providerError?: unknown,
+) {
+  return Response.json(
+    createStudentPortalInvitationErrorPayload({
+      errorCode,
+      message,
+      providerError,
+    }),
+    { status },
+  );
 }
 
 function getInviteOrigin(request: Request) {
@@ -87,7 +124,11 @@ export async function POST(request: Request) {
     const tenantId = typeof body.tenantId === "string" ? body.tenantId.trim() : "";
 
     if (!uuidPattern.test(enrollmentRequestId) || !uuidPattern.test(tenantId)) {
-      return jsonError("The enrollment request could not be verified.");
+      return jsonError(
+        "The enrollment request could not be verified.",
+        400,
+        "invalid_request",
+      );
     }
 
     const accessToken = getBearerToken(request);
@@ -103,10 +144,27 @@ export async function POST(request: Request) {
       return jsonError(
         "Only workspace owners and admins can send portal invitations.",
         403,
+        "forbidden",
       );
     }
 
-    const admin = getSupabaseAdminClient();
+    let admin: ReturnType<typeof getSupabaseAdminClient>;
+
+    try {
+      admin = getSupabaseAdminClient();
+    } catch {
+      captureInvitationSendDiagnostic({
+        errorCode: "server_admin_not_configured",
+        httpStatus: 500,
+        operation: "student_portal_invitation_admin_init",
+      });
+      return jsonError(
+        "Portal invitation delivery needs attention. Enrollment is unchanged.",
+        500,
+        "server_admin_not_configured",
+      );
+    }
+
     const requestResult = await admin
       .from("public_site_leads")
       .select(
@@ -117,7 +175,7 @@ export async function POST(request: Request) {
       .maybeSingle();
 
     if (requestResult.error || !requestResult.data) {
-      return jsonError("Enrolled request not found.", 404);
+      return jsonError("Enrolled request not found.", 404, "invalid_request");
     }
 
     const enrollmentRequest = requestResult.data;
@@ -130,6 +188,7 @@ export async function POST(request: Request) {
       return jsonError(
         "Complete enrollment before sending a portal invitation.",
         409,
+        "invitation_not_sendable",
       );
     }
 
@@ -158,14 +217,22 @@ export async function POST(request: Request) {
       student.status !== "active" ||
       student.portal_enabled !== true
     ) {
-      return jsonError("Student portal access needs attention before inviting.", 409);
+      return jsonError(
+        "Student portal access needs attention before inviting.",
+        409,
+        "invitation_not_sendable",
+      );
     }
 
     const normalizedEmail =
       typeof student.email === "string" ? student.email.trim().toLowerCase() : "";
 
     if (!normalizedEmail) {
-      return jsonError("Add a valid student email before sending an invitation.", 409);
+      return jsonError(
+        "Add a valid student email before sending an invitation.",
+        409,
+        "invitation_not_sendable",
+      );
     }
 
     if (
@@ -175,7 +242,11 @@ export async function POST(request: Request) {
       enrollment.course_id !== enrollmentRequest.interested_course_id ||
       (enrollment.status !== "active" && enrollment.status !== "completed")
     ) {
-      return jsonError("Student enrollment needs attention before inviting.", 409);
+      return jsonError(
+        "Student enrollment needs attention before inviting.",
+        409,
+        "invitation_not_sendable",
+      );
     }
 
     const summaryResult = await userScopedSupabase.rpc(
@@ -187,7 +258,11 @@ export async function POST(request: Request) {
     );
 
     if (summaryResult.error || !summaryResult.data) {
-      return jsonError("Unable to verify portal invitation status.", 409);
+      return jsonError(
+        "Unable to verify portal invitation status.",
+        409,
+        "invitation_not_sendable",
+      );
     }
 
     const summary = summaryResult.data as InvitationSummary;
@@ -213,7 +288,11 @@ export async function POST(request: Request) {
     }
 
     if (summary.status === "needs_attention" && !summary.can_resend) {
-      return jsonError("Portal access needs support review before another invitation.", 409);
+      return jsonError(
+        "Portal access needs support review before another invitation.",
+        409,
+        "invitation_not_sendable",
+      );
     }
 
     const rawToken = createInvitationToken();
@@ -233,7 +312,18 @@ export async function POST(request: Request) {
     );
 
     if (prepareResult.error || !prepareResult.data) {
-      return jsonError("Unable to prepare the portal invitation right now.", 409);
+      const safeProviderCode = captureInvitationSendDiagnostic({
+        errorCode: "invitation_prepare_failed",
+        httpStatus: 409,
+        operation: "student_portal_invitation_prepare",
+        providerError: prepareResult.error,
+      });
+      return jsonError(
+        "Unable to prepare the portal invitation right now.",
+        409,
+        "invitation_prepare_failed",
+        safeProviderCode,
+      );
     }
 
     const prepared = prepareResult.data as PreparedInvitation;
@@ -260,7 +350,11 @@ export async function POST(request: Request) {
         });
       }
 
-      return jsonError("Portal access needs support review before inviting.", 409);
+      return jsonError(
+        "Portal access needs support review before inviting.",
+        409,
+        "invitation_not_sendable",
+      );
     }
 
     if (
@@ -268,10 +362,18 @@ export async function POST(request: Request) {
       !prepared.invitation_id ||
       !prepared.expires_at
     ) {
-      return jsonError("Portal access needs support review before inviting.", 409);
+      return jsonError(
+        "Portal access needs support review before inviting.",
+        409,
+        "invitation_not_sendable",
+      );
     }
 
     let delivered = false;
+    let emailFailureCode: Extract<
+      StudentPortalInvitationSendErrorCode,
+      "email_delivery_failed" | "email_not_configured"
+    > = "email_delivery_failed";
 
     try {
       const emailResult = await sendCoachFortTransactionalEmail({
@@ -293,8 +395,22 @@ export async function POST(request: Request) {
         }),
       });
       delivered = emailResult.delivered;
-    } catch {
+      if (!delivered && emailResult.provider === "none") {
+        emailFailureCode = "email_not_configured";
+        captureInvitationSendDiagnostic({
+          errorCode: emailFailureCode,
+          httpStatus: 502,
+          operation: "student_portal_invitation_email",
+        });
+      }
+    } catch (caught) {
       delivered = false;
+      captureInvitationSendDiagnostic({
+        errorCode: emailFailureCode,
+        httpStatus: 502,
+        operation: "student_portal_invitation_email",
+        providerError: caught,
+      });
     }
 
     const deliveryResult = await admin.rpc(
@@ -307,13 +423,25 @@ export async function POST(request: Request) {
     );
 
     if (deliveryResult.error) {
-      return jsonError("Invitation delivery needs attention. Enrollment is unchanged.", 500);
+      const safeProviderCode = captureInvitationSendDiagnostic({
+        errorCode: "invitation_delivery_record_failed",
+        httpStatus: 500,
+        operation: "student_portal_invitation_delivery_record",
+        providerError: deliveryResult.error,
+      });
+      return jsonError(
+        "Invitation delivery needs attention. Enrollment is unchanged.",
+        500,
+        "invitation_delivery_record_failed",
+        safeProviderCode,
+      );
     }
 
     if (!delivered) {
       return jsonError(
         "The student is enrolled, but the invitation could not be delivered. You can retry safely.",
         502,
+        emailFailureCode,
       );
     }
 
@@ -323,13 +451,23 @@ export async function POST(request: Request) {
     });
   } catch (caught) {
     if (caught instanceof InvalidJsonPayloadError) {
-      return jsonError(caught.message);
+      return jsonError(caught.message, 400, "invalid_request");
     }
 
     if (caught instanceof Error && caught.message === "Authentication required.") {
-      return jsonError("Please sign in again to continue.", 401);
+      return jsonError("Please sign in again to continue.", 401, "unauthorized");
     }
 
-    return jsonError("Unable to send the portal invitation right now.", 500);
+    captureInvitationSendDiagnostic({
+      errorCode: "invitation_not_sendable",
+      httpStatus: 500,
+      operation: "student_portal_invitation_send_unexpected",
+      providerError: caught,
+    });
+    return jsonError(
+      "Unable to send the portal invitation right now.",
+      500,
+      "invitation_not_sendable",
+    );
   }
 }

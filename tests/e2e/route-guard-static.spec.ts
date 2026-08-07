@@ -1361,6 +1361,90 @@ test.describe("static route guard coverage", () => {
     );
   });
 
+  test("student portal invitation send diagnostics are safe and distinct", () => {
+    const sendRoute = read(
+      "app/api/student-portal-invitations/send/route.ts",
+    );
+    const invitationClient = read("src/lib/studentPortalInvitations.ts");
+    const diagnostics = read("src/lib/studentPortalInvitationDiagnostics.ts");
+    const courseDetail = read(
+      "src/components/courses/CourseDetailClient.tsx",
+    );
+
+    for (const category of [
+      "server_admin_not_configured",
+      "unauthorized",
+      "forbidden",
+      "invalid_request",
+      "invitation_prepare_failed",
+      "invitation_not_sendable",
+      "email_not_configured",
+      "email_delivery_failed",
+      "invitation_delivery_record_failed",
+    ]) {
+      expect(diagnostics).toContain(`"${category}"`);
+      expect(sendRoute).toContain(`"${category}"`);
+    }
+
+    expect(sendRoute).toContain("captureServerException(new Error(params.errorCode)");
+    expect(sendRoute).toContain(
+      'operation: "student_portal_invitation_admin_init"',
+    );
+    expect(sendRoute).toContain(
+      'operation: "student_portal_invitation_prepare"',
+    );
+    expect(sendRoute).toContain(
+      'operation: "student_portal_invitation_delivery_record"',
+    );
+    expect(sendRoute.indexOf("student_portal_invitation_admin_init")).toBeLessThan(
+      sendRoute.indexOf('.from("public_site_leads")'),
+    );
+    expect(sendRoute.indexOf("student_portal_invitation_prepare")).toBeGreaterThan(
+      sendRoute.indexOf('"prepare_student_portal_invitation_secure"'),
+    );
+    expect(sendRoute).toMatch(
+      /try \{\s+admin = getSupabaseAdminClient\(\);\s+\} catch \{[\s\S]{0,700}errorCode: "server_admin_not_configured"[\s\S]{0,700}"server_admin_not_configured"/,
+    );
+    expect(sendRoute).toMatch(
+      /if \(prepareResult\.error \|\| !prepareResult\.data\) \{[\s\S]{0,900}errorCode: "invitation_prepare_failed"[\s\S]{0,900}"invitation_prepare_failed"/,
+    );
+    expect(sendRoute).not.toContain("captureServerException(caught");
+    expect(sendRoute).not.toContain("captureServerException(prepareResult.error");
+    expect(sendRoute).not.toContain("captureServerException(deliveryResult.error");
+
+    expect(diagnostics).toContain("postgresCodePattern");
+    expect(diagnostics).toContain("postgrestCodePattern");
+    expect(diagnostics).not.toContain("details:");
+    expect(diagnostics).not.toContain("hint:");
+    expect(invitationClient).toContain("StudentPortalInvitationActionError");
+    expect(invitationClient).toContain("errorCode: result.error_code");
+    expect(invitationClient).toContain(
+      "safeProviderCode: result.safe_provider_code",
+    );
+
+    const monitoringCall = sendRoute.slice(
+      sendRoute.indexOf("function captureInvitationSendDiagnostic"),
+      sendRoute.indexOf("function jsonError"),
+    );
+    for (const sensitive of [
+      "rawToken",
+      "tokenHash",
+      "normalizedEmail",
+      "accessToken",
+      "serviceRole",
+      "inviteUrl",
+    ]) {
+      expect(monitoringCall).not.toContain(sensitive);
+    }
+
+    expect(courseDetail).toContain("Invitation sent");
+    expect(courseDetail).toContain("Invitation needs retry");
+    expect(courseDetail).toContain("Access active");
+    expect(sendRoute).toMatch(
+      /return Response\.json\(\{\s+message: "Portal invitation sent\.",\s+status: "invitation_sent",\s+\}\);/,
+    );
+  });
+
   test("pending student portal invitation recovery is explicit and race-safe", () => {
     const recoverySql = read(
       "supabase/bundle_ux3d1_pending_invitation_recovery.sql",
