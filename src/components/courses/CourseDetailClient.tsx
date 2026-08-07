@@ -35,9 +35,13 @@ import {
   getEnrollmentRequestStudentCandidates,
   getPublicSiteLeadsForCourse,
   type EnrollmentRequestStudentCandidate,
-  type PaymentConfirmationMode,
   type PublicSiteLead,
 } from "@/src/lib/publicSite";
+import {
+  getStudentPortalInvitationStatus,
+  sendStudentPortalInvitation,
+  type StudentPortalInvitationSummary,
+} from "@/src/lib/studentPortalInvitations";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 import {
   canManageCourses,
@@ -99,8 +103,6 @@ type ReviewRequestModalState = {
   conversionNote: string;
   error: string;
   existingStudentId: string;
-  paymentConfirmationMode: PaymentConfirmationMode;
-  paymentReference: string;
   request: PublicSiteLead;
   studentAction: "create" | "existing";
   studentEmail: string;
@@ -176,6 +178,58 @@ function getErrorMessage(caught: unknown, fallback: string) {
   return caught instanceof Error ? caught.message : fallback;
 }
 
+async function getInvitationStatusesForRequests(
+  requests: PublicSiteLead[],
+  tenantId: string,
+) {
+  const enrolledRequests = requests.filter(
+    (request) =>
+      request.enrollment_request_status === "enrolled" &&
+      Boolean(request.converted_student_id),
+  );
+  const entries = await Promise.all(
+    enrolledRequests.map(async (request) => {
+      try {
+        const summary = await getStudentPortalInvitationStatus({
+          studentId: request.converted_student_id as string,
+          tenantId,
+        });
+        return [request.id, summary] as const;
+      } catch {
+        return [request.id, null] as const;
+      }
+    }),
+  );
+
+  return Object.fromEntries(entries) as Record<
+    string,
+    StudentPortalInvitationSummary | null
+  >;
+}
+
+function getInvitationStatusCopy(
+  summary: StudentPortalInvitationSummary | null | undefined,
+) {
+  if (!summary) {
+    return "Portal invitation status is unavailable.";
+  }
+
+  switch (summary.status) {
+    case "access_active":
+      return "Access active";
+    case "invitation_expired":
+      return "Invitation expired";
+    case "invitation_pending":
+      return "Invitation pending";
+    case "invitation_sent":
+      return "Invitation sent";
+    case "needs_attention":
+      return "Invitation needs retry";
+    default:
+      return "Invitation not sent";
+  }
+}
+
 export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
   const [actionError, setActionError] = useState("");
   const [course, setCourse] = useState<Course | null>(null);
@@ -199,6 +253,10 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
   const publishFeedbackRef = useRef<HTMLDivElement>(null);
   const focusPublishFeedbackAfterSuccessRef = useRef(false);
   const [publishSaving, setPublishSaving] = useState(false);
+  const [portalInvitationSavingId, setPortalInvitationSavingId] = useState("");
+  const [portalInvitationStatuses, setPortalInvitationStatuses] = useState<
+    Record<string, StudentPortalInvitationSummary | null>
+  >({});
   const [salesFeedback, setSalesFeedback] = useState<{
     message: string;
     tone: "error" | "success";
@@ -284,6 +342,12 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
                 }),
               ])
             : [[], []];
+        const invitationStatuses = canReviewRequests
+          ? await getInvitationStatusesForRequests(
+              courseEnrollmentRequests,
+              currentTenant.id,
+            )
+          : {};
 
         if (!active) {
           return;
@@ -294,6 +358,7 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
         setSalesForm(currentCourse ? createSalesSettingsForm(currentCourse) : null);
         setCurrentRole(memberRole);
         setEnrollmentRequests(courseEnrollmentRequests);
+        setPortalInvitationStatuses(invitationStatuses);
         setStudentCandidates(activeStudentCandidates);
         setSections(currentCourse ? currentStructure : []);
         setEnrollments(currentCourse ? courseEnrollments : []);
@@ -417,12 +482,17 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
     setEnrollmentRequestsLoading(true);
 
     try {
-      setEnrollmentRequests(
-        await getPublicSiteLeadsForCourse({
-          courseId: course.id,
-          tenantId: tenant.id,
-        }),
+      const requests = await getPublicSiteLeadsForCourse({
+        courseId: course.id,
+        tenantId: tenant.id,
+      });
+      const statuses = await getInvitationStatusesForRequests(
+        requests,
+        tenant.id,
       );
+
+      setEnrollmentRequests(requests);
+      setPortalInvitationStatuses(statuses);
     } finally {
       setEnrollmentRequestsLoading(false);
     }
@@ -447,8 +517,6 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
       conversionNote: "",
       error: "",
       existingStudentId: "",
-      paymentConfirmationMode: "no_payment_required",
-      paymentReference: "",
       request,
       studentAction: "create",
       studentEmail: request.email ?? "",
@@ -789,14 +857,11 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
     try {
       await approvePublicProgramEnrollmentRequest({
         conversionNote: reviewModal.conversionNote,
-        courseId: course.id,
         existingStudentId:
           reviewModal.studentAction === "existing"
             ? reviewModal.existingStudentId
             : null,
         leadId: reviewModal.request.id,
-        paymentConfirmationMode: reviewModal.paymentConfirmationMode,
-        paymentReference: reviewModal.paymentReference,
         studentAction: reviewModal.studentAction,
         studentEmail: reviewModal.studentEmail,
         studentName: reviewModal.studentName,
@@ -807,7 +872,8 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
       await Promise.all([refreshEnrollmentRequests(), refreshEnrollments()]);
       setReviewModal(null);
       setRequestFeedback({
-        message: "Request approved. Enrollment access is active.",
+        message:
+          "Request approved and student enrolled. Portal access remains separate until an invitation is accepted.",
         tone: "success",
       });
     } catch (caught) {
@@ -824,6 +890,58 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
       );
     } finally {
       setReviewSaving(false);
+    }
+  }
+
+  async function handleSendPortalInvitation(request: PublicSiteLead) {
+    if (!tenant || !request.converted_student_id) {
+      return;
+    }
+
+    setPortalInvitationSavingId(request.id);
+    setRequestFeedback(null);
+
+    try {
+      const result = await sendStudentPortalInvitation({
+        enrollmentRequestId: request.id,
+        tenantId: tenant.id,
+      });
+      const summary = await getStudentPortalInvitationStatus({
+        studentId: request.converted_student_id,
+        tenantId: tenant.id,
+      });
+
+      setPortalInvitationStatuses((current) => ({
+        ...current,
+        [request.id]: summary,
+      }));
+      setRequestFeedback({
+        message: result.message,
+        tone: "success",
+      });
+    } catch (caught) {
+      try {
+        const summary = await getStudentPortalInvitationStatus({
+          studentId: request.converted_student_id,
+          tenantId: tenant.id,
+        });
+        setPortalInvitationStatuses((current) => ({
+          ...current,
+          [request.id]: summary,
+        }));
+      } catch {
+        // Keep the last safe summary when refresh is unavailable.
+      }
+
+      setRequestFeedback({
+        message: getErrorMessage(
+          caught,
+          "Unable to send the portal invitation right now.",
+        ),
+        tone: "error",
+      });
+    } finally {
+      setPortalInvitationSavingId("");
     }
   }
 
@@ -1549,8 +1667,8 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
                 </h3>
                 <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-400">
                   Requests submitted from this program&apos;s public page appear
-                  here. Review the student, confirm any payment directly when
-                  required, then approve access when everything is ready.
+                  here. Approve and enroll the student, then send portal access
+                  when the enrollment is ready.
                 </p>
               </div>
               <Badge className="border-white/10 bg-white/10 text-slate-200">
@@ -1560,8 +1678,8 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
 
             <p className="mt-5 rounded-2xl border border-white/10 bg-[#15181b] px-4 py-3 text-sm leading-6 text-slate-300">
               A request does not create enrollment, record payment, or activate
-              access automatically. Use Enrollments and Student Finance to
-              follow the next steps.
+              access automatically. Enrollment, portal access, and payment are
+              separate states.
             </p>
             <div className="mt-4 flex flex-wrap gap-2">
               <Button href="/app/enrollments" size="sm" variant="secondary">
@@ -1574,6 +1692,7 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
 
             {requestFeedback ? (
               <div
+                aria-live="polite"
                 className={[
                   "mt-5 rounded-2xl border p-4 text-sm font-medium",
                   requestFeedback.tone === "success"
@@ -1607,16 +1726,30 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
             ) : (
               <div className="mt-6 grid gap-4 lg:grid-cols-2">
                 {enrollmentRequests.map((request) => {
+                  const lifecycleStatus =
+                    request.enrollment_request_status ??
+                    (request.status === "converted" ? "enrolled" : request.status);
                   const canReviewRequest =
                     canApproveRequests &&
-                    (request.status === "new" ||
-                      request.status === "contacted") &&
+                    (lifecycleStatus === "new" ||
+                      lifecycleStatus === "needs_attention") &&
                     !request.converted_student_id &&
                     !request.converted_enrollment_id;
-                  const isConverted =
-                    request.status === "converted" ||
-                    Boolean(request.converted_student_id) ||
-                    Boolean(request.converted_enrollment_id);
+                  const isEnrolled = lifecycleStatus === "enrolled";
+                  const invitationSummary = portalInvitationStatuses[request.id];
+                  const canSendInvitation =
+                    isEnrolled &&
+                    Boolean(request.converted_student_id) &&
+                    Boolean(request.converted_enrollment_id) &&
+                    invitationSummary !== null &&
+                    (invitationSummary?.status === "invitation_not_sent" ||
+                      invitationSummary?.status === "invitation_expired" ||
+                      (invitationSummary?.status === "needs_attention" &&
+                        invitationSummary.can_resend));
+                  const isResend =
+                    invitationSummary?.status === "invitation_expired";
+                  const isRetry =
+                    invitationSummary?.status === "needs_attention";
 
                   return (
                     <article
@@ -1634,14 +1767,14 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
                         </div>
                         <Badge
                           className={
-                            isConverted
+                            isEnrolled
                               ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-100"
-                              : request.status === "closed"
+                              : lifecycleStatus === "rejected"
                                 ? "border-white/10 bg-white/10 text-slate-300"
                                 : "border-[#2ECBEA]/20 bg-[#2ECBEA]/10 text-[#A7F3FF]"
                           }
                         >
-                          {isConverted ? "converted" : request.status}
+                          {lifecycleStatus.replace("_", " ")}
                         </Badge>
                       </div>
 
@@ -1672,13 +1805,20 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
                       )}
 
                       <div className="mt-5 flex flex-col gap-3 border-t border-white/10 pt-4 sm:flex-row sm:items-center sm:justify-between">
-                        <p className="text-xs leading-5 text-slate-500">
-                          {isConverted
-                            ? "Converted requests are kept read-only here."
-                            : request.status === "closed"
+                        <div>
+                          <p className="text-xs leading-5 text-slate-500">
+                          {isEnrolled
+                            ? "Student enrollment is active. Portal access is managed separately."
+                            : lifecycleStatus === "rejected"
                               ? "Closed requests are not available for approval."
-                              : "Review is required before enrollment access is activated."}
-                        </p>
+                              : "Review is required before the student is enrolled."}
+                          </p>
+                          {isEnrolled ? (
+                            <p className="mt-2 text-sm font-semibold text-slate-200">
+                              {getInvitationStatusCopy(invitationSummary)}
+                            </p>
+                          ) : null}
+                        </div>
                         {canReviewRequest ? (
                           <Button
                             className="shrink-0 bg-teal-400 text-black hover:bg-teal-300"
@@ -1687,6 +1827,28 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
                             type="button"
                           >
                             Review request
+                          </Button>
+                        ) : null}
+                        {canSendInvitation ? (
+                          <Button
+                            className="shrink-0 bg-teal-400 text-black hover:bg-teal-300"
+                            isLoading={portalInvitationSavingId === request.id}
+                            loadingText={
+                              isRetry
+                                ? "Retrying..."
+                                : isResend
+                                  ? "Resending..."
+                                  : "Sending..."
+                            }
+                            onClick={() => handleSendPortalInvitation(request)}
+                            size="sm"
+                            type="button"
+                          >
+                            {isRetry
+                              ? "Retry invitation"
+                              : isResend
+                                ? "Resend invitation"
+                                : "Send invitation"}
                           </Button>
                         ) : null}
                       </div>
@@ -2015,9 +2177,9 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
                   Review enrollment request
                 </h3>
                 <p className="mt-3 text-sm leading-6 text-slate-400">
-                  Review the request, link or create an internal student, and
-                  approve access only after the coach/admin has confirmed the
-                  payment status.
+                  Review the request, match or create the student, and create
+                  the program enrollment. Payment and portal access remain
+                  separate.
                 </p>
               </div>
               <Badge className="border-white/10 bg-white/10 text-slate-300">
@@ -2084,11 +2246,11 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
                     />
                     <span>
                       <span className="block font-semibold">
-                        Create new internal student
+                        Match using request details
                       </span>
                       <span className="mt-1 block leading-6 text-slate-400">
-                        This creates an internal student record only. It does
-                        not create a login account.
+                        CoachFort reuses a matching student by email, or creates
+                        one when no safe match exists. It does not create a login.
                       </span>
                     </span>
                   </label>
@@ -2115,7 +2277,7 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
                     />
                     <span>
                       <span className="block font-semibold">
-                        Link existing active student
+                        Choose an existing active student
                       </span>
                       <span className="mt-1 block leading-6 text-slate-400">
                         Use this when the learner already exists in this
@@ -2223,58 +2385,8 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
 
               <section className="rounded-3xl border border-white/10 bg-[#15181b] p-5">
                 <h4 className="text-lg font-semibold text-white">
-                  Payment confirmation
+                  Enrollment note
                 </h4>
-                <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                  <label className="block text-sm font-semibold text-slate-200">
-                    Confirmation mode
-                    <select
-                      className="mt-2 h-12 w-full rounded-xl border border-white/10 bg-[#101214] px-4 text-sm text-white outline-none focus:border-teal-400/50 focus:ring-4 focus:ring-teal-400/10"
-                      onChange={(event) =>
-                        setReviewModal((current) =>
-                          current
-                            ? {
-                                ...current,
-                                paymentConfirmationMode: event.target
-                                  .value as PaymentConfirmationMode,
-                              }
-                            : current,
-                        )
-                      }
-                      value={reviewModal.paymentConfirmationMode}
-                    >
-                      <option value="no_payment_required">
-                        No payment required
-                      </option>
-                      <option value="manual_payment_received">
-                        Manual payment received
-                      </option>
-                      <option value="external_payment_confirmed">
-                        External payment confirmed
-                      </option>
-                    </select>
-                  </label>
-                  <label className="block text-sm font-semibold text-slate-200">
-                    Payment reference
-                    <input
-                      className="mt-2 h-12 w-full rounded-xl border border-white/10 bg-[#101214] px-4 text-sm text-white outline-none placeholder:text-slate-500 focus:border-teal-400/50 focus:ring-4 focus:ring-teal-400/10"
-                      maxLength={160}
-                      onChange={(event) =>
-                        setReviewModal((current) =>
-                          current
-                            ? {
-                                ...current,
-                                paymentReference: event.target.value,
-                              }
-                            : current,
-                        )
-                      }
-                      placeholder="Optional bank/UPI/external reference"
-                      value={reviewModal.paymentReference}
-                    />
-                  </label>
-                </div>
-
                 <label className="mt-4 block text-sm font-semibold text-slate-200">
                   Internal note
                   <textarea
@@ -2296,10 +2408,9 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
               <div className="rounded-3xl border border-amber-300/30 bg-amber-300/10 p-5 text-sm leading-6 text-amber-50">
                 <p className="font-semibold">Approval warning</p>
                 <p className="mt-2">
-                  Approving this request creates an active enrollment and
-                  activates learning access for this student. It does not create
-                  an invoice, receipt, payment record, login account, or
-                  online payment.
+                  Approving creates or reuses the student and program enrollment.
+                  It does not record payment, create a login account, send an
+                  invitation, or activate portal access.
                 </p>
               </div>
 
@@ -2316,7 +2427,7 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
                   disabled={reviewSaving}
                   type="submit"
                 >
-                  {reviewSaving ? "Approving..." : "Approve and activate access"}
+                  {reviewSaving ? "Approving..." : "Approve & enroll"}
                 </Button>
               </div>
             </form>

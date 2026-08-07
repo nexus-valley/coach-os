@@ -11,19 +11,12 @@ import {
 import { Button } from "@/src/components/ui/Button";
 import { requestAuthOtp, verifyAuthOtp } from "@/src/lib/authOtp";
 import { signUpWithPassword } from "@/src/lib/auth";
-
-function getSafeNextPath(value: string | null) {
-  if (!value || !value.startsWith("/") || value.startsWith("//")) {
-    return null;
-  }
-
-  return value;
-}
+import { getSafeInternalPath } from "@/src/lib/authRedirects";
 
 export function SignupForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const nextPath = getSafeNextPath(searchParams.get("next"));
+  const nextPath = getSafeInternalPath(searchParams.get("next"));
   const isInviteSignup = nextPath?.startsWith("/invite/") ?? false;
   const [cooldown, setCooldown] = useState(0);
   const [email, setEmail] = useState("");
@@ -118,7 +111,7 @@ export function SignupForm() {
         <p className="mt-1">{earlyAccessSupportMessage}</p>
         {isInviteSignup ? (
           <p className="mt-3 font-semibold text-amber-900">
-            This invite signup flow remains available for invited workspace users.
+            Your invitation will remain ready while you verify your email.
           </p>
         ) : null}
       </div>

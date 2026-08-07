@@ -103,12 +103,20 @@ export type PublicProgramSalesPagePayload = {
 };
 
 export type PublicSiteLead = {
+  approval_enrollment_action?: "created" | "reused" | null;
+  approval_student_action?: "created" | "matched" | "selected" | null;
   converted_at?: string | null;
   converted_enrollment_id?: string | null;
   converted_student_id?: string | null;
   conversion_note?: string | null;
   created_at: string;
   email: string | null;
+  enrollment_request_status?:
+    | "enrolled"
+    | "needs_attention"
+    | "new"
+    | "processing"
+    | "rejected";
   id: string;
   interested_course_id: string | null;
   metadata_json?: Record<string, unknown> | null;
@@ -127,18 +135,10 @@ export type EnrollmentRequestStudentCandidate = {
   status: "active";
 };
 
-export type PaymentConfirmationMode =
-  | "external_payment_confirmed"
-  | "manual_payment_received"
-  | "no_payment_required";
-
 export type ApprovePublicProgramEnrollmentRequestInput = {
   conversionNote?: string;
-  courseId: string;
   existingStudentId?: null | string;
   leadId: string;
-  paymentConfirmationMode: PaymentConfirmationMode;
-  paymentReference?: string;
   studentAction: "create" | "existing";
   studentEmail?: string;
   studentName?: string;
@@ -147,23 +147,22 @@ export type ApprovePublicProgramEnrollmentRequestInput = {
 };
 
 export type ApprovePublicProgramEnrollmentRequestResult = {
-  enrollment: {
-    course_id: string;
+  enrollment_action?: "created" | "reused";
+  enrollment_request_status: "enrolled" | "needs_attention";
+  error_code?: string;
+  message?: string;
+  portal_access_status: "not_started";
+  replayed: boolean;
+  request_id: string;
+  enrollment?: {
     id: string;
     status: string;
   };
-  lead: {
-    converted_at: string;
+  student?: {
     id: string;
-    status: "converted";
-  };
-  student: {
-    email: string | null;
-    id: string;
-    name: string;
-    phone: string | null;
     status: string;
   };
+  student_action?: "created" | "matched" | "selected";
 };
 
 export type PublicSiteSettingsInput = {
@@ -229,12 +228,6 @@ const textMaxLengths: Record<keyof Omit<PublicSiteSettingsInput,
 
 const slugPattern = /^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$/;
 const unsafeTextPattern = /[<>]/;
-const paymentConfirmationModes: PaymentConfirmationMode[] = [
-  "external_payment_confirmed",
-  "manual_payment_received",
-  "no_payment_required",
-];
-
 function normalizeOptionalText(value: string, label: string, maxLength: number) {
   const trimmed = value.trim();
 
@@ -485,7 +478,7 @@ export async function getPublicSiteLeadsForCourse(params: {
   const { data, error } = await supabase
     .from("public_site_leads")
     .select(
-      "id,source,name,email,phone,message,interested_course_id,status,metadata_json,converted_student_id,converted_enrollment_id,converted_at,conversion_note,created_at",
+      "id,source,name,email,phone,message,interested_course_id,status,enrollment_request_status,metadata_json,converted_student_id,converted_enrollment_id,converted_at,conversion_note,approval_student_action,approval_enrollment_action,created_at",
     )
     .eq("tenant_id", params.tenantId)
     .eq("interested_course_id", params.courseId)
@@ -545,10 +538,6 @@ export async function approvePublicProgramEnrollmentRequest(
     throw new Error("Choose whether to create or link a student.");
   }
 
-  if (!paymentConfirmationModes.includes(input.paymentConfirmationMode)) {
-    throw new Error("Choose a valid payment confirmation option.");
-  }
-
   if (input.studentAction === "existing" && !input.existingStudentId) {
     throw new Error("Select an existing active student.");
   }
@@ -566,15 +555,7 @@ export async function approvePublicProgramEnrollmentRequest(
     }
   }
 
-  const paymentReference = input.paymentReference?.trim() ?? "";
   const conversionNote = input.conversionNote?.trim() ?? "";
-
-  if (
-    paymentReference &&
-    (paymentReference.length > 160 || unsafeTextPattern.test(paymentReference))
-  ) {
-    throw new Error("Payment reference must be plain text under 160 characters.");
-  }
 
   if (
     conversionNote &&
@@ -585,15 +566,12 @@ export async function approvePublicProgramEnrollmentRequest(
 
   const supabase = getSupabaseClient();
   const { data, error } = await supabase.rpc(
-    "approve_public_program_enrollment_request",
+    "approve_public_program_enrollment_request_v2",
     {
-      p_conversion_note: conversionNote || null,
-      p_course_id: input.courseId,
       p_existing_student_id: input.existingStudentId ?? null,
+      p_idempotency_key: `enrollment-request:${input.leadId}`,
       p_lead_id: input.leadId,
-      p_payment_confirmation_mode: input.paymentConfirmationMode,
-      p_payment_reference: paymentReference || null,
-      p_student_action: input.studentAction,
+      p_note: conversionNote || null,
       p_student_email: input.studentEmail?.trim() || null,
       p_student_name: input.studentName?.trim() || null,
       p_student_phone: input.studentPhone?.trim() || null,
@@ -607,5 +585,14 @@ export async function approvePublicProgramEnrollmentRequest(
     );
   }
 
-  return data as ApprovePublicProgramEnrollmentRequestResult;
+  const result = data as ApprovePublicProgramEnrollmentRequestResult;
+
+  if (result.enrollment_request_status !== "enrolled") {
+    throw new Error(
+      result.message ||
+        "This request needs attention before the student can be enrolled.",
+    );
+  }
+
+  return result;
 }

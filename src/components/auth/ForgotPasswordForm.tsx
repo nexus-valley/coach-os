@@ -1,14 +1,17 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 
 import { AuthInput } from "@/src/components/auth/AuthInput";
 import { Button } from "@/src/components/ui/Button";
+import { getSafeInternalPath } from "@/src/lib/authRedirects";
 import { requestAuthOtp } from "@/src/lib/authOtp";
 
 export function ForgotPasswordForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const nextPath = getSafeInternalPath(searchParams.get("next"));
   const [email, setEmail] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -27,7 +30,13 @@ export function ForgotPasswordForm() {
         purpose: "password_reset",
       });
       setMessage(result.message);
-      router.push(`/reset-password?email=${encodeURIComponent(normalizedEmail)}`);
+      const resetParams = new URLSearchParams({ email: normalizedEmail });
+
+      if (nextPath) {
+        resetParams.set("next", nextPath);
+      }
+
+      router.push(`/reset-password?${resetParams.toString()}`);
     } catch (caught) {
       setError(
         caught instanceof Error

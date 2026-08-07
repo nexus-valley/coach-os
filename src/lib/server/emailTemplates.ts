@@ -123,8 +123,8 @@ export const coachFortEmailTemplateInventory = [
     key: "student.portal_invite",
     lifecycle: "student_access",
     manualFallback: "Coach or founder shares student access instructions manually.",
-    notes: "Template exists, but no sender route is wired.",
-    wiringStatus: "template_only",
+    notes: "Wired through the server-only student portal invitation lifecycle.",
+    wiringStatus: "wired",
   },
   {
     builderName: null,
@@ -376,7 +376,7 @@ export function buildStudentPortalInviteEmail(input: {
     },
     body: [
       greeting,
-      `${coachBrandName} has enabled your CoachFort student portal for courses, sessions, documents, messages, and coaching updates.`,
+      `${coachBrandName} invited you to access a CoachFort student portal for courses, sessions, documents, messages, and coaching updates.`,
       expiry ? `This access link expires on ${expiry}.` : "Use the link to sign in with your student account.",
     ],
     footerNote:

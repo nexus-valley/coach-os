@@ -8,6 +8,7 @@ import { useState } from "react";
 import { AuthInput } from "@/src/components/auth/AuthInput";
 import { Button } from "@/src/components/ui/Button";
 import { signInWithPassword } from "@/src/lib/auth";
+import { getSafeInternalPath } from "@/src/lib/authRedirects";
 
 function getErrorMessage(error: unknown) {
   if (error instanceof Error) {
@@ -24,14 +25,6 @@ function getErrorMessage(error: unknown) {
   }
 
   return "Unable to sign in. Please try again.";
-}
-
-function getSafeNextPath(value: string | null) {
-  if (!value || !value.startsWith("/") || value.startsWith("//")) {
-    return null;
-  }
-
-  return value;
 }
 
 function getCompatibleNextPath(params: {
@@ -57,7 +50,10 @@ function getCompatibleNextPath(params: {
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const nextPath = getSafeNextPath(searchParams.get("next"));
+  const nextPath = getSafeInternalPath(searchParams.get("next"));
+  const forgotPasswordHref = nextPath
+    ? `/forgot-password?next=${encodeURIComponent(nextPath)}`
+    : "/forgot-password";
   const [email, setEmail] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -114,7 +110,7 @@ export function LoginForm() {
       />
 
       <div className="text-right text-sm">
-        <Link className="font-semibold text-[#145DA0]" href="/forgot-password">
+        <Link className="font-semibold text-[#145DA0]" href={forgotPasswordHref}>
           Forgot password?
         </Link>
       </div>

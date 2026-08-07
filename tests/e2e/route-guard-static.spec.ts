@@ -2,6 +2,7 @@ import { expect, type Page, test } from "@playwright/test";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
+import { getSafeInternalPath } from "../../src/lib/authRedirects";
 import { expectProgramsAccessibleState } from "./helpers/auth";
 
 const root = process.cwd();
@@ -34,6 +35,26 @@ const isolatedProgramsReadinessOptions = {
   indicatorGraceMs: 20,
   timeoutMs: 1_000,
 };
+
+test.describe("Auth return path behavior", () => {
+  test("accepts internal invitation paths and rejects redirect bypasses", () => {
+    expect(getSafeInternalPath("/invite/student")).toBe("/invite/student");
+    expect(getSafeInternalPath("/app/courses?tab=draft#status")).toBe(
+      "/app/courses?tab=draft#status",
+    );
+
+    for (const unsafePath of [
+      "https://example.com",
+      "//example.com",
+      "/\\example.com",
+      "/%2f%2fexample.com",
+      "/%5cexample.com",
+      "/invite/student%0d%0aLocation:example.com",
+    ]) {
+      expect(getSafeInternalPath(unsafePath)).toBeNull();
+    }
+  });
+});
 
 async function expectIsolatedProgramsFailure(
   page: Page,
@@ -1198,6 +1219,220 @@ test.describe("static route guard coverage", () => {
       expect(read(path), `${path} should not directly write profiles`).not.toMatch(
         /\.from\(["'`]profiles["'`]\)[\s\S]{0,700}\.(insert|update|upsert|delete)\(/,
       );
+    }
+  });
+
+  test("student portal invitations reuse secure server, auth, and email boundaries", () => {
+    const sendRoute = read(
+      "app/api/student-portal-invitations/send/route.ts",
+    );
+    const acceptRoute = read(
+      "app/api/student-portal-invitations/accept/route.ts",
+    );
+    const invitationClient = read("src/lib/studentPortalInvitations.ts");
+    const invitePage = read(
+      "src/components/portal/StudentPortalInviteClient.tsx",
+    );
+    const loginPage = read("app/login/page.tsx");
+    const signupPage = read("app/signup/page.tsx");
+    const loginForm = read("src/components/auth/LoginForm.tsx");
+    const forgotPasswordForm = read(
+      "src/components/auth/ForgotPasswordForm.tsx",
+    );
+    const resetPasswordForm = read(
+      "src/components/auth/ResetPasswordForm.tsx",
+    );
+    const authRedirects = read("src/lib/authRedirects.ts");
+    const courseDetail = read(
+      "src/components/courses/CourseDetailClient.tsx",
+    );
+    const publicSite = read("src/lib/publicSite.ts");
+
+    expect(sendRoute).toContain("requireAuthenticatedUser(accessToken)");
+    expect(sendRoute).toContain('allowed_roles: ["owner", "admin"]');
+    expect(sendRoute).toContain("prepare_student_portal_invitation_secure");
+    expect(sendRoute).toContain(
+      "record_student_portal_invitation_delivery_secure",
+    );
+    expect(sendRoute).toContain("buildStudentPortalInviteEmail");
+    expect(sendRoute).toContain("sendCoachFortTransactionalEmail");
+    expect(sendRoute).toContain('/invite/student#token=');
+    expect(sendRoute).toContain("prepared.token_ready !== true");
+    expect(sendRoute).not.toContain('select("token_hash")');
+    expect(sendRoute).not.toContain("console.");
+
+    expect(sendRoute.indexOf("prepared.token_ready !== true")).toBeLessThan(
+      sendRoute.indexOf("sendCoachFortTransactionalEmail({"),
+    );
+
+    expect(acceptRoute).toContain("requireAuthenticatedUser(accessToken)");
+    expect(acceptRoute).toContain('createHash("sha256")');
+    expect(acceptRoute).toContain("accept_student_portal_invitation_secure");
+    expect(acceptRoute).toContain("p_user_id: user.id");
+    expect(acceptRoute).not.toContain("console.");
+
+    for (const serviceRpc of [
+      "prepare_student_portal_invitation_secure",
+      "record_student_portal_invitation_delivery_secure",
+      "accept_student_portal_invitation_secure",
+    ]) {
+      expect(invitationClient).not.toContain(serviceRpc);
+      expect(courseDetail).not.toContain(serviceRpc);
+      expect(invitePage).not.toContain(serviceRpc);
+    }
+
+    expect(invitationClient).toContain(
+      'rpc(\n    "get_student_portal_invitation_status"',
+    );
+    expect(invitationClient).toContain(
+      'fetch("/api/student-portal-invitations/send"',
+    );
+    expect(invitationClient).toContain(
+      'fetch("/api/student-portal-invitations/accept"',
+    );
+    expect(invitePage).toContain("window.sessionStorage.setItem");
+    expect(invitePage).toContain("window.history.replaceState");
+    expect(invitePage).toContain('encodeURIComponent(inviteReturnPath)');
+    expect(invitePage).toContain('href={`/login?next=${nextPath}`}');
+    expect(invitePage).toContain('href={`/signup?next=${nextPath}`}');
+    expect(invitePage).not.toContain("token_hash");
+    expect(loginPage).toContain("encodeURIComponent(nextPath)");
+    expect(signupPage).toContain("encodeURIComponent(nextPath)");
+    expect(loginPage).toContain("getSafeInternalPath");
+    expect(signupPage).toContain("getSafeInternalPath");
+    expect(loginForm).toContain("forgotPasswordHref");
+    expect(forgotPasswordForm).toContain('resetParams.set("next", nextPath)');
+    expect(resetPasswordForm).toContain("loginHref");
+
+    for (const authSource of [
+      loginForm,
+      forgotPasswordForm,
+      resetPasswordForm,
+    ]) {
+      expect(authSource).toContain("getSafeInternalPath");
+    }
+    expect(authRedirects).toContain('value.startsWith("//")');
+    expect(authRedirects).toContain("unsafeEncodedPathPattern");
+    expect(authRedirects).toContain("unsafePathCharacterPattern");
+
+    expect(courseDetail).toContain(
+      'currentRole === "owner" || currentRole === "admin"',
+    );
+    expect(courseDetail).toContain("Send invitation");
+    expect(courseDetail).toContain("Resend invitation");
+    expect(courseDetail).toContain("Retry invitation");
+    expect(courseDetail).toContain("Access active");
+    expect(publicSite).toContain(
+      '"approve_public_program_enrollment_request_v2"',
+    );
+    expect(publicSite).not.toContain(
+      '"approve_public_program_enrollment_request",',
+    );
+    expect(publicSite).not.toContain("p_payment_confirmation_mode");
+    expect(publicSite).not.toContain("p_payment_reference");
+  });
+
+  test("student portal invitation orchestration has no finance or auth-admin side effects", () => {
+    const invitationSources = [
+      read("app/api/student-portal-invitations/send/route.ts"),
+      read("app/api/student-portal-invitations/accept/route.ts"),
+      read("src/lib/studentPortalInvitations.ts"),
+      read("src/components/portal/StudentPortalInviteClient.tsx"),
+    ];
+
+    for (const source of invitationSources) {
+      for (const forbidden of [
+        'auth.admin.createUser',
+        'auth.admin.updateUserById',
+        '.from("payments")',
+        '.from("invoices")',
+        '.from("receipts")',
+        '.from("subscriptions")',
+        'payment_confirmation_mode',
+        'payment_reference',
+        'storageState',
+      ]) {
+        expect(source).not.toContain(forbidden);
+      }
+    }
+
+    expect(invitationSources.join("\n")).not.toMatch(
+      /\.from\("student_portal_accounts"\)[\s\S]{0,500}\.(insert|update|upsert|delete)\(/,
+    );
+  });
+
+  test("pending student portal invitation recovery is explicit and race-safe", () => {
+    const recoverySql = read(
+      "supabase/bundle_ux3d1_pending_invitation_recovery.sql",
+    );
+    const originalSql = read(
+      "supabase/bundle_ux3d_student_portal_invitation_lifecycle.sql",
+    );
+    const sendRoute = read(
+      "app/api/student-portal-invitations/send/route.ts",
+    );
+    const invitePage = read(
+      "src/components/portal/StudentPortalInviteClient.tsx",
+    );
+
+    expect(recoverySql).toContain("begin;");
+    expect(recoverySql).toContain("commit;");
+    expect(recoverySql).toContain("interval '2 minutes'");
+    expect(recoverySql).toContain("v_invitation.updated_at <= now()");
+    expect(recoverySql).toContain("limit 1\n  for update;");
+    expect(recoverySql).toContain("v_action := 'recovered'");
+    expect(recoverySql).toContain("v_action := 'retried'");
+    expect(recoverySql).toContain("'token_ready', true");
+    expect(recoverySql).toContain("'token_ready', false");
+    expect(recoverySql).toContain("v_status := 'needs_attention'");
+    expect(recoverySql).toContain("v_can_resend := true");
+    expect(recoverySql).toContain("token_hash = v_token_hash");
+    expect(recoverySql).not.toMatch(/\b(token|raw_token)\s+text\b/i);
+
+    const recentOrSentReuse = recoverySql.slice(
+      recoverySql.indexOf("if found then\n    if v_invitation.status = 'pending'"),
+      recoverySql.indexOf(
+        "  else\n    select i.*",
+        recoverySql.indexOf("if found then\n    if v_invitation.status = 'pending'"),
+      ),
+    );
+    expect(recentOrSentReuse).toContain("'token_ready', false");
+    expect(recentOrSentReuse).toContain("v_action := 'recovered'");
+
+    expect(sendRoute).toContain("prepared.token_ready !== true");
+    expect(sendRoute).not.toContain("digestResult");
+    expect(sendRoute).not.toContain('select("token_hash")');
+    expect(sendRoute).toContain(
+      'record_student_portal_invitation_delivery_secure',
+    );
+    expect(sendRoute).not.toMatch(
+      /\.from\("(students|enrollments|public_site_leads)"\)[\s\S]{0,500}\.(insert|update|upsert|delete)\(/,
+    );
+
+    expect(originalSql).toContain(
+      "create or replace function public.accept_student_portal_invitation_secure",
+    );
+    expect(originalSql).toContain("'replayed', true");
+    expect(originalSql).toContain(
+      "Sign in with the email address that received this invitation.",
+    );
+    expect(invitePage).toContain("window.sessionStorage.removeItem(tokenStorageKey)");
+
+    const terminalCleanup = invitePage.slice(
+      invitePage.indexOf('if (code === "invitation_expired"'),
+      invitePage.indexOf("setErrorCode(code)"),
+    );
+    expect(terminalCleanup).toContain("invitation_unavailable");
+    expect(terminalCleanup).not.toContain("email_mismatch");
+
+    for (const forbidden of [
+      "console.log",
+      "console.error",
+      "localStorage",
+      "document.cookie",
+      "token_hash",
+    ]) {
+      expect(invitePage).not.toContain(forbidden);
     }
   });
 });

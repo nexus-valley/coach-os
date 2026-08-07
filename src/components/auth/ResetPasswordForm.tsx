@@ -6,10 +6,15 @@ import { useState } from "react";
 
 import { AuthInput } from "@/src/components/auth/AuthInput";
 import { Button } from "@/src/components/ui/Button";
+import { getSafeInternalPath } from "@/src/lib/authRedirects";
 import { resetPasswordWithOtp, verifyAuthOtp } from "@/src/lib/authOtp";
 
 export function ResetPasswordForm() {
   const searchParams = useSearchParams();
+  const nextPath = getSafeInternalPath(searchParams.get("next"));
+  const loginHref = nextPath
+    ? `/login?next=${encodeURIComponent(nextPath)}`
+    : "/login";
   const [confirmPassword, setConfirmPassword] = useState("");
   const [email, setEmail] = useState(searchParams.get("email") ?? "");
   const [error, setError] = useState("");
@@ -109,7 +114,7 @@ export function ResetPasswordForm() {
       {message ? (
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
           {message}{" "}
-          <Link className="font-semibold text-emerald-900" href="/login">
+          <Link className="font-semibold text-emerald-900" href={loginHref}>
             Back to login
           </Link>
         </div>
