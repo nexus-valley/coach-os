@@ -11,6 +11,7 @@ import {
   acceptStudentPortalInvitation,
   getStudentPortalInvitationError,
 } from "@/src/lib/studentPortalInvitations";
+import { shouldClearStudentPortalInvitationToken } from "@/src/lib/studentPortalInvitationAcceptance";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 
 const inviteReturnPath = "/invite/student";
@@ -29,6 +30,7 @@ export function StudentPortalInviteClient() {
   const startedRef = useRef(false);
   const [errorCode, setErrorCode] = useState("");
   const [message, setMessage] = useState("");
+  const [signingOut, setSigningOut] = useState(false);
   const [stage, setStage] = useState<InviteStage>("loading");
 
   useEffect(() => {
@@ -82,7 +84,7 @@ export function StudentPortalInviteClient() {
       } catch (caught) {
         const code = caught instanceof Error ? caught.name : "needs_attention";
 
-        if (code === "invitation_expired" || code === "invitation_unavailable") {
+        if (shouldClearStudentPortalInvitationToken(code)) {
           window.sessionStorage.removeItem(tokenStorageKey);
         }
 
@@ -94,6 +96,42 @@ export function StudentPortalInviteClient() {
 
     void continueInvitation();
   }, [router]);
+
+  async function handleContinueWithInvitedEmail() {
+    const rawToken = window.sessionStorage.getItem(tokenStorageKey) ?? "";
+
+    if (!tokenPattern.test(rawToken)) {
+      window.sessionStorage.removeItem(tokenStorageKey);
+      setErrorCode("invitation_unavailable");
+      setMessage(
+        "This invitation link is not available. Ask your coach to send a new invitation.",
+      );
+      return;
+    }
+
+    setSigningOut(true);
+
+    try {
+      const supabase = getSupabaseClient();
+      const { error } = await supabase.auth.signOut();
+
+      if (error) {
+        throw error;
+      }
+
+      window.sessionStorage.setItem(tokenStorageKey, rawToken);
+      setErrorCode("");
+      setMessage("");
+      setStage("signed_out");
+      router.replace(inviteReturnPath);
+    } catch {
+      setMessage(
+        "Unable to sign out right now. Your invitation is still available. Please try again.",
+      );
+    } finally {
+      setSigningOut(false);
+    }
+  }
 
   const nextPath = encodeURIComponent(inviteReturnPath);
   const canTryAnotherAccount = errorCode === "email_mismatch";
@@ -148,10 +186,11 @@ export function StudentPortalInviteClient() {
               {canTryAnotherAccount ? (
                 <Button
                   className="mt-5"
-                  href={`/login?next=${nextPath}`}
-                  variant="secondary"
+                  isLoading={signingOut}
+                  loadingText="Signing out..."
+                  onClick={handleContinueWithInvitedEmail}
                 >
-                  Sign in with another account
+                  Continue with invited email
                 </Button>
               ) : null}
             </div>

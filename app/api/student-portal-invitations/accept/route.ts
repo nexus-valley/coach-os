@@ -9,6 +9,11 @@ import {
   parseJsonBody,
 } from "@/src/lib/server/requestJson";
 import { getSupabaseAdminClient } from "@/src/lib/server/supabaseAdmin";
+import {
+  classifyStudentPortalInvitationAcceptanceError,
+  classifyStudentPortalInvitationAcceptanceResult,
+  getStudentPortalInvitationAcceptanceFailure,
+} from "@/src/lib/studentPortalInvitationAcceptance";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -19,42 +24,11 @@ function jsonError(code: string, message: string, status = 400) {
   return Response.json({ code, message }, { status });
 }
 
-function mapAcceptanceError(message: string) {
-  const normalized = message.toLowerCase();
-
-  if (normalized.includes("email") && normalized.includes("match")) {
-    return jsonError(
-      "email_mismatch",
-      "Please sign in using the email address that received this invitation.",
-      403,
-    );
-  }
-
-  if (normalized.includes("expired")) {
-    return jsonError(
-      "invitation_expired",
-      "This invitation has expired. Ask your coach to send a new one.",
-      410,
-    );
-  }
-
-  if (
-    normalized.includes("not found") ||
-    normalized.includes("invalid") ||
-    normalized.includes("revoked")
-  ) {
-    return jsonError(
-      "invitation_unavailable",
-      "This invitation is no longer available. Ask your coach for a new invitation.",
-      410,
-    );
-  }
-
-  return jsonError(
-    "needs_attention",
-    "Portal access needs attention. Please contact your coach or CoachFort support.",
-    409,
-  );
+function acceptanceErrorResponse(
+  code: Parameters<typeof getStudentPortalInvitationAcceptanceFailure>[0],
+) {
+  const failure = getStudentPortalInvitationAcceptanceFailure(code);
+  return jsonError(failure.code, failure.message, failure.httpStatus);
 }
 
 export async function POST(request: Request) {
@@ -84,17 +58,15 @@ export async function POST(request: Request) {
     );
 
     if (error) {
-      return mapAcceptanceError(error.message);
+      return acceptanceErrorResponse(
+        classifyStudentPortalInvitationAcceptanceError(error),
+      );
     }
 
-    const result = data as { access_status?: string } | null;
+    const resultError = classifyStudentPortalInvitationAcceptanceResult(data);
 
-    if (result?.access_status !== "access_active") {
-      return jsonError(
-        "needs_attention",
-        "Portal access needs attention. Please contact your coach or CoachFort support.",
-        409,
-      );
+    if (resultError) {
+      return acceptanceErrorResponse(resultError);
     }
 
     return Response.json({

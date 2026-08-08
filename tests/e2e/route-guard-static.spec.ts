@@ -1230,6 +1230,9 @@ test.describe("static route guard coverage", () => {
       "app/api/student-portal-invitations/accept/route.ts",
     );
     const invitationClient = read("src/lib/studentPortalInvitations.ts");
+    const acceptanceDiagnostics = read(
+      "src/lib/studentPortalInvitationAcceptance.ts",
+    );
     const invitePage = read(
       "src/components/portal/StudentPortalInviteClient.tsx",
     );
@@ -1269,7 +1272,19 @@ test.describe("static route guard coverage", () => {
     expect(acceptRoute).toContain('createHash("sha256")');
     expect(acceptRoute).toContain("accept_student_portal_invitation_secure");
     expect(acceptRoute).toContain("p_user_id: user.id");
+    expect(acceptRoute).toContain(
+      "classifyStudentPortalInvitationAcceptanceError(error)",
+    );
+    expect(acceptRoute).toContain(
+      "classifyStudentPortalInvitationAcceptanceResult(data)",
+    );
     expect(acceptRoute).not.toContain("console.");
+    expect(acceptanceDiagnostics).toContain('providerCode === "42501"');
+    expect(acceptanceDiagnostics).toContain(
+      "normalizedMessage === wrongIdentityMessage",
+    );
+    expect(acceptanceDiagnostics).not.toContain("details");
+    expect(acceptanceDiagnostics).not.toContain("hint");
 
     for (const serviceRpc of [
       "prepare_student_portal_invitation_secure",
@@ -1296,6 +1311,13 @@ test.describe("static route guard coverage", () => {
     expect(invitePage).toContain('href={`/login?next=${nextPath}`}');
     expect(invitePage).toContain('href={`/signup?next=${nextPath}`}');
     expect(invitePage).not.toContain("token_hash");
+    expect(invitePage).toContain("handleContinueWithInvitedEmail");
+    expect(invitePage).toContain("await supabase.auth.signOut()");
+    expect(invitePage).toContain('setStage("signed_out")');
+    expect(invitePage).toContain("Continue with invited email");
+    expect(invitePage).toContain(
+      "shouldClearStudentPortalInvitationToken(code)",
+    );
     expect(loginPage).toContain("encodeURIComponent(nextPath)");
     expect(signupPage).toContain("encodeURIComponent(nextPath)");
     expect(loginPage).toContain("getSafeInternalPath");
@@ -1494,6 +1516,9 @@ test.describe("static route guard coverage", () => {
     const invitePage = read(
       "src/components/portal/StudentPortalInviteClient.tsx",
     );
+    const acceptanceDiagnostics = read(
+      "src/lib/studentPortalInvitationAcceptance.ts",
+    );
 
     expect(recoverySql).toContain("begin;");
     expect(recoverySql).toContain("commit;");
@@ -1538,12 +1563,12 @@ test.describe("static route guard coverage", () => {
     );
     expect(invitePage).toContain("window.sessionStorage.removeItem(tokenStorageKey)");
 
-    const terminalCleanup = invitePage.slice(
-      invitePage.indexOf('if (code === "invitation_expired"'),
-      invitePage.indexOf("setErrorCode(code)"),
+    expect(acceptanceDiagnostics).toContain(
+      'code === "invitation_expired" || code === "invitation_unavailable"',
     );
-    expect(terminalCleanup).toContain("invitation_unavailable");
-    expect(terminalCleanup).not.toContain("email_mismatch");
+    expect(acceptanceDiagnostics).not.toContain(
+      'code === "email_mismatch"',
+    );
 
     for (const forbidden of [
       "console.log",
