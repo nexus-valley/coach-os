@@ -31,15 +31,11 @@ import {
   type EnrollmentWithRelations,
 } from "@/src/lib/enrollments";
 import {
-  approvePublicProgramEnrollmentRequest,
-  getEnrollmentRequestStudentCandidates,
   getPublicSiteLeadsForCourse,
-  type EnrollmentRequestStudentCandidate,
   type PublicSiteLead,
 } from "@/src/lib/publicSite";
 import {
   getStudentPortalInvitationStatus,
-  sendStudentPortalInvitation,
   type StudentPortalInvitationSummary,
 } from "@/src/lib/studentPortalInvitations";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
@@ -97,17 +93,6 @@ type SalesSettingsForm = {
   salesHeadline: string;
   salesPaymentMode: CourseSalesPaymentMode;
   salesSummary: string;
-};
-
-type ReviewRequestModalState = {
-  conversionNote: string;
-  error: string;
-  existingStudentId: string;
-  request: PublicSiteLead;
-  studentAction: "create" | "existing";
-  studentEmail: string;
-  studentName: string;
-  studentPhone: string;
 };
 
 const lessonTypes: LessonType[] = ["text", "video", "pdf", "quiz", "assignment"];
@@ -253,7 +238,6 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
   const publishFeedbackRef = useRef<HTMLDivElement>(null);
   const focusPublishFeedbackAfterSuccessRef = useRef(false);
   const [publishSaving, setPublishSaving] = useState(false);
-  const [portalInvitationSavingId, setPortalInvitationSavingId] = useState("");
   const [portalInvitationStatuses, setPortalInvitationStatuses] = useState<
     Record<string, StudentPortalInvitationSummary | null>
   >({});
@@ -264,22 +248,10 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
   const [salesForm, setSalesForm] = useState<SalesSettingsForm | null>(null);
   const [salesSaving, setSalesSaving] = useState(false);
   const [shareFeedback, setShareFeedback] = useState("");
-  const [requestFeedback, setRequestFeedback] = useState<{
-    message: string;
-    tone: "error" | "success";
-  } | null>(null);
-  const [reviewModal, setReviewModal] =
-    useState<ReviewRequestModalState | null>(null);
-  const [reviewSaving, setReviewSaving] = useState(false);
   const [sectionModal, setSectionModal] = useState<SectionModalState | null>(
     null,
   );
   const [sections, setSections] = useState<CourseSectionWithLessons[]>([]);
-  const [studentCandidates, setStudentCandidates] = useState<
-    EnrollmentRequestStudentCandidate[]
-  >([]);
-  const [studentCandidatesLoading, setStudentCandidatesLoading] =
-    useState(true);
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const canDelete = canDeleteRecords(currentRole);
   const canManage = canManageCourses(currentRole);
@@ -291,7 +263,6 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
     async function loadCourse() {
       try {
         setEnrollmentRequestsLoading(true);
-        setStudentCandidatesLoading(true);
         const currentTenant = await getCurrentTenant();
 
         if (!active) {
@@ -330,18 +301,13 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
           ]);
         const canReviewRequests =
           memberRole === "owner" || memberRole === "admin";
-        const [courseEnrollmentRequests, activeStudentCandidates] =
+        const courseEnrollmentRequests =
           currentCourse && canReviewRequests
-            ? await Promise.all([
-                getPublicSiteLeadsForCourse({
-                  courseId,
-                  tenantId: currentTenant.id,
-                }),
-                getEnrollmentRequestStudentCandidates({
-                  tenantId: currentTenant.id,
-                }),
-              ])
-            : [[], []];
+            ? await getPublicSiteLeadsForCourse({
+                courseId,
+                tenantId: currentTenant.id,
+              })
+            : [];
         const invitationStatuses = canReviewRequests
           ? await getInvitationStatusesForRequests(
               courseEnrollmentRequests,
@@ -359,7 +325,6 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
         setCurrentRole(memberRole);
         setEnrollmentRequests(courseEnrollmentRequests);
         setPortalInvitationStatuses(invitationStatuses);
-        setStudentCandidates(activeStudentCandidates);
         setSections(currentCourse ? currentStructure : []);
         setEnrollments(currentCourse ? courseEnrollments : []);
 
@@ -378,7 +343,6 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
         if (active) {
           setLoading(false);
           setEnrollmentRequestsLoading(false);
-          setStudentCandidatesLoading(false);
         }
       }
     }
@@ -472,57 +436,6 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
     }
 
     setSections(await getCourseStructure(courseId, tenant.id));
-  }
-
-  async function refreshEnrollmentRequests() {
-    if (!tenant || !course || !canApproveRequests) {
-      return;
-    }
-
-    setEnrollmentRequestsLoading(true);
-
-    try {
-      const requests = await getPublicSiteLeadsForCourse({
-        courseId: course.id,
-        tenantId: tenant.id,
-      });
-      const statuses = await getInvitationStatusesForRequests(
-        requests,
-        tenant.id,
-      );
-
-      setEnrollmentRequests(requests);
-      setPortalInvitationStatuses(statuses);
-    } finally {
-      setEnrollmentRequestsLoading(false);
-    }
-  }
-
-  async function refreshEnrollments() {
-    if (!tenant || !course) {
-      return;
-    }
-
-    setEnrollments(
-      await getEnrollmentsForCourse({
-        courseId: course.id,
-        tenantId: tenant.id,
-      }),
-    );
-  }
-
-  function openReviewRequest(request: PublicSiteLead) {
-    setRequestFeedback(null);
-    setReviewModal({
-      conversionNote: "",
-      error: "",
-      existingStudentId: "",
-      request,
-      studentAction: "create",
-      studentEmail: request.email ?? "",
-      studentName: request.name,
-      studentPhone: request.phone ?? "",
-    });
   }
 
   function getNextSectionOrder() {
@@ -839,109 +752,6 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
       setShareFeedback(
         "Unable to copy automatically. Open the student page and copy its address.",
       );
-    }
-  }
-
-  async function handleApproveRequestSubmit(
-    event: React.FormEvent<HTMLFormElement>,
-  ) {
-    event.preventDefault();
-
-    if (!tenant || !course || !reviewModal) {
-      return;
-    }
-
-    setReviewSaving(true);
-    setReviewModal((current) => (current ? { ...current, error: "" } : current));
-
-    try {
-      await approvePublicProgramEnrollmentRequest({
-        conversionNote: reviewModal.conversionNote,
-        existingStudentId:
-          reviewModal.studentAction === "existing"
-            ? reviewModal.existingStudentId
-            : null,
-        leadId: reviewModal.request.id,
-        studentAction: reviewModal.studentAction,
-        studentEmail: reviewModal.studentEmail,
-        studentName: reviewModal.studentName,
-        studentPhone: reviewModal.studentPhone,
-        tenantId: tenant.id,
-      });
-
-      await Promise.all([refreshEnrollmentRequests(), refreshEnrollments()]);
-      setReviewModal(null);
-      setRequestFeedback({
-        message:
-          "Request approved and student enrolled. Portal access remains separate until an invitation is accepted.",
-        tone: "success",
-      });
-    } catch (caught) {
-      setReviewModal((current) =>
-        current
-          ? {
-              ...current,
-              error: getErrorMessage(
-                caught,
-                "Unable to approve this request right now.",
-              ),
-            }
-          : current,
-      );
-    } finally {
-      setReviewSaving(false);
-    }
-  }
-
-  async function handleSendPortalInvitation(request: PublicSiteLead) {
-    if (!tenant || !request.converted_student_id) {
-      return;
-    }
-
-    setPortalInvitationSavingId(request.id);
-    setRequestFeedback(null);
-
-    try {
-      const result = await sendStudentPortalInvitation({
-        enrollmentRequestId: request.id,
-        tenantId: tenant.id,
-      });
-      const summary = await getStudentPortalInvitationStatus({
-        studentId: request.converted_student_id,
-        tenantId: tenant.id,
-      });
-
-      setPortalInvitationStatuses((current) => ({
-        ...current,
-        [request.id]: summary,
-      }));
-      setRequestFeedback({
-        message: result.message,
-        tone: "success",
-      });
-    } catch (caught) {
-      try {
-        const summary = await getStudentPortalInvitationStatus({
-          studentId: request.converted_student_id,
-          tenantId: tenant.id,
-        });
-        setPortalInvitationStatuses((current) => ({
-          ...current,
-          [request.id]: summary,
-        }));
-      } catch {
-        // Keep the last safe summary when refresh is unavailable.
-      }
-
-      setRequestFeedback({
-        message: getErrorMessage(
-          caught,
-          "Unable to send the portal invitation right now.",
-        ),
-        tone: "error",
-      });
-    } finally {
-      setPortalInvitationSavingId("");
     }
   }
 
@@ -1667,8 +1477,7 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
                 </h3>
                 <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-400">
                   Requests submitted from this program&apos;s public page appear
-                  here. Approve and enroll the student, then send portal access
-                  when the enrollment is ready.
+                  here. Review and manage them from the central request inbox.
                 </p>
               </div>
               <Badge className="border-white/10 bg-white/10 text-slate-200">
@@ -1682,27 +1491,16 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
               separate states.
             </p>
             <div className="mt-4 flex flex-wrap gap-2">
+              <Button
+                href={`/app/enrollment-requests?course=${course.id}`}
+                size="sm"
+              >
+                View enrollment requests
+              </Button>
               <Button href="/app/enrollments" size="sm" variant="secondary">
                 Open enrollments
               </Button>
-              <Button href="/app/finance" size="sm" variant="secondary">
-                Open Student Finance
-              </Button>
             </div>
-
-            {requestFeedback ? (
-              <div
-                aria-live="polite"
-                className={[
-                  "mt-5 rounded-2xl border p-4 text-sm font-medium",
-                  requestFeedback.tone === "success"
-                    ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-100"
-                    : "border-red-400/30 bg-red-500/10 text-red-100",
-                ].join(" ")}
-              >
-                {requestFeedback.message}
-              </div>
-            ) : null}
 
             {enrollmentRequestsLoading ? (
               <div className="mt-6 rounded-3xl border border-white/10 bg-[#15181b] p-5">
@@ -1727,29 +1525,9 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
               <div className="mt-6 grid gap-4 lg:grid-cols-2">
                 {enrollmentRequests.map((request) => {
                   const lifecycleStatus =
-                    request.enrollment_request_status ??
-                    (request.status === "converted" ? "enrolled" : request.status);
-                  const canReviewRequest =
-                    canApproveRequests &&
-                    (lifecycleStatus === "new" ||
-                      lifecycleStatus === "needs_attention") &&
-                    !request.converted_student_id &&
-                    !request.converted_enrollment_id;
+                    request.enrollment_request_status ?? "new";
                   const isEnrolled = lifecycleStatus === "enrolled";
                   const invitationSummary = portalInvitationStatuses[request.id];
-                  const canSendInvitation =
-                    isEnrolled &&
-                    Boolean(request.converted_student_id) &&
-                    Boolean(request.converted_enrollment_id) &&
-                    invitationSummary !== null &&
-                    (invitationSummary?.status === "invitation_not_sent" ||
-                      invitationSummary?.status === "invitation_expired" ||
-                      (invitationSummary?.status === "needs_attention" &&
-                        invitationSummary.can_resend));
-                  const isResend =
-                    invitationSummary?.status === "invitation_expired";
-                  const isRetry =
-                    invitationSummary?.status === "needs_attention";
 
                   return (
                     <article
@@ -1819,38 +1597,13 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
                             </p>
                           ) : null}
                         </div>
-                        {canReviewRequest ? (
-                          <Button
-                            className="shrink-0 bg-teal-400 text-black hover:bg-teal-300"
-                            onClick={() => openReviewRequest(request)}
-                            size="sm"
-                            type="button"
-                          >
-                            Review request
-                          </Button>
-                        ) : null}
-                        {canSendInvitation ? (
-                          <Button
-                            className="shrink-0 bg-teal-400 text-black hover:bg-teal-300"
-                            isLoading={portalInvitationSavingId === request.id}
-                            loadingText={
-                              isRetry
-                                ? "Retrying..."
-                                : isResend
-                                  ? "Resending..."
-                                  : "Sending..."
-                            }
-                            onClick={() => handleSendPortalInvitation(request)}
-                            size="sm"
-                            type="button"
-                          >
-                            {isRetry
-                              ? "Retry invitation"
-                              : isResend
-                                ? "Resend invitation"
-                                : "Send invitation"}
-                          </Button>
-                        ) : null}
+                        <Button
+                          href={`/app/enrollment-requests?course=${course.id}`}
+                          size="sm"
+                          variant="secondary"
+                        >
+                          Open in Requests
+                        </Button>
                       </div>
                     </article>
                   );
@@ -2164,276 +1917,6 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
           </Card>
         ))}
       </section>
-
-      {reviewModal && canApproveRequests ? (
-        <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-black/70 px-4 py-4 backdrop-blur-sm sm:items-center">
-          <Card className="max-h-[calc(100vh-2rem)] w-full max-w-3xl overflow-y-auto border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/40 sm:p-8">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <Badge className="border-[#2ECBEA]/20 bg-[#2ECBEA]/10 text-[#A7F3FF]">
-                  Enrollment request
-                </Badge>
-                <h3 className="mt-4 text-2xl font-semibold">
-                  Review enrollment request
-                </h3>
-                <p className="mt-3 text-sm leading-6 text-slate-400">
-                  Review the request, match or create the student, and create
-                  the program enrollment. Payment and portal access remain
-                  separate.
-                </p>
-              </div>
-              <Badge className="border-white/10 bg-white/10 text-slate-300">
-                {getLeadSourceLabel(reviewModal.request.source)}
-              </Badge>
-            </div>
-
-            <div className="mt-6 grid gap-4 rounded-3xl border border-white/10 bg-[#15181b] p-5 sm:grid-cols-2">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-                  Request
-                </p>
-                <p className="mt-2 text-lg font-semibold text-white">
-                  {reviewModal.request.name}
-                </p>
-                <p className="mt-1 text-sm text-slate-400">
-                  {formatDate(reviewModal.request.created_at)}
-                </p>
-              </div>
-              <div className="space-y-2 text-sm text-slate-300">
-                <p>{reviewModal.request.email || "No email provided"}</p>
-                <p>{reviewModal.request.phone || "No phone provided"}</p>
-              </div>
-              <div className="sm:col-span-2">
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-                  Message
-                </p>
-                <p className="mt-2 text-sm leading-6 text-slate-300">
-                  {reviewModal.request.message ||
-                    "No message or goal was included."}
-                </p>
-              </div>
-            </div>
-
-            {reviewModal.error ? (
-              <div className="mt-5 rounded-2xl border border-red-400/30 bg-red-500/10 p-4 text-sm font-medium text-red-100">
-                {reviewModal.error}
-              </div>
-            ) : null}
-
-            <form className="mt-6 space-y-6" onSubmit={handleApproveRequestSubmit}>
-              <section className="rounded-3xl border border-white/10 bg-[#15181b] p-5">
-                <h4 className="text-lg font-semibold text-white">Student</h4>
-                <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                  <label
-                    className={[
-                      "flex cursor-pointer gap-3 rounded-2xl border p-4 text-sm transition",
-                      reviewModal.studentAction === "create"
-                        ? "border-teal-400/40 bg-teal-400/10 text-white"
-                        : "border-white/10 bg-[#101214] text-slate-300",
-                    ].join(" ")}
-                  >
-                    <input
-                      checked={reviewModal.studentAction === "create"}
-                      className="mt-1 h-4 w-4 accent-teal-400"
-                      onChange={() =>
-                        setReviewModal((current) =>
-                          current
-                            ? { ...current, studentAction: "create" }
-                            : current,
-                        )
-                      }
-                      type="radio"
-                    />
-                    <span>
-                      <span className="block font-semibold">
-                        Match using request details
-                      </span>
-                      <span className="mt-1 block leading-6 text-slate-400">
-                        CoachFort reuses a matching student by email, or creates
-                        one when no safe match exists. It does not create a login.
-                      </span>
-                    </span>
-                  </label>
-
-                  <label
-                    className={[
-                      "flex cursor-pointer gap-3 rounded-2xl border p-4 text-sm transition",
-                      reviewModal.studentAction === "existing"
-                        ? "border-teal-400/40 bg-teal-400/10 text-white"
-                        : "border-white/10 bg-[#101214] text-slate-300",
-                    ].join(" ")}
-                  >
-                    <input
-                      checked={reviewModal.studentAction === "existing"}
-                      className="mt-1 h-4 w-4 accent-teal-400"
-                      onChange={() =>
-                        setReviewModal((current) =>
-                          current
-                            ? { ...current, studentAction: "existing" }
-                            : current,
-                        )
-                      }
-                      type="radio"
-                    />
-                    <span>
-                      <span className="block font-semibold">
-                        Choose an existing active student
-                      </span>
-                      <span className="mt-1 block leading-6 text-slate-400">
-                        Use this when the learner already exists in this
-                        workspace.
-                      </span>
-                    </span>
-                  </label>
-                </div>
-
-                {reviewModal.studentAction === "create" ? (
-                  <div className="mt-5 grid gap-4 sm:grid-cols-3">
-                    <label className="block text-sm font-semibold text-slate-200">
-                      Student name
-                      <input
-                        className="mt-2 h-12 w-full rounded-xl border border-white/10 bg-[#101214] px-4 text-sm text-white outline-none placeholder:text-slate-500 focus:border-teal-400/50 focus:ring-4 focus:ring-teal-400/10"
-                        maxLength={160}
-                        onChange={(event) =>
-                          setReviewModal((current) =>
-                            current
-                              ? { ...current, studentName: event.target.value }
-                              : current,
-                          )
-                        }
-                        required
-                        value={reviewModal.studentName}
-                      />
-                    </label>
-                    <label className="block text-sm font-semibold text-slate-200">
-                      Email
-                      <input
-                        className="mt-2 h-12 w-full rounded-xl border border-white/10 bg-[#101214] px-4 text-sm text-white outline-none placeholder:text-slate-500 focus:border-teal-400/50 focus:ring-4 focus:ring-teal-400/10"
-                        maxLength={254}
-                        onChange={(event) =>
-                          setReviewModal((current) =>
-                            current
-                              ? { ...current, studentEmail: event.target.value }
-                              : current,
-                          )
-                        }
-                        type="email"
-                        value={reviewModal.studentEmail}
-                      />
-                    </label>
-                    <label className="block text-sm font-semibold text-slate-200">
-                      Phone
-                      <input
-                        className="mt-2 h-12 w-full rounded-xl border border-white/10 bg-[#101214] px-4 text-sm text-white outline-none placeholder:text-slate-500 focus:border-teal-400/50 focus:ring-4 focus:ring-teal-400/10"
-                        maxLength={40}
-                        onChange={(event) =>
-                          setReviewModal((current) =>
-                            current
-                              ? { ...current, studentPhone: event.target.value }
-                              : current,
-                          )
-                        }
-                        value={reviewModal.studentPhone}
-                      />
-                    </label>
-                  </div>
-                ) : (
-                  <div className="mt-5">
-                    {studentCandidatesLoading ? (
-                      <div className="rounded-2xl border border-white/10 bg-[#101214] p-4 text-sm text-slate-400">
-                        Loading active students...
-                      </div>
-                    ) : studentCandidates.length === 0 ? (
-                      <div className="rounded-2xl border border-dashed border-white/15 bg-[#101214] p-5 text-sm leading-6 text-slate-400">
-                        No active students found. Create a new internal student
-                        instead.
-                      </div>
-                    ) : (
-                      <label className="block text-sm font-semibold text-slate-200">
-                        Active student
-                        <select
-                          className="mt-2 h-12 w-full rounded-xl border border-white/10 bg-[#101214] px-4 text-sm text-white outline-none focus:border-teal-400/50 focus:ring-4 focus:ring-teal-400/10"
-                          onChange={(event) =>
-                            setReviewModal((current) =>
-                              current
-                                ? {
-                                    ...current,
-                                    existingStudentId: event.target.value,
-                                  }
-                                : current,
-                            )
-                          }
-                          required
-                          value={reviewModal.existingStudentId}
-                        >
-                          <option value="">Select active student</option>
-                          {studentCandidates.map((student) => (
-                            <option key={student.id} value={student.id}>
-                              {student.full_name}
-                              {student.email ? ` - ${student.email}` : ""}
-                              {!student.email && student.phone
-                                ? ` - ${student.phone}`
-                                : ""}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                    )}
-                  </div>
-                )}
-              </section>
-
-              <section className="rounded-3xl border border-white/10 bg-[#15181b] p-5">
-                <h4 className="text-lg font-semibold text-white">
-                  Enrollment note
-                </h4>
-                <label className="mt-4 block text-sm font-semibold text-slate-200">
-                  Internal note
-                  <textarea
-                    className="mt-2 min-h-24 w-full resize-none rounded-xl border border-white/10 bg-[#101214] px-4 py-3 text-sm leading-6 text-white outline-none placeholder:text-slate-500 focus:border-teal-400/50 focus:ring-4 focus:ring-teal-400/10"
-                    maxLength={1000}
-                    onChange={(event) =>
-                      setReviewModal((current) =>
-                        current
-                          ? { ...current, conversionNote: event.target.value }
-                          : current,
-                      )
-                    }
-                    placeholder="Optional approval context for the team."
-                    value={reviewModal.conversionNote}
-                  />
-                </label>
-              </section>
-
-              <div className="rounded-3xl border border-amber-300/30 bg-amber-300/10 p-5 text-sm leading-6 text-amber-50">
-                <p className="font-semibold">Approval warning</p>
-                <p className="mt-2">
-                  Approving creates or reuses the student and program enrollment.
-                  It does not record payment, create a login account, send an
-                  invitation, or activate portal access.
-                </p>
-              </div>
-
-              <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-                <Button
-                  onClick={() => setReviewModal(null)}
-                  type="button"
-                  variant="secondary"
-                >
-                  Cancel
-                </Button>
-                <Button
-                  className="bg-teal-400 text-black hover:bg-teal-300"
-                  disabled={reviewSaving}
-                  type="submit"
-                >
-                  {reviewSaving ? "Approving..." : "Approve & enroll"}
-                </Button>
-              </div>
-            </form>
-          </Card>
-        </div>
-      ) : null}
 
       {sectionModal ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 px-4 py-4 backdrop-blur-sm sm:items-center">

@@ -175,6 +175,7 @@ test.describe("static route guard coverage", () => {
       '"Team Operations": "team_operations"',
       'Certificates: "certificates"',
       'Payments: "finance"',
+      'Requests: "courses"',
     ]) {
       expect(source).toContain(expected);
     }
@@ -1249,6 +1250,9 @@ test.describe("static route guard coverage", () => {
     const courseDetail = read(
       "src/components/courses/CourseDetailClient.tsx",
     );
+    const enrollmentInbox = read(
+      "src/components/enrollment-requests/EnrollmentRequestsPageClient.tsx",
+    );
     const publicSite = read("src/lib/publicSite.ts");
 
     expect(sendRoute).toContain("requireAuthenticatedUser(accessToken)");
@@ -1293,6 +1297,7 @@ test.describe("static route guard coverage", () => {
     ]) {
       expect(invitationClient).not.toContain(serviceRpc);
       expect(courseDetail).not.toContain(serviceRpc);
+      expect(enrollmentInbox).not.toContain(serviceRpc);
       expect(invitePage).not.toContain(serviceRpc);
     }
 
@@ -1337,13 +1342,14 @@ test.describe("static route guard coverage", () => {
     expect(authRedirects).toContain("unsafeEncodedPathPattern");
     expect(authRedirects).toContain("unsafePathCharacterPattern");
 
-    expect(courseDetail).toContain(
-      'currentRole === "owner" || currentRole === "admin"',
+    expect(enrollmentInbox).toContain(
+      'const canMutate = role === "owner" || role === "admin"',
     );
-    expect(courseDetail).toContain("Send invitation");
-    expect(courseDetail).toContain("Resend invitation");
-    expect(courseDetail).toContain("Retry invitation");
-    expect(courseDetail).toContain("Access active");
+    expect(enrollmentInbox).toContain("Send invitation");
+    expect(enrollmentInbox).toContain("Send new invitation");
+    expect(enrollmentInbox).toContain("Retry invitation");
+    expect(enrollmentInbox).toContain("Access active");
+    expect(courseDetail).toContain("View enrollment requests");
     expect(publicSite).toContain(
       '"approve_public_program_enrollment_request_v2"',
     );

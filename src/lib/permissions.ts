@@ -138,6 +138,7 @@ const navAccess: Record<string, (role: MemberRole | null | undefined) => boolean
     Permissions: canAccessPermissions,
     Portal: canAccessStudents,
     Programs: canAccessPrograms,
+    Requests: canAccessRequests,
     Reminders: canAccessMessages,
     Sessions: canAccessAttendance,
     Automations: canManageAutomations,
@@ -201,6 +202,10 @@ export function canAccessHome() {
 
 export function canAccessPrograms() {
   return true;
+}
+
+export function canAccessRequests(role: MemberRole | null | undefined) {
+  return hasPermission(role, "manage_courses");
 }
 
 export function canAccessStudents() {

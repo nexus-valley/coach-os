@@ -1,8 +1,5 @@
 import { logActivity } from "@/src/lib/auditLogger";
-import {
-  getMemberRoleForTenant,
-  requireTenantPermission,
-} from "@/src/lib/permissions";
+import { requireTenantPermission } from "@/src/lib/permissions";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 
 export type PublicSiteCoursePreview = {
@@ -102,6 +99,13 @@ export type PublicProgramSalesPagePayload = {
   tenant: PublicSiteTenant;
 };
 
+export type EnrollmentRequestLifecycleStatus =
+  | "enrolled"
+  | "needs_attention"
+  | "new"
+  | "processing"
+  | "rejected";
+
 export type PublicSiteLead = {
   approval_enrollment_action?: "created" | "reused" | null;
   approval_student_action?: "created" | "matched" | "selected" | null;
@@ -111,35 +115,24 @@ export type PublicSiteLead = {
   conversion_note?: string | null;
   created_at: string;
   email: string | null;
-  enrollment_request_status?:
-    | "enrolled"
-    | "needs_attention"
-    | "new"
-    | "processing"
-    | "rejected";
+  enrollment_request_status?: EnrollmentRequestLifecycleStatus;
   id: string;
   interested_course_id: string | null;
+  last_error_code?: string | null;
   metadata_json?: Record<string, unknown> | null;
   message: string | null;
   name: string;
   phone: string | null;
+  processed_at?: string | null;
+  rejection_reason?: string | null;
   source: string | null;
   status: "new" | "contacted" | "converted" | "closed";
-};
-
-export type EnrollmentRequestStudentCandidate = {
-  email: string | null;
-  full_name: string;
-  id: string;
-  phone: string | null;
-  status: "active";
 };
 
 export type ApprovePublicProgramEnrollmentRequestInput = {
   conversionNote?: string;
   existingStudentId?: null | string;
   leadId: string;
-  studentAction: "create" | "existing";
   studentEmail?: string;
   studentName?: string;
   studentPhone?: string;
@@ -492,57 +485,38 @@ export async function getPublicSiteLeadsForCourse(params: {
   return (data ?? []) as PublicSiteLead[];
 }
 
-export async function getEnrollmentRequestStudentCandidates(params: {
+export async function getEnrollmentRequests(params: {
   limit?: number;
   tenantId: string;
 }) {
+  await requireTenantPermission({
+    description:
+      "Blocked enrollment request inbox read without course management permission.",
+    permission: "manage_courses",
+    tenantId: params.tenantId,
+  });
+
   const supabase = getSupabaseClient();
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
-
-  if (userError) {
-    throw userError;
-  }
-
-  if (!user) {
-    throw new Error("You must be logged in to review enrollment requests.");
-  }
-
-  const role = await getMemberRoleForTenant(params.tenantId, user.id);
-
-  if (role !== "owner" && role !== "admin") {
-    throw new Error("Only owners and admins can review enrollment requests.");
-  }
-
   const { data, error } = await supabase
-    .from("students")
-    .select("id,full_name,email,phone,status")
+    .from("public_site_leads")
+    .select(
+      "id,source,name,email,phone,message,interested_course_id,status,enrollment_request_status,metadata_json,converted_student_id,converted_enrollment_id,converted_at,conversion_note,approval_student_action,approval_enrollment_action,last_error_code,processed_at,rejection_reason,created_at",
+    )
     .eq("tenant_id", params.tenantId)
-    .eq("status", "active")
-    .order("full_name", { ascending: true })
-    .limit(params.limit ?? 75);
+    .order("created_at", { ascending: false })
+    .limit(params.limit ?? 100);
 
   if (error) {
-    throw error;
+    throw new Error("Unable to load enrollment requests right now.");
   }
 
-  return (data ?? []) as EnrollmentRequestStudentCandidate[];
+  return (data ?? []) as PublicSiteLead[];
 }
 
 export async function approvePublicProgramEnrollmentRequest(
   input: ApprovePublicProgramEnrollmentRequestInput,
 ) {
-  if (input.studentAction !== "create" && input.studentAction !== "existing") {
-    throw new Error("Choose whether to create or link a student.");
-  }
-
-  if (input.studentAction === "existing" && !input.existingStudentId) {
-    throw new Error("Select an existing active student.");
-  }
-
-  if (input.studentAction === "create") {
+  if (!input.existingStudentId) {
     const hasContact =
       Boolean(input.studentEmail?.trim()) || Boolean(input.studentPhone?.trim());
 
@@ -595,4 +569,52 @@ export async function approvePublicProgramEnrollmentRequest(
   }
 
   return result;
+}
+
+export type RejectPublicProgramEnrollmentRequestResult = {
+  enrollment_request_status: "rejected";
+  replayed: boolean;
+  request_id: string;
+};
+
+export async function rejectPublicProgramEnrollmentRequest(input: {
+  leadId: string;
+  reason?: string;
+  tenantId: string;
+}) {
+  const reason = input.reason?.trim() ?? "";
+
+  if (reason && (reason.length > 1000 || unsafeTextPattern.test(reason))) {
+    throw new Error("Rejection reason must be plain text under 1000 characters.");
+  }
+
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.rpc(
+    "reject_public_program_enrollment_request_v2",
+    {
+      p_lead_id: input.leadId,
+      p_reason: reason || null,
+      p_tenant_id: input.tenantId,
+    },
+  );
+
+  if (error) {
+    const message = getErrorMessage(error, "").toLowerCase();
+
+    if (error.code === "42501") {
+      throw new Error("Only workspace owners and admins can reject requests.");
+    }
+
+    if (message.includes("enrolled requests cannot be rejected")) {
+      throw new Error("Enrolled requests cannot be rejected.");
+    }
+
+    if (message.includes("not found")) {
+      throw new Error("This enrollment request is no longer available.");
+    }
+
+    throw new Error("Unable to reject this request right now.");
+  }
+
+  return data as RejectPublicProgramEnrollmentRequestResult;
 }

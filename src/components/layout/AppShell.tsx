@@ -45,6 +45,7 @@ const navItems = [
     label: "Branding",
   },
   { href: "/app/students", label: "Students" },
+  { href: "/app/enrollment-requests", label: "Requests" },
   { href: "/app/enrollments", label: "Enrollments", mobileLabel: "Enroll" },
   { href: "/app/sessions", label: "Live Classes" },
   { href: "/app/documents", label: "Content Library" },
@@ -79,7 +80,7 @@ const navGroups = [
   },
   {
     label: "Students",
-    items: ["Students", "Enrollments"],
+    items: ["Students", "Requests", "Enrollments"],
   },
   {
     label: "Deliver",
@@ -348,6 +349,14 @@ function NavIcon({ label }: { label: string }) {
         <path d="M8 17V9" />
         <path d="M13 17V5" />
         <path d="M18 17v-4" />
+      </>
+    ),
+    Requests: (
+      <>
+        <path d="M5 4h14v16H5z" />
+        <path d="M8 8h8" />
+        <path d="M8 12h5" />
+        <path d="m14 16 1.5 1.5L19 14" />
       </>
     ),
     Sessions: (

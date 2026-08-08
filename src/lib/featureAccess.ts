@@ -240,6 +240,7 @@ export const navFeatureByLabel: Record<string, FeatureKey | undefined> = {
   Automations: "automations",
   Portal: "students",
   Programs: "courses",
+  Requests: "courses",
   "Public Site": "website_builder",
   Reminders: "notifications",
   Reports: "reports",
