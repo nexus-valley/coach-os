@@ -1376,6 +1376,7 @@ test.describe("static route guard coverage", () => {
       "unauthorized",
       "forbidden",
       "invalid_request",
+      "eligibility_read_failed",
       "invitation_prepare_failed",
       "invitation_not_sendable",
       "email_not_configured",
@@ -1396,8 +1397,23 @@ test.describe("static route guard coverage", () => {
     expect(sendRoute).toContain(
       'operation: "student_portal_invitation_delivery_record"',
     );
+    expect(sendRoute).toContain(
+      'const requestResult = await userScopedSupabase',
+    );
+    const eligibilityReads = sendRoute.slice(
+      sendRoute.indexOf("const requestResult"),
+      sendRoute.indexOf("let admin:"),
+    );
+    expect(eligibilityReads).toContain('.from("public_site_leads")');
+    expect(eligibilityReads).toContain('.from("students")');
+    expect(eligibilityReads).toContain('.from("enrollments")');
+    expect(eligibilityReads).toContain('.from("tenants")');
+    expect(eligibilityReads).not.toMatch(/\badmin\s*\.\s*from\(/);
+    expect(sendRoute.indexOf("student_portal_invitation_admin_init")).toBeGreaterThan(
+      sendRoute.indexOf('"get_student_portal_invitation_status"'),
+    );
     expect(sendRoute.indexOf("student_portal_invitation_admin_init")).toBeLessThan(
-      sendRoute.indexOf('.from("public_site_leads")'),
+      sendRoute.indexOf('"prepare_student_portal_invitation_secure"'),
     );
     expect(sendRoute.indexOf("student_portal_invitation_prepare")).toBeGreaterThan(
       sendRoute.indexOf('"prepare_student_portal_invitation_secure"'),
@@ -1408,6 +1424,26 @@ test.describe("static route guard coverage", () => {
     expect(sendRoute).toMatch(
       /if \(prepareResult\.error \|\| !prepareResult\.data\) \{[\s\S]{0,900}errorCode: "invitation_prepare_failed"[\s\S]{0,900}"invitation_prepare_failed"/,
     );
+    expect(sendRoute).toContain(
+      'admin.rpc(\n      "prepare_student_portal_invitation_secure"',
+    );
+    expect(sendRoute).toContain(
+      'admin.rpc(\n      "record_student_portal_invitation_delivery_secure"',
+    );
+    expect(sendRoute).not.toContain(
+      'userScopedSupabase.rpc(\n      "prepare_student_portal_invitation_secure"',
+    );
+    expect(sendRoute).not.toContain(
+      'userScopedSupabase.rpc(\n      "record_student_portal_invitation_delivery_secure"',
+    );
+    expect(sendRoute).toMatch(
+      /if \(requestResult\.error\) \{[\s\S]{0,300}"student_portal_invitation_request_read"[\s\S]{0,300}requestResult\.error/,
+    );
+    expect(sendRoute).toMatch(
+      /if \(!requestResult\.data\) \{\s+return jsonError\("Enrolled request not found\.", 404, "invalid_request"\);/,
+    );
+    expect(sendRoute).toContain('errorCode: "eligibility_read_failed"');
+    expect(sendRoute).toContain('allowed_roles: ["owner", "admin"]');
     expect(sendRoute).not.toContain("captureServerException(caught");
     expect(sendRoute).not.toContain("captureServerException(prepareResult.error");
     expect(sendRoute).not.toContain("captureServerException(deliveryResult.error");

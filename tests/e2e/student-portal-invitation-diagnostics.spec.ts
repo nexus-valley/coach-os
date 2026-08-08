@@ -40,6 +40,30 @@ test.describe("student portal invitation diagnostics", () => {
     expect(serialized).not.toContain("private database response");
   });
 
+  test("classifies eligibility read failures without exposing provider details", () => {
+    const payload = createStudentPortalInvitationErrorPayload({
+      errorCode: "eligibility_read_failed",
+      message: "Unable to verify invitation eligibility right now.",
+      providerError: {
+        code: "42501",
+        details: "private query detail",
+        hint: "private query hint",
+        message: "permission denied for a tenant-scoped table",
+      },
+    });
+    const serialized = JSON.stringify(payload);
+
+    expect(payload).toEqual({
+      error_code: "eligibility_read_failed",
+      message: "Unable to verify invitation eligibility right now.",
+      safe_provider_code: "42501",
+      status: "needs_attention",
+    });
+    expect(serialized).not.toContain("private query detail");
+    expect(serialized).not.toContain("private query hint");
+    expect(serialized).not.toContain("permission denied");
+  });
+
   test("preserves safe diagnostics without changing the coach message", () => {
     const error = new StudentPortalInvitationActionError({
       errorCode: "server_admin_not_configured",

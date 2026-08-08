@@ -3,6 +3,7 @@ export const studentPortalInvitationSendErrorCodes = [
   "unauthorized",
   "forbidden",
   "invalid_request",
+  "eligibility_read_failed",
   "invitation_prepare_failed",
   "invitation_not_sendable",
   "email_not_configured",

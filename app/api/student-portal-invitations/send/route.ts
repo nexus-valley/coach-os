@@ -75,6 +75,22 @@ function jsonError(
   );
 }
 
+function eligibilityReadError(operation: string, providerError: unknown) {
+  const safeProviderCode = captureInvitationSendDiagnostic({
+    errorCode: "eligibility_read_failed",
+    httpStatus: 500,
+    operation,
+    providerError,
+  });
+
+  return jsonError(
+    "Unable to verify invitation eligibility right now.",
+    500,
+    "eligibility_read_failed",
+    safeProviderCode,
+  );
+}
+
 function getInviteOrigin(request: Request) {
   const configuredOrigin =
     process.env.COACHFORT_APP_URL ?? process.env.NEXT_PUBLIC_APP_URL;
@@ -148,24 +164,7 @@ export async function POST(request: Request) {
       );
     }
 
-    let admin: ReturnType<typeof getSupabaseAdminClient>;
-
-    try {
-      admin = getSupabaseAdminClient();
-    } catch {
-      captureInvitationSendDiagnostic({
-        errorCode: "server_admin_not_configured",
-        httpStatus: 500,
-        operation: "student_portal_invitation_admin_init",
-      });
-      return jsonError(
-        "Portal invitation delivery needs attention. Enrollment is unchanged.",
-        500,
-        "server_admin_not_configured",
-      );
-    }
-
-    const requestResult = await admin
+    const requestResult = await userScopedSupabase
       .from("public_site_leads")
       .select(
         "id,tenant_id,enrollment_request_status,converted_student_id,converted_enrollment_id,interested_course_id",
@@ -174,7 +173,14 @@ export async function POST(request: Request) {
       .eq("tenant_id", tenantId)
       .maybeSingle();
 
-    if (requestResult.error || !requestResult.data) {
+    if (requestResult.error) {
+      return eligibilityReadError(
+        "student_portal_invitation_request_read",
+        requestResult.error,
+      );
+    }
+
+    if (!requestResult.data) {
       return jsonError("Enrolled request not found.", 404, "invalid_request");
     }
 
@@ -193,26 +199,50 @@ export async function POST(request: Request) {
     }
 
     const [studentResult, enrollmentResult, tenantResult] = await Promise.all([
-      admin
+      userScopedSupabase
         .from("students")
         .select("id,tenant_id,full_name,email,status,portal_enabled")
         .eq("id", enrollmentRequest.converted_student_id)
         .eq("tenant_id", tenantId)
         .maybeSingle(),
-      admin
+      userScopedSupabase
         .from("enrollments")
         .select("id,tenant_id,student_id,course_id,status")
         .eq("id", enrollmentRequest.converted_enrollment_id)
         .eq("tenant_id", tenantId)
         .maybeSingle(),
-      admin.from("tenants").select("name").eq("id", tenantId).maybeSingle(),
+      userScopedSupabase
+        .from("tenants")
+        .select("name")
+        .eq("id", tenantId)
+        .maybeSingle(),
     ]);
+
+    if (studentResult.error) {
+      return eligibilityReadError(
+        "student_portal_invitation_student_read",
+        studentResult.error,
+      );
+    }
+
+    if (enrollmentResult.error) {
+      return eligibilityReadError(
+        "student_portal_invitation_enrollment_read",
+        enrollmentResult.error,
+      );
+    }
+
+    if (tenantResult.error) {
+      return eligibilityReadError(
+        "student_portal_invitation_tenant_read",
+        tenantResult.error,
+      );
+    }
 
     const student = studentResult.data;
     const enrollment = enrollmentResult.data;
 
     if (
-      studentResult.error ||
       !student ||
       student.status !== "active" ||
       student.portal_enabled !== true
@@ -236,7 +266,6 @@ export async function POST(request: Request) {
     }
 
     if (
-      enrollmentResult.error ||
       !enrollment ||
       enrollment.student_id !== student.id ||
       enrollment.course_id !== enrollmentRequest.interested_course_id ||
@@ -257,7 +286,14 @@ export async function POST(request: Request) {
       },
     );
 
-    if (summaryResult.error || !summaryResult.data) {
+    if (summaryResult.error) {
+      return eligibilityReadError(
+        "student_portal_invitation_summary_read",
+        summaryResult.error,
+      );
+    }
+
+    if (!summaryResult.data) {
       return jsonError(
         "Unable to verify portal invitation status.",
         409,
@@ -292,6 +328,23 @@ export async function POST(request: Request) {
         "Portal access needs support review before another invitation.",
         409,
         "invitation_not_sendable",
+      );
+    }
+
+    let admin: ReturnType<typeof getSupabaseAdminClient>;
+
+    try {
+      admin = getSupabaseAdminClient();
+    } catch {
+      captureInvitationSendDiagnostic({
+        errorCode: "server_admin_not_configured",
+        httpStatus: 500,
+        operation: "student_portal_invitation_admin_init",
+      });
+      return jsonError(
+        "Portal invitation delivery needs attention. Enrollment is unchanged.",
+        500,
+        "server_admin_not_configured",
       );
     }
 
