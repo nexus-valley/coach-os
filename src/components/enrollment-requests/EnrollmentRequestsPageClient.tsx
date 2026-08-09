@@ -12,6 +12,11 @@ import { Skeleton } from "@/src/components/ui/Skeleton";
 import { TableShell } from "@/src/components/ui/TableShell";
 import { getCoursesForTenant, type Course } from "@/src/lib/courses";
 import {
+  buildEnrollmentRequestActivity,
+  getEnrollmentRequestRecovery,
+  type EnrollmentRequestRecovery,
+} from "@/src/lib/enrollmentRequestActivity";
+import {
   canApproveEnrollmentRequest,
   canRejectEnrollmentRequest,
   enrollmentRequestStatusFilters,
@@ -61,6 +66,20 @@ const statusTone: Record<
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("en-IN", {
     day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(value));
+}
+
+function formatActivityTimestamp(value: string | null) {
+  if (!value) {
+    return "Current state";
+  }
+
+  return new Intl.DateTimeFormat("en-IN", {
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
     month: "short",
     year: "numeric",
   }).format(new Date(value));
@@ -162,6 +181,21 @@ export function EnrollmentRequestsPageClient({
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
   const canMutate = role === "owner" || role === "admin";
+  const selectedInvitation = selectedRequest
+    ? invitationStatuses[selectedRequest.id]
+    : null;
+  const selectedActivity = selectedRequest
+    ? buildEnrollmentRequestActivity({
+        invitation: selectedInvitation,
+        request: selectedRequest,
+      })
+    : [];
+  const selectedRecovery = selectedRequest
+    ? getEnrollmentRequestRecovery({
+        invitation: selectedInvitation,
+        request: selectedRequest,
+      })
+    : null;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -397,6 +431,54 @@ export function EnrollmentRequestsPageClient({
       });
     } finally {
       setMutatingId("");
+    }
+  }
+
+  function renderRecoveryAction(
+    request: PublicSiteLead,
+    recovery: EnrollmentRequestRecovery,
+  ) {
+    switch (recovery.action) {
+      case "retry_invitation":
+        return (
+          <Button
+            isLoading={mutatingId === request.id}
+            loadingText="Retrying..."
+            onClick={() => void handleInvitation(request)}
+            size="sm"
+            type="button"
+          >
+            Retry invitation
+          </Button>
+        );
+      case "review_student":
+        return request.converted_student_id ? (
+          <Button
+            href={`/app/students/${request.converted_student_id}`}
+            size="sm"
+            variant="secondary"
+          >
+            Review student
+          </Button>
+        ) : null;
+      case "review_enrollment":
+        return (
+          <Button href="/app/enrollments" size="sm" variant="secondary">
+            Review enrollments
+          </Button>
+        );
+      case "open_program":
+        return request.interested_course_id ? (
+          <Button
+            href={`/app/courses/${request.interested_course_id}`}
+            size="sm"
+            variant="secondary"
+          >
+            Open program
+          </Button>
+        ) : null;
+      default:
+        return null;
     }
   }
 
@@ -760,6 +842,40 @@ export function EnrollmentRequestsPageClient({
               </div>
             </div>
 
+            <section aria-labelledby="request-history-title" className="mt-6">
+              <h3
+                className="text-sm font-semibold text-[#0B1F33]"
+                id="request-history-title"
+              >
+                Request history
+              </h3>
+              <ol className="mt-3 border-l border-[#CBD5E1] pl-4">
+                {selectedActivity.map((event) => (
+                  <li className="relative pb-4 last:pb-0" key={event.key}>
+                    <span
+                      aria-hidden="true"
+                      className="absolute -left-[1.31rem] top-1.5 h-2 w-2 rounded-full bg-[#145DA0] ring-4 ring-white"
+                    />
+                    <p className="text-sm font-semibold text-[#0B1F33]">
+                      {event.label}
+                    </p>
+                    {event.timestamp ? (
+                      <time
+                        className="mt-1 block text-xs text-[#64748B]"
+                        dateTime={event.timestamp}
+                      >
+                        {formatActivityTimestamp(event.timestamp)}
+                      </time>
+                    ) : (
+                      <span className="mt-1 block text-xs text-[#64748B]">
+                        Current state
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ol>
+            </section>
+
             {rejecting ? (
               <label className="mt-5 block text-sm font-semibold text-[#334155]">
                 Reason (optional)
@@ -778,11 +894,18 @@ export function EnrollmentRequestsPageClient({
                 separate, and portal access starts only after an invitation is
                 accepted.
               </FeedbackAlert>
-            ) : getEnrollmentRequestLifecycleStatus(selectedRequest) ===
-              "needs_attention" ? (
-              <FeedbackAlert className="mt-5" tone="warning">
-                {getNeedsAttentionGuidance(selectedRequest.last_error_code)}
-              </FeedbackAlert>
+            ) : selectedRecovery ? (
+              <div className="mt-5 border-l-4 border-[#F59E0B] bg-[#FFF7ED] px-4 py-3 text-[#7C2D12]">
+                <p className="text-sm font-semibold">{selectedRecovery.title}</p>
+                <p className="mt-1 text-sm leading-6">
+                  {selectedRecovery.description}
+                </p>
+                {selectedRecovery.action ? (
+                  <div className="mt-3">
+                    {renderRecoveryAction(selectedRequest, selectedRecovery)}
+                  </div>
+                ) : null}
+              </div>
             ) : getEnrollmentRequestLifecycleStatus(selectedRequest) ===
               "enrolled" ? (
               <FeedbackAlert className="mt-5" tone="info">
@@ -800,7 +923,8 @@ export function EnrollmentRequestsPageClient({
                 >
                   Cancel
                 </Button>
-                {selectedRequest.interested_course_id ? (
+                {selectedRequest.interested_course_id &&
+                selectedRecovery?.action !== "open_program" ? (
                   <Button
                     href={`/app/courses/${selectedRequest.interested_course_id}`}
                     variant="ghost"
@@ -808,7 +932,8 @@ export function EnrollmentRequestsPageClient({
                     Open program
                   </Button>
                 ) : null}
-                {selectedRequest.converted_student_id ? (
+                {selectedRequest.converted_student_id &&
+                selectedRecovery?.action !== "review_student" ? (
                   <Button
                     href={`/app/students/${selectedRequest.converted_student_id}`}
                     variant="ghost"

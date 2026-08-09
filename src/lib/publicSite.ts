@@ -124,6 +124,7 @@ export type PublicSiteLead = {
   name: string;
   phone: string | null;
   processed_at?: string | null;
+  processing_started_at?: string | null;
   rejection_reason?: string | null;
   source: string | null;
   status: "new" | "contacted" | "converted" | "closed";
@@ -500,7 +501,7 @@ export async function getEnrollmentRequests(params: {
   const { data, error } = await supabase
     .from("public_site_leads")
     .select(
-      "id,source,name,email,phone,message,interested_course_id,status,enrollment_request_status,metadata_json,converted_student_id,converted_enrollment_id,converted_at,conversion_note,approval_student_action,approval_enrollment_action,last_error_code,processed_at,rejection_reason,created_at",
+      "id,source,name,email,phone,message,interested_course_id,status,enrollment_request_status,metadata_json,converted_student_id,converted_enrollment_id,converted_at,conversion_note,approval_student_action,approval_enrollment_action,last_error_code,processed_at,processing_started_at,rejection_reason,created_at",
     )
     .eq("tenant_id", params.tenantId)
     .order("created_at", { ascending: false })
