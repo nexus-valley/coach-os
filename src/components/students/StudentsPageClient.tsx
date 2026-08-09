@@ -19,6 +19,8 @@ import {
   type Student,
   type StudentStatus,
 } from "@/src/lib/students";
+import { getSupabaseClient } from "@/src/lib/supabaseClient";
+import { getCurrentMemberRole, type MemberRole } from "@/src/lib/team";
 import { getCurrentTenant, type Tenant } from "@/src/lib/tenant";
 
 const studentStatuses: StudentStatus[] = [
@@ -97,6 +99,7 @@ export function StudentsPageClient() {
   const [formErrors, setFormErrors] = useState<StudentFormErrors>({});
   const [formOpen, setFormOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [memberRole, setMemberRole] = useState<MemberRole | null>(null);
   const [saving, setSaving] = useState(false);
   const [students, setStudents] = useState<Student[]>([]);
   const [success, setSuccess] = useState("");
@@ -118,7 +121,22 @@ export function StudentsPageClient() {
           return;
         }
 
-        const tenantStudents = await getStudentsForTenant(currentTenant.id);
+        const supabase = getSupabaseClient();
+        const {
+          data: { user },
+          error: userError,
+        } = await supabase.auth.getUser();
+
+        if (userError) {
+          throw userError;
+        }
+
+        const [tenantStudents, currentRole] = await Promise.all([
+          getStudentsForTenant(currentTenant.id),
+          user
+            ? getCurrentMemberRole(currentTenant.id, user.id)
+            : Promise.resolve(null),
+        ]);
 
         if (!active) {
           return;
@@ -126,6 +144,7 @@ export function StudentsPageClient() {
 
         setTenant(currentTenant);
         setStudents(tenantStudents);
+        setMemberRole(currentRole);
       } catch (caught) {
         if (!active) {
           return;
@@ -196,6 +215,7 @@ export function StudentsPageClient() {
     .length;
   const blockedStudents = students.filter((student) => student.status === "blocked")
     .length;
+  const canCreateStudent = memberRole !== null && memberRole !== "trainer";
 
   return (
     <div className="mx-auto max-w-7xl">
@@ -212,9 +232,11 @@ export function StudentsPageClient() {
             into the right programs when they are ready to learn.
           </p>
         </div>
-        <Button onClick={() => setFormOpen(true)} size="lg" type="button">
-          Add Student
-        </Button>
+        {canCreateStudent ? (
+          <Button onClick={() => setFormOpen(true)} size="lg" type="button">
+            Add Student
+          </Button>
+        ) : null}
       </div>
 
       <Card className="mt-8 border-white/10 bg-[#101214] p-5 text-white shadow-2xl shadow-black/10 sm:p-6">
@@ -282,7 +304,11 @@ export function StudentsPageClient() {
         </section>
       ) : students.length === 0 ? (
         <EmptyState
-          action={{ label: "Add Student", onClick: () => setFormOpen(true) }}
+          action={
+            canCreateStudent
+              ? { label: "Add Student", onClick: () => setFormOpen(true) }
+              : undefined
+          }
           description="Add a student first, then open their profile to enroll them into one or more programs."
           icon="SD"
           title="No students added yet"
@@ -352,7 +378,7 @@ export function StudentsPageClient() {
         </section>
       )}
 
-      {formOpen ? (
+      {formOpen && canCreateStudent ? (
         <div className="fixed inset-0 z-50 flex min-h-full items-end justify-center overflow-y-auto bg-[#0B1F33]/70 px-4 py-4 backdrop-blur-sm sm:items-center">
           <Card className="max-h-[calc(100dvh-2rem)] w-full max-w-2xl overflow-y-auto rounded-xl border-[#CBD5E1] bg-white p-5 text-[#0B1F33] shadow-2xl shadow-slate-950/25 sm:p-6">
             <div className="flex items-start justify-between gap-4">
@@ -397,11 +423,15 @@ export function StudentsPageClient() {
 }
 
 export function StudentFormFields({
+  disableProfile = false,
+  disableStatus = false,
   errors = {},
   form,
   setForm,
   tone = "dark",
 }: {
+  disableProfile?: boolean;
+  disableStatus?: boolean;
   errors?: StudentFormErrors;
   form: StudentFormState;
   setForm: React.Dispatch<React.SetStateAction<StudentFormState>>;
@@ -429,6 +459,7 @@ export function StudentFormFields({
         <input
           id="student-full-name"
           className={controlClass}
+          disabled={disableProfile}
           onChange={(event) =>
             setForm((current) => ({ ...current, fullName: event.target.value }))
           }
@@ -449,6 +480,7 @@ export function StudentFormFields({
           <input
             id="student-email"
             className={controlClass}
+            disabled={disableProfile}
             onChange={(event) =>
               setForm((current) => ({ ...current, email: event.target.value }))
             }
@@ -461,6 +493,7 @@ export function StudentFormFields({
           <input
             id="student-phone"
             className={controlClass}
+            disabled={disableProfile}
             onChange={(event) =>
               setForm((current) => ({ ...current, phone: event.target.value }))
             }
@@ -476,6 +509,7 @@ export function StudentFormFields({
           <select
             id="student-status"
             className={controlClass}
+            disabled={disableStatus}
             onChange={(event) =>
               setForm((current) => ({
                 ...current,
@@ -495,6 +529,7 @@ export function StudentFormFields({
           <input
             id="student-source"
             className={controlClass}
+            disabled={disableProfile}
             onChange={(event) =>
               setForm((current) => ({ ...current, source: event.target.value }))
             }

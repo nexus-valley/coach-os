@@ -43,6 +43,7 @@ import {
   getPaymentLinksByStudent,
   type PaymentLinkWithRelations,
 } from "@/src/lib/paymentLinks";
+import { hasEffectivePermission } from "@/src/lib/permissions";
 import {
   deleteStudent as deleteStudentRecord,
   getStudentById,
@@ -100,6 +101,22 @@ function formatPaymentLinkStatus(value: string) {
   return value.replace("_", " ");
 }
 
+function getEnrollmentStatusOptions(
+  currentStatus: EnrollmentStatus,
+  studentIsActive: boolean,
+) {
+  const transitions: Record<EnrollmentStatus, EnrollmentStatus[]> = {
+    active: ["active", "completed", "paused", "cancelled"],
+    cancelled: ["cancelled", "active"],
+    completed: ["completed"],
+    paused: ["paused", "active", "cancelled"],
+  };
+
+  return transitions[currentStatus].filter(
+    (status) => status !== "active" || studentIsActive,
+  );
+}
+
 function getErrorMessage(caught: unknown, fallback: string) {
   return caught instanceof Error ? caught.message : fallback;
 }
@@ -132,6 +149,7 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
   const [error, setError] = useState("");
   const [form, setForm] = useState<StudentFormState>(emptyStudentForm);
   const [loading, setLoading] = useState(true);
+  const [canViewFinance, setCanViewFinance] = useState(false);
   const [mutating, setMutating] = useState(false);
   const [paymentLinks, setPaymentLinks] = useState<
     PaymentLinkWithRelations[]
@@ -174,6 +192,7 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
   );
 
   const canDelete = canDeleteRecords(currentRole);
+  const canAddLearningRelationship = student?.status === "active";
   function getPaymentLinkWhatsAppUrl(link: PaymentLinkWithRelations) {
     const workspaceBranding = getWorkspaceBranding(tenantSettings, tenant);
     const message = buildPaymentReminderMessage({
@@ -243,8 +262,6 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
           tenantCohorts,
           studentEnrollments,
           studentCohortMemberships,
-          studentPayments,
-          studentPaymentLinks,
           settings,
           memberRole,
         ] =
@@ -263,13 +280,33 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
               studentId,
               tenantId: currentTenant.id,
             }),
-            getPaymentsByStudent(studentId, currentTenant.id),
-            getPaymentLinksByStudent(studentId, currentTenant.id),
             getTenantSettings(currentTenant.id),
             user
               ? getCurrentMemberRole(currentTenant.id, user.id)
               : Promise.resolve(null),
           ]);
+
+        const financeAllowed = Boolean(
+          currentStudent &&
+            user &&
+            (await hasEffectivePermission({
+              action: "view_student_finance",
+              entityId: studentId,
+              entityType: "student",
+              logUsage: false,
+              permission: "view_payments",
+              scopeId: studentId,
+              scopeType: "student",
+              tenantId: currentTenant.id,
+              userId: user.id,
+            })),
+        );
+        const [studentPayments, studentPaymentLinks] = financeAllowed
+          ? await Promise.all([
+              getPaymentsByStudent(studentId, currentTenant.id),
+              getPaymentLinksByStudent(studentId, currentTenant.id),
+            ])
+          : [[], []];
 
         if (!active) {
           return;
@@ -279,6 +316,7 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
         setTenantSettings(settings);
         setStudent(currentStudent);
         setCurrentRole(memberRole);
+        setCanViewFinance(financeAllowed);
         setCourses(tenantCourses);
         setCohorts(tenantCohorts);
         setEnrollments(currentStudent ? studentEnrollments : []);
@@ -698,25 +736,31 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
             be loaded inside that workspace.
           </p>
           <div className="mt-7 flex flex-col gap-3">
-            <Button onClick={openEnrollmentPanel} type="button">
-              Enroll in Program
-            </Button>
-            <Button
-              className="border-slate-700! bg-white/10! text-white! hover:bg-white/15!"
-              onClick={openCohortPanel}
-              type="button"
-              variant="secondary"
-            >
-              Add to Cohort
-            </Button>
-            <Button
-              className="border-slate-700! bg-white/10! text-white! hover:bg-white/15!"
-              onClick={openPaymentPanel}
-              type="button"
-              variant="secondary"
-            >
-              Open Sales
-            </Button>
+            {canAddLearningRelationship ? (
+              <>
+                <Button onClick={openEnrollmentPanel} type="button">
+                  Enroll in Program
+                </Button>
+                <Button
+                  className="border-slate-700! bg-white/10! text-white! hover:bg-white/15!"
+                  onClick={openCohortPanel}
+                  type="button"
+                  variant="secondary"
+                >
+                  Add to Cohort
+                </Button>
+              </>
+            ) : null}
+            {canViewFinance ? (
+              <Button
+                className="border-slate-700! bg-white/10! text-white! hover:bg-white/15!"
+                onClick={openPaymentPanel}
+                type="button"
+                variant="secondary"
+              >
+                Open Sales
+              </Button>
+            ) : null}
             <Button
               onClick={openWhatsAppFollowUp}
               type="button"
@@ -772,9 +816,11 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
                 sections.
               </p>
             </div>
-            <Button onClick={openEnrollmentPanel} type="button">
-              Enroll in Program
-            </Button>
+            {canAddLearningRelationship ? (
+              <Button onClick={openEnrollmentPanel} type="button">
+                Enroll in Program
+              </Button>
+            ) : null}
           </div>
 
           {enrollments.length === 0 ? (
@@ -820,8 +866,10 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
                     }
                     value={enrollment.status}
                   >
-                    {["active", "completed", "paused", "cancelled"].map(
-                      (status) => (
+                    {getEnrollmentStatusOptions(
+                      enrollment.status,
+                      student.status === "active",
+                    ).map((status) => (
                         <option
                           className="text-slate-950"
                           key={status}
@@ -829,8 +877,7 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
                         >
                           {formatEnrollmentStatus(status as EnrollmentStatus)}
                         </option>
-                      ),
-                    )}
+                      ))}
                   </select>
                   {canDelete ? (
                     <Button
@@ -863,9 +910,11 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
                 enrollment or payment records.
               </p>
             </div>
-            <Button onClick={openCohortPanel} type="button">
-              Add to Cohort
-            </Button>
+            {canAddLearningRelationship ? (
+              <Button onClick={openCohortPanel} type="button">
+                Add to Cohort
+              </Button>
+            ) : null}
           </div>
 
           {studentCohorts.length === 0 ? (
@@ -911,8 +960,10 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
         </Card>
       </section>
 
-      <section className="mt-6">
-        <Card className="border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/10 sm:p-8">
+      {canViewFinance ? (
+        <>
+          <section className="mt-6">
+            <Card className="border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/10 sm:p-8">
           <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-start">
             <div>
               <Badge className="border-white/15 bg-white/10 text-white">
@@ -1081,7 +1132,9 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
           </Card>
           ),
         )}
-      </section>
+          </section>
+        </>
+      ) : null}
 
       {enrollOpen ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 px-4 py-4 backdrop-blur-sm sm:items-center">
@@ -1262,7 +1315,12 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
           <Card className="w-full max-w-2xl border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/40 sm:p-8">
             <h3 className="text-2xl font-semibold">Edit student</h3>
             <form className="mt-7 space-y-5" onSubmit={handleUpdateStudent}>
-              <StudentFormFields form={form} setForm={setForm} />
+              <StudentFormFields
+                disableProfile={currentRole === "trainer"}
+                disableStatus={currentRole === "trainer"}
+                form={form}
+                setForm={setForm}
+              />
               <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end">
                 <Button
                   className="border-slate-700! bg-white/10! text-white! hover:bg-white/15!"

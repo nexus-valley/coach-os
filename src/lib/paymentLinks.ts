@@ -1,5 +1,6 @@
 import type { Course } from "@/src/lib/courses";
 import type { Enrollment } from "@/src/lib/enrollments";
+import { requireEffectivePermission } from "@/src/lib/permissions";
 import type { Student } from "@/src/lib/students";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 import type { TenantSettings } from "@/src/lib/tenantSettings";
@@ -138,6 +139,18 @@ async function getPaymentLinksByFilter(
   tenantId: string,
   filter?: { column: "student_id"; value: string },
 ) {
+  await requireEffectivePermission({
+    action: filter ? "view_student_payment_links" : "view_payment_links",
+    description:
+      "Blocked payment-link access without payment visibility permission.",
+    entityId: filter?.value ?? tenantId,
+    entityType: filter ? "student" : "tenant",
+    permission: "view_payments",
+    scopeId: filter?.value ?? null,
+    scopeType: filter ? "student" : "workspace",
+    tenantId,
+  });
+
   const supabase = getSupabaseClient();
   let query = supabase
     .from("payment_links")
