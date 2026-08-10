@@ -14,6 +14,22 @@ function executableSql() {
     .replace(/--.*$/gm, "");
 }
 
+function executableUx4b1Sql() {
+  return read("supabase/bundle_ux4b1_remove_cohort_rls_recursion.sql")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/--.*$/gm, "");
+}
+
+function policyBody(sql: string, name: string) {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = sql.match(
+    new RegExp(`create\\s+policy\\s+"${escaped}"[\\s\\S]*?;`, "i"),
+  );
+
+  expect(match, `Expected policy ${name}`).not.toBeNull();
+  return match?.[0] ?? "";
+}
+
 test.describe("UX-4B canonical enrollment access", () => {
   test("defines one status-aware portal and course access contract", () => {
     const sql = executableSql();
@@ -171,5 +187,116 @@ test.describe("UX-4B application permission boundaries", () => {
     expect(changedSources).not.toContain("student_portal_accounts");
     expect(changedSources).not.toContain("payment_confirmation_mode");
     expect(changedSources).not.toContain("payment_reference");
+  });
+});
+
+test.describe("UX-4B1 cohort RLS recursion closure", () => {
+  test("routes both student policies through one non-recursive definer helper", () => {
+    const sql = executableUx4b1Sql();
+    const cohortsPolicy = policyBody(sql, "Linked students can read own cohorts");
+    const membershipsPolicy = policyBody(
+      sql,
+      "Linked students can read own cohort memberships",
+    );
+
+    expect(sql).toContain(
+      "create or replace function coachfort_internal.student_can_access_cohort(",
+    );
+    expect(sql).toContain("security definer");
+    expect(sql).toContain("set search_path = public, pg_temp");
+    expect(sql).toContain("owner to postgres");
+    expect(sql).toContain("auth.uid() is null");
+    expect(sql).toContain("p_user_id is distinct from auth.uid()");
+    expect(sql).toContain("from public.cohorts c");
+    expect(sql).toContain("join public.cohort_members cm");
+    expect(sql).toContain("join public.student_portal_accounts spa");
+    expect(sql).toContain("public.student_portal_access_allowed(");
+    expect(sql).toContain("'course_read', 'course_participate'");
+    expect(sql).toContain("helper_owner.rolsuper");
+    expect(sql).toContain("helper_owner.rolbypassrls");
+    expect(sql).toContain("c.relforcerowsecurity");
+    expect(sql).toContain("UX-4B1 cannot install: helper owner cannot bypass RLS");
+
+    expect(cohortsPolicy).toContain(
+      "coachfort_internal.student_can_access_cohort(",
+    );
+    expect(cohortsPolicy).not.toMatch(/from\s+public\.cohort_members/i);
+    expect(membershipsPolicy).toContain(
+      "coachfort_internal.student_can_access_cohort(",
+    );
+    expect(membershipsPolicy).not.toMatch(/from\s+public\.cohorts/i);
+  });
+
+  test("keeps the helper outside the public RPC schema with policy-only privileges", () => {
+    const sql = executableUx4b1Sql();
+
+    expect(sql).toContain(
+      "create schema if not exists coachfort_internal authorization postgres;",
+    );
+    expect(sql).toContain(
+      "revoke all on schema coachfort_internal from public, anon, authenticated, service_role;",
+    );
+    expect(sql).toContain("grant usage on schema coachfort_internal to authenticated;");
+    expect(sql).toContain(
+      "grant execute on function coachfort_internal.student_can_access_cohort(",
+    );
+    expect(sql).toContain(") to authenticated;");
+    expect(sql).not.toContain(
+      "function public.student_can_access_cohort",
+    );
+    expect(sql).toContain("authenticated_executable_functions");
+    expect(sql).toContain("postgrest_db_schemas_setting");
+    expect(sql).toContain("authenticator_role_db_schemas_setting");
+    expect(sql).toContain("listed_in_authenticator_role_setting");
+    expect(sql).toContain("listed_in_visible_postgrest_setting");
+    expect(sql).toContain("internal helper schema is API-exposed");
+    expect(sql).not.toMatch(
+      /grant\s+execute\s+on\s+function\s+coachfort_internal\.student_can_access_cohort\([\s\S]*?\)\s+to\s+(public|anon|service_role)/i,
+    );
+  });
+
+  test("replaces only recursive student policies and preserves RLS and grants", () => {
+    const sql = executableUx4b1Sql();
+    const deploymentSmoke = read("tests/e2e/ux4b-deployment-smoke.spec.ts");
+
+    expect(sql.match(/drop\s+policy\s+if\s+exists/gi)).toHaveLength(2);
+    expect(sql).toContain(
+      'drop policy if exists "Linked students can read own cohorts"',
+    );
+    expect(sql).toContain(
+      'drop policy if exists "Linked students can read own cohort memberships"',
+    );
+    expect(sql).toContain("alter table public.cohorts enable row level security;");
+    expect(sql).toContain(
+      "alter table public.cohort_members enable row level security;",
+    );
+    expect(sql).not.toMatch(/disable\s+row\s+level\s+security/i);
+    expect(sql).not.toMatch(
+      /grant\s+(select|insert|update|delete|truncate|trigger|references|maintain)\s+on\s+(table\s+)?public\.(cohorts|cohort_members)/i,
+    );
+    expect(sql).not.toMatch(
+      /drop\s+policy[^;]+"Tenant members can read (cohorts|cohort memberships)"/i,
+    );
+    for (const roleCoverage of [
+      "Owner can read students",
+      "Admin retains authorized Student Detail",
+      "Staff reads remain safe",
+      "unassigned Trainer remains scoped out",
+      "regression Student portal learning reads remain authorized and recursion-free",
+    ]) {
+      expect(deploymentSmoke).toContain(roleCoverage);
+    }
+    expect(deploymentSmoke).toContain(
+      "NO ACTIVE PORTAL FIXTURE - AUTHORIZED EMPTY/COHORT READ COVERAGE ONLY",
+    );
+    expect(deploymentSmoke).toContain(
+      "assigned program cards should expose their enrollment state",
+    );
+    expect(deploymentSmoke).toContain(
+      "assertCohortReadsHealthy({ required: true })",
+    );
+    expect(sql.match(/^begin;$/gm)).toHaveLength(1);
+    expect(sql.match(/^commit;$/gm)).toHaveLength(1);
+    expect(sql.match(/as verification_result;/g)).toHaveLength(1);
   });
 });
