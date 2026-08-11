@@ -1,6 +1,13 @@
 import { runAutomationTrigger } from "@/src/lib/automationTriggers";
+import type { EnrollmentStatus } from "@/src/lib/enrollments";
+import {
+  deriveStudentPortalState,
+  type StudentDirectoryEnrollment,
+  type StudentDirectoryRow,
+} from "@/src/lib/studentDirectory";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 import { getCurrentTrainerScope } from "@/src/lib/trainerAssignments";
+import type { MemberRole } from "@/src/lib/team";
 import {
   enforceWorkspaceLimit,
   refreshWorkspaceUsageSnapshot,
@@ -17,6 +24,7 @@ export type Student = {
   status: StudentStatus;
   source: string | null;
   notes: string | null;
+  portal_enabled: boolean;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -38,63 +46,12 @@ export type UpdateStudentInput = StudentInput & {
 
 export async function getStudentsForTenant(tenantId: string) {
   const supabase = getSupabaseClient();
-  const trainerScope = await getCurrentTrainerScope(tenantId);
-  let scopedStudentIds: string[] | null = null;
-
-  if (trainerScope) {
-    const [enrollmentsResult, cohortMembersResult] = await Promise.all([
-      trainerScope.courseIds.length
-        ? supabase
-            .from("enrollments")
-            .select("student_id")
-            .eq("tenant_id", tenantId)
-            .in("course_id", trainerScope.courseIds)
-        : Promise.resolve({ data: [], error: null }),
-      trainerScope.cohortIds.length
-        ? supabase
-            .from("cohort_members")
-            .select("student_id")
-            .eq("tenant_id", tenantId)
-            .in("cohort_id", trainerScope.cohortIds)
-        : Promise.resolve({ data: [], error: null }),
-    ]);
-
-    if (enrollmentsResult.error) {
-      throw enrollmentsResult.error;
-    }
-
-    if (cohortMembersResult.error) {
-      throw cohortMembersResult.error;
-    }
-
-    scopedStudentIds = Array.from(
-      new Set([
-        ...((enrollmentsResult.data ?? []) as { student_id: string }[]).map(
-          (item) => item.student_id,
-        ),
-        ...((cohortMembersResult.data ?? []) as { student_id: string }[]).map(
-          (item) => item.student_id,
-        ),
-      ]),
-    );
-
-    if (scopedStudentIds.length === 0) {
-      return [];
-    }
-  }
-
-  let query = supabase
+  const { data, error } = await supabase
     .from("students")
     .select(
-      "id,tenant_id,full_name,email,phone,status,source,notes,created_by,created_at,updated_at",
+      "id,tenant_id,full_name,email,phone,status,source,notes,portal_enabled,created_by,created_at,updated_at",
     )
-    .eq("tenant_id", tenantId);
-
-  if (scopedStudentIds) {
-    query = query.in("id", scopedStudentIds);
-  }
-
-  const { data, error } = await query
+    .eq("tenant_id", tenantId)
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -102,6 +59,130 @@ export async function getStudentsForTenant(tenantId: string) {
   }
 
   return (data ?? []) as Student[];
+}
+
+type DirectoryEnrollmentRecord = {
+  course_id: string;
+  enrolled_at: string;
+  id: string;
+  status: EnrollmentStatus;
+  student_id: string;
+};
+
+type DirectoryPortalAccountRecord = {
+  status: "active" | "pending" | "revoked";
+  student_id: string;
+};
+
+export async function getStudentDirectoryRows(params: {
+  memberRole: MemberRole;
+  tenantId: string;
+}) {
+  const supabase = getSupabaseClient();
+  const [students, trainerScope] = await Promise.all([
+    getStudentsForTenant(params.tenantId),
+    params.memberRole === "trainer"
+      ? getCurrentTrainerScope(params.tenantId)
+      : Promise.resolve(null),
+  ]);
+
+  if (students.length === 0) {
+    return [] satisfies StudentDirectoryRow[];
+  }
+
+  if (params.memberRole === "trainer" && trainerScope === null) {
+    return [] satisfies StudentDirectoryRow[];
+  }
+
+  const authorizedStudentIds = students.map((student) => student.id);
+  const enrollmentQuery = supabase
+    .from("enrollments")
+    .select("id,student_id,course_id,status,enrolled_at")
+    .eq("tenant_id", params.tenantId)
+    .in("student_id", authorizedStudentIds);
+
+  const canViewPortalAccounts =
+    params.memberRole === "owner" || params.memberRole === "admin";
+  const [enrollmentsResult, portalAccountsResult] = await Promise.all([
+    enrollmentQuery.order("enrolled_at", { ascending: false }),
+    canViewPortalAccounts
+      ? supabase
+          .from("student_portal_accounts")
+          .select("student_id,status")
+          .eq("tenant_id", params.tenantId)
+          .in("student_id", authorizedStudentIds)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+
+  if (enrollmentsResult.error) {
+    throw enrollmentsResult.error;
+  }
+
+  if (portalAccountsResult.error) {
+    throw portalAccountsResult.error;
+  }
+
+  const enrollments = (enrollmentsResult.data ?? []) as DirectoryEnrollmentRecord[];
+  const courseIds = Array.from(
+    new Set(enrollments.map((enrollment) => enrollment.course_id)),
+  );
+  const { data: coursesData, error: coursesError } = courseIds.length
+    ? await supabase
+        .from("courses")
+        .select("id,title")
+        .eq("tenant_id", params.tenantId)
+        .in("id", courseIds)
+    : { data: [], error: null };
+
+  if (coursesError) {
+    throw coursesError;
+  }
+
+  const courseTitleById = new Map(
+    ((coursesData ?? []) as { id: string; title: string }[]).map((course) => [
+      course.id,
+      course.title,
+    ]),
+  );
+  const enrollmentsByStudent = new Map<string, StudentDirectoryEnrollment[]>();
+
+  for (const enrollment of enrollments) {
+    const courseTitle = courseTitleById.get(enrollment.course_id);
+
+    if (!courseTitle) {
+      continue;
+    }
+
+    const current = enrollmentsByStudent.get(enrollment.student_id) ?? [];
+    current.push({
+      canOpenCourse:
+        params.memberRole !== "trainer" ||
+        Boolean(trainerScope?.courseIds.includes(enrollment.course_id)),
+      courseId: enrollment.course_id,
+      courseTitle,
+      enrolledAt: enrollment.enrolled_at,
+      id: enrollment.id,
+      status: enrollment.status,
+    });
+    enrollmentsByStudent.set(enrollment.student_id, current);
+  }
+
+  const portalAccountByStudent = new Map(
+    ((portalAccountsResult.data ?? []) as DirectoryPortalAccountRecord[]).map(
+      (account) => [account.student_id, account.status],
+    ),
+  );
+
+  return students.map((student) => ({
+    enrollments: enrollmentsByStudent.get(student.id) ?? [],
+    portalState: deriveStudentPortalState({
+      canViewPortalAccounts,
+      portalAccountStatus: portalAccountByStudent.get(student.id) ?? null,
+      portalEnabled: student.portal_enabled,
+      studentStatus: student.status,
+    }),
+    student,
+  })) satisfies StudentDirectoryRow[];
 }
 
 export async function createStudent(input: StudentInput) {
@@ -166,7 +247,7 @@ export async function getStudentById(params: {
   const { data, error } = await supabase
     .from("students")
     .select(
-      "id,tenant_id,full_name,email,phone,status,source,notes,created_by,created_at,updated_at",
+      "id,tenant_id,full_name,email,phone,status,source,notes,portal_enabled,created_by,created_at,updated_at",
     )
     .eq("tenant_id", params.tenantId)
     .eq("id", params.studentId)
