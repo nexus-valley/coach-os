@@ -69,6 +69,19 @@ type DelegatedAttendanceDecision =
       source: "delegated";
     };
 
+type AttendanceManagementEvaluation =
+  | {
+      allowed: true;
+      decision: DelegatedAttendanceDecision;
+      role: MemberRole | null;
+      user: Awaited<ReturnType<typeof getCurrentUserAndRole>>["user"];
+    }
+  | {
+      allowed: false;
+      role: MemberRole | null;
+      user: Awaited<ReturnType<typeof getCurrentUserAndRole>>["user"];
+    };
+
 async function notifyAttendanceAlert(params: {
   absentCount: number;
   session: TrainingSessionWithRelations;
@@ -122,14 +135,19 @@ async function getCurrentUserAndRole(tenantId: string) {
   return { role, user };
 }
 
-async function ensureCanManageAttendanceForSession(
+async function evaluateAttendanceManagementForSession(
   session: TrainingSessionWithRelations,
   studentIds: string[] = [],
-) {
+): Promise<AttendanceManagementEvaluation> {
   const { role, user } = await getCurrentUserAndRole(session.tenant_id);
 
   if (canManageAttendance(role)) {
-    return { decision: { source: "role" } satisfies DelegatedAttendanceDecision, role, user };
+    return {
+      allowed: true,
+      decision: { source: "role" } satisfies DelegatedAttendanceDecision,
+      role,
+      user,
+    };
   }
 
   const decision = await getDelegatedAttendanceDecision({
@@ -139,6 +157,22 @@ async function ensureCanManageAttendanceForSession(
   });
 
   if (!decision) {
+    return { allowed: false, role, user };
+  }
+
+  return { allowed: true, decision, role, user };
+}
+
+async function ensureCanManageAttendanceForSession(
+  session: TrainingSessionWithRelations,
+  studentIds: string[] = [],
+) {
+  const evaluation = await evaluateAttendanceManagementForSession(
+    session,
+    studentIds,
+  );
+
+  if (!evaluation.allowed) {
     await logActivity({
       action: "access_denied",
       description: "Blocked attendance marking without effective permission.",
@@ -146,7 +180,7 @@ async function ensureCanManageAttendanceForSession(
       entityName: session.title,
       entityType: "security",
       metadata: {
-        role,
+        role: evaluation.role,
         sessionId: session.id,
         studentIds,
       },
@@ -156,7 +190,7 @@ async function ensureCanManageAttendanceForSession(
     throw new Error("You do not have permission to mark attendance.");
   }
 
-  return { decision, role, user };
+  return evaluation;
 }
 
 async function getDelegatedAttendanceDecision(params: {
@@ -858,8 +892,11 @@ export async function canCurrentUserMarkAttendance(params: {
   }
 
   try {
-    await ensureCanManageAttendanceForSession(session, params.studentIds ?? []);
-    return true;
+    const evaluation = await evaluateAttendanceManagementForSession(
+      session,
+      params.studentIds ?? [],
+    );
+    return evaluation.allowed;
   } catch {
     return false;
   }

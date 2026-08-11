@@ -101,6 +101,22 @@ type DelegatedSessionDecision =
       source: "delegated";
     };
 
+type SessionManagementDenial = "access" | "permission" | "trainer_scope";
+
+type SessionManagementEvaluation =
+  | {
+      allowed: true;
+      decision: DelegatedSessionDecision;
+      role: MemberRole | null;
+      user: Awaited<ReturnType<typeof getCurrentUserAndRole>>["user"];
+    }
+  | {
+      allowed: false;
+      denial: SessionManagementDenial;
+      role: MemberRole | null;
+      user: Awaited<ReturnType<typeof getCurrentUserAndRole>>["user"];
+    };
+
 const deliveryModeLabels: Record<SessionDeliveryMode, string> = {
   hybrid: "Hybrid",
   offline: "Offline",
@@ -261,6 +277,12 @@ async function getCurrentUserAndRole(tenantId: string) {
 
   const role = await getMemberRoleForTenant(tenantId, user.id);
 
+  return { role, user };
+}
+
+async function ensureCanAccessSessions(tenantId: string) {
+  const { role, user } = await getCurrentUserAndRole(tenantId);
+
   if (!canAccessAttendance(role)) {
     await logActivity({
       action: "access_denied",
@@ -277,13 +299,18 @@ async function getCurrentUserAndRole(tenantId: string) {
   return { role, user };
 }
 
-async function ensureCanManageSession(params: {
+async function evaluateSessionManagement(params: {
   cohortId?: string | null;
   courseId?: string | null;
   sessionId?: string | null;
   tenantId: string;
-}) {
+}): Promise<SessionManagementEvaluation> {
   const { role, user } = await getCurrentUserAndRole(params.tenantId);
+
+  if (!canAccessAttendance(role)) {
+    return { allowed: false, denial: "access", role, user };
+  }
+
   const baseRoleAllowed = canManageAttendance(role);
   const delegatedDecision =
     !baseRoleAllowed || role === "trainer"
@@ -297,7 +324,7 @@ async function ensureCanManageSession(params: {
       : null;
 
   if (!baseRoleAllowed && !delegatedDecision) {
-    throw new Error("You do not have permission to manage sessions.");
+    return { allowed: false, denial: "permission", role, user };
   }
 
   if (role === "trainer" && baseRoleAllowed) {
@@ -311,34 +338,69 @@ async function ensureCanManageSession(params: {
     ]);
 
     if (!courseAssigned && !cohortAssigned && !delegatedDecision) {
-      await logActivity({
-        action: "access_denied",
-        description: "Blocked trainer session change outside assignment scope.",
-        entityName: "Session assignment scope",
-        entityType: "security",
-        metadata: {
-          cohortId: params.cohortId ?? null,
-          courseId: params.courseId ?? null,
-          role,
-        },
-        severity: "warning",
-        tenantId: params.tenantId,
-      });
-      throw new Error("Trainers can only manage sessions for assigned courses or cohorts.");
+      return { allowed: false, denial: "trainer_scope", role, user };
     }
 
     if (!courseAssigned && !cohortAssigned && delegatedDecision) {
-      return { decision: delegatedDecision, role, user };
+      return { allowed: true, decision: delegatedDecision, role, user };
     }
   }
 
   return {
+    allowed: true,
     decision:
       delegatedDecision ??
       ({ source: "role" } satisfies DelegatedSessionDecision),
     role,
     user,
   };
+}
+
+async function ensureCanManageSession(params: {
+  cohortId?: string | null;
+  courseId?: string | null;
+  sessionId?: string | null;
+  tenantId: string;
+}) {
+  const evaluation = await evaluateSessionManagement(params);
+
+  if (evaluation.allowed) {
+    return evaluation;
+  }
+
+  if (evaluation.denial === "access") {
+    await logActivity({
+      action: "access_denied",
+      description: "Blocked attendance access attempt.",
+      entityName: "Sessions",
+      entityType: "security",
+      metadata: { role: evaluation.role, route: "/app/sessions" },
+      severity: "warning",
+      tenantId: params.tenantId,
+    });
+    throw new Error("You do not have permission to access sessions.");
+  }
+
+  if (evaluation.denial === "trainer_scope") {
+    await logActivity({
+      action: "access_denied",
+      description: "Blocked trainer session change outside assignment scope.",
+      entityName: "Session assignment scope",
+      entityType: "security",
+      metadata: {
+        cohortId: params.cohortId ?? null,
+        courseId: params.courseId ?? null,
+        role: evaluation.role,
+      },
+      severity: "warning",
+      tenantId: params.tenantId,
+    });
+    throw new Error(
+      "Trainers can only manage sessions for assigned courses or cohorts.",
+    );
+  }
+
+  throw new Error("You do not have permission to manage sessions.");
 }
 
 async function createDelegatedSessionWithRpc(
@@ -829,7 +891,7 @@ async function attachSessionRelations(
 }
 
 export async function getSessionsForTenant(tenantId: string) {
-  await getCurrentUserAndRole(tenantId);
+  await ensureCanAccessSessions(tenantId);
   const supabase = getSupabaseClient();
   const trainerScope = await getCurrentTrainerScope(tenantId);
 
@@ -866,7 +928,7 @@ export async function getSessionById(params: {
   sessionId: string;
   tenantId: string;
 }) {
-  await getCurrentUserAndRole(params.tenantId);
+  await ensureCanAccessSessions(params.tenantId);
   const trainerScope = await getCurrentTrainerScope(params.tenantId);
 
   if (trainerScope) {
@@ -1371,8 +1433,8 @@ export async function canCurrentUserManageSession(params: {
   tenantId: string;
 }) {
   try {
-    await ensureCanManageSession(params);
-    return true;
+    const evaluation = await evaluateSessionManagement(params);
+    return evaluation.allowed;
   } catch {
     return false;
   }

@@ -14,7 +14,6 @@ import { getCohortsForTenant, type CohortWithCourse } from "@/src/lib/cohorts";
 import { getUserDelegatedPermissions } from "@/src/lib/delegatedPermissions";
 import { canAccessAttendance, canManageAttendance } from "@/src/lib/permissions";
 import {
-  canCurrentUserManageSession,
   createSession,
   getSessionsForTenant,
   type SessionDeliveryMode,
@@ -272,16 +271,6 @@ export function SessionsPageClient() {
     setSuccess("");
 
     try {
-      const allowed = await canCurrentUserManageSession({
-        cohortId: form.cohortId || null,
-        courseId: form.courseId || null,
-        tenantId: tenant.id,
-      });
-
-      if (!allowed) {
-        throw new Error("You do not have permission to create this live class.");
-      }
-
       await createSession({
         cohortId: form.cohortId || null,
         courseId: form.courseId || null,
