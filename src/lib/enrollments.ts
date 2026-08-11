@@ -36,6 +36,8 @@ export type UpdateEnrollmentStatusInput = {
   tenantId: string;
 };
 
+export type EnrollmentCourseOption = Pick<Course, "id" | "status" | "title">;
+
 async function loadEnrollmentRelations(
   enrollments: Enrollment[],
   tenantId: string,
@@ -142,10 +144,21 @@ export async function getEnrollmentsForStudent(params: {
   studentId: string;
   tenantId: string;
 }) {
-  return getEnrollmentsByFilter(params.tenantId, {
-    column: "student_id",
-    value: params.studentId,
-  });
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from("enrollments")
+    .select(
+      "id,tenant_id,student_id,course_id,status,enrolled_at,completed_at,created_by,created_at,updated_at",
+    )
+    .eq("tenant_id", params.tenantId)
+    .eq("student_id", params.studentId)
+    .order("enrolled_at", { ascending: false });
+
+  if (error) {
+    throw error;
+  }
+
+  return loadEnrollmentRelations((data ?? []) as Enrollment[], params.tenantId);
 }
 
 export async function getEnrollmentsForCourse(params: {
@@ -156,6 +169,32 @@ export async function getEnrollmentsForCourse(params: {
     column: "course_id",
     value: params.courseId,
   });
+}
+
+export async function getEnrollmentCourseOptions(tenantId: string) {
+  const supabase = getSupabaseClient();
+  const trainerScope = await getCurrentTrainerScope(tenantId);
+
+  if (trainerScope && trainerScope.courseIds.length === 0) {
+    return [] satisfies EnrollmentCourseOption[];
+  }
+
+  let query = supabase
+    .from("courses")
+    .select("id,title,status")
+    .eq("tenant_id", tenantId);
+
+  if (trainerScope) {
+    query = query.in("id", trainerScope.courseIds);
+  }
+
+  const { data, error } = await query.order("title", { ascending: true });
+
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? []) as EnrollmentCourseOption[];
 }
 
 export async function createEnrollment(input: CreateEnrollmentInput) {

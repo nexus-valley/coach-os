@@ -35,6 +35,11 @@ export type StudentCohortMembership = CohortMember & {
   cohort: CohortWithCourse | null;
 };
 
+export type CohortAssignmentOption = Pick<
+  Cohort,
+  "course_id" | "id" | "name"
+>;
+
 export type CohortInput = {
   courseId: string;
   description: string;
@@ -129,6 +134,36 @@ export async function getCohortsForTenant(tenantId: string) {
   }
 
   return attachCohortRelations((data ?? []) as Cohort[], tenantId);
+}
+
+export async function getCohortAssignmentOptions(params: {
+  courseId: string;
+  tenantId: string;
+}) {
+  const supabase = getSupabaseClient();
+  const trainerScope = await getCurrentTrainerScope(params.tenantId);
+
+  if (trainerScope && trainerScope.cohortIds.length === 0) {
+    return [] satisfies CohortAssignmentOption[];
+  }
+
+  let query = supabase
+    .from("cohorts")
+    .select("id,course_id,name")
+    .eq("tenant_id", params.tenantId)
+    .eq("course_id", params.courseId);
+
+  if (trainerScope) {
+    query = query.in("id", trainerScope.cohortIds);
+  }
+
+  const { data, error } = await query.order("name", { ascending: true });
+
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? []) as CohortAssignmentOption[];
 }
 
 export async function getCohortById(params: {

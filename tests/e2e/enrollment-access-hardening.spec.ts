@@ -152,14 +152,17 @@ test.describe("UX-4B application permission boundaries", () => {
     const payments = read("src/lib/payments.ts");
     const paymentLinks = read("src/lib/paymentLinks.ts");
     const detail = read("src/components/students/StudentDetailClient.tsx");
+    const detailLoader = read("src/lib/studentDetail.ts");
 
     expect(payments).toContain("requireEffectivePermission");
     expect(paymentLinks).toContain("requireEffectivePermission");
     expect(paymentLinks).toContain('permission: "view_payments"');
-    expect(detail).toContain("hasEffectivePermission");
-    expect(detail).toContain("const financeAllowed = Boolean(");
-    expect(detail).toContain("const [studentPayments, studentPaymentLinks] = financeAllowed");
-    expect(detail).toContain("{canViewFinance ? (");
+    expect(detailLoader).toContain("hasEffectivePermission");
+    expect(detailLoader).toContain('permission: "view_payments"');
+    expect(detailLoader).not.toContain("getPaymentsByStudent");
+    expect(detailLoader).not.toContain("getPaymentLinksByStudent");
+    expect(detail).toContain("detail.capabilities.canViewFinance");
+    expect(detail).toContain('href="/app/finance"');
   });
 
   test("removes unscoped trainer creation and global status controls", () => {
@@ -168,11 +171,18 @@ test.describe("UX-4B application permission boundaries", () => {
 
     expect(students).toContain('memberRole !== "trainer"');
     expect(students).toContain("formOpen && canCreateStudent");
-    expect(detail).toContain('disableStatus={currentRole === "trainer"}');
-    expect(detail).toContain('disableProfile={currentRole === "trainer"}');
+    expect(detail).toContain(
+      "disableStatus={!detail.capabilities.canEditProfile}",
+    );
+    expect(detail).toContain(
+      "disableProfile={!detail.capabilities.canEditProfile}",
+    );
     expect(students).toContain("disabled={disableProfile}");
-    expect(detail).toContain("getEnrollmentStatusOptions(");
-    expect(detail).toContain('student?.status === "active"');
+    expect(detail).toContain("relationship.canManageEnrollment");
+    expect(detail).toContain("getStudentDetailEnrollmentTransitions");
+    expect(detail).toContain(
+      'detail.role === "trainer" ? "Edit student notes" : "Edit student"',
+    );
   });
 
   test("does not alter payment mutations or introduce parallel systems", () => {
