@@ -1,4 +1,8 @@
 import { logActivity } from "@/src/lib/auditLogger";
+import {
+  composeAttendanceRoster,
+  getNewAttendanceRelationshipStudentIds,
+} from "@/src/lib/attendanceRoster";
 import { getCohortMembers } from "@/src/lib/cohorts";
 import {
   explainPermissionSource,
@@ -7,7 +11,6 @@ import {
   type DelegatedPermissionKey,
   type DelegatedPermissionScopeType,
 } from "@/src/lib/delegatedPermissions";
-import { getEnrollmentsForCourse } from "@/src/lib/enrollments";
 import { canManageAttendance } from "@/src/lib/permissions";
 import {
   getSessionById,
@@ -37,6 +40,8 @@ export type AttendanceRecordWithStudent = AttendanceRecord & {
 };
 
 export type AttendanceRosterItem = {
+  hasExistingAttendance: boolean;
+  isNewAttendanceEligible: boolean;
   record: AttendanceRecord | null;
   student: Pick<Student, "email" | "full_name" | "id" | "phone" | "status">;
 };
@@ -378,43 +383,161 @@ async function getStudentRows(
   return (data ?? []) as AttendanceRosterItem["student"][];
 }
 
-async function getEligibleStudentIdsForSession(
+type AttendanceEnrollmentEvidence = {
+  status: "active" | "cancelled" | "completed" | "paused";
+  student_id: string;
+};
+
+async function getRelationshipEligibleStudentIds(
   session: TrainingSessionWithRelations,
 ) {
-  if (session.cohort_id) {
-    const members = await getCohortMembers({
-      cohortId: session.cohort_id,
-      tenantId: session.tenant_id,
-    });
+  const supabase = getSupabaseClient();
 
-    return new Set(members.map((member) => member.student_id));
+  if (session.cohort_id) {
+    const [cohortResult, membersResult] = await Promise.all([
+      supabase
+        .from("cohorts")
+        .select("id,course_id")
+        .eq("tenant_id", session.tenant_id)
+        .eq("id", session.cohort_id)
+        .maybeSingle(),
+      supabase
+        .from("cohort_members")
+        .select("student_id")
+        .eq("tenant_id", session.tenant_id)
+        .eq("cohort_id", session.cohort_id),
+    ]);
+
+    if (cohortResult.error) {
+      throw cohortResult.error;
+    }
+
+    if (membersResult.error) {
+      throw membersResult.error;
+    }
+
+    const cohort = cohortResult.data as { course_id: string; id: string } | null;
+    const memberIds = Array.from(
+      new Set(
+        ((membersResult.data ?? []) as { student_id: string }[]).map(
+          (member) => member.student_id,
+        ),
+      ),
+    );
+
+    if (
+      !cohort ||
+      memberIds.length === 0 ||
+      (session.course_id && session.course_id !== cohort.course_id)
+    ) {
+      return new Set<string>();
+    }
+
+    const { data, error } = await supabase
+      .from("enrollments")
+      .select("student_id,status")
+      .eq("tenant_id", session.tenant_id)
+      .eq("course_id", cohort.course_id)
+      .in("student_id", memberIds);
+
+    if (error) {
+      throw error;
+    }
+
+    return getNewAttendanceRelationshipStudentIds({
+      cohortMemberIds: memberIds,
+      enrollments: (data ?? []) as AttendanceEnrollmentEvidence[],
+    });
   }
 
   if (session.course_id) {
-    const enrollments = await getEnrollmentsForCourse({
-      courseId: session.course_id,
-      tenantId: session.tenant_id,
-    });
+    const { data, error } = await supabase
+      .from("enrollments")
+      .select("student_id,status")
+      .eq("tenant_id", session.tenant_id)
+      .eq("course_id", session.course_id);
 
-    return new Set(enrollments.map((enrollment) => enrollment.student_id));
+    if (error) {
+      throw error;
+    }
+
+    return getNewAttendanceRelationshipStudentIds({
+      enrollments: (data ?? []) as AttendanceEnrollmentEvidence[],
+    });
   }
 
   return new Set<string>();
 }
 
-async function ensureStudentsBelongToSession(
+async function getSessionAttendanceRecords(params: {
+  sessionId: string;
+  studentIds?: string[];
+  tenantId: string;
+}) {
+  const supabase = getSupabaseClient();
+  let query = supabase
+    .from("attendance_records")
+    .select(attendanceColumns)
+    .eq("tenant_id", params.tenantId)
+    .eq("session_id", params.sessionId);
+
+  if (params.studentIds) {
+    if (params.studentIds.length === 0) {
+      return [] satisfies AttendanceRecord[];
+    }
+
+    query = query.in("student_id", params.studentIds);
+  }
+
+  const { data, error } = await query.order("marked_at", { ascending: false });
+
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? []) as AttendanceRecord[];
+}
+
+async function ensureAttendanceRowsCanBeSaved(
   session: TrainingSessionWithRelations,
   studentIds: string[],
 ) {
-  const eligibleStudentIds = await getEligibleStudentIdsForSession(session);
-  const invalidStudentId = studentIds.find(
-    (studentId) => !eligibleStudentIds.has(studentId),
+  if (session.status === "canceled") {
+    throw new Error("Attendance is read-only for canceled live classes.");
+  }
+
+  const uniqueStudentIds = Array.from(new Set(studentIds));
+  const [relationshipEligibleStudentIds, existingRecords, students] =
+    await Promise.all([
+      getRelationshipEligibleStudentIds(session),
+      getSessionAttendanceRecords({
+        sessionId: session.id,
+        studentIds: uniqueStudentIds,
+        tenantId: session.tenant_id,
+      }),
+      getStudentRows(uniqueStudentIds, session.tenant_id),
+    ]);
+  const existingStudentIds = new Set(
+    existingRecords.map((record) => record.student_id),
+  );
+  const activeStudentIds = new Set(
+    students
+      .filter((student) => student.status === "active")
+      .map((student) => student.id),
+  );
+  const invalidStudentId = uniqueStudentIds.find(
+    (studentId) =>
+      !existingStudentIds.has(studentId) &&
+      !(
+        activeStudentIds.has(studentId) &&
+        relationshipEligibleStudentIds.has(studentId)
+      ),
   );
 
   if (invalidStudentId) {
     await logActivity({
       action: "access_denied",
-      description: "Blocked attendance marking outside session roster.",
+      description: "Blocked attendance marking for an ineligible roster row.",
       entityId: session.id,
       entityName: session.title,
       entityType: "security",
@@ -425,7 +548,9 @@ async function ensureStudentsBelongToSession(
       severity: "warning",
       tenantId: session.tenant_id,
     });
-    throw new Error("Attendance can only be marked for students in this session roster.");
+    throw new Error(
+      "This student is no longer eligible for new attendance in this live class.",
+    );
   }
 }
 
@@ -433,19 +558,7 @@ export async function getSessionAttendance(params: {
   sessionId: string;
   tenantId: string;
 }) {
-  const supabase = getSupabaseClient();
-  const { data, error } = await supabase
-    .from("attendance_records")
-    .select(attendanceColumns)
-    .eq("tenant_id", params.tenantId)
-    .eq("session_id", params.sessionId)
-    .order("marked_at", { ascending: false });
-
-  if (error) {
-    throw error;
-  }
-
-  const records = (data ?? []) as AttendanceRecord[];
+  const records = await getSessionAttendanceRecords(params);
   const studentIds = Array.from(new Set(records.map((record) => record.student_id)));
   const students = await getStudentRows(studentIds, params.tenantId);
   const studentById = new Map(students.map((student) => [student.id, student]));
@@ -466,41 +579,32 @@ export async function getSessionAttendanceRoster(params: {
     throw new Error("Session not found in this workspace.");
   }
 
-  const [records, cohortMembers, enrollments] = await Promise.all([
-    getSessionAttendance(params),
-    session.cohort_id
-      ? getCohortMembers({
-          cohortId: session.cohort_id,
-          tenantId: params.tenantId,
-        })
-      : Promise.resolve([]),
-    !session.cohort_id && session.course_id
-      ? getEnrollmentsForCourse({
-          courseId: session.course_id,
-          tenantId: params.tenantId,
-        })
-      : Promise.resolve([]),
+  const [records, relationshipEligibleStudentIds] = await Promise.all([
+    getSessionAttendanceRecords(params),
+    getRelationshipEligibleStudentIds(session),
   ]);
 
   const studentIds = Array.from(
     new Set([
-      ...cohortMembers.map((member) => member.student_id),
-      ...enrollments.map((enrollment) => enrollment.student_id),
+      ...relationshipEligibleStudentIds,
       ...records.map((record) => record.student_id),
     ]),
   );
   const students = await getStudentRows(studentIds, params.tenantId);
-  const recordByStudentId = new Map(
-    records.map((record) => [record.student_id, record]),
+  const roster = composeAttendanceRoster({
+    records,
+    relationshipEligibleStudentIds,
+    sessionStatus: session.status,
+    students,
+  });
+  const visibleRecords = roster.flatMap((item) =>
+    item.record ? [item.record] : [],
   );
 
   return {
-    roster: students.map((student) => ({
-      record: recordByStudentId.get(student.id) ?? null,
-      student,
-    })) satisfies AttendanceRosterItem[],
+    roster,
     session,
-    summary: calculateSummary(students.length, records),
+    summary: calculateSummary(roster.length, visibleRecords),
   };
 }
 
@@ -523,7 +627,7 @@ export async function markAttendance(params: {
   const { decision, user } = await ensureCanManageAttendanceForSession(session, [
     params.studentId,
   ]);
-  await ensureStudentsBelongToSession(session, [params.studentId]);
+  await ensureAttendanceRowsCanBeSaved(session, [params.studentId]);
 
   if (decision.source === "delegated") {
     const record = await markDelegatedAttendanceWithRpc(params);
@@ -606,7 +710,7 @@ export async function bulkMarkAttendance(params: {
     session,
     params.records.map((record) => record.studentId),
   );
-  await ensureStudentsBelongToSession(
+  await ensureAttendanceRowsCanBeSaved(
     session,
     params.records.map((record) => record.studentId),
   );
@@ -735,14 +839,19 @@ export function canRoleMarkAttendance(role: MemberRole | null | undefined) {
 }
 
 export async function canCurrentUserMarkAttendance(params: {
+  session?: TrainingSessionWithRelations;
   sessionId: string;
   studentIds?: string[];
   tenantId: string;
 }) {
-  const session = await getSessionById({
-    sessionId: params.sessionId,
-    tenantId: params.tenantId,
-  });
+  const session =
+    params.session?.id === params.sessionId &&
+    params.session.tenant_id === params.tenantId
+      ? params.session
+      : await getSessionById({
+          sessionId: params.sessionId,
+          tenantId: params.tenantId,
+        });
 
   if (!session || session.status === "canceled") {
     return false;

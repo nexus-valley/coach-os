@@ -22,7 +22,6 @@ import {
   canCurrentUserManageSession,
   cancelSession,
   completeSession,
-  getSessionById,
   type SessionDeliveryMode,
   type SessionMeetingProvider,
   type TrainingSessionWithRelations,
@@ -60,7 +59,18 @@ const providerLabels: Record<SessionMeetingProvider, string> = {
 };
 
 function getErrorMessage(caught: unknown, fallback: string) {
-  return caught instanceof Error ? caught.message : fallback;
+  const message = caught instanceof Error ? caught.message : "";
+  const safeMessages = new Set([
+    "Attendance is read-only for canceled live classes.",
+    "Live class not found in this workspace.",
+    "No attendance records selected.",
+    "This student is no longer eligible for new attendance in this live class.",
+    "You do not have permission to manage this live class.",
+    "You do not have permission to mark attendance.",
+    "Workspace context is not available.",
+  ]);
+
+  return safeMessages.has(message) ? message : fallback;
 }
 
 function formatDateTime(value: string | null) {
@@ -163,6 +173,7 @@ export function SessionDetailClient({ sessionId }: SessionDetailClientProps) {
     });
     const [markAllowed, manageAllowed] = await Promise.all([
       canCurrentUserMarkAttendance({
+        session: data.session,
         sessionId,
         studentIds: data.roster.map((item) => item.student.id),
         tenantId: currentTenant.id,
@@ -216,16 +227,6 @@ export function SessionDetailClient({ sessionId }: SessionDetailClientProps) {
         setCurrentRole(role);
 
         if (canAccessAttendance(role)) {
-          const currentSession = await getSessionById({
-            sessionId,
-            tenantId: currentTenant.id,
-          });
-
-          if (!currentSession) {
-            setError("Live class not found in this workspace.");
-            return;
-          }
-
           await loadDetail(currentTenant);
         }
       } catch (caught) {
@@ -275,12 +276,24 @@ export function SessionDetailClient({ sessionId }: SessionDetailClientProps) {
     setSuccess("");
 
     try {
-      await bulkMarkAttendance({
-        records: roster.map((item) => ({
+      const records = roster
+        .filter(
+          (item) =>
+            item.hasExistingAttendance || item.isNewAttendanceEligible,
+        )
+        .map((item) => ({
           remarks: draft[item.student.id]?.remarks ?? "",
           status: draft[item.student.id]?.status ?? "present",
           studentId: item.student.id,
-        })),
+        }));
+
+      if (records.length === 0) {
+        setActionError("No attendance records selected.");
+        return;
+      }
+
+      await bulkMarkAttendance({
+        records,
         sessionId,
         tenantId: tenant.id,
       });
@@ -330,6 +343,10 @@ export function SessionDetailClient({ sessionId }: SessionDetailClientProps) {
       const next = { ...current };
 
       for (const item of roster) {
+        if (!item.hasExistingAttendance && !item.isNewAttendanceEligible) {
+          continue;
+        }
+
         next[item.student.id] = {
           remarks: next[item.student.id]?.remarks ?? "",
           status: "present",
@@ -556,8 +573,9 @@ export function SessionDetailClient({ sessionId }: SessionDetailClientProps) {
               Student roster
             </h3>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-[#425B76]">
-              Use this roster after the live class to capture attendance for
-              students from the linked cohort or program enrollment list.
+              {session.status === "canceled"
+                ? "This live class is canceled. Existing attendance remains available as read-only history."
+                : "Capture attendance for active students with an active enrollment in the linked program and, when applicable, membership in the linked cohort."}
             </p>
           </div>
           {canMark && roster.length > 0 ? (
@@ -578,9 +596,17 @@ export function SessionDetailClient({ sessionId }: SessionDetailClientProps) {
 
         {roster.length === 0 ? (
           <EmptyState
-            description="Add students to the linked cohort or enroll them in the linked program before marking attendance."
+            description={
+              session.status === "canceled"
+                ? "No historical attendance was recorded for this canceled live class."
+                : "Students need an active profile and active enrollment, plus membership in the linked cohort when this class uses one."
+            }
             icon="AT"
-            title="No students available for this live class"
+            title={
+              session.status === "canceled"
+                ? "No attendance history"
+                : "No eligible students"
+            }
           />
         ) : (
           <div className="mt-8 divide-y divide-[#D8E8F0] overflow-hidden rounded-3xl border border-[#D8E8F0]">
@@ -589,6 +615,9 @@ export function SessionDetailClient({ sessionId }: SessionDetailClientProps) {
                 remarks: "",
                 status: item.record?.status ?? "present",
               };
+              const rowEditable =
+                canMark &&
+                (item.hasExistingAttendance || item.isNewAttendanceEligible);
 
               return (
                 <div
@@ -602,6 +631,12 @@ export function SessionDetailClient({ sessionId }: SessionDetailClientProps) {
                     <p className="mt-1 text-sm text-[#64748B]">
                       {item.student.email || item.student.phone || "No contact added"}
                     </p>
+                    {item.hasExistingAttendance &&
+                    !item.isNewAttendanceEligible ? (
+                      <div className="mt-2">
+                        <Badge tone="light">Historical attendance</Badge>
+                      </div>
+                    ) : null}
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {statuses.map((status) => (
@@ -612,7 +647,7 @@ export function SessionDetailClient({ sessionId }: SessionDetailClientProps) {
                             ? "border-[#145DA0] bg-[#145DA0] text-white"
                             : "border-[#D8E8F0] bg-[#F6FBFE] text-[#425B76] hover:border-[#2ECBEA]",
                         ].join(" ")}
-                        disabled={!canMark}
+                        disabled={!rowEditable}
                         key={status}
                         onClick={() =>
                           setDraft((existing) => ({
@@ -635,7 +670,7 @@ export function SessionDetailClient({ sessionId }: SessionDetailClientProps) {
                     </Badge>
                     <input
                       className="h-10 min-w-0 flex-1 rounded-2xl border border-[#D8E8F0] bg-white px-3 text-sm text-[#0B1F33] outline-none transition placeholder:text-[#64748B] focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
-                      disabled={!canMark}
+                      disabled={!rowEditable}
                       onChange={(event) =>
                         setDraft((existing) => ({
                           ...existing,
