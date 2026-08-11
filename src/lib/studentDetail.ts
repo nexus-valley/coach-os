@@ -5,6 +5,7 @@ import {
   getStudentPortalInvitationStatus,
 } from "@/src/lib/studentPortalInvitations";
 import {
+  canCreateStudentDetailEnrollment,
   deriveStudentDetailPortalEvidence,
   getStudentDetailRelationshipCapabilities,
   groupStudentDetailRelationships,
@@ -198,8 +199,6 @@ export async function getStudentDetail(params: {
       program: cohort ? programById.get(cohort.course_id) ?? null : null,
     } satisfies StudentDetailCohort;
   });
-  const canManageTenantStudents =
-    role === "owner" || role === "admin" || role === "staff";
   const relationships = enrollments.map((enrollment) => {
     const relationshipCapabilities =
       getStudentDetailRelationshipCapabilities({
@@ -227,9 +226,11 @@ export async function getStudentDetail(params: {
 
   return {
     capabilities: {
-      canCreateEnrollment:
-        student.status === "active" &&
-        (canManageTenantStudents || trainerCourseIds.length > 0),
+      canCreateEnrollment: canCreateStudentDetailEnrollment({
+        role,
+        studentStatus: student.status,
+        trainerCourseIds,
+      }),
       canDeleteStudent: role === "owner" || role === "admin",
       canEditProfile: role !== "trainer",
       canPreviewPortal: true,

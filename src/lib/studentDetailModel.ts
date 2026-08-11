@@ -1,6 +1,10 @@
 import type { CourseStatus } from "@/src/lib/courses";
 import type { Cohort, CohortMember } from "@/src/lib/cohorts";
-import type { Enrollment, EnrollmentStatus } from "@/src/lib/enrollments";
+import type {
+  Enrollment,
+  EnrollmentCourseOption,
+  EnrollmentStatus,
+} from "@/src/lib/enrollments";
 import type {
   StudentPortalInvitationStatus,
   StudentPortalInvitationSummary,
@@ -61,11 +65,122 @@ export const studentDetailEnrollmentTransitions: Record<
   EnrollmentStatus,
   EnrollmentStatus[]
 > = {
-  active: ["completed", "paused", "cancelled"],
+  active: ["paused", "completed", "cancelled"],
   cancelled: ["active"],
   completed: [],
   paused: ["active", "cancelled"],
 };
+
+export type StudentDetailEnrollmentAction = {
+  confirmLabel: string;
+  description: string;
+  label: string;
+  successMessage: string;
+  targetStatus: EnrollmentStatus;
+};
+
+const studentDetailEnrollmentActions: Partial<
+  Record<
+    EnrollmentStatus,
+    Partial<Record<EnrollmentStatus, StudentDetailEnrollmentAction>>
+  >
+> = {
+  active: {
+    cancelled: {
+      confirmLabel: "Cancel enrollment",
+      description:
+        "Current learning access ends and the relationship moves to history. The existing enrollment may be reactivated later. Portal identity and payment state remain separate.",
+      label: "Cancel enrollment",
+      successMessage: "Enrollment cancelled.",
+      targetStatus: "cancelled",
+    },
+    completed: {
+      confirmLabel: "Complete enrollment",
+      description:
+        "The relationship moves to enrollment history and participation ends. Historical read access may remain where available. Completed enrollments cannot be resumed or reactivated. Portal identity and payment state remain separate.",
+      label: "Complete enrollment",
+      successMessage: "Enrollment completed.",
+      targetStatus: "completed",
+    },
+    paused: {
+      confirmLabel: "Pause enrollment",
+      description:
+        "The enrollment relationship is preserved in Current, but current learning access and participation are suspended. Portal identity and payment state remain separate.",
+      label: "Pause enrollment",
+      successMessage: "Enrollment paused.",
+      targetStatus: "paused",
+    },
+  },
+  cancelled: {
+    active: {
+      confirmLabel: "Reactivate enrollment",
+      description:
+        "The existing enrollment relationship is reactivated and its original record is reused. No new enrollment is created. Portal identity and payment state remain separate.",
+      label: "Reactivate enrollment",
+      successMessage: "Enrollment reactivated.",
+      targetStatus: "active",
+    },
+  },
+  paused: {
+    active: {
+      confirmLabel: "Resume enrollment",
+      description:
+        "The existing enrollment relationship resumes. No new enrollment record is created. Portal identity and payment state remain separate.",
+      label: "Resume enrollment",
+      successMessage: "Enrollment resumed.",
+      targetStatus: "active",
+    },
+    cancelled: {
+      confirmLabel: "Cancel enrollment",
+      description:
+        "Current learning access ends and the relationship moves to history. The existing enrollment may be reactivated later. Portal identity and payment state remain separate.",
+      label: "Cancel enrollment",
+      successMessage: "Enrollment cancelled.",
+      targetStatus: "cancelled",
+    },
+  },
+};
+
+export function getStudentDetailEnrollmentAction(params: {
+  currentStatus: EnrollmentStatus;
+  targetStatus: EnrollmentStatus;
+}) {
+  return (
+    studentDetailEnrollmentActions[params.currentStatus]?.[
+      params.targetStatus
+    ] ?? null
+  );
+}
+
+export function getAvailableStudentDetailEnrollmentOptions(params: {
+  options: EnrollmentCourseOption[];
+  relationships: StudentDetailRelationship[];
+}) {
+  const existingCourseIds = new Set(
+    params.relationships.map(
+      (relationship) => relationship.enrollment.course_id,
+    ),
+  );
+
+  return params.options.filter((option) => !existingCourseIds.has(option.id));
+}
+
+export function canCreateStudentDetailEnrollment(params: {
+  role: MemberRole;
+  studentStatus: Student["status"];
+  trainerCourseIds: string[];
+}) {
+  if (params.studentStatus !== "active") {
+    return false;
+  }
+
+  return (
+    params.role === "owner" ||
+    params.role === "admin" ||
+    params.role === "staff" ||
+    (params.role === "trainer" && params.trainerCourseIds.length > 0)
+  );
+}
 
 export function getStudentDetailEnrollmentTransitions(params: {
   enrollmentStatus: EnrollmentStatus;

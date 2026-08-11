@@ -336,9 +336,8 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
           return;
         }
 
-        setError(
-          getErrorMessage(caught, "Unable to load this program right now."),
-        );
+        console.error("Unable to load program detail", caught);
+        setError("Unable to load this program right now. Please try again.");
       } finally {
         if (active) {
           setLoading(false);
@@ -1586,7 +1585,7 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
                         <div>
                           <p className="text-xs leading-5 text-slate-500">
                           {isEnrolled
-                            ? "Student enrollment is active. Portal access is managed separately."
+                            ? "The request created or reused an enrollment. Current enrollment and portal access are managed separately."
                             : lifecycleStatus === "rejected"
                               ? "Closed requests are not available for approval."
                               : "Review is required before the student is enrolled."}

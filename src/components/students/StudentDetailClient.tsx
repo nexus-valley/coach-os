@@ -10,10 +10,7 @@ import {
   type ReactNode,
 } from "react";
 
-import {
-  EnrollmentStatusBadge,
-  formatEnrollmentStatus,
-} from "@/src/components/enrollments/EnrollmentStatusBadge";
+import { EnrollmentStatusBadge } from "@/src/components/enrollments/EnrollmentStatusBadge";
 import {
   emptyStudentForm,
   StudentFormFields,
@@ -34,18 +31,18 @@ import {
 } from "@/src/lib/cohorts";
 import {
   createEnrollment,
-  deleteEnrollment,
   getEnrollmentCourseOptions,
   updateEnrollmentStatus,
   type EnrollmentCourseOption,
   type EnrollmentStatus,
 } from "@/src/lib/enrollments";
+import { getStudentDetail } from "@/src/lib/studentDetail";
 import {
-  getStudentDetail,
-} from "@/src/lib/studentDetail";
-import {
+  getAvailableStudentDetailEnrollmentOptions,
+  getStudentDetailEnrollmentAction,
   getStudentDetailEnrollmentTransitions,
   type StudentDetailCohort,
+  type StudentDetailEnrollmentAction,
   type StudentDetailModel,
   type StudentDetailPortalState,
   type StudentDetailRelationship,
@@ -65,6 +62,11 @@ type AttentionItem = {
   description: string;
   title: string;
   tone: "info" | "warning";
+};
+
+type EnrollmentActionTarget = {
+  action: StudentDetailEnrollmentAction;
+  relationship: StudentDetailRelationship;
 };
 
 const portalLabels: Record<StudentDetailPortalState, string> = {
@@ -257,8 +259,7 @@ function RelationshipGroup({
   emptyCopy,
   label,
   onAddCohort,
-  onRemove,
-  onStatusChange,
+  onRequestStatusChange,
   relationships,
   studentStatus,
   mutating,
@@ -267,8 +268,7 @@ function RelationshipGroup({
   label: string;
   mutating: boolean;
   onAddCohort: (relationship: StudentDetailRelationship) => void;
-  onRemove: (relationship: StudentDetailRelationship) => void;
-  onStatusChange: (
+  onRequestStatusChange: (
     relationship: StudentDetailRelationship,
     status: EnrollmentStatus,
   ) => void;
@@ -348,16 +348,6 @@ function RelationshipGroup({
                         Add cohort
                       </Button>
                     ) : null}
-                    {relationship.canRemoveEnrollment ? (
-                      <Button
-                        onClick={() => onRemove(relationship)}
-                        size="sm"
-                        type="button"
-                        variant="ghost"
-                      >
-                        Remove relationship
-                      </Button>
-                    ) : null}
                   </div>
                 </div>
 
@@ -385,38 +375,37 @@ function RelationshipGroup({
                   </div>
                   <div>
                     <p className="text-xs font-semibold text-[#64748B]">
-                      Next enrollment state
+                      Enrollment actions
                     </p>
                     {relationship.canManageEnrollment && nextStatuses.length ? (
-                      <label className="mt-2 block">
-                        <span className="sr-only">
-                          Change enrollment state for {programTitle}
-                        </span>
-                        <select
-                          aria-label={`Change enrollment state for ${programTitle}`}
-                          className="h-10 w-full rounded-lg border border-[#CBD5E1] bg-white px-3 text-sm font-semibold text-[#334155] outline-none focus:border-[#145DA0] focus:ring-4 focus:ring-[#145DA0]/10"
-                          disabled={mutating}
-                          onChange={(event) => {
-                            const nextStatus = event.target.value as EnrollmentStatus;
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {nextStatuses.map((status) => {
+                          const action = getStudentDetailEnrollmentAction({
+                            currentStatus: relationship.enrollment.status,
+                            targetStatus: status,
+                          });
 
-                            if (nextStatus !== relationship.enrollment.status) {
-                              onStatusChange(relationship, nextStatus);
-                            }
-                          }}
-                          value={relationship.enrollment.status}
-                        >
-                          <option value={relationship.enrollment.status}>
-                            {formatEnrollmentStatus(
-                              relationship.enrollment.status,
-                            )}
-                          </option>
-                          {nextStatuses.map((status) => (
-                            <option key={status} value={status}>
-                              {formatEnrollmentStatus(status)}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
+                          return action ? (
+                            <Button
+                              aria-label={`${action.label} in ${programTitle}`}
+                              disabled={mutating}
+                              key={status}
+                              onClick={() =>
+                                onRequestStatusChange(relationship, status)
+                              }
+                              size="sm"
+                              type="button"
+                              variant={
+                                status === "cancelled"
+                                  ? "destructive"
+                                  : "secondary"
+                              }
+                            >
+                              {action.label}
+                            </Button>
+                          ) : null;
+                        })}
+                      </div>
                     ) : (
                       <p className="mt-2 text-sm text-[#526A80]">
                         {relationship.enrollment.status === "completed"
@@ -541,8 +530,6 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
   const [cohortOptions, setCohortOptions] = useState<CohortAssignmentOption[]>([]);
   const [cohortTarget, setCohortTarget] =
     useState<StudentDetailRelationship | null>(null);
-  const [deleteEnrollmentTarget, setDeleteEnrollmentTarget] =
-    useState<StudentDetailRelationship | null>(null);
   const [deleteStudentOpen, setDeleteStudentOpen] = useState(false);
   const [detail, setDetail] = useState<StudentDetailModel | null>(null);
   const [editOpen, setEditOpen] = useState(false);
@@ -557,6 +544,8 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
   const [optionsLoading, setOptionsLoading] = useState(false);
   const [selectedCohortId, setSelectedCohortId] = useState("");
   const [selectedCourseId, setSelectedCourseId] = useState("");
+  const [statusActionTarget, setStatusActionTarget] =
+    useState<EnrollmentActionTarget | null>(null);
   const [tenant, setTenant] = useState<Tenant | null>(null);
 
   const allRelationships = useMemo(
@@ -649,12 +638,10 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
 
     try {
       const options = await getEnrollmentCourseOptions(tenant.id);
-      const enrolledCourseIds = new Set(
-        allRelationships.map((relationship) => relationship.enrollment.course_id),
-      );
-      const available = options.filter(
-        (option) => !enrolledCourseIds.has(option.id),
-      );
+      const available = getAvailableStudentDetailEnrollmentOptions({
+        options,
+        relationships: allRelationships,
+      });
       setEnrollmentOptions(available);
       setSelectedCourseId(available[0]?.id ?? "");
     } catch (caught) {
@@ -786,11 +773,28 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
     }
   }
 
-  async function handleStatusChange(
+  function requestStatusChange(
     relationship: StudentDetailRelationship,
     status: EnrollmentStatus,
   ) {
-    if (!tenant) {
+    const action = getStudentDetailEnrollmentAction({
+      currentStatus: relationship.enrollment.status,
+      targetStatus: status,
+    });
+
+    if (!action) {
+      setActionError(
+        "That enrollment change is not available from the current state.",
+      );
+      return;
+    }
+
+    setActionError("");
+    setStatusActionTarget({ action, relationship });
+  }
+
+  async function handleStatusChange() {
+    if (!tenant || !statusActionTarget) {
       return;
     }
 
@@ -800,45 +804,17 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
 
     try {
       await updateEnrollmentStatus({
-        enrollmentId: relationship.enrollment.id,
-        status,
+        enrollmentId: statusActionTarget.relationship.enrollment.id,
+        status: statusActionTarget.action.targetStatus,
         tenantId: tenant.id,
       });
       await refreshDetail(tenant);
-      setActionMessage(
-        `${relationship.program?.title ?? "Program"} enrollment updated.`,
-      );
+      setStatusActionTarget(null);
+      setActionMessage(statusActionTarget.action.successMessage);
     } catch (caught) {
       console.error("Unable to update enrollment", caught);
       setActionError(
         safeActionError(caught, "Unable to update this enrollment."),
-      );
-    } finally {
-      setMutating(false);
-    }
-  }
-
-  async function handleRemoveEnrollment() {
-    if (!tenant || !deleteEnrollmentTarget) {
-      return;
-    }
-
-    setMutating(true);
-    setActionError("");
-    setActionMessage("");
-
-    try {
-      await deleteEnrollment({
-        enrollmentId: deleteEnrollmentTarget.enrollment.id,
-        tenantId: tenant.id,
-      });
-      await refreshDetail(tenant);
-      setDeleteEnrollmentTarget(null);
-      setActionMessage("Enrollment relationship removed.");
-    } catch (caught) {
-      console.error("Unable to remove enrollment", caught);
-      setActionError(
-        safeActionError(caught, "Unable to remove this enrollment."),
       );
     } finally {
       setMutating(false);
@@ -1006,8 +982,7 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
               label="Current"
               mutating={mutating}
               onAddCohort={openCohortDialog}
-              onRemove={setDeleteEnrollmentTarget}
-              onStatusChange={handleStatusChange}
+              onRequestStatusChange={requestStatusChange}
               relationships={detail.currentRelationships}
               studentStatus={student.status}
             />
@@ -1016,8 +991,7 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
               label="History"
               mutating={mutating}
               onAddCohort={openCohortDialog}
-              onRemove={setDeleteEnrollmentTarget}
-              onStatusChange={handleStatusChange}
+              onRequestStatusChange={requestStatusChange}
               relationships={detail.historyRelationships}
               studentStatus={student.status}
             />
@@ -1260,31 +1234,35 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
         </StudentDetailDialog>
       ) : null}
 
-      {deleteEnrollmentTarget ? (
+      {statusActionTarget ? (
         <StudentDetailDialog
-          description="This permanently deletes the enrollment relationship record. It does not merely pause or cancel learning access."
+          description={statusActionTarget.action.description}
           disabled={mutating}
-          onClose={() => setDeleteEnrollmentTarget(null)}
-          title={`Remove ${deleteEnrollmentTarget.program?.title ?? "program"} enrollment?`}
+          onClose={() => setStatusActionTarget(null)}
+          title={`${statusActionTarget.action.label} in ${statusActionTarget.relationship.program?.title ?? "this program"}?`}
         >
           <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
             <Button
               disabled={mutating}
-              onClick={() => setDeleteEnrollmentTarget(null)}
+              onClick={() => setStatusActionTarget(null)}
               type="button"
               variant="secondary"
             >
-              Keep relationship
+              Keep current status
             </Button>
             <Button
               disabled={mutating}
               isLoading={mutating}
-              loadingText="Removing..."
-              onClick={handleRemoveEnrollment}
+              loadingText="Updating..."
+              onClick={handleStatusChange}
               type="button"
-              variant="destructive"
+              variant={
+                statusActionTarget.action.targetStatus === "cancelled"
+                  ? "destructive"
+                  : "primary"
+              }
             >
-              Remove enrollment
+              {statusActionTarget.action.confirmLabel}
             </Button>
           </div>
         </StudentDetailDialog>

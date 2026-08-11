@@ -93,11 +93,8 @@ export function EnrollmentsPageClient() {
           return;
         }
 
-        setError(
-          caught instanceof Error
-            ? caught.message
-            : "Unable to load enrollments right now.",
-        );
+        console.error("Unable to load enrollments", caught);
+        setError("Unable to load enrollments right now. Please try again.");
       } finally {
         if (active) {
           setLoading(false);
@@ -216,7 +213,7 @@ export function EnrollmentsPageClient() {
             </Card>
           ))}
         </section>
-      ) : filteredEnrollments.length === 0 ? (
+      ) : error ? null : filteredEnrollments.length === 0 ? (
         <EmptyState
           action={{ label: "Open Students", onClick: () => router.push("/app/students") }}
           description="No enrollments yet. Add a student, create a program, then enroll the student from their profile."
@@ -224,8 +221,72 @@ export function EnrollmentsPageClient() {
           title="No enrollments found"
         />
       ) : (
-        <Card className="mt-6 overflow-hidden border-white/10 bg-[#101214] text-white shadow-2xl shadow-black/10">
-          <div className="overflow-x-auto">
+        <>
+          <section
+            aria-label="Enrollment relationships"
+            className="mt-6 grid gap-3 md:hidden"
+          >
+            {filteredEnrollments.map((enrollment) => (
+              <Card
+                className="border-white/10 bg-[#101214] p-5 text-white shadow-lg shadow-black/10"
+                key={enrollment.id}
+              >
+                <div className="grid gap-4">
+                  <div>
+                    <p className="text-xs font-semibold text-slate-400">
+                      Student
+                    </p>
+                    <Link
+                      className="mt-1 block min-w-0 wrap-break-word font-semibold transition hover:text-slate-200"
+                      href={`/app/students/${enrollment.student_id}`}
+                    >
+                      {enrollment.student?.full_name ?? "Student unavailable"}
+                    </Link>
+                    <p className="mt-1 wrap-break-word text-sm text-slate-400">
+                      {enrollment.student?.email ||
+                        enrollment.student?.phone ||
+                        "No contact details"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold text-slate-400">
+                      Program
+                    </p>
+                    {enrollment.canOpenCourse ? (
+                      <Link
+                        className="mt-1 block wrap-break-word font-semibold transition hover:text-slate-200"
+                        href={`/app/courses/${enrollment.course_id}`}
+                      >
+                        {enrollment.course?.title ?? "Program unavailable"}
+                      </Link>
+                    ) : (
+                      <p className="mt-1 wrap-break-word font-semibold">
+                        {enrollment.course?.title ?? "Program unavailable"}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap items-end justify-between gap-4">
+                    <div>
+                      <p className="mb-2 text-xs font-semibold text-slate-400">
+                        Enrollment state
+                      </p>
+                      <EnrollmentStatusBadge status={enrollment.status} />
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs font-semibold text-slate-400">
+                        Enrolled
+                      </p>
+                      <p className="mt-1 text-sm text-slate-300">
+                        {formatDate(enrollment.enrolled_at)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </section>
+
+          <Card className="mt-6 hidden overflow-hidden border-white/10 bg-[#101214] text-white shadow-2xl shadow-black/10 md:block">
             <div className="min-w-[780px]">
               <div
                 className={[
@@ -262,12 +323,18 @@ export function EnrollmentsPageClient() {
                           "No contact details"}
                       </p>
                     </Link>
-                    <Link
-                      className="min-w-0 truncate font-semibold transition hover:text-white"
-                      href={`/app/courses/${enrollment.course_id}`}
-                    >
-                      {enrollment.course?.title ?? "Program unavailable"}
-                    </Link>
+                    {enrollment.canOpenCourse ? (
+                      <Link
+                        className="min-w-0 truncate font-semibold transition hover:text-white"
+                        href={`/app/courses/${enrollment.course_id}`}
+                      >
+                        {enrollment.course?.title ?? "Program unavailable"}
+                      </Link>
+                    ) : (
+                      <p className="min-w-0 truncate font-semibold">
+                        {enrollment.course?.title ?? "Program unavailable"}
+                      </p>
+                    )}
                     <div>
                       <EnrollmentStatusBadge status={enrollment.status} />
                     </div>
@@ -278,8 +345,8 @@ export function EnrollmentsPageClient() {
                 ))}
               </div>
             </div>
-          </div>
-        </Card>
+          </Card>
+        </>
       )}
     </div>
   );

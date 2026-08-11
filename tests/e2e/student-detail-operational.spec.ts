@@ -120,7 +120,7 @@ test.describe("UX-4D Student Detail operational model", () => {
 
   test("preserves the exact enrollment transition contract", () => {
     expect(studentDetailEnrollmentTransitions).toEqual({
-      active: ["completed", "paused", "cancelled"],
+      active: ["paused", "completed", "cancelled"],
       cancelled: ["active"],
       completed: [],
       paused: ["active", "cancelled"],
@@ -385,22 +385,24 @@ test.describe("UX-4D Student Detail architecture", () => {
     expect(component.match(/onClick=\{openEnrollmentDialog\}/g)).toHaveLength(1);
   });
 
-  test("keeps mutations on secure helpers with exact destructive copy", () => {
+  test("keeps mutations on secure helpers without routine enrollment deletion", () => {
     const component = read("src/components/students/StudentDetailClient.tsx");
+    const enrollments = read("src/lib/enrollments.ts");
     const changedSources = [
       component,
       read("src/lib/studentDetail.ts"),
       read("src/lib/cohorts.ts"),
-      read("src/lib/enrollments.ts"),
+      enrollments,
     ].join("\n");
 
     expect(component).toContain("createEnrollment({");
     expect(component).toContain("updateEnrollmentStatus({");
-    expect(component).toContain("deleteEnrollment({");
     expect(component).toContain("addStudentToCohort({");
-    expect(component).toContain(
-      "permanently deletes the enrollment relationship record",
-    );
+    expect(component).not.toContain("deleteEnrollment({");
+    expect(component).not.toContain("Remove enrollment");
+    expect(component).not.toContain("Remove relationship");
+    expect(enrollments).toContain("export async function deleteEnrollment");
+    expect(enrollments).toContain('.rpc("remove_enrollment_secure"');
     expect(changedSources).not.toMatch(
       /\.from\(["'](?:students|enrollments|cohort_members)["']\)[\s\S]{0,300}\.(?:insert|update|delete)\(/,
     );

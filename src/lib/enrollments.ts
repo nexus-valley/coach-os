@@ -19,6 +19,7 @@ export type Enrollment = {
 };
 
 export type EnrollmentWithRelations = Enrollment & {
+  canOpenCourse: boolean;
   course: Course | null;
   student: Student | null;
 };
@@ -41,6 +42,7 @@ export type EnrollmentCourseOption = Pick<Course, "id" | "status" | "title">;
 async function loadEnrollmentRelations(
   enrollments: Enrollment[],
   tenantId: string,
+  trainerCourseIds: string[] | null,
 ) {
   const supabase = getSupabaseClient();
   const courseIds = Array.from(
@@ -86,6 +88,9 @@ async function loadEnrollmentRelations(
 
   return enrollments.map((enrollment) => ({
     ...enrollment,
+    canOpenCourse:
+      trainerCourseIds === null ||
+      trainerCourseIds.includes(enrollment.course_id),
     course: courseById.get(enrollment.course_id) ?? null,
     student: studentById.get(enrollment.student_id) ?? null,
   }));
@@ -98,17 +103,12 @@ async function getEnrollmentsByFilter(
   const supabase = getSupabaseClient();
   const trainerScope = await getCurrentTrainerScope(tenantId);
 
-  if (trainerScope) {
-    if (trainerScope.courseIds.length === 0) {
-      return [];
-    }
-
-    if (
-      filter?.column === "course_id" &&
-      !trainerScope.courseIds.includes(filter.value)
-    ) {
-      return [];
-    }
+  if (
+    trainerScope &&
+    filter?.column === "course_id" &&
+    !trainerScope.courseIds.includes(filter.value)
+  ) {
+    return [];
   }
 
   let query = supabase
@@ -123,17 +123,17 @@ async function getEnrollmentsByFilter(
     query = query.eq(filter.column, filter.value);
   }
 
-  if (trainerScope) {
-    query = query.in("course_id", trainerScope.courseIds);
-  }
-
   const { data, error } = await query;
 
   if (error) {
     throw error;
   }
 
-  return loadEnrollmentRelations((data ?? []) as Enrollment[], tenantId);
+  return loadEnrollmentRelations(
+    (data ?? []) as Enrollment[],
+    tenantId,
+    trainerScope?.courseIds ?? null,
+  );
 }
 
 export async function getEnrollmentsForTenant(tenantId: string) {
@@ -145,20 +145,27 @@ export async function getEnrollmentsForStudent(params: {
   tenantId: string;
 }) {
   const supabase = getSupabaseClient();
-  const { data, error } = await supabase
-    .from("enrollments")
-    .select(
-      "id,tenant_id,student_id,course_id,status,enrolled_at,completed_at,created_by,created_at,updated_at",
-    )
-    .eq("tenant_id", params.tenantId)
-    .eq("student_id", params.studentId)
-    .order("enrolled_at", { ascending: false });
+  const [{ data, error }, trainerScope] = await Promise.all([
+    supabase
+      .from("enrollments")
+      .select(
+        "id,tenant_id,student_id,course_id,status,enrolled_at,completed_at,created_by,created_at,updated_at",
+      )
+      .eq("tenant_id", params.tenantId)
+      .eq("student_id", params.studentId)
+      .order("enrolled_at", { ascending: false }),
+    getCurrentTrainerScope(params.tenantId),
+  ]);
 
   if (error) {
     throw error;
   }
 
-  return loadEnrollmentRelations((data ?? []) as Enrollment[], params.tenantId);
+  return loadEnrollmentRelations(
+    (data ?? []) as Enrollment[],
+    params.tenantId,
+    trainerScope?.courseIds ?? null,
+  );
 }
 
 export async function getEnrollmentsForCourse(params: {

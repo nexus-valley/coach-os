@@ -40,10 +40,6 @@ function formatDate(value: string | null) {
   }).format(new Date(value));
 }
 
-function getErrorMessage(caught: unknown, fallback: string) {
-  return caught instanceof Error ? caught.message : fallback;
-}
-
 export function CohortDetailClient({ cohortId }: CohortDetailClientProps) {
   const router = useRouter();
   const [actionError, setActionError] = useState("");
@@ -132,7 +128,8 @@ export function CohortDetailClient({ cohortId }: CohortDetailClientProps) {
           return;
         }
 
-        setError(getErrorMessage(caught, "Unable to load this cohort."));
+        console.error("Unable to load cohort detail", caught);
+        setError("Unable to load this cohort. Please try again.");
       } finally {
         if (active) {
           setLoading(false);
@@ -176,7 +173,8 @@ export function CohortDetailClient({ cohortId }: CohortDetailClientProps) {
     try {
       await refreshMembers();
     } catch (caught) {
-      setActionError(getErrorMessage(caught, "Unable to load students."));
+      console.error("Unable to load cohort students", caught);
+      setActionError("Unable to load students right now. Please try again.");
     }
   }
 
@@ -200,8 +198,9 @@ export function CohortDetailClient({ cohortId }: CohortDetailClientProps) {
       setAddOpen(false);
       await refreshMembers();
     } catch (caught) {
+      console.error("Unable to add cohort member", caught);
       setActionError(
-        getErrorMessage(caught, "Unable to add student to cohort."),
+        "Unable to add this student to the cohort. Please try again.",
       );
     } finally {
       setMutating(false);
@@ -233,7 +232,10 @@ export function CohortDetailClient({ cohortId }: CohortDetailClientProps) {
       });
       await refreshMembers();
     } catch (caught) {
-      setActionError(getErrorMessage(caught, "Unable to remove student."));
+      console.error("Unable to remove cohort member", caught);
+      setActionError(
+        "Unable to remove this student from the cohort. Please try again.",
+      );
     } finally {
       setMutating(false);
     }
