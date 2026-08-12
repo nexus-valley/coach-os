@@ -10,6 +10,7 @@ import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
 import { EmptyState } from "@/src/components/ui/EmptyState";
 import { FeedbackAlert } from "@/src/components/ui/FeedbackAlert";
+import { getAssignmentDetailLifecycleUi } from "@/src/lib/assignmentDetailLifecycle";
 import {
   canRoleManageAssignments,
   closeAssignment,
@@ -121,9 +122,13 @@ export function AssignmentDetailClient({
 
   const canAccess = canAccessAttendance(currentRole);
   const canManage = canManageEffective;
+  const lifecycleUi = getAssignmentDetailLifecycleUi(assignment?.status);
+  const canPublish = canManage && lifecycleUi.canPublish;
+  const canClose = canManage && lifecycleUi.canClose;
   const canCreateSubmission =
-    currentRole === "owner" || currentRole === "admin";
-  const canReviewSubmission = canReviewEffective;
+    (currentRole === "owner" || currentRole === "admin") &&
+    lifecycleUi.canCaptureSubmission;
+  const canReviewSubmission = canReviewEffective && lifecycleUi.canReview;
 
   const loadDetail = useCallback(async (currentTenant: Tenant) => {
     const data = await getAssignmentSubmissionRoster({
@@ -246,6 +251,15 @@ export function AssignmentDetailClient({
 
     if (!canManage) {
       setActionError("You do not have permission to manage this assignment.");
+      return;
+    }
+
+    const transitionAllowed =
+      (nextStatus === "published" && lifecycleUi.canPublish) ||
+      (nextStatus === "closed" && lifecycleUi.canClose);
+
+    if (!transitionAllowed) {
+      setActionError("This lifecycle action is not available for the assignment.");
       return;
     }
 
@@ -382,9 +396,9 @@ export function AssignmentDetailClient({
                   "General assignment"}
               </p>
             </div>
-            {canManage ? (
+            {canPublish || canClose ? (
               <div className="flex flex-wrap gap-2">
-                {assignment.status !== "published" ? (
+                {canPublish ? (
                   <Button
                     disabled={mutating === "published"}
                     onClick={() => updateStatus("published")}
@@ -395,7 +409,7 @@ export function AssignmentDetailClient({
                     Publish
                   </Button>
                 ) : null}
-                {assignment.status !== "closed" ? (
+                {canClose ? (
                   <Button
                     className="text-red-700!"
                     disabled={mutating === "closed"}
@@ -527,54 +541,87 @@ export function AssignmentDetailClient({
                       </Badge>
                     </div>
                   </div>
-                  <textarea
-                    className="min-h-28 resize-none rounded-2xl border border-[#D8E8F0] bg-white px-4 py-3 text-sm leading-6 text-[#0B1F33] outline-none transition placeholder:text-[#66788F] focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
-                    disabled={!canCreateSubmission}
-                    onChange={(event) =>
-                      setDraft((existing) => ({
-                        ...existing,
-                        [item.student.id]: {
-                          ...current,
-                          submissionText: event.target.value,
-                        },
-                      }))
-                    }
-                    placeholder="Submission text"
-                    value={current.submissionText}
-                  />
-                  <div className="space-y-3">
-                    <input
-                      className="h-11 w-full rounded-2xl border border-[#D8E8F0] bg-white px-3 text-sm text-[#0B1F33] outline-none transition placeholder:text-[#66788F] focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
-                      disabled={!canReviewSubmission}
-                      onChange={(event) =>
-                        setDraft((existing) => ({
-                          ...existing,
-                          [item.student.id]: {
-                            ...current,
-                            score: event.target.value,
-                          },
-                        }))
-                      }
-                      placeholder="Score"
-                      type="number"
-                      value={current.score}
-                    />
+                  {canCreateSubmission ? (
                     <textarea
-                      className="min-h-20 w-full resize-none rounded-2xl border border-[#D8E8F0] bg-white px-3 py-3 text-sm leading-6 text-[#0B1F33] outline-none transition placeholder:text-[#66788F] focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
-                      disabled={!canReviewSubmission}
+                      aria-label={`Submission text for ${item.student.full_name}`}
+                      className="min-h-28 resize-none rounded-2xl border border-[#D8E8F0] bg-white px-4 py-3 text-sm leading-6 text-[#0B1F33] outline-none transition placeholder:text-[#66788F] focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
                       onChange={(event) =>
                         setDraft((existing) => ({
                           ...existing,
                           [item.student.id]: {
                             ...current,
-                            feedback: event.target.value,
+                            submissionText: event.target.value,
                           },
                         }))
                       }
-                      placeholder="Feedback"
-                      value={current.feedback}
+                      placeholder="Submission text"
+                      value={current.submissionText}
                     />
-                  </div>
+                  ) : (
+                    <div className="min-h-28 rounded-2xl bg-[#F6FBFE] px-4 py-3">
+                      <p className="text-xs font-semibold text-[#66788F]">
+                        Submission
+                      </p>
+                      <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-[#425B76]">
+                        {item.submission?.submission_text ||
+                          "No submission recorded."}
+                      </p>
+                    </div>
+                  )}
+                  {canReviewSubmission ? (
+                    <div className="space-y-3">
+                      <input
+                        aria-label={`Score for ${item.student.full_name}`}
+                        className="h-11 w-full rounded-2xl border border-[#D8E8F0] bg-white px-3 text-sm text-[#0B1F33] outline-none transition placeholder:text-[#66788F] focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
+                        onChange={(event) =>
+                          setDraft((existing) => ({
+                            ...existing,
+                            [item.student.id]: {
+                              ...current,
+                              score: event.target.value,
+                            },
+                          }))
+                        }
+                        placeholder="Score"
+                        type="number"
+                        value={current.score}
+                      />
+                      <textarea
+                        aria-label={`Feedback for ${item.student.full_name}`}
+                        className="min-h-20 w-full resize-none rounded-2xl border border-[#D8E8F0] bg-white px-3 py-3 text-sm leading-6 text-[#0B1F33] outline-none transition placeholder:text-[#66788F] focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
+                        onChange={(event) =>
+                          setDraft((existing) => ({
+                            ...existing,
+                            [item.student.id]: {
+                              ...current,
+                              feedback: event.target.value,
+                            },
+                          }))
+                        }
+                        placeholder="Feedback"
+                        value={current.feedback}
+                      />
+                    </div>
+                  ) : (
+                    <div className="space-y-3 rounded-2xl bg-[#F6FBFE] px-4 py-3">
+                      <div>
+                        <p className="text-xs font-semibold text-[#66788F]">
+                          Score
+                        </p>
+                        <p className="mt-1 text-sm text-[#425B76]">
+                          {item.submission?.score ?? "Not scored"}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold text-[#66788F]">
+                          Feedback
+                        </p>
+                        <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-[#425B76]">
+                          {item.submission?.feedback || "No feedback recorded."}
+                        </p>
+                      </div>
+                    </div>
+                  )}
                   {canCreateSubmission || canReviewSubmission ? (
                     <div className="flex flex-wrap gap-2 xl:flex-col">
                       {canCreateSubmission ? (
