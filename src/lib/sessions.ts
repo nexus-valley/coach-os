@@ -1100,7 +1100,7 @@ export async function createSession(input: SessionInput) {
       },
       tenantId: session.tenant_id,
     });
-    await notifySessionUpdated(session);
+    await notifySessionCreated(session);
     await runAutomationTrigger("session_scheduled", {
       entityId: session.id,
       entityType: "session",
@@ -1145,7 +1145,7 @@ export async function createSession(input: SessionInput) {
     tenantId: session.tenant_id,
     userId: user.id,
   });
-  await notifySessionUpdated(session);
+  await notifySessionCreated(session);
   await runAutomationTrigger("session_scheduled", {
     entityId: session.id,
     entityType: "session",
@@ -1201,7 +1201,7 @@ export async function updateSession(input: UpdateSessionInput) {
       },
       tenantId: session.tenant_id,
     });
-    await notifySessionCreated(session);
+    await notifySessionUpdated(session);
 
     return session;
   }
@@ -1234,7 +1234,7 @@ export async function updateSession(input: UpdateSessionInput) {
     tenantId: session.tenant_id,
     userId: user.id,
   });
-  await notifySessionCreated(session);
+  await notifySessionUpdated(session);
 
   return session;
 }

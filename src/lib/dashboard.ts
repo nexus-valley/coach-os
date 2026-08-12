@@ -159,18 +159,13 @@ const paymentSelect =
 const financeInvoiceSelect =
   "id,tenant_id,student_id,course_id,total_amount,balance_amount,currency,status,created_at";
 
-const emptyAttendanceSummary: DashboardAttendanceSummary = {
-  attendancePercent: null,
-  deliveryModeBreakdown: {
-    hybrid: 0,
-    offline: 0,
-    online: 0,
-  },
-  lowAttendanceAlerts: 0,
-  recentSessions: [],
-  todaysSessions: [],
-  totalMarkedAttendance: 0,
-  upcomingSessions: [],
+type DashboardAttendanceAggregateRow = {
+  attendance_percent: number | null;
+  low_attendance_alerts: number | string;
+  total_marked_attendance: number | string;
+  upcoming_hybrid_count: number | string;
+  upcoming_offline_count: number | string;
+  upcoming_online_count: number | string;
 };
 
 const emptyAssignmentSummary: DashboardAssignmentSummary = {
@@ -347,7 +342,6 @@ async function getAttendanceDashboardSummary(
   todayStart.setHours(0, 0, 0, 0);
   const todayEnd = new Date(todayStart);
   todayEnd.setDate(todayEnd.getDate() + 1);
-  let scopedSessionIds: string[] | null = null;
   let upcomingQuery = supabase
     .from("sessions")
     .select(
@@ -388,48 +382,27 @@ async function getAttendanceDashboardSummary(
       filters.push(`cohort_id.in.(${trainerScope.cohortIds.join(",")})`);
     }
 
-    if (filters.length === 0) {
-      return emptyAttendanceSummary;
-    }
-
-    upcomingQuery = upcomingQuery.or(filters.join(","));
-    recentQuery = recentQuery.or(filters.join(","));
-    todayQuery = todayQuery.or(filters.join(","));
-
-    const scopedSessionsResult = await supabase
-      .from("sessions")
-      .select("id")
-      .eq("tenant_id", tenantId)
-      .or(filters.join(","));
-
-    if (scopedSessionsResult.error) {
-      throw scopedSessionsResult.error;
-    }
-
-    scopedSessionIds = ((scopedSessionsResult.data ?? []) as { id: string }[]).map(
-      (session) => session.id,
-    );
-
-    if (scopedSessionIds.length === 0) {
-      return emptyAttendanceSummary;
+    if (filters.length > 0) {
+      upcomingQuery = upcomingQuery.or(filters.join(","));
+      recentQuery = recentQuery.or(filters.join(","));
+      todayQuery = todayQuery.or(filters.join(","));
     }
   }
 
-  let attendanceQuery = supabase
-    .from("attendance_records")
-    .select("status")
-    .eq("tenant_id", tenantId);
-
-  if (scopedSessionIds) {
-    attendanceQuery = attendanceQuery.in("session_id", scopedSessionIds);
-  }
-
-  const [upcomingResult, recentResult, todayResult, attendanceResult] = await Promise.all([
-    upcomingQuery,
-    recentQuery,
-    todayQuery,
-    attendanceQuery,
-  ]);
+  const emptyTrainerScope =
+    trainerScope !== null &&
+    trainerScope.courseIds.length === 0 &&
+    trainerScope.cohortIds.length === 0;
+  const emptyPreviewResult = Promise.resolve({ data: [], error: null });
+  const [upcomingResult, recentResult, todayResult, aggregateResult] =
+    await Promise.all([
+      emptyTrainerScope ? emptyPreviewResult : upcomingQuery,
+      emptyTrainerScope ? emptyPreviewResult : recentQuery,
+      emptyTrainerScope ? emptyPreviewResult : todayQuery,
+      supabase.rpc("get_dashboard_session_attendance_summary", {
+        p_tenant_id: tenantId,
+      }),
+    ]);
 
   if (upcomingResult.error) {
     throw upcomingResult.error;
@@ -439,20 +412,21 @@ async function getAttendanceDashboardSummary(
     throw recentResult.error;
   }
 
-  if (attendanceResult.error) {
-    throw attendanceResult.error;
-  }
-
   if (todayResult.error) {
     throw todayResult.error;
   }
 
-  const attendanceRows = (attendanceResult.data ?? []) as { status: string }[];
-  const attended = attendanceRows.filter(
-    (record) => record.status === "present" || record.status === "late",
-  ).length;
-  const absent = attendanceRows.filter((record) => record.status === "absent")
-    .length;
+  if (aggregateResult.error) {
+    throw aggregateResult.error;
+  }
+
+  const aggregate = (
+    (aggregateResult.data ?? []) as DashboardAttendanceAggregateRow[]
+  )[0];
+
+  if (!aggregate) {
+    throw new Error("Dashboard attendance summary was unavailable.");
+  }
 
   const upcomingSessions = (upcomingResult.data ?? []) as {
     cohort_id: string | null;
@@ -467,27 +441,18 @@ async function getAttendanceDashboardSummary(
   }[];
   const recentSessions = (recentResult.data ?? []) as typeof upcomingSessions;
   const todaysSessions = (todayResult.data ?? []) as typeof upcomingSessions;
-  const deliveryModeBreakdown = [...upcomingSessions, ...todaysSessions].reduce<
-    Record<SessionDeliveryMode, number>
-  >(
-    (summary, session) => {
-      const mode = session.delivery_mode ?? "offline";
-      summary[mode] += 1;
-      return summary;
-    },
-    { hybrid: 0, offline: 0, online: 0 },
-  );
 
   return {
-    attendancePercent:
-      attendanceRows.length > 0
-        ? Math.round((attended / attendanceRows.length) * 100)
-        : null,
-    deliveryModeBreakdown,
-    lowAttendanceAlerts: absent,
+    attendancePercent: aggregate.attendance_percent,
+    deliveryModeBreakdown: {
+      hybrid: Number(aggregate.upcoming_hybrid_count),
+      offline: Number(aggregate.upcoming_offline_count),
+      online: Number(aggregate.upcoming_online_count),
+    },
+    lowAttendanceAlerts: Number(aggregate.low_attendance_alerts),
     recentSessions: await loadSessionPreviews(recentSessions, tenantId),
     todaysSessions: await loadSessionPreviews(todaysSessions, tenantId),
-    totalMarkedAttendance: attendanceRows.length,
+    totalMarkedAttendance: Number(aggregate.total_marked_attendance),
     upcomingSessions: await loadSessionPreviews(upcomingSessions, tenantId),
   } satisfies DashboardAttendanceSummary;
 }

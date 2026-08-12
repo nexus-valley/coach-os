@@ -60,8 +60,8 @@ function formatDate(value: string) {
   }).format(new Date(value));
 }
 
-function getErrorMessage(caught: unknown, fallback: string) {
-  return caught instanceof Error ? caught.message : fallback;
+function getSafeDashboardError() {
+  return "Unable to load dashboard data.";
 }
 
 function UsageMiniCard({
@@ -149,7 +149,7 @@ function SessionPreviewList({
               <Badge tone="light">{session.meetingProvider.replace("_", " ")}</Badge>
             ) : null}
           </div>
-          {showJoin && session.meetingUrl ? (
+          {showJoin && session.status === "scheduled" && session.meetingUrl ? (
             <a
               className="mt-3 inline-flex h-9 items-center justify-center rounded-full border border-[#D8E8F0] bg-white px-3 text-xs font-semibold text-[#0B2A3D] transition hover:-translate-y-0.5 hover:border-[#2ECBEA]/60 hover:bg-[#F3FAFD]"
               href={session.meetingUrl}
@@ -294,12 +294,12 @@ export function DashboardPageClient() {
         setTrialStatus(workspaceTrialStatus);
         setUsage(workspaceUsage);
         setError("");
-      } catch (caught) {
+      } catch {
         if (!active) {
           return;
         }
 
-        setError(getErrorMessage(caught, "Unable to load dashboard data."));
+        setError(getSafeDashboardError());
       } finally {
         if (active) {
           setLoading(false);
