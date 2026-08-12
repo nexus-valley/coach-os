@@ -54,6 +54,16 @@ export type AssignmentSubmissionSummary = {
   total: number;
 };
 
+export const staleAssignmentReviewMessage =
+  "This submission changed since you opened it. Review the latest submission before saving feedback.";
+
+export class StaleAssignmentReviewError extends Error {
+  constructor() {
+    super(staleAssignmentReviewMessage);
+    this.name = "StaleAssignmentReviewError";
+  }
+}
+
 const submissionColumns =
   "id,tenant_id,assignment_id,student_id,submitted_by,submission_text,attachment_urls_json,score,feedback,status,submitted_at,reviewed_at,reviewed_by,created_at,updated_at";
 
@@ -72,6 +82,28 @@ function normalizeSubmission(row: AssignmentSubmission) {
 
 function normalizeAttachmentUrls(urls: string[] | undefined) {
   return (urls ?? []).map((url) => url.trim()).filter(Boolean);
+}
+
+function throwReviewRpcError(error: unknown): never {
+  const candidate =
+    error && typeof error === "object"
+      ? (error as { code?: unknown; details?: unknown })
+      : null;
+
+  if (
+    candidate?.code === "P0001" &&
+    candidate.details === "assignment_submission_stale"
+  ) {
+    throw new StaleAssignmentReviewError();
+  }
+
+  throw error;
+}
+
+export function isStaleAssignmentReviewError(
+  error: unknown,
+): error is StaleAssignmentReviewError {
+  return error instanceof StaleAssignmentReviewError;
 }
 
 function calculateSummary(
@@ -247,6 +279,7 @@ async function notifySubmissionEvent(params: {
 
 async function reviewDelegatedSubmissionWithRpc(params: {
   assignmentId: string;
+  expectedSubmissionUpdatedAt: string;
   feedback: string;
   score?: string | number | null;
   studentId: string;
@@ -265,6 +298,7 @@ async function reviewDelegatedSubmissionWithRpc(params: {
   const { data, error } = await supabase
     .rpc("review_delegated_assignment_submission", {
       p_assignment_id: params.assignmentId,
+      p_expected_submission_updated_at: params.expectedSubmissionUpdatedAt,
       p_feedback: params.feedback.trim() || null,
       p_score: rawScore,
       p_student_id: params.studentId,
@@ -273,7 +307,7 @@ async function reviewDelegatedSubmissionWithRpc(params: {
     .single();
 
   if (error) {
-    throw error;
+    throwReviewRpcError(error);
   }
 
   return normalizeSubmission(data as AssignmentSubmission);
@@ -421,11 +455,16 @@ export async function updateSubmission(params: {
 
 export async function reviewSubmission(params: {
   assignmentId: string;
+  expectedSubmissionUpdatedAt: string;
   feedback: string;
   score?: string | number | null;
   studentId: string;
   tenantId: string;
 }) {
+  if (!params.expectedSubmissionUpdatedAt) {
+    throw new Error("Submission revision is not available. Reload before reviewing.");
+  }
+
   const assignment = await getAssignmentById({
     assignmentId: params.assignmentId,
     tenantId: params.tenantId,
@@ -490,6 +529,7 @@ export async function reviewSubmission(params: {
   const { data, error } = await supabase
     .rpc("review_assignment_submission_secure", {
       p_assignment_id: params.assignmentId,
+      p_expected_submission_updated_at: params.expectedSubmissionUpdatedAt,
       p_feedback: params.feedback.trim() || null,
       p_score: rawScore,
       p_student_id: params.studentId,
@@ -497,7 +537,7 @@ export async function reviewSubmission(params: {
     });
 
   if (error) {
-    throw error;
+    throwReviewRpcError(error);
   }
 
   const submission = normalizeSubmission(data as AssignmentSubmission);

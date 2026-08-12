@@ -23,7 +23,9 @@ import { getUserDelegatedPermissions } from "@/src/lib/delegatedPermissions";
 import { canAccessAttendance } from "@/src/lib/permissions";
 import {
   getAssignmentSubmissionRoster,
+  isStaleAssignmentReviewError,
   reviewSubmission,
+  staleAssignmentReviewMessage,
   submitAssignment,
   type AssignmentRosterItem,
   type AssignmentSubmissionSummary,
@@ -316,6 +318,15 @@ export function AssignmentDetailClient({
       return;
     }
 
+    const submission = roster.find(
+      (item) => item.student.id === studentId,
+    )?.submission;
+
+    if (!submission?.updated_at) {
+      setActionError("Reload this assignment before reviewing the submission.");
+      return;
+    }
+
     setMutating(`review-${studentId}`);
     setActionError("");
     setSuccess("");
@@ -323,6 +334,7 @@ export function AssignmentDetailClient({
     try {
       await reviewSubmission({
         assignmentId,
+        expectedSubmissionUpdatedAt: submission.updated_at,
         feedback: draft[studentId]?.feedback ?? "",
         score: draft[studentId]?.score ?? null,
         studentId,
@@ -331,6 +343,13 @@ export function AssignmentDetailClient({
       await refresh();
       setSuccess("Submission reviewed.");
     } catch (caught) {
+      if (isStaleAssignmentReviewError(caught)) {
+        setDraft({});
+        await refresh().catch(() => undefined);
+        setActionError(staleAssignmentReviewMessage);
+        return;
+      }
+
       setActionError(getErrorMessage(caught, "Unable to review submission."));
     } finally {
       setMutating("");
