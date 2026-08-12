@@ -161,6 +161,42 @@ test.describe("UX-5E Dashboard attendance aggregate safety", () => {
 });
 
 test.describe("UX-5E Dashboard application integration", () => {
+  test("shows attendance metrics only to the four aggregate-authorized team roles", () => {
+    const page = read("src/components/dashboard/DashboardPageClient.tsx");
+    const visibilityStart = page.indexOf("function canViewAttendanceMetrics(");
+    const visibilityEnd = page.indexOf("function UsageMiniCard(", visibilityStart);
+
+    expect(visibilityStart).toBeGreaterThanOrEqual(0);
+    expect(visibilityEnd).toBeGreaterThan(visibilityStart);
+
+    const visibility = page.slice(visibilityStart, visibilityEnd);
+    expect(visibility.match(/role === "[^"]+"/g)).toEqual([
+      'role === "owner"',
+      'role === "admin"',
+      'role === "staff"',
+      'role === "trainer"',
+    ]);
+    expect(visibility).not.toMatch(/role\s*!==|return\s+true/);
+    expect(visibility).not.toMatch(/student|platform_owner|unknown/i);
+
+    const attendanceGuard = page.indexOf(
+      "{canViewAttendanceMetrics(currentRole) ? (",
+    );
+    const attendanceSectionEnd = page.indexOf("</section>", attendanceGuard);
+    const assignmentSnapshot = page.indexOf("Assignment Snapshot");
+    const unrelatedOwnerGuard = page.lastIndexOf(
+      '{currentRole !== "owner" ? (',
+      assignmentSnapshot,
+    );
+
+    expect(attendanceGuard).toBeGreaterThanOrEqual(0);
+    expect(attendanceSectionEnd).toBeGreaterThan(attendanceGuard);
+    expect(page.slice(attendanceGuard, attendanceSectionEnd)).toContain(
+      "Attendance Snapshot",
+    );
+    expect(unrelatedOwnerGuard).toBeGreaterThan(attendanceSectionEnd);
+  });
+
   test("uses the aggregate RPC without broad attendance or session-ID fallback", () => {
     const dashboard = read("src/lib/dashboard.ts");
     const attendance = typescriptFunctionBody(

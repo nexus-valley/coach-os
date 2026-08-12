@@ -64,6 +64,15 @@ function getSafeDashboardError() {
   return "Unable to load dashboard data.";
 }
 
+function canViewAttendanceMetrics(role: MemberRole | null) {
+  return (
+    role === "owner" ||
+    role === "admin" ||
+    role === "staff" ||
+    role === "trainer"
+  );
+}
+
 function UsageMiniCard({
   label,
   limit,
@@ -548,8 +557,7 @@ export function DashboardPageClient() {
         </section>
       ) : null}
 
-      {currentRole !== "owner" ? (
-        <>
+      {canViewAttendanceMetrics(currentRole) ? (
       <section className="mt-8 grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
         <Card className="border-[#D8E8F0] bg-white p-6 text-[#0B1F33] shadow-2xl shadow-[#0B2A3D]/10">
           <div className="flex items-start justify-between gap-4">
@@ -640,7 +648,10 @@ export function DashboardPageClient() {
           </div>
         </Card>
       </section>
+      ) : null}
 
+      {currentRole !== "owner" ? (
+        <>
       <section className="mt-8 grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
         <Card className="border-[#D8E8F0] bg-white p-6 text-[#0B1F33] shadow-2xl shadow-[#0B2A3D]/10">
           <div className="flex items-start justify-between gap-4">
