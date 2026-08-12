@@ -43,6 +43,12 @@ type CreatedRecord = {
   id: string;
 };
 
+type DemoAssignmentStatus = "closed" | "draft" | "published";
+
+function shouldSeedDemoAssignmentSubmissions(status: DemoAssignmentStatus) {
+  return status === "published" || status === "closed";
+}
+
 type DemoStudentInput = {
   email: string;
   name: string;
@@ -871,7 +877,9 @@ export async function seedDemoWorkspace(tenantId: string) {
   const cohorts: CreatedRecord[] = [];
   const enrollments: CreatedRecord[] = [];
   const sessions: CreatedRecord[] = [];
-  const assignments: CreatedRecord[] = [];
+  const assignments: Array<
+    CreatedRecord & { cohortIndex: number; status: DemoAssignmentStatus }
+  > = [];
 
   await updateWorkspaceBranding(tenantId, { batchId, userId });
 
@@ -1056,7 +1064,11 @@ export async function seedDemoWorkspace(tenantId: string) {
 
   for (const [index, course] of courses.entries()) {
     const cohort = cohorts[index];
-    const assignmentTemplates = [
+    const assignmentTemplates: Array<{
+      days: number;
+      status: DemoAssignmentStatus;
+      title: string;
+    }> = [
       { days: -2, status: "published", title: "Weekly practice worksheet" },
       { days: 3, status: "published", title: "Upcoming concept check" },
       { days: 10, status: "draft", title: "Revision planning task" },
@@ -1077,14 +1089,21 @@ export async function seedDemoWorkspace(tenantId: string) {
         tenant_id: tenantId,
         title: `${demoCourses[index].title}: ${template.title}`,
       }, { batchId, tenantId, userId });
-      assignments.push(assignment);
+      assignments.push({
+        ...assignment,
+        cohortIndex: index,
+        status: template.status,
+      });
       summary.assignments += 1;
     }
   }
 
   for (const [assignmentIndex, assignment] of assignments.entries()) {
-    const cohortIndex = Math.floor(assignmentIndex / 3);
-    const roster = studentsByCohort[cohortIndex] ?? [];
+    if (!shouldSeedDemoAssignmentSubmissions(assignment.status)) {
+      continue;
+    }
+
+    const roster = studentsByCohort[assignment.cohortIndex] ?? [];
 
     for (const [studentIndex, student] of roster.entries()) {
       if (studentIndex > 5) {
