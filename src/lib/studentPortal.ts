@@ -795,14 +795,27 @@ export async function getStudentPortalSessions(params: StudentPortalRequest) {
 
   return {
     recent: sessions
-      .filter((session) => new Date(session.scheduled_start_at).getTime() < now)
-      .slice(-6)
-      .reverse(),
+      .filter(
+        (session) =>
+          session.status === "canceled" ||
+          new Date(session.scheduled_start_at).getTime() < now,
+      )
+      .sort(
+        (left, right) =>
+          new Date(right.scheduled_start_at).getTime() -
+          new Date(left.scheduled_start_at).getTime(),
+      )
+      .slice(0, 8),
     upcoming: sessions
       .filter(
         (session) =>
           session.status === "scheduled" &&
           new Date(session.scheduled_start_at).getTime() >= now,
+      )
+      .sort(
+        (left, right) =>
+          new Date(left.scheduled_start_at).getTime() -
+          new Date(right.scheduled_start_at).getTime(),
       )
       .slice(0, 6),
   };

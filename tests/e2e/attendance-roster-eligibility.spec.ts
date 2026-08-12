@@ -4,7 +4,9 @@ import { join } from "node:path";
 
 import {
   composeAttendanceRoster,
+  getChangedAttendanceRecords,
   getNewAttendanceRelationshipStudentIds,
+  updateAttendanceDraft,
 } from "../../src/lib/attendanceRoster";
 import type { StudentStatus } from "../../src/lib/students";
 
@@ -153,9 +155,13 @@ test.describe("UX-5B1 attendance roster compatibility", () => {
     const componentSource = read(
       "src/components/sessions/SessionDetailClient.tsx",
     );
+    const draftSource = read("src/lib/attendanceRoster.ts");
 
+    expect(componentSource).toContain("getChangedAttendanceRecords(draft)");
+    expect(componentSource).toContain("hasUnmarkedChange");
+    expect(componentSource).toContain("item.isNewAttendanceEligible");
     expect(componentSource).toContain(
-      "item.hasExistingAttendance || item.isNewAttendanceEligible",
+      "item.hasExistingAttendance && !item.isNewAttendanceEligible",
     );
     expect(attendanceSource).toContain(
       "!existingStudentIds.has(studentId)",
@@ -166,9 +172,54 @@ test.describe("UX-5B1 attendance roster compatibility", () => {
     expect(attendanceSource).toContain('.rpc("mark_attendance_secure"');
     expect(attendanceSource).toContain('.rpc("bulk_mark_attendance_secure"');
     expect(attendanceSource).toContain('.rpc("mark_delegated_attendance"');
+    expect(draftSource).toContain("Object.entries(draft)");
     expect(attendanceSource).not.toMatch(
       /\.from\("attendance_records"\)[\s\S]{0,240}\.(insert|update|delete)\(/,
     );
+  });
+
+  test("tracks explicit attendance changes and builds a changed-only payload", () => {
+    const unmarked = { remarks: "", status: null } as const;
+    const persisted = { remarks: "Saved", status: "late" } as const;
+    let draft = updateAttendanceDraft({
+      baseline: unmarked,
+      current: {},
+      next: { remarks: "", status: "present" },
+      studentId: "new-present",
+    });
+
+    expect(draft).toEqual({
+      "new-present": { remarks: "", status: "present" },
+    });
+    draft = updateAttendanceDraft({
+      baseline: persisted,
+      current: draft,
+      next: { remarks: "Corrected", status: "late" },
+      studentId: "existing",
+    });
+    expect(Object.keys(draft)).toHaveLength(2);
+    expect(getChangedAttendanceRecords(draft)).toEqual({
+      hasUnmarkedChange: false,
+      records: [
+        { remarks: "", status: "present", studentId: "new-present" },
+        { remarks: "Corrected", status: "late", studentId: "existing" },
+      ],
+    });
+
+    draft = updateAttendanceDraft({
+      baseline: persisted,
+      current: draft,
+      next: persisted,
+      studentId: "existing",
+    });
+    draft = updateAttendanceDraft({
+      baseline: unmarked,
+      current: draft,
+      next: unmarked,
+      studentId: "new-present",
+    });
+    expect(draft).toEqual({});
+    expect(getChangedAttendanceRecords(draft).records).toEqual([]);
   });
 
   test("keeps canceled attendance read-only and maps failures to safe copy", () => {
@@ -186,7 +237,7 @@ test.describe("UX-5B1 attendance roster compatibility", () => {
     expect(componentSource).toContain(
       'canMarkEffective && session?.status !== "canceled"',
     );
-    expect(componentSource).toContain("Existing attendance remains available");
+    expect(componentSource).toContain("canceled classes are read-only");
     expect(componentSource).toContain("safeMessages.has(message)");
     expect(componentSource).not.toContain(
       "return caught instanceof Error ? caught.message",

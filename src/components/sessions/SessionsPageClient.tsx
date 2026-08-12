@@ -4,20 +4,31 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 import { AccessDeniedCard } from "@/src/components/security/AccessDeniedCard";
+import {
+  createDefaultSessionForm,
+  emptySessionForm,
+  SessionDialog,
+  SessionFormActions,
+  SessionFormFields,
+  type SessionFormState,
+} from "@/src/components/sessions/SessionForm";
 import { Badge } from "@/src/components/ui/Badge";
 import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
 import { EmptyState } from "@/src/components/ui/EmptyState";
 import { FeedbackAlert } from "@/src/components/ui/FeedbackAlert";
-import { getCoursesForTenant, type Course } from "@/src/lib/courses";
 import { getCohortsForTenant, type CohortWithCourse } from "@/src/lib/cohorts";
+import { getCoursesForTenant, type Course } from "@/src/lib/courses";
 import { getUserDelegatedPermissions } from "@/src/lib/delegatedPermissions";
 import { canAccessAttendance, canManageAttendance } from "@/src/lib/permissions";
 import {
+  classifyOperationalSessions,
+  formatSessionDateTime,
+} from "@/src/lib/sessionDateTime";
+import {
   createSession,
-  getSessionsForTenant,
+  getOperationalSessionsForTenant,
   type SessionDeliveryMode,
-  type SessionMeetingProvider,
   type SessionStatus,
   type TrainingSessionWithRelations,
 } from "@/src/lib/sessions";
@@ -25,38 +36,11 @@ import { getSupabaseClient } from "@/src/lib/supabaseClient";
 import { getCurrentMemberRole, type MemberRole } from "@/src/lib/team";
 import { getCurrentTenant, type Tenant } from "@/src/lib/tenant";
 
-type SessionFormState = {
-  cohortId: string;
-  courseId: string;
+type SessionGroup = {
   description: string;
-  deliveryMode: SessionDeliveryMode;
-  joinAvailableFrom: string;
-  meetingId: string;
-  meetingNotes: string;
-  meetingPasscode: string;
-  meetingProvider: SessionMeetingProvider | "";
-  meetingUrl: string;
-  scheduledEndAt: string;
-  scheduledStartAt: string;
-  timezone: string;
+  key: "upcoming" | "past-due" | "completed" | "canceled";
+  sessions: TrainingSessionWithRelations[];
   title: string;
-};
-
-const emptyForm: SessionFormState = {
-  cohortId: "",
-  courseId: "",
-  description: "",
-  deliveryMode: "offline",
-  joinAvailableFrom: "",
-  meetingId: "",
-  meetingNotes: "",
-  meetingPasscode: "",
-  meetingProvider: "",
-  meetingUrl: "",
-  scheduledEndAt: "",
-  scheduledStartAt: "",
-  timezone: "Asia/Kolkata",
-  title: "",
 };
 
 const deliveryModeLabels: Record<SessionDeliveryMode, string> = {
@@ -65,69 +49,90 @@ const deliveryModeLabels: Record<SessionDeliveryMode, string> = {
   online: "Online",
 };
 
-const providerLabels: Record<SessionMeetingProvider, string> = {
-  custom: "Custom",
-  google_meet: "Google Meet",
-  microsoft_teams: "Microsoft Teams",
-  zoom: "Zoom",
-};
+function getSafeError(caught: unknown, fallback: string) {
+  const message = caught instanceof Error ? caught.message : "";
+  const allowed = [
+    "Enter a valid date and time.",
+    "Enter a valid IANA timezone, such as Asia/Kolkata.",
+    "Session end time cannot be before start time.",
+    "Session title is required.",
+    "Select a course or cohort for this session.",
+    "That local time does not exist in the selected timezone. Choose another time.",
+    "That local time occurs twice in the selected timezone. Choose another time.",
+    "You do not have permission to manage sessions.",
+  ];
 
-function getErrorMessage(caught: unknown, fallback: string) {
-  return caught instanceof Error ? caught.message : fallback;
+  return allowed.includes(message) ? message : fallback;
 }
 
-function formatDateTime(value: string | null) {
-  if (!value) {
-    return "Not set";
-  }
-
-  return new Intl.DateTimeFormat("en", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
+function statusTone(status: SessionStatus): "danger" | "success" | "warning" {
+  return status === "completed" ? "success" : status === "canceled" ? "danger" : "warning";
 }
 
-function getStatusTone(status: SessionStatus): "danger" | "success" | "warning" {
-  if (status === "completed") {
-    return "success";
-  }
-
-  if (status === "canceled") {
-    return "danger";
-  }
-
-  return "warning";
+function deliveryTone(mode: SessionDeliveryMode): "admin" | "light" | "staff" {
+  return mode === "online" ? "admin" : mode === "hybrid" ? "light" : "staff";
 }
 
-function getDeliveryTone(
-  deliveryMode: SessionDeliveryMode,
-): "admin" | "light" | "staff" {
-  if (deliveryMode === "online") {
-    return "admin";
-  }
+function groupSessions(
+  sessions: TrainingSessionWithRelations[],
+  now = Date.now(),
+): SessionGroup[] {
+  const groups = classifyOperationalSessions(sessions, now);
 
-  if (deliveryMode === "hybrid") {
-    return "light";
-  }
-
-  return "staff";
+  return [
+    {
+      description: "Scheduled classes ahead, nearest first.",
+      key: "upcoming",
+      sessions: groups.upcoming,
+      title: "Upcoming",
+    },
+    {
+      description: "Scheduled time has passed. Review attendance, then complete or cancel the class.",
+      key: "past-due",
+      sessions: groups.pastDue,
+      title: "Past due / needs attention",
+    },
+    {
+      description: "Completed class history, newest first.",
+      key: "completed",
+      sessions: groups.completed,
+      title: "Completed",
+    },
+    {
+      description: "Canceled class history, newest first.",
+      key: "canceled",
+      sessions: groups.canceled,
+      title: "Canceled",
+    },
+  ];
 }
 
-function toDateTimeLocalValue(date: Date) {
-  const offsetDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
-  return offsetDate.toISOString().slice(0, 16);
-}
+function SessionCard({ session }: { session: TrainingSessionWithRelations }) {
+  const marked = Object.values(session.attendanceCounts).reduce((sum, count) => sum + count, 0);
 
-function defaultStartTime() {
-  const date = new Date();
-  date.setHours(date.getHours() + 1, 0, 0, 0);
-  return toDateTimeLocalValue(date);
-}
-
-function defaultEndTime(startValue: string) {
-  const date = new Date(startValue);
-  date.setHours(date.getHours() + 1);
-  return toDateTimeLocalValue(date);
+  return (
+    <Card className="border-[#D8E8F0] bg-white p-5 shadow-lg shadow-[#0B2A3D]/8 sm:p-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <div className="flex flex-wrap gap-2">
+            <Badge tone={statusTone(session.status)}>{session.status}</Badge>
+            <Badge tone={deliveryTone(session.delivery_mode)}>{deliveryModeLabels[session.delivery_mode]}</Badge>
+          </div>
+          <h4 className="mt-4 break-words text-xl font-semibold text-[#0B1F33]">{session.title}</h4>
+          <p className="mt-2 text-sm font-semibold text-[#425B76]">
+            {formatSessionDateTime(session.scheduled_start_at, session.timezone)}
+          </p>
+          <p className="mt-1 text-xs text-[#64748B]">Session timezone: {session.timezone}</p>
+        </div>
+        <Button href={`/app/sessions/${session.id}`} size="sm" variant="secondary">View session</Button>
+      </div>
+      <dl className="mt-5 grid gap-3 border-t border-[#D8E8F0] pt-4 text-sm sm:grid-cols-3">
+        <div><dt className="text-[#64748B]">Program</dt><dd className="mt-1 font-semibold text-[#0B1F33]">{session.course?.title ?? "General live class"}</dd></div>
+        <div><dt className="text-[#64748B]">Cohort</dt><dd className="mt-1 font-semibold text-[#0B1F33]">{session.cohort?.name ?? "No cohort"}</dd></div>
+        <div><dt className="text-[#64748B]">Attendance recorded</dt><dd className="mt-1 font-semibold text-[#0B1F33]">{marked}</dd></div>
+      </dl>
+    </Card>
+  );
 }
 
 export function SessionsPageClient() {
@@ -135,682 +140,226 @@ export function SessionsPageClient() {
   const [cohorts, setCohorts] = useState<CohortWithCourse[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
   const [currentRole, setCurrentRole] = useState<MemberRole | null>(null);
-  const [canManageEffective, setCanManageEffective] = useState(false);
+  const [canManage, setCanManage] = useState(false);
+  const [cohortFilter, setCohortFilter] = useState("all");
+  const [courseFilter, setCourseFilter] = useState("all");
   const [error, setError] = useState("");
-  const [form, setForm] = useState<SessionFormState>(emptyForm);
+  const [form, setForm] = useState<SessionFormState>(emptySessionForm);
   const [formOpen, setFormOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [managementCohorts, setManagementCohorts] = useState<CohortWithCourse[]>([]);
+  const [managementCourses, setManagementCourses] = useState<Course[]>([]);
   const [saving, setSaving] = useState(false);
+  const [search, setSearch] = useState("");
   const [sessions, setSessions] = useState<TrainingSessionWithRelations[]>([]);
   const [statusFilter, setStatusFilter] = useState<SessionStatus | "all">("all");
   const [success, setSuccess] = useState("");
   const [tenant, setTenant] = useState<Tenant | null>(null);
-
   const canAccess = canAccessAttendance(currentRole);
-  const canManage = canManageEffective;
+  const canSchedule =
+    canManage && (managementCourses.length > 0 || managementCohorts.length > 0);
 
   async function loadSessionContext(currentTenant: Tenant) {
     const [tenantSessions, tenantCourses, tenantCohorts] = await Promise.all([
-      getSessionsForTenant(currentTenant.id),
+      getOperationalSessionsForTenant(currentTenant.id, 200),
       getCoursesForTenant(currentTenant.id),
       getCohortsForTenant(currentTenant.id),
     ]);
-
     setSessions(tenantSessions);
     setCourses(tenantCourses);
     setCohorts(tenantCohorts);
+    return { tenantCohorts, tenantCourses };
   }
 
   useEffect(() => {
     let active = true;
-
     async function load() {
       try {
         const currentTenant = await getCurrentTenant();
-
-        if (!active) {
-          return;
-        }
-
-        if (!currentTenant) {
-          router.replace("/onboarding");
-          return;
-        }
-
+        if (!active) return;
+        if (!currentTenant) { router.replace("/onboarding"); return; }
         const supabase = getSupabaseClient();
-        const {
-          data: { user },
-          error: userError,
-        } = await supabase.auth.getUser();
-
-        if (userError) {
-          throw userError;
-        }
-
-        const role = user
-          ? await getCurrentMemberRole(currentTenant.id, user.id)
-          : null;
-
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        if (userError) throw userError;
+        const role = user ? await getCurrentMemberRole(currentTenant.id, user.id) : null;
         setTenant(currentTenant);
         setCurrentRole(role);
-
         if (canAccessAttendance(role)) {
-          await loadSessionContext(currentTenant);
-          const delegated = user
-            ? await getUserDelegatedPermissions(currentTenant.id, user.id).catch(
-                () => [],
-              )
-            : [];
-          setCanManageEffective(
-            canManageAttendance(role) ||
-              delegated.some(
-                (permission) => permission.permission_key === "manage_sessions",
-              ),
+          const loaded = await loadSessionContext(currentTenant);
+          const delegated = user ? await getUserDelegatedPermissions(currentTenant.id, user.id).catch(() => []) : [];
+          const hasScope = loaded.tenantCourses.length > 0 || loaded.tenantCohorts.length > 0;
+          const sessionPermissions = delegated.filter(
+            (permission) => permission.permission_key === "manage_sessions",
+          );
+          const workspaceDelegated = sessionPermissions.some(
+            (permission) => !permission.scope_type || permission.scope_type === "workspace",
+          );
+          const delegatedCourseIds = new Set(
+            sessionPermissions
+              .filter((permission) => permission.scope_type === "course")
+              .map((permission) => permission.scope_id)
+              .filter((id): id is string => Boolean(id)),
+          );
+          const delegatedCohortIds = new Set(
+            sessionPermissions
+              .filter((permission) => permission.scope_type === "cohort")
+              .map((permission) => permission.scope_id)
+              .filter((id): id is string => Boolean(id)),
+          );
+          const roleManaged = canManageAttendance(role);
+          const managedCohorts = roleManaged || workspaceDelegated
+            ? loaded.tenantCohorts
+            : loaded.tenantCohorts.filter(
+                (cohort) =>
+                  delegatedCohortIds.has(cohort.id) ||
+                  delegatedCourseIds.has(cohort.course_id),
+              );
+          const cohortCourseIds = new Set(managedCohorts.map((cohort) => cohort.course_id));
+          const managedCourses = roleManaged || workspaceDelegated
+            ? loaded.tenantCourses
+            : loaded.tenantCourses.filter(
+                (course) =>
+                  delegatedCourseIds.has(course.id) || cohortCourseIds.has(course.id),
+              );
+          setManagementCourses(managedCourses);
+          setManagementCohorts(managedCohorts);
+          setCanManage(
+            (roleManaged && (role !== "trainer" || hasScope)) ||
+              workspaceDelegated ||
+              managedCourses.length > 0 ||
+              managedCohorts.length > 0,
           );
         }
       } catch (caught) {
-        if (!active) {
-          return;
-        }
-
-        setError(getErrorMessage(caught, "Unable to load live classes."));
+        if (active) setError(getSafeError(caught, "Live classes could not be loaded."));
       } finally {
-        if (active) {
-          setLoading(false);
-        }
+        if (active) setLoading(false);
       }
     }
-
     load();
-
-    return () => {
-      active = false;
-    };
+    return () => { active = false; };
   }, [router]);
 
-  const filteredSessions = useMemo(
-    () =>
-      sessions.filter(
-        (session) => statusFilter === "all" || session.status === statusFilter,
-      ),
-    [sessions, statusFilter],
-  );
+  const filteredSessions = useMemo(() => {
+    const query = search.trim().toLocaleLowerCase();
+    return sessions.filter((session) => {
+      if (statusFilter !== "all" && session.status !== statusFilter) return false;
+      if (courseFilter !== "all" && session.course_id !== courseFilter) return false;
+      if (cohortFilter !== "all" && session.cohort_id !== cohortFilter) return false;
+      return !query || session.title.toLocaleLowerCase().includes(query);
+    });
+  }, [cohortFilter, courseFilter, search, sessions, statusFilter]);
+  const programOptions = useMemo(() => {
+    const options = new Map(courses.map((course) => [course.id, course.title]));
+    for (const cohort of cohorts) {
+      if (cohort.course) options.set(cohort.course.id, cohort.course.title);
+    }
+    for (const session of sessions) {
+      if (session.course_id && session.course) {
+        options.set(session.course_id, session.course.title);
+      }
+    }
+    return [...options].sort((left, right) => left[1].localeCompare(right[1]));
+  }, [cohorts, courses, sessions]);
+  const groups = useMemo(() => groupSessions(filteredSessions), [filteredSessions]);
+  const filtersActive = Boolean(search.trim()) || statusFilter !== "all" || courseFilter !== "all" || cohortFilter !== "all";
+
+  function resetFilters() {
+    setSearch(""); setStatusFilter("all"); setCourseFilter("all"); setCohortFilter("all");
+  }
 
   function openCreateForm() {
-    const start = defaultStartTime();
-    setForm({
-      ...emptyForm,
-      cohortId: cohorts[0]?.id ?? "",
-      courseId: cohorts[0]?.course_id ?? courses[0]?.id ?? "",
-      scheduledEndAt: defaultEndTime(start),
-      scheduledStartAt: start,
-    });
-    setError("");
-    setSuccess("");
-    setFormOpen(true);
+    setForm(createDefaultSessionForm(managementCourses, managementCohorts));
+    setError(""); setSuccess(""); setFormOpen(true);
   }
 
   async function refreshSessions() {
-    if (!tenant) {
-      return;
-    }
-
-    await loadSessionContext(tenant);
+    if (tenant) await loadSessionContext(tenant);
   }
 
   async function handleCreateSession(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-
-    if (!tenant) {
-      setError("Workspace context is not available.");
+    if (!tenant || saving) return;
+    const selectedCohort = managementCohorts.find((cohort) => cohort.id === form.cohortId);
+    if (selectedCohort && selectedCohort.course_id !== form.courseId) {
+      setError("Select a cohort that belongs to the chosen program.");
       return;
     }
-
-    setSaving(true);
-    setError("");
-    setSuccess("");
-
+    setSaving(true); setError(""); setSuccess("");
     try {
       await createSession({
-        cohortId: form.cohortId || null,
-        courseId: form.courseId || null,
-        description: form.description,
-        deliveryMode: form.deliveryMode,
-        joinAvailableFrom: form.joinAvailableFrom || null,
-        meetingId: form.meetingId,
-        meetingNotes: form.meetingNotes,
-        meetingPasscode: form.meetingPasscode,
-        meetingProvider: form.meetingProvider || null,
-        meetingUrl: form.meetingUrl,
-        scheduledEndAt: form.scheduledEndAt,
-        scheduledStartAt: form.scheduledStartAt,
-        tenantId: tenant.id,
-        timezone: form.timezone,
-        title: form.title,
+        cohortId: form.cohortId || null, courseId: form.courseId || null,
+        description: form.description, deliveryMode: form.deliveryMode,
+        joinAvailableFrom: form.joinAvailableFrom || null, meetingId: form.meetingId,
+        meetingNotes: form.meetingNotes, meetingPasscode: form.meetingPasscode,
+        meetingProvider: form.meetingProvider || null, meetingUrl: form.meetingUrl,
+        recordingUrl: form.recordingUrl, scheduledEndAt: form.scheduledEndAt,
+        scheduledStartAt: form.scheduledStartAt, tenantId: tenant.id,
+        timezone: form.timezone, title: form.title,
       });
-      setFormOpen(false);
-      setForm(emptyForm);
-      await refreshSessions();
-      setSuccess("Live class created.");
+      setFormOpen(false); setForm(emptySessionForm); await refreshSessions(); setSuccess("Live class created.");
     } catch (caught) {
-      setError(getErrorMessage(caught, "Unable to create live class."));
-    } finally {
-      setSaving(false);
-    }
+      setError(getSafeError(caught, "Live class could not be created."));
+    } finally { setSaving(false); }
   }
 
-  if (!loading && currentRole && !canAccess) {
-    return (
-      <AccessDeniedCard description="You do not have permission to access live class scheduling." />
-    );
-  }
+  if (!loading && currentRole && !canAccess) return <AccessDeniedCard description="You do not have permission to access live class scheduling." />;
 
   return (
     <div className="mx-auto max-w-7xl">
       <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
         <div>
           <Badge tone="light">Live class operations</Badge>
-          <h2 className="mt-5 text-3xl font-semibold tracking-normal text-[#0B1F33] sm:text-4xl">
-            Live Classes
-          </h2>
-          <p className="mt-3 max-w-2xl text-base leading-7 text-[#425B76]">
-            Schedule program-linked live teaching, manage meeting details, and
-            track attendance after each class.
-          </p>
+          <h1 className="mt-4 text-3xl font-semibold text-[#0B1F33] sm:text-4xl">Live Classes</h1>
+          <p className="mt-3 max-w-2xl text-base leading-7 text-[#425B76]">Review upcoming delivery, resolve past-due classes, and keep attendance history organized.</p>
         </div>
-        {canManage ? (
-          <Button onClick={openCreateForm} size="lg" type="button">
-            Schedule live class
-          </Button>
-        ) : null}
+        {canSchedule ? <Button onClick={openCreateForm} size="lg">Schedule live class</Button> : null}
       </div>
 
-      <Card className="mt-8 border-[#D8E8F0] bg-white p-5 shadow-2xl shadow-[#0B2A3D]/10 sm:p-6">
-        <div className="grid gap-4 lg:grid-cols-[1fr_auto_auto] lg:items-end">
-          <div>
-            <p className="text-sm font-medium text-[#425B76]">
-              Current workspace
-            </p>
-            <p className="mt-1 text-xl font-semibold text-[#0B1F33]">
-              {tenant?.name ?? "Loading workspace..."}
-            </p>
-          </div>
-          <div className="rounded-full border border-[#9ADDEA] bg-[#EAF8FC] px-4 py-2 text-sm font-semibold text-[#0B6F87]">
-            {sessions.length}{" "}
-            {sessions.length === 1 ? "live class" : "live classes"}
-          </div>
-          <label className="block">
-            <span className="text-sm font-medium text-[#425B76]">Status</span>
-            <select
-              className="mt-2 h-11 rounded-2xl border border-[#D8E8F0] bg-white px-4 text-sm text-[#0B1F33] outline-none transition focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
-              onChange={(event) =>
-                setStatusFilter(event.target.value as SessionStatus | "all")
-              }
-              value={statusFilter}
-            >
-              <option value="all">All live classes</option>
-              <option value="scheduled">Scheduled</option>
-              <option value="completed">Completed</option>
-              <option value="canceled">Canceled</option>
-            </select>
-          </label>
+      <Card className="mt-7 border-[#D8E8F0] bg-white p-5 shadow-lg shadow-[#0B2A3D]/8">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-[minmax(12rem,1fr)_repeat(3,minmax(10rem,0.55fr))_auto] xl:items-end">
+          <label className="block"><span className="text-sm font-medium text-[#425B76]">Search title</span><input className="mt-2 h-11 w-full rounded-lg border border-[#CBD5E1] px-3 text-sm" onChange={(event) => setSearch(event.target.value)} type="search" value={search} /></label>
+          <label className="block"><span className="text-sm font-medium text-[#425B76]">Status</span><select className="mt-2 h-11 w-full rounded-lg border border-[#CBD5E1] px-3 text-sm" onChange={(event) => setStatusFilter(event.target.value as SessionStatus | "all")} value={statusFilter}><option value="all">All statuses</option><option value="scheduled">Scheduled</option><option value="completed">Completed</option><option value="canceled">Canceled</option></select></label>
+          <label className="block"><span className="text-sm font-medium text-[#425B76]">Program</span><select className="mt-2 h-11 w-full rounded-lg border border-[#CBD5E1] px-3 text-sm" onChange={(event) => { setCourseFilter(event.target.value); if (event.target.value !== "all") { const cohort = cohorts.find((item) => item.id === cohortFilter); if (cohort?.course_id !== event.target.value) setCohortFilter("all"); } }} value={courseFilter}><option value="all">All programs</option>{programOptions.map(([id, title]) => <option key={id} value={id}>{title}</option>)}</select></label>
+          <label className="block"><span className="text-sm font-medium text-[#425B76]">Cohort</span><select className="mt-2 h-11 w-full rounded-lg border border-[#CBD5E1] px-3 text-sm" onChange={(event) => setCohortFilter(event.target.value)} value={cohortFilter}><option value="all">All cohorts</option>{cohorts.filter((cohort) => courseFilter === "all" || cohort.course_id === courseFilter).map((cohort) => <option key={cohort.id} value={cohort.id}>{cohort.name}</option>)}</select></label>
+          <Button disabled={!filtersActive} onClick={resetFilters} variant="secondary">Reset</Button>
         </div>
+        <p aria-live="polite" className="mt-4 text-sm text-[#64748B]">Showing {filteredSessions.length} of {sessions.length} bounded live classes.</p>
       </Card>
 
-      {error ? (
-        <div className="mt-6">
-          <FeedbackAlert onRetry={() => window.location.reload()}>
-            {error}
-          </FeedbackAlert>
-        </div>
-      ) : null}
-
-      {success ? (
-        <div className="mt-6">
-          <FeedbackAlert tone="success">{success}</FeedbackAlert>
-        </div>
-      ) : null}
+      {error ? <div className="mt-5"><FeedbackAlert onRetry={() => window.location.reload()}>{error}</FeedbackAlert></div> : null}
+      {success ? <div className="mt-5"><FeedbackAlert tone="success">{success}</FeedbackAlert></div> : null}
 
       {loading ? (
-        <section className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {[0, 1, 2].map((item) => (
-            <Card
-              className="h-64 animate-pulse border-[#D8E8F0] bg-white"
-              key={item}
-            >
-              <span className="sr-only">Loading live classes</span>
-            </Card>
-          ))}
-        </section>
+        <div className="mt-6 grid gap-4 md:grid-cols-2">{[0, 1, 2, 3].map((item) => <Card className="h-52 animate-pulse border-[#D8E8F0] bg-white" key={item}><span className="sr-only">Loading live classes</span></Card>)}</div>
       ) : filteredSessions.length === 0 ? (
         <EmptyState
-          action={
-            canManage
-              ? {
-                  disabled: courses.length === 0 && cohorts.length === 0,
-                  label: "Schedule live class",
-                  onClick: openCreateForm,
-                }
-              : undefined
-          }
-          description="Create a program-linked live class for enrolled students, then add meeting details and track attendance after delivery."
+          action={filtersActive ? { label: "Reset filters", onClick: resetFilters } : canSchedule ? { label: "Schedule live class", onClick: openCreateForm } : undefined}
+          description={filtersActive ? "No live classes match the current search and filters." : "Schedule the first program-linked live class for this workspace."}
           icon="SE"
-          title="No live classes found"
+          title={filtersActive ? "No matching live classes" : "No live classes yet"}
         />
       ) : (
-        <section className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {filteredSessions.map((session) => {
-            const marked =
-              session.attendanceCounts.present +
-              session.attendanceCounts.absent +
-              session.attendanceCounts.late +
-              session.attendanceCounts.excused;
-
-            return (
-              <Card
-                className="flex min-h-72 flex-col justify-between border-[#D8E8F0] bg-white p-6 shadow-2xl shadow-[#0B2A3D]/10 transition hover:-translate-y-1 hover:shadow-[#0B2A3D]/15"
-                key={session.id}
-              >
-                <div>
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="flex flex-wrap gap-2">
-                      <Badge tone={getStatusTone(session.status)}>
-                        {session.status}
-                      </Badge>
-                      <Badge tone={getDeliveryTone(session.delivery_mode)}>
-                        {deliveryModeLabels[session.delivery_mode]}
-                      </Badge>
-                    </div>
-                    <span className="text-xs font-semibold text-[#64748B]">
-                      {formatDateTime(session.scheduled_start_at)}
-                    </span>
-                  </div>
-                  <h3 className="mt-5 text-2xl font-semibold leading-tight text-[#0B1F33]">
-                    {session.title}
-                  </h3>
-                  <div className="mt-4 grid gap-3 text-sm">
-                    <div className="rounded-2xl border border-[#D8E8F0] bg-[#F8FAFC] p-3">
-                      <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#64748B]">
-                        Program
-                      </p>
-                      <p className="mt-1 font-semibold text-[#0B1F33]">
-                        {session.course?.title ?? "General live class"}
-                      </p>
-                    </div>
-                    {session.cohort ? (
-                      <div className="rounded-2xl border border-[#D8E8F0] bg-[#F8FAFC] p-3">
-                        <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#64748B]">
-                          Cohort
-                        </p>
-                        <p className="mt-1 font-semibold text-[#0B1F33]">
-                          {session.cohort.name}
-                        </p>
-                      </div>
-                    ) : null}
-                  </div>
-                  <p className="mt-4 line-clamp-3 text-sm leading-6 text-[#425B76]">
-                    {session.description || "No live class notes added yet."}
-                  </p>
-                  <p className="mt-3 text-xs font-semibold uppercase tracking-[0.08em] text-[#64748B]">
-                    {session.trainer_user_id ? "Host assigned" : "Team hosted"}
-                  </p>
-                  {session.meeting_provider || session.meeting_url ? (
-                    <div className="mt-4 flex flex-wrap items-center gap-2">
-                      {session.meeting_provider ? (
-                        <Badge tone="light">
-                          {providerLabels[session.meeting_provider]}
-                        </Badge>
-                      ) : null}
-                      {session.meeting_url ? (
-                        <a
-                          className="inline-flex h-10 items-center justify-center rounded-full border border-[#D8E8F0] bg-white px-4 text-sm font-semibold text-[#0B2A3D] shadow-sm transition hover:-translate-y-0.5 hover:border-[#2ECBEA]/60 hover:bg-[#F3FAFD]"
-                          href={session.meeting_url}
-                          rel="noreferrer"
-                          target="_blank"
-                        >
-                          Join Class
-                        </a>
-                      ) : null}
-                    </div>
-                  ) : null}
-                </div>
-                <div className="mt-8 border-t border-[#D8E8F0] pt-5">
-                  <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div className="rounded-2xl bg-[#F6FBFE] p-3">
-                      <p className="font-semibold text-[#0B1F33]">
-                        {marked}
-                      </p>
-                      <p className="mt-1 text-xs text-[#64748B]">Marked</p>
-                    </div>
-                    <div className="rounded-2xl bg-[#F6FBFE] p-3">
-                      <p className="font-semibold text-[#0B1F33]">
-                        {session.attendanceCounts.present +
-                          session.attendanceCounts.late}
-                      </p>
-                      <p className="mt-1 text-xs text-[#64748B]">Attended</p>
-                    </div>
-                  </div>
-                  <div className="mt-5">
-                    <Button href={`/app/sessions/${session.id}`} size="sm">
-                      Open command center
-                    </Button>
-                  </div>
-                </div>
-              </Card>
-            );
-          })}
-        </section>
+        <div className="mt-7 space-y-9">
+          {groups.filter((group) => group.sessions.length > 0).map((group) => (
+            <section aria-labelledby={`session-group-${group.key}`} key={group.key}>
+              <div className="flex flex-wrap items-end justify-between gap-3 border-b border-[#D8E8F0] pb-3">
+                <div><h2 className="text-xl font-semibold text-[#0B1F33]" id={`session-group-${group.key}`}>{group.title}</h2><p className="mt-1 text-sm text-[#64748B]">{group.description}</p></div>
+                <Badge tone={group.key === "past-due" ? "warning" : "neutral"}>{group.sessions.length}</Badge>
+              </div>
+              <div className="mt-4 grid gap-4 lg:grid-cols-2">{group.sessions.map((session) => <SessionCard key={session.id} session={session} />)}</div>
+            </section>
+          ))}
+        </div>
       )}
 
       {formOpen ? (
-        <div className="fixed inset-0 z-50 flex min-h-full items-end justify-center overflow-y-auto bg-[#0B1F33]/70 px-4 py-4 backdrop-blur-sm sm:items-center">
-          <Card className="max-h-[calc(100dvh-2rem)] w-full max-w-3xl overflow-y-auto rounded-xl border-[#CBD5E1] bg-white p-5 text-[#0B1F33] shadow-2xl shadow-slate-950/25 sm:p-6">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-sm font-semibold text-[#475569]">
-                  Live class setup
-                </p>
-                <h3 className="mt-2 text-2xl font-semibold text-[#0B1F33]">
-                  Schedule live class
-                </h3>
-              </div>
-              <button
-                className="flex h-10 w-10 items-center justify-center rounded-full border border-[#CBD5E1] text-sm font-semibold text-[#475569] transition hover:bg-[#F8FAFC] hover:text-[#0B1F33]"
-                onClick={() => setFormOpen(false)}
-                type="button"
-              >
-                X
-              </button>
-            </div>
-
-            <form className="mt-7 space-y-5" onSubmit={handleCreateSession}>
-              <label className="block">
-                <span className="text-sm font-medium text-[#425B76]">
-                  Live class title
-                </span>
-                <input
-                  className="mt-2 h-12 w-full rounded-2xl border border-[#D8E8F0] bg-white px-4 text-sm text-[#0B1F33] outline-none transition placeholder:text-[#64748B] focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      title: event.target.value,
-                    }))
-                  }
-                  placeholder="Weekly live class"
-                  required
-                  type="text"
-                  value={form.title}
-                />
-              </label>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <label className="block">
-                  <span className="text-sm font-medium text-[#425B76]">
-                    Program
-                  </span>
-                  <select
-                    className="mt-2 h-12 w-full rounded-2xl border border-[#D8E8F0] bg-white px-4 text-sm text-[#0B1F33] outline-none transition focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        courseId: event.target.value,
-                      }))
-                    }
-                    value={form.courseId}
-                  >
-                    <option value="">Select program</option>
-                    {courses.map((course) => (
-                      <option key={course.id} value={course.id}>
-                        {course.title}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="block">
-                  <span className="text-sm font-medium text-[#425B76]">
-                    Cohort
-                  </span>
-                  <select
-                    className="mt-2 h-12 w-full rounded-2xl border border-[#D8E8F0] bg-white px-4 text-sm text-[#0B1F33] outline-none transition focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
-                    onChange={(event) => {
-                      const cohort = cohorts.find(
-                        (item) => item.id === event.target.value,
-                      );
-                      setForm((current) => ({
-                        ...current,
-                        cohortId: event.target.value,
-                        courseId: cohort?.course_id ?? current.courseId,
-                      }));
-                    }}
-                    value={form.cohortId}
-                  >
-                    <option value="">No cohort</option>
-                    {cohorts.map((cohort) => (
-                      <option key={cohort.id} value={cohort.id}>
-                        {cohort.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <label className="block">
-                  <span className="text-sm font-medium text-[#425B76]">
-                    Start
-                  </span>
-                  <input
-                    className="mt-2 h-12 w-full rounded-2xl border border-[#D8E8F0] bg-white px-4 text-sm text-[#0B1F33] outline-none transition focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        scheduledStartAt: event.target.value,
-                      }))
-                    }
-                    required
-                    type="datetime-local"
-                    value={form.scheduledStartAt}
-                  />
-                </label>
-                <label className="block">
-                  <span className="text-sm font-medium text-[#425B76]">End</span>
-                  <input
-                    className="mt-2 h-12 w-full rounded-2xl border border-[#D8E8F0] bg-white px-4 text-sm text-[#0B1F33] outline-none transition focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        scheduledEndAt: event.target.value,
-                      }))
-                    }
-                    type="datetime-local"
-                    value={form.scheduledEndAt}
-                  />
-                </label>
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-3">
-                <label className="block">
-                  <span className="text-sm font-medium text-[#425B76]">
-                    Delivery
-                  </span>
-                  <select
-                    className="mt-2 h-12 w-full rounded-2xl border border-[#D8E8F0] bg-white px-4 text-sm text-[#0B1F33] outline-none transition focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        deliveryMode: event.target.value as SessionDeliveryMode,
-                      }))
-                    }
-                    value={form.deliveryMode}
-                  >
-                    <option value="offline">Offline</option>
-                    <option value="online">Online</option>
-                    <option value="hybrid">Hybrid</option>
-                  </select>
-                </label>
-                <label className="block">
-                  <span className="text-sm font-medium text-[#425B76]">
-                    Provider
-                  </span>
-                  <select
-                    className="mt-2 h-12 w-full rounded-2xl border border-[#D8E8F0] bg-white px-4 text-sm text-[#0B1F33] outline-none transition focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        meetingProvider: event.target
-                          .value as SessionMeetingProvider | "",
-                      }))
-                    }
-                    value={form.meetingProvider}
-                  >
-                    <option value="">No provider</option>
-                    <option value="zoom">Zoom</option>
-                    <option value="google_meet">Google Meet</option>
-                    <option value="microsoft_teams">Microsoft Teams</option>
-                    <option value="custom">Custom</option>
-                  </select>
-                </label>
-                <label className="block">
-                  <span className="text-sm font-medium text-[#425B76]">
-                    Timezone
-                  </span>
-                  <input
-                    className="mt-2 h-12 w-full rounded-2xl border border-[#D8E8F0] bg-white px-4 text-sm text-[#0B1F33] outline-none transition placeholder:text-[#64748B] focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        timezone: event.target.value,
-                      }))
-                    }
-                    placeholder="Asia/Kolkata"
-                    type="text"
-                    value={form.timezone}
-                  />
-                </label>
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <label className="block">
-                  <span className="text-sm font-medium text-[#425B76]">
-                    Meeting link
-                  </span>
-                  <input
-                    className="mt-2 h-12 w-full rounded-2xl border border-[#D8E8F0] bg-white px-4 text-sm text-[#0B1F33] outline-none transition placeholder:text-[#64748B] focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        meetingUrl: event.target.value,
-                      }))
-                    }
-                    placeholder="https://meet.google.com/..."
-                    type="url"
-                    value={form.meetingUrl}
-                  />
-                </label>
-                <label className="block">
-                  <span className="text-sm font-medium text-[#425B76]">
-                    Join opens from
-                  </span>
-                  <input
-                    className="mt-2 h-12 w-full rounded-2xl border border-[#D8E8F0] bg-white px-4 text-sm text-[#0B1F33] outline-none transition focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        joinAvailableFrom: event.target.value,
-                      }))
-                    }
-                    type="datetime-local"
-                    value={form.joinAvailableFrom}
-                  />
-                </label>
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <label className="block">
-                  <span className="text-sm font-medium text-[#425B76]">
-                    Meeting ID
-                  </span>
-                  <input
-                    className="mt-2 h-12 w-full rounded-2xl border border-[#D8E8F0] bg-white px-4 text-sm text-[#0B1F33] outline-none transition placeholder:text-[#64748B] focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        meetingId: event.target.value,
-                      }))
-                    }
-                    placeholder="Optional meeting ID"
-                    type="text"
-                    value={form.meetingId}
-                  />
-                </label>
-                <label className="block">
-                  <span className="text-sm font-medium text-[#425B76]">
-                    Passcode
-                  </span>
-                  <input
-                    className="mt-2 h-12 w-full rounded-2xl border border-[#D8E8F0] bg-white px-4 text-sm text-[#0B1F33] outline-none transition placeholder:text-[#64748B] focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        meetingPasscode: event.target.value,
-                      }))
-                    }
-                    placeholder="Optional passcode"
-                    type="text"
-                    value={form.meetingPasscode}
-                  />
-                </label>
-              </div>
-
-              <label className="block">
-                <span className="text-sm font-medium text-[#425B76]">
-                  Description
-                </span>
-                <textarea
-                  className="mt-2 min-h-24 w-full resize-none rounded-2xl border border-[#D8E8F0] bg-white px-4 py-3 text-sm leading-6 text-[#0B1F33] outline-none transition placeholder:text-[#64748B] focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      description: event.target.value,
-                    }))
-                  }
-                  placeholder="Agenda, delivery notes, or class context."
-                  value={form.description}
-                />
-              </label>
-
-              <label className="block">
-                <span className="text-sm font-medium text-[#425B76]">
-                  Meeting notes
-                </span>
-                <textarea
-                  className="mt-2 min-h-20 w-full resize-none rounded-2xl border border-[#D8E8F0] bg-white px-4 py-3 text-sm leading-6 text-[#0B1F33] outline-none transition placeholder:text-[#64748B] focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      meetingNotes: event.target.value,
-                    }))
-                  }
-                  placeholder="Room number, join instructions, or host notes."
-                  value={form.meetingNotes}
-                />
-              </label>
-
-              <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end">
-                <Button
-                  onClick={() => setFormOpen(false)}
-                  type="button"
-                  variant="secondary"
-                >
-                  Cancel
-                </Button>
-                <Button disabled={saving} type="submit">
-                  {saving ? "Creating..." : "Schedule live class"}
-                </Button>
-              </div>
-            </form>
-          </Card>
-        </div>
+        <SessionDialog description="Times are entered in the selected session timezone. Program and cohort choices stay correlated." disabled={saving} onClose={() => setFormOpen(false)} title="Schedule live class">
+          <form className="mt-6" onSubmit={handleCreateSession}>
+            <SessionFormFields cohorts={managementCohorts} courses={managementCourses} form={form} onChange={setForm} />
+            <SessionFormActions onCancel={() => setFormOpen(false)} saving={saving} submitLabel="Schedule live class" />
+          </form>
+        </SessionDialog>
       ) : null}
     </div>
   );

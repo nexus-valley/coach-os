@@ -7,8 +7,8 @@ import { PageHeader } from "@/src/components/ui/PageHeader";
 import { SectionHeader } from "@/src/components/ui/SectionHeader";
 import { StatCard } from "@/src/components/ui/StatCard";
 import type { StudentPortalContext } from "@/src/lib/studentPortalAuth";
+import { formatSessionDateTime } from "@/src/lib/sessionDateTime";
 import {
-  formatPortalDateTime,
   PortalEmptyState,
   PortalError,
   PortalLoadingCard,
@@ -16,14 +16,18 @@ import {
 } from "@/src/components/portal/StudentPortalShared";
 
 type JoinWindowSession = {
+  cohort: { id: string; name: string } | null;
+  course: { id: string; title: string } | null;
   delivery_mode: string;
   id: string;
   join_available_from: string | null;
   meeting_provider: string | null;
   meeting_url: string | null;
+  recording_url: string | null;
   scheduled_start_at: string;
   status: string;
   title: string;
+  timezone: string;
 };
 
 function getDeliveryLabel(value: string) {
@@ -67,11 +71,19 @@ function getJoinAvailabilityLabel(session: JoinWindowSession) {
     session.join_available_from &&
     Date.now() < new Date(session.join_available_from).getTime()
   ) {
-    return `Join opens ${formatPortalDateTime(session.join_available_from)}`;
+    return `Join opens ${formatSessionDateTime(session.join_available_from, session.timezone)}`;
   }
 
   if (!session.meeting_url) {
-    return "Meeting link will be shared by your coach.";
+    if (session.delivery_mode === "offline") {
+      return "This class is delivered offline. Follow the delivery details shared by your coach.";
+    }
+
+    if (session.delivery_mode === "hybrid") {
+      return "Hybrid class details will be shared by your coach.";
+    }
+
+    return "The online room is not open yet.";
   }
 
   return "Join is open.";
@@ -108,6 +120,14 @@ export function StudentPortalSessions({ context }: { context: StudentPortalConte
     allowJoin: boolean,
   ) {
     if (!allowJoin) {
+      if (session.status === "completed" && session.recording_url) {
+        return (
+          <Button href={session.recording_url} size="sm" variant="secondary">
+            View recording
+          </Button>
+        );
+      }
+
       return (
         <div className="rounded-2xl border border-[#D8E8F0] bg-[#F8FAFC] px-4 py-3 text-sm font-semibold text-[#425B76]">
           {getClosedScheduleLabel(session)}
@@ -160,11 +180,20 @@ export function StudentPortalSessions({ context }: { context: StudentPortalConte
               {session.title}
             </h2>
             <p className="mt-2 text-sm font-medium text-[#425B76]">
-              {formatPortalDateTime(session.scheduled_start_at)}
+              {formatSessionDateTime(session.scheduled_start_at, session.timezone)}
             </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {session.course ? <Badge tone="outline">Program: {session.course.title}</Badge> : null}
+              {session.cohort ? <Badge tone="outline">Cohort: {session.cohort.name}</Badge> : null}
+            </div>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-[#64748B]">
-              Your coach controls when the joining link becomes available for
-              this live class.
+              {session.status === "canceled"
+                ? "This class was canceled. Meeting and recording links are not available."
+                : session.delivery_mode === "offline"
+                  ? "This class is delivered offline; no online meeting link is expected."
+                  : session.delivery_mode === "hybrid"
+                    ? "This hybrid class combines in-person delivery with an online room when opened by your coach."
+                    : "Your coach controls when the online room becomes available."}
             </p>
           </div>
           <div className="shrink-0 sm:max-w-56">

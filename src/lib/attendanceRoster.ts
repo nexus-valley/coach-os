@@ -14,6 +14,53 @@ type RosterStudent = {
   status: StudentStatus;
 };
 
+export type AttendanceDraftStatus =
+  | "absent"
+  | "excused"
+  | "late"
+  | "present";
+
+export type AttendanceDraftValue = {
+  remarks: string;
+  status: AttendanceDraftStatus | null;
+};
+
+export type AttendanceDraftState = Record<string, AttendanceDraftValue>;
+
+export function updateAttendanceDraft(params: {
+  baseline: AttendanceDraftValue;
+  current: AttendanceDraftState;
+  next: AttendanceDraftValue;
+  studentId: string;
+}) {
+  const updated = { ...params.current };
+  const restored =
+    params.next.status === params.baseline.status &&
+    params.next.remarks === params.baseline.remarks;
+
+  if (restored) {
+    delete updated[params.studentId];
+  } else {
+    updated[params.studentId] = params.next;
+  }
+
+  return updated;
+}
+
+export function getChangedAttendanceRecords(draft: AttendanceDraftState) {
+  const entries = Object.entries(draft);
+  const records = entries.flatMap(([studentId, value]) =>
+    value.status
+      ? [{ remarks: value.remarks, status: value.status, studentId }]
+      : [],
+  );
+
+  return {
+    hasUnmarkedChange: records.length !== entries.length,
+    records,
+  };
+}
+
 export function getNewAttendanceRelationshipStudentIds(params: {
   cohortMemberIds?: Iterable<string>;
   enrollments: EnrollmentEvidence[];

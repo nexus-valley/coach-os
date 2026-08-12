@@ -25,6 +25,10 @@ import {
   isTrainerAssignedToCohort,
   isTrainerAssignedToCourse,
 } from "@/src/lib/trainerAssignments";
+import {
+  normalizeSessionTimezone,
+  sessionWallClockToIso,
+} from "@/src/lib/sessionDateTime";
 
 export type SessionStatus = "scheduled" | "completed" | "canceled";
 export type SessionDeliveryMode = "hybrid" | "offline" | "online";
@@ -622,6 +626,43 @@ async function updateSessionMeetingDetailsWithRpc(params: {
   return data as TrainingSession;
 }
 
+async function updateDelegatedSessionMeetingDetailsWithRpc(params: {
+  deliveryMode: SessionDeliveryMode;
+  joinAvailableFrom: string | null;
+  meetingId: string | null;
+  meetingNotes: string | null;
+  meetingPasscode: string | null;
+  meetingProvider: SessionMeetingProvider | null;
+  meetingUrl: string | null;
+  recordingUrl: string | null;
+  sessionId: string;
+  tenantId: string;
+  timezone: string;
+}) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .rpc("update_delegated_session_meeting_details", {
+      p_delivery_mode: params.deliveryMode,
+      p_join_available_from: params.joinAvailableFrom,
+      p_meeting_id: params.meetingId,
+      p_meeting_notes: params.meetingNotes,
+      p_meeting_passcode: params.meetingPasscode,
+      p_meeting_provider: params.meetingProvider,
+      p_meeting_url: params.meetingUrl,
+      p_recording_url: params.recordingUrl,
+      p_session_id: params.sessionId,
+      p_tenant_id: params.tenantId,
+      p_timezone: params.timezone,
+    })
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  return data as TrainingSession;
+}
+
 async function getDelegatedSessionDecision(params: {
   cohortId?: string | null;
   courseId?: string | null;
@@ -691,22 +732,10 @@ async function logSessionDelegatedUse(params: {
   });
 }
 
-function normalizeDateTimeInput(value: string) {
-  return value ? new Date(value).toISOString() : null;
-}
-
-function normalizeOptionalDateTimeInput(value: string | null | undefined) {
-  return value ? new Date(value).toISOString() : null;
-}
-
 function normalizeOptionalText(value: string | null | undefined) {
   const normalized = value?.trim();
 
   return normalized ? normalized : null;
-}
-
-function normalizeTimezone(value: string | null | undefined) {
-  return normalizeOptionalText(value) ?? "Asia/Kolkata";
 }
 
 function normalizeOptionalUrl(value: string | null | undefined, label: string) {
@@ -731,14 +760,19 @@ function normalizeOptionalUrl(value: string | null | undefined, label: string) {
 
 function validateSessionInput(input: SessionInput) {
   const title = input.title.trim();
-  const scheduledStartAt = normalizeDateTimeInput(input.scheduledStartAt);
-  const scheduledEndAt = normalizeDateTimeInput(input.scheduledEndAt);
+  const timezone = normalizeSessionTimezone(input.timezone);
+  const scheduledStartAt = sessionWallClockToIso(
+    input.scheduledStartAt,
+    timezone,
+  );
+  const scheduledEndAt = sessionWallClockToIso(input.scheduledEndAt, timezone);
   const deliveryMode = input.deliveryMode ?? "offline";
   const meetingProvider = input.meetingProvider ?? null;
   const meetingUrl = normalizeOptionalUrl(input.meetingUrl, "Meeting URL");
   const recordingUrl = normalizeOptionalUrl(input.recordingUrl, "Recording URL");
-  const joinAvailableFrom = normalizeOptionalDateTimeInput(
+  const joinAvailableFrom = sessionWallClockToIso(
     input.joinAvailableFrom,
+    timezone,
   );
 
   if (!title) {
@@ -768,7 +802,7 @@ function validateSessionInput(input: SessionInput) {
     recordingUrl,
     scheduledEndAt,
     scheduledStartAt,
-    timezone: normalizeTimezone(input.timezone),
+    timezone,
     title,
   };
 }
@@ -890,7 +924,7 @@ async function attachSessionRelations(
   })) satisfies TrainingSessionWithRelations[];
 }
 
-export async function getSessionsForTenant(tenantId: string) {
+export async function getSessionsForTenant(tenantId: string, limit = 200) {
   await ensureCanAccessSessions(tenantId);
   const supabase = getSupabaseClient();
   const trainerScope = await getCurrentTrainerScope(tenantId);
@@ -915,7 +949,7 @@ export async function getSessionsForTenant(tenantId: string) {
 
   const { data, error } = await query.order("scheduled_start_at", {
     ascending: false,
-  });
+  }).limit(Math.max(1, Math.min(limit, 500)));
 
   if (error) {
     throw error;
@@ -924,20 +958,86 @@ export async function getSessionsForTenant(tenantId: string) {
   return attachSessionRelations((data ?? []) as TrainingSession[], tenantId);
 }
 
+export async function getOperationalSessionsForTenant(
+  tenantId: string,
+  limit = 200,
+) {
+  await ensureCanAccessSessions(tenantId);
+  const supabase = getSupabaseClient();
+  const trainerScope = await getCurrentTrainerScope(tenantId);
+
+  if (
+    trainerScope &&
+    trainerScope.courseIds.length === 0 &&
+    trainerScope.cohortIds.length === 0
+  ) {
+    return [] satisfies TrainingSessionWithRelations[];
+  }
+
+  const boundedLimit = Math.max(4, Math.min(limit, 500));
+  const upcomingLimit = Math.ceil(boundedLimit * 0.4);
+  const groupLimit = Math.floor((boundedLimit - upcomingLimit) / 3);
+  const canceledLimit = boundedLimit - upcomingLimit - groupLimit * 2;
+  const now = new Date().toISOString();
+  const scopedQuery = () => {
+    let query = supabase
+      .from("sessions")
+      .select(sessionColumns)
+      .eq("tenant_id", tenantId);
+
+    if (trainerScope) {
+      query = applyTrainerSessionScope(
+        query,
+        trainerScope.courseIds,
+        trainerScope.cohortIds,
+      );
+    }
+
+    return query;
+  };
+  const [upcoming, pastDue, completed, canceled] = await Promise.all([
+    scopedQuery()
+      .eq("status", "scheduled")
+      .gte("scheduled_start_at", now)
+      .order("scheduled_start_at", { ascending: true })
+      .limit(upcomingLimit),
+    scopedQuery()
+      .eq("status", "scheduled")
+      .lt("scheduled_start_at", now)
+      .order("scheduled_start_at", { ascending: false })
+      .limit(groupLimit),
+    scopedQuery()
+      .eq("status", "completed")
+      .order("scheduled_start_at", { ascending: false })
+      .limit(groupLimit),
+    scopedQuery()
+      .eq("status", "canceled")
+      .order("scheduled_start_at", { ascending: false })
+      .limit(canceledLimit),
+  ]);
+
+  for (const result of [upcoming, pastDue, completed, canceled]) {
+    if (result.error) {
+      throw result.error;
+    }
+  }
+
+  return attachSessionRelations(
+    [
+      ...(upcoming.data ?? []),
+      ...(pastDue.data ?? []),
+      ...(completed.data ?? []),
+      ...(canceled.data ?? []),
+    ] as TrainingSession[],
+    tenantId,
+  );
+}
+
 export async function getSessionById(params: {
   sessionId: string;
   tenantId: string;
 }) {
   await ensureCanAccessSessions(params.tenantId);
-  const trainerScope = await getCurrentTrainerScope(params.tenantId);
-
-  if (trainerScope) {
-    const visibleSessions = await getSessionsForTenant(params.tenantId);
-
-    if (!visibleSessions.some((session) => session.id === params.sessionId)) {
-      return null;
-    }
-  }
 
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
@@ -1319,29 +1419,19 @@ export async function updateMeetingDetails(input: {
   });
 
   if (decision.source === "delegated") {
-    const session = await updateDelegatedSessionWithRpc(
-      {
-        cohortId: existing.cohort_id,
-        courseId: existing.course_id,
-        description: existing.description ?? "",
-        deliveryMode: validated.deliveryMode,
-        joinAvailableFrom: validated.joinAvailableFrom,
-        meetingId: validated.meetingId,
-        meetingNotes: validated.meetingNotes,
-        meetingPasscode: validated.meetingPasscode,
-        meetingProvider: validated.meetingProvider,
-        meetingUrl: validated.meetingUrl,
-        recordingUrl: validated.recordingUrl,
-        scheduledEndAt: existing.scheduled_end_at ?? "",
-        scheduledStartAt: existing.scheduled_start_at,
-        sessionId: input.sessionId,
-        tenantId: input.tenantId,
-        timezone: validated.timezone,
-        title: existing.title,
-        trainerUserId: existing.trainer_user_id,
-      },
-      validated,
-    );
+    const session = await updateDelegatedSessionMeetingDetailsWithRpc({
+      deliveryMode: validated.deliveryMode,
+      joinAvailableFrom: validated.joinAvailableFrom,
+      meetingId: validated.meetingId,
+      meetingNotes: validated.meetingNotes,
+      meetingPasscode: validated.meetingPasscode,
+      meetingProvider: validated.meetingProvider,
+      meetingUrl: validated.meetingUrl,
+      recordingUrl: validated.recordingUrl,
+      sessionId: input.sessionId,
+      tenantId: input.tenantId,
+      timezone: validated.timezone,
+    });
 
     await logActivity({
       action: "meeting_details_updated",

@@ -159,6 +159,11 @@ function SessionPreviewList({
               Start Class
             </a>
           ) : null}
+          <div className="mt-3">
+            <Button href={`/app/sessions/${session.id}`} size="sm" variant="ghost">
+              View class details
+            </Button>
+          </div>
         </div>
       ))}
     </div>
