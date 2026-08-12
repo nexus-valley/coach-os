@@ -32,6 +32,7 @@ const portalNavItems = [
   { href: "/portal", label: "Home" },
   { href: "/portal/courses", label: "My Programs" },
   { href: "/portal/sessions", label: "Live Classes" },
+  { href: "/portal/assignments", label: "Assignments" },
   { href: "/portal/documents", label: "Materials" },
   { href: "/portal/community", label: "Community" },
   { href: "/portal/announcements", label: "Announcements" },

@@ -195,6 +195,14 @@ export function StudentPortalDashboard({ context }: { context: StudentPortalCont
                 <p className="mt-1 text-sm text-[#425B76]">
                   Due {formatPortalDateTime(nextAssignment.assignment.due_at)}
                 </p>
+                <Button
+                  className="mt-4"
+                  href={`/portal/assignments/${nextAssignment.assignment.id}`}
+                  size="sm"
+                  variant="secondary"
+                >
+                  View assignment
+                </Button>
               </>
             ) : (
               <p className="mt-3 text-sm text-[#425B76]">
@@ -325,6 +333,14 @@ export function StudentPortalDashboard({ context }: { context: StudentPortalCont
                   <p className="mt-1 text-sm text-[#425B76]">
                     Due {formatPortalDateTime(assignment.assignment.due_at)}
                   </p>
+                  <Button
+                    className="mt-3"
+                    href={`/portal/assignments/${assignment.assignment.id}`}
+                    size="sm"
+                    variant="secondary"
+                  >
+                    View assignment
+                  </Button>
                 </div>
               ))
             )}
