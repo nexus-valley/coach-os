@@ -8,8 +8,6 @@ import {
   normalizeAssignment,
   type AssignmentWithRelations,
 } from "@/src/lib/assignments";
-import { getCohortMembers } from "@/src/lib/cohorts";
-import { getEnrollmentsForCourse } from "@/src/lib/enrollments";
 import { createNotificationForTenantRoles } from "@/src/lib/notifications";
 import { getMemberRoleForTenant } from "@/src/lib/permissions";
 import type { Student } from "@/src/lib/students";
@@ -36,11 +34,17 @@ export type AssignmentSubmission = {
 };
 
 export type AssignmentSubmissionWithStudent = AssignmentSubmission & {
-  student: Pick<Student, "email" | "full_name" | "id" | "phone" | "status"> | null;
+  student:
+    | (Pick<Student, "email" | "full_name" | "id" | "phone"> & {
+        status: Student["status"] | null;
+      })
+    | null;
 };
 
 export type AssignmentRosterItem = {
-  student: Pick<Student, "email" | "full_name" | "id" | "phone" | "status">;
+  student: Pick<Student, "email" | "full_name" | "id" | "phone"> & {
+    status: Student["status"] | null;
+  };
   submission: AssignmentSubmission | null;
 };
 
@@ -163,22 +167,42 @@ async function getStudentRows(
 async function getEligibleStudentIdsForAssignment(
   assignment: AssignmentWithRelations,
 ) {
-  if (assignment.cohort_id) {
-    const members = await getCohortMembers({
-      cohortId: assignment.cohort_id,
-      tenantId: assignment.tenant_id,
-    });
+  const supabase = getSupabaseClient();
 
-    return new Set(members.map((member) => member.student_id));
+  if (assignment.cohort_id) {
+    const { data, error } = await supabase
+      .from("cohort_members")
+      .select("student_id")
+      .eq("tenant_id", assignment.tenant_id)
+      .eq("cohort_id", assignment.cohort_id);
+
+    if (error) {
+      throw error;
+    }
+
+    return new Set(
+      ((data ?? []) as { student_id: string }[]).map(
+        (member) => member.student_id,
+      ),
+    );
   }
 
   if (assignment.course_id) {
-    const enrollments = await getEnrollmentsForCourse({
-      courseId: assignment.course_id,
-      tenantId: assignment.tenant_id,
-    });
+    const { data, error } = await supabase
+      .from("enrollments")
+      .select("student_id")
+      .eq("tenant_id", assignment.tenant_id)
+      .eq("course_id", assignment.course_id);
 
-    return new Set(enrollments.map((enrollment) => enrollment.student_id));
+    if (error) {
+      throw error;
+    }
+
+    return new Set(
+      ((data ?? []) as { student_id: string }[]).map(
+        (enrollment) => enrollment.student_id,
+      ),
+    );
   }
 
   return new Set<string>();
@@ -323,6 +347,23 @@ export async function getAssignmentSubmissions(params: {
     throw new Error("Assignment not found in this workspace.");
   }
 
+  const submissions = await getAssignmentSubmissionsForKnownAssignment(params);
+  const studentIds = Array.from(
+    new Set(submissions.map((item) => item.student_id)),
+  );
+  const students = await getStudentRows(studentIds, params.tenantId);
+  const studentById = new Map(students.map((student) => [student.id, student]));
+
+  return submissions.map((submission) => ({
+    ...submission,
+    student: studentById.get(submission.student_id) ?? null,
+  })) satisfies AssignmentSubmissionWithStudent[];
+}
+
+async function getAssignmentSubmissionsForKnownAssignment(params: {
+  assignmentId: string;
+  tenantId: string;
+}) {
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
     .from("assignment_submissions")
@@ -335,17 +376,7 @@ export async function getAssignmentSubmissions(params: {
     throw error;
   }
 
-  const submissions = ((data ?? []) as AssignmentSubmission[]).map(
-    normalizeSubmission,
-  );
-  const studentIds = Array.from(new Set(submissions.map((item) => item.student_id)));
-  const students = await getStudentRows(studentIds, params.tenantId);
-  const studentById = new Map(students.map((student) => [student.id, student]));
-
-  return submissions.map((submission) => ({
-    ...submission,
-    student: studentById.get(submission.student_id) ?? null,
-  })) satisfies AssignmentSubmissionWithStudent[];
+  return ((data ?? []) as AssignmentSubmission[]).map(normalizeSubmission);
 }
 
 export async function getAssignmentSubmissionRoster(params: {
@@ -359,24 +390,45 @@ export async function getAssignmentSubmissionRoster(params: {
   }
 
   const [submissions, eligibleStudentIds] = await Promise.all([
-    getAssignmentSubmissions(params),
+    getAssignmentSubmissionsForKnownAssignment(params),
     getEligibleStudentIdsForAssignment(assignment),
   ]);
+  const submissionStudentIds = submissions.map(
+    (submission) => submission.student_id,
+  );
+  const rosterStudentIds = Array.from(
+    new Set([...eligibleStudentIds, ...submissionStudentIds]),
+  );
   const students = await getStudentRows(
-    Array.from(eligibleStudentIds),
+    rosterStudentIds,
     params.tenantId,
   );
+  const studentById = new Map(students.map((student) => [student.id, student]));
   const submissionByStudentId = new Map(
     submissions.map((submission) => [submission.student_id, submission]),
   );
+  const roster = rosterStudentIds
+    .map((studentId) => ({
+      student:
+        studentById.get(studentId) ??
+        ({
+          email: null,
+          full_name: "Former student",
+          id: studentId,
+          phone: null,
+          status: null,
+        } satisfies AssignmentRosterItem["student"]),
+      submission: submissionByStudentId.get(studentId) ?? null,
+    }))
+    .sort((left, right) =>
+      left.student.full_name.localeCompare(right.student.full_name) ||
+      left.student.id.localeCompare(right.student.id),
+    );
 
   return {
     assignment,
-    roster: students.map((student) => ({
-      student,
-      submission: submissionByStudentId.get(student.id) ?? null,
-    })) satisfies AssignmentRosterItem[],
-    summary: calculateSummary(students.length, submissions),
+    roster,
+    summary: calculateSummary(roster.length, submissions),
   };
 }
 
@@ -476,12 +528,12 @@ export async function reviewSubmission(params: {
 
   const { decision, user } = await ensureCanReviewAssignment({
     assignmentId: assignment.id,
+    assignmentTrainerUserId: assignment.trainer_user_id,
     cohortId: assignment.cohort_id,
     courseId: assignment.course_id,
     studentId: params.studentId,
     tenantId: params.tenantId,
   });
-  await ensureStudentsBelongToAssignment(assignment, [params.studentId]);
 
   const rawScore =
     params.score === null || typeof params.score === "undefined" || params.score === ""

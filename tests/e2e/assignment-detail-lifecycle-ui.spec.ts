@@ -55,17 +55,16 @@ test.describe("UX-6B1 assignment detail lifecycle UI", () => {
     expect(detailSource).toMatch(
       /\(currentRole === "owner" \|\| currentRole === "admin"\) &&\s+lifecycleUi\.canCaptureSubmission/,
     );
-    expect(detailSource).toContain(
-      "const canReviewSubmission = canReviewEffective && lifecycleUi.canReview;",
-    );
+    expect(detailSource).toContain("if (!assignment || !lifecycleUi.canReview || !item.submission)");
+    expect(detailSource).toContain("delegatedPermissionMatchesAssignment(permission, assignment, item.student.id)");
     expect(detailSource).not.toContain('assignment.status !== "published"');
     expect(detailSource).not.toContain('assignment.status !== "closed"');
   });
 
   test("guards stale handlers before calling secure mutation helpers", () => {
-    expect(detailSource).toContain("if (!transitionAllowed)");
-    expect(detailSource).toContain("if (!tenant || !canCreateSubmission)");
-    expect(detailSource).toContain("if (!tenant || !canReviewSubmission)");
+    expect(detailSource).toContain("if (!allowed)");
+    expect(detailSource).toContain("if (!tenant || !canCreateSubmission || item.submission)");
+    expect(detailSource).toContain("if (!tenant || !canReviewItem(item))");
     expect(detailSource).toContain("await publishAssignment(");
     expect(detailSource).toContain("await closeAssignment(");
     expect(detailSource).toContain("await submitAssignment(");
@@ -73,12 +72,11 @@ test.describe("UX-6B1 assignment detail lifecycle UI", () => {
   });
 
   test("renders unavailable submission and review data without mutation controls", () => {
-    expect(detailSource).toMatch(
-      /\{canCreateSubmission \? \([\s\S]*?<textarea[\s\S]*?No submission recorded\./,
-    );
-    expect(detailSource).toMatch(
-      /\{canReviewSubmission \? \([\s\S]*?<input[\s\S]*?No feedback recorded\./,
-    );
+    expect(detailSource).toContain("!selectedItem.submission && canCreateSubmission");
+    expect(detailSource).toContain("selectedItem.submission && canReviewSelected");
+    expect(detailSource).toContain("selectedItem.submission && !canReviewSelected");
+    expect(detailSource).toContain("Record missing submission");
+    expect(detailSource).toContain("No feedback recorded.");
     expect(detailSource).not.toContain("updateAssignment(");
     expect(detailSource).not.toContain('currentRole === "student"');
     expect(detailSource).not.toContain("/portal");

@@ -46,10 +46,39 @@ export type Assignment = {
 };
 
 export type AssignmentWithRelations = Assignment & {
+  awaitingReviewCount: number;
   cohort: Pick<CohortWithCourse, "id" | "name"> | null;
   course: Pick<Course, "id" | "title"> | null;
   submissionCounts: Record<"late" | "pending" | "reviewed" | "submitted", number>;
 };
+
+export type AssignmentListSort = "due_soon" | "newest" | "title";
+
+export type AssignmentListOptions = {
+  courseId?: string | null;
+  needsReview?: boolean;
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  sort?: AssignmentListSort;
+  status?: AssignmentStatus | null;
+};
+
+export type AssignmentListPage = {
+  hasNext: boolean;
+  hasPrevious: boolean;
+  items: AssignmentWithRelations[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+};
+
+export type AssignmentProgramOption = Pick<Course, "id" | "title">;
+
+export const assignmentListDefaultPageSize = 24;
+export const assignmentListMaximumPageSize = 50;
+const assignmentListMaximumPage = 10_000;
 
 export type AssignmentInput = {
   attachmentUrls?: string[];
@@ -70,6 +99,8 @@ export type UpdateAssignmentInput = AssignmentInput & {
 
 const assignmentColumns =
   "id,tenant_id,course_id,cohort_id,trainer_user_id,title,description,instructions,attachment_urls_json,max_score,due_at,status,created_by,created_at,updated_at";
+const assignmentNeedsReviewColumns =
+  "id,tenant_id,course_id,cohort_id,trainer_user_id,title,description,instructions,attachment_urls_json,max_score,due_at,status,created_by,created_at,updated_at,assignment_submissions!inner(status)";
 
 type DelegatedAssignmentDecision =
   | { source: "role" }
@@ -96,6 +127,28 @@ function normalizeAssignment(row: Assignment) {
 
 function normalizeAttachmentUrls(urls: string[] | undefined) {
   return (urls ?? []).map((url) => url.trim()).filter(Boolean);
+}
+
+function normalizeAssignmentSearch(search: string | undefined) {
+  return (search ?? "").trim().slice(0, 120);
+}
+
+function escapeIlikePattern(value: string) {
+  return value.replace(/[\\%_]/g, "\\$&");
+}
+
+function normalizePage(value: number | undefined) {
+  return Number.isSafeInteger(value) && Number(value) > 0
+    ? Math.min(Number(value), assignmentListMaximumPage)
+    : 1;
+}
+
+function normalizePageSize(value: number | undefined) {
+  if (!Number.isInteger(value) || Number(value) <= 0) {
+    return assignmentListDefaultPageSize;
+  }
+
+  return Math.min(Number(value), assignmentListMaximumPageSize);
 }
 
 function normalizeDateTimeInput(value: string) {
@@ -170,6 +223,7 @@ async function getCurrentUserAndRole(tenantId: string) {
 
 export async function ensureCanManageAssignment(params: {
   assignmentId?: string | null;
+  assignmentTrainerUserId?: string | null;
   cohortId?: string | null;
   courseId?: string | null;
   tenantId: string;
@@ -183,6 +237,7 @@ export async function ensureCanManageAssignment(params: {
 
 export async function ensureCanReviewAssignment(params: {
   assignmentId?: string | null;
+  assignmentTrainerUserId?: string | null;
   cohortId?: string | null;
   courseId?: string | null;
   studentId?: string | null;
@@ -198,6 +253,7 @@ export async function ensureCanReviewAssignment(params: {
 async function ensureCanUseAssignmentPermission(params: {
   action: string;
   assignmentId?: string | null;
+  assignmentTrainerUserId?: string | null;
   cohortId?: string | null;
   courseId?: string | null;
   permissionKey: "manage_assignments" | "review_assignments";
@@ -232,7 +288,9 @@ async function ensureCanUseAssignmentPermission(params: {
         : Promise.resolve(false),
     ]);
 
-    if (!courseAssigned && !cohortAssigned) {
+    const directlyAssigned = params.assignmentTrainerUserId === user.id;
+
+    if (!directlyAssigned && !courseAssigned && !cohortAssigned) {
       await logActivity({
         action: "access_denied",
         description: "Blocked trainer assignment change outside assignment scope.",
@@ -340,6 +398,7 @@ function applyTrainerAssignmentScope<T extends { or: (filters: string) => T }>(
   query: T,
   courseIds: string[],
   cohortIds: string[],
+  trainerUserId: string,
 ) {
   const filters: string[] = [];
 
@@ -351,12 +410,15 @@ function applyTrainerAssignmentScope<T extends { or: (filters: string) => T }>(
     filters.push(`cohort_id.in.(${cohortIds.join(",")})`);
   }
 
-  return filters.length > 0 ? query.or(filters.join(",")) : query;
+  filters.push(`trainer_user_id.eq.${trainerUserId}`);
+
+  return query.or(filters.join(","));
 }
 
 async function attachAssignmentRelations(
   assignments: Assignment[],
   tenantId: string,
+  includeSubmissionCounts = true,
 ) {
   if (assignments.length === 0) {
     return [];
@@ -386,11 +448,13 @@ async function attachAssignmentRelations(
           .eq("tenant_id", tenantId)
           .in("id", cohortIds)
       : Promise.resolve({ data: [], error: null }),
-    supabase
-      .from("assignment_submissions")
-      .select("assignment_id,status")
-      .eq("tenant_id", tenantId)
-      .in("assignment_id", assignmentIds),
+    includeSubmissionCounts
+      ? supabase
+          .from("assignment_submissions")
+          .select("assignment_id,status")
+          .eq("tenant_id", tenantId)
+          .in("assignment_id", assignmentIds)
+      : Promise.resolve({ data: [], error: null }),
   ]);
 
   if (coursesResult.error) {
@@ -437,6 +501,10 @@ async function attachAssignmentRelations(
 
   return assignments.map((assignment) => ({
     ...assignment,
+    awaitingReviewCount:
+      (countsByAssignment.get(assignment.id)?.late ?? 0) +
+      (countsByAssignment.get(assignment.id)?.pending ?? 0) +
+      (countsByAssignment.get(assignment.id)?.submitted ?? 0),
     cohort: assignment.cohort_id
       ? cohortById.get(assignment.cohort_id) ?? null
       : null,
@@ -500,44 +568,118 @@ async function notifyAssignmentRoles(
   }
 }
 
-export async function getAssignments(tenantId: string) {
+export async function getAssignments(
+  tenantId: string,
+  options: AssignmentListOptions = {},
+): Promise<AssignmentListPage> {
   await getCurrentUserAndRole(tenantId);
   const supabase = getSupabaseClient();
   const trainerScope = await getCurrentTrainerScope(tenantId);
-
-  if (
-    trainerScope &&
-    trainerScope.courseIds.length === 0 &&
-    trainerScope.cohortIds.length === 0
-  ) {
-    return [];
-  }
-
-  let query = supabase
-    .from("assignments")
-    .select(assignmentColumns)
-    .eq("tenant_id", tenantId);
+  const page = normalizePage(options.page);
+  const pageSize = normalizePageSize(options.pageSize);
+  const search = normalizeAssignmentSearch(options.search);
+  const start = (page - 1) * pageSize;
+  const baseQuery = options.needsReview
+    ? supabase
+        .from("assignments")
+        .select(assignmentNeedsReviewColumns, { count: "exact" })
+    : supabase.from("assignments").select(assignmentColumns, { count: "exact" });
+  let query = baseQuery.eq("tenant_id", tenantId);
 
   if (trainerScope) {
     query = applyTrainerAssignmentScope(
       query,
       trainerScope.courseIds,
       trainerScope.cohortIds,
+      trainerScope.userId,
     );
   }
 
-  const { data, error } = await query
-    .order("due_at", { ascending: true, nullsFirst: false })
-    .order("created_at", { ascending: false });
+  if (search) {
+    query = query.ilike("title", `%${escapeIlikePattern(search)}%`);
+  }
+
+  if (options.status) {
+    query = query.eq("status", options.status);
+  }
+
+  if (options.courseId) {
+    query = query.eq("course_id", options.courseId);
+  }
+
+  if (options.needsReview) {
+    query = query.in("assignment_submissions.status", [
+      "late",
+      "pending",
+      "submitted",
+    ]);
+  }
+
+  const sort = options.sort ?? "due_soon";
+
+  if (sort === "title") {
+    query = query.order("title", { ascending: true }).order("id", {
+      ascending: true,
+    });
+  } else if (sort === "newest") {
+    query = query.order("created_at", { ascending: false }).order("id", {
+      ascending: true,
+    });
+  } else {
+    query = query
+      .order("due_at", { ascending: true, nullsFirst: false })
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: true });
+  }
+
+  const { count, data, error } = await query.range(start, start + pageSize - 1);
 
   if (error) {
     throw error;
   }
 
-  return attachAssignmentRelations(
-    ((data ?? []) as Assignment[]).map(normalizeAssignment),
+  const total = count ?? 0;
+  const totalPages = Math.max(Math.ceil(total / pageSize), 1);
+
+  if (page > totalPages) {
+    return getAssignments(tenantId, {
+      ...options,
+      page: totalPages,
+      pageSize,
+    });
+  }
+
+  const items = await attachAssignmentRelations(
+    ((data ?? []) as unknown as Assignment[]).map(normalizeAssignment),
     tenantId,
   );
+
+  return {
+    hasNext: page < totalPages,
+    hasPrevious: page > 1,
+    items,
+    page,
+    pageSize,
+    total,
+    totalPages,
+  };
+}
+
+export async function getAssignmentProgramOptions(tenantId: string) {
+  await getCurrentUserAndRole(tenantId);
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from("courses")
+    .select("id,title")
+    .eq("tenant_id", tenantId)
+    .order("title", { ascending: true })
+    .limit(200);
+
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? []) as AssignmentProgramOption[];
 }
 
 export async function getAssignmentById(params: {
@@ -545,16 +687,6 @@ export async function getAssignmentById(params: {
   tenantId: string;
 }) {
   await getCurrentUserAndRole(params.tenantId);
-  const trainerScope = await getCurrentTrainerScope(params.tenantId);
-
-  if (trainerScope) {
-    const visible = await getAssignments(params.tenantId);
-
-    if (!visible.some((assignment) => assignment.id === params.assignmentId)) {
-      return null;
-    }
-  }
-
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
     .from("assignments")
@@ -574,6 +706,7 @@ export async function getAssignmentById(params: {
   const [assignment] = await attachAssignmentRelations(
     [normalizeAssignment(data as Assignment)],
     params.tenantId,
+    false,
   );
   return assignment ?? null;
 }
@@ -636,8 +769,18 @@ export async function createAssignment(input: AssignmentInput) {
 
 export async function updateAssignment(input: UpdateAssignmentInput) {
   const validated = validateAssignmentInput(input);
+  const existing = await getAssignmentById({
+    assignmentId: input.assignmentId,
+    tenantId: input.tenantId,
+  });
+
+  if (!existing) {
+    throw new Error("Assignment not found in this workspace.");
+  }
+
   const { decision, role, user } = await ensureCanManageAssignment({
     assignmentId: input.assignmentId,
+    assignmentTrainerUserId: existing.trainer_user_id,
     cohortId: input.cohortId,
     courseId: input.courseId,
     tenantId: input.tenantId,
@@ -710,6 +853,7 @@ async function updateAssignmentStatus(params: {
 
   const { decision, user } = await ensureCanManageAssignment({
     assignmentId: existing.id,
+    assignmentTrainerUserId: existing.trainer_user_id,
     cohortId: existing.cohort_id,
     courseId: existing.course_id,
     tenantId: params.tenantId,

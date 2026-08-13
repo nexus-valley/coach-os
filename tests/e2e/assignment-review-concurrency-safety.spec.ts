@@ -186,9 +186,9 @@ test.describe("UX-6D1 assignment review optimistic concurrency", () => {
       'candidate.details === "assignment_submission_stale"',
     );
     expect(detail).toContain(
-      "expectedSubmissionUpdatedAt: submission.updated_at",
+      "expectedSubmissionUpdatedAt: item.submission.updated_at",
     );
-    expect(detail).toContain("if (!submission?.updated_at)");
+    expect(detail).toContain("if (!item.submission?.updated_at)");
     expect(detail).toContain("if (isStaleAssignmentReviewError(caught))");
     expect(detail).toContain("setDraft({});");
     expect(detail).toContain("await refresh().catch(() => undefined);");
