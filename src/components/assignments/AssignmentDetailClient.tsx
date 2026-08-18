@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { AssignmentEditDialog } from "@/src/components/assignments/AssignmentEditDialog";
 import { AccessDeniedCard } from "@/src/components/security/AccessDeniedCard";
 import { Badge } from "@/src/components/ui/Badge";
 import { Button } from "@/src/components/ui/Button";
@@ -11,13 +12,16 @@ import { Card } from "@/src/components/ui/Card";
 import { EmptyState } from "@/src/components/ui/EmptyState";
 import { FeedbackAlert } from "@/src/components/ui/FeedbackAlert";
 import { getSafeAssignmentError } from "@/src/lib/assignmentErrors";
+import { getAssignmentEditCapability } from "@/src/lib/assignmentEditModel";
 import { getAssignmentDetailLifecycleUi } from "@/src/lib/assignmentDetailLifecycle";
 import {
   canRoleManageAssignments,
   closeAssignment,
   publishAssignment,
+  updateAssignment,
   type AssignmentStatus,
   type AssignmentWithRelations,
+  type UpdateAssignmentInput,
 } from "@/src/lib/assignments";
 import {
   delegatedPermissionMatchesAssignment,
@@ -79,8 +83,10 @@ export function AssignmentDetailClient({ assignmentId }: AssignmentDetailClientP
   const [delegatedPermissions, setDelegatedPermissions] = useState<DelegatedPermission[]>([]);
   const [draft, setDraft] = useState<SubmissionDraft>({});
   const [error, setError] = useState("");
+  const [editOpen, setEditOpen] = useState(false);
   const [filter, setFilter] = useState<AssignmentReviewFilter>("all");
   const [loading, setLoading] = useState(true);
+  const [hasPersistedSubmissions, setHasPersistedSubmissions] = useState(false);
   const [mutating, setMutating] = useState("");
   const [roster, setRoster] = useState<AssignmentRosterItem[]>([]);
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
@@ -91,12 +97,37 @@ export function AssignmentDetailClient({ assignmentId }: AssignmentDetailClientP
   const canAccess = canAccessAttendance(currentRole);
   const baseCanManage = canRoleManageAssignments(currentRole);
   const lifecycleUi = getAssignmentDetailLifecycleUi(assignment?.status);
+  const matchingManageDelegations = assignment
+    ? delegatedPermissions.filter(
+        (permission) =>
+          permission.permission_key === "manage_assignments" &&
+          delegatedPermissionMatchesAssignment(permission, assignment),
+      )
+    : [];
+  const relationshipDelegation =
+    matchingManageDelegations.find(
+      (permission) => !permission.scope_type || permission.scope_type === "workspace",
+    ) ??
+    matchingManageDelegations.find((permission) => permission.scope_type === "course") ??
+    matchingManageDelegations.find((permission) => permission.scope_type === "cohort") ??
+    null;
   const assignmentManageDelegation = Boolean(
-    assignment && delegatedPermissions.some(
-      (permission) => permission.permission_key === "manage_assignments" && delegatedPermissionMatchesAssignment(permission, assignment),
-    ),
+    matchingManageDelegations.length,
   );
   const canManage = baseCanManage || assignmentManageDelegation;
+  const canMoveRelationships = Boolean(
+    currentRole === "owner" ||
+      currentRole === "admin" ||
+      currentRole === "trainer" ||
+      relationshipDelegation,
+  );
+  const editCapability = getAssignmentEditCapability({
+    canManage,
+    canMoveRelationships,
+    hasPersistedSubmissions,
+    role: currentRole,
+    status: assignment?.status,
+  });
   const canPublish = canManage && lifecycleUi.canPublish;
   const canClose = canManage && lifecycleUi.canClose;
   const canCreateSubmission =
@@ -105,6 +136,7 @@ export function AssignmentDetailClient({ assignmentId }: AssignmentDetailClientP
   const loadDetail = useCallback(async (currentTenant: Tenant) => {
     const data = await getAssignmentSubmissionRoster({ assignmentId, tenantId: currentTenant.id });
     setAssignment(data.assignment);
+    setHasPersistedSubmissions(data.hasPersistedSubmissions);
     setRoster(data.roster);
     setSummary(data.summary);
     setDraft(buildDraft(data.roster));
@@ -203,6 +235,35 @@ export function AssignmentDetailClient({ assignmentId }: AssignmentDetailClientP
     }
   }
 
+  async function saveAssignmentEdit(input: UpdateAssignmentInput) {
+    setActionError("");
+    setSuccess("");
+    await updateAssignment(input);
+
+    try {
+      await refresh();
+      setSuccess("Assignment updated.");
+    } catch {
+      setActionError(
+        "Assignment was saved, but the latest details could not be loaded. Reload this page before editing again.",
+      );
+    } finally {
+      setEditOpen(false);
+    }
+  }
+
+  async function handleEditConflict(message: string) {
+    setSuccess("");
+    setEditOpen(false);
+
+    try {
+      await refresh();
+      setActionError(message);
+    } catch {
+      setActionError(`${message} Reload this page to view the latest assignment.`);
+    }
+  }
+
   async function recordMissingSubmission(item: AssignmentRosterItem) {
     if (!tenant || !canCreateSubmission || item.submission) {
       setActionError("A missing submission cannot be recorded for this student.");
@@ -272,7 +333,7 @@ export function AssignmentDetailClient({ assignmentId }: AssignmentDetailClientP
       <Link className="text-sm font-semibold text-[#425B76] hover:text-[#0B1F33]" href="/app/assignments">Back to assignments</Link>
       <section className="mt-6 grid gap-6 xl:grid-cols-[1fr_0.38fr]">
         <Card className="border-[#D8E8F0] bg-white p-6 shadow-2xl shadow-[#0B2A3D]/10 sm:p-8">
-          <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between"><div><Badge tone={statusTone(assignment.status)}>{assignment.status}</Badge><h2 className="mt-5 text-3xl font-semibold leading-tight text-[#0B1F33] sm:text-4xl">{assignment.title}</h2><p className="mt-3 text-sm font-semibold text-[#0E7490]">{assignment.cohort?.name ?? assignment.course?.title ?? "General assignment"}</p></div>{canPublish || canClose ? <div className="flex flex-wrap gap-2">{canPublish ? <Button disabled={mutating === "published"} onClick={() => void updateStatus("published")} size="sm" variant="secondary">Publish</Button> : null}{canClose ? <Button disabled={mutating === "closed"} onClick={() => void updateStatus("closed")} size="sm" variant="ghost">Close</Button> : null}</div> : null}</div>
+          <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between"><div><Badge tone={statusTone(assignment.status)}>{assignment.status}</Badge><h2 className="mt-5 text-3xl font-semibold leading-tight text-[#0B1F33] sm:text-4xl">{assignment.title}</h2><p className="mt-3 text-sm font-semibold text-[#0E7490]">{assignment.cohort?.name ?? assignment.course?.title ?? "General assignment"}</p></div>{editCapability.canEdit || canPublish || canClose ? <div className="flex flex-wrap gap-2">{editCapability.canEdit ? <Button onClick={() => { setActionError(""); setSuccess(""); setEditOpen(true); }} size="sm" variant="secondary">Edit</Button> : null}{canPublish ? <Button disabled={mutating === "published"} onClick={() => void updateStatus("published")} size="sm" variant="secondary">Publish</Button> : null}{canClose ? <Button disabled={mutating === "closed"} onClick={() => void updateStatus("closed")} size="sm" variant="ghost">Close</Button> : null}</div> : null}</div>
           <p className="mt-7 max-w-3xl text-sm leading-6 text-[#425B76]">{assignment.description || "No assignment summary added yet."}</p><p className="mt-4 max-w-3xl whitespace-pre-wrap text-sm leading-6 text-[#425B76]">{assignment.instructions || "No detailed instructions added yet."}</p>
           <div className="mt-8 grid gap-4 border-t border-[#D8E8F0] pt-6 sm:grid-cols-2"><div><p className="text-sm text-[#66788F]">Due</p><p className="mt-2 font-semibold text-[#0B1F33]">{assignment.due_at ? formatDateTime(assignment.due_at) : "No due date"}</p></div><div><p className="text-sm text-[#66788F]">Max score</p><p className="mt-2 font-semibold text-[#0B1F33]">{assignment.max_score ?? "Not graded"}</p></div></div>
         </Card>
@@ -308,6 +369,20 @@ export function AssignmentDetailClient({ assignmentId }: AssignmentDetailClientP
           })()}
         </Card>
       </section>
+      {editOpen && editCapability.canEdit && currentRole ? (
+        <AssignmentEditDialog
+          assignment={assignment}
+          capability={editCapability}
+          currentRole={currentRole}
+          onCanonicalConflict={handleEditConflict}
+          onClose={() => setEditOpen(false)}
+          onSave={saveAssignmentEdit}
+          relationshipScope={relationshipDelegation ? {
+            scopeId: relationshipDelegation.scope_id,
+            scopeType: relationshipDelegation.scope_type,
+          } : null}
+        />
+      ) : null}
     </div>
   );
 }

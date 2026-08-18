@@ -71,13 +71,14 @@ test.describe("UX-6B1 assignment detail lifecycle UI", () => {
     expect(detailSource).toContain("await reviewSubmission(");
   });
 
-  test("renders unavailable submission and review data without mutation controls", () => {
+  test("renders unavailable submission and review data without invalid lifecycle controls", () => {
     expect(detailSource).toContain("!selectedItem.submission && canCreateSubmission");
     expect(detailSource).toContain("selectedItem.submission && canReviewSelected");
     expect(detailSource).toContain("selectedItem.submission && !canReviewSelected");
     expect(detailSource).toContain("Record missing submission");
     expect(detailSource).toContain("No feedback recorded.");
-    expect(detailSource).not.toContain("updateAssignment(");
+    expect(detailSource).toContain("editCapability.canEdit");
+    expect(detailSource).toContain("await updateAssignment(input)");
     expect(detailSource).not.toContain('currentRole === "student"');
     expect(detailSource).not.toContain("/portal");
   });

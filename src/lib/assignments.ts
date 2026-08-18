@@ -152,7 +152,17 @@ function normalizePageSize(value: number | undefined) {
 }
 
 function normalizeDateTimeInput(value: string) {
-  return value ? new Date(value).toISOString() : null;
+  if (!value) {
+    return null;
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    throw new Error("Due date must be a valid date and time.");
+  }
+
+  return date.toISOString();
 }
 
 function normalizeMaxScore(value: string | number | null | undefined) {
@@ -163,7 +173,7 @@ function normalizeMaxScore(value: string | number | null | undefined) {
   const score = Number(value);
 
   if (!Number.isFinite(score) || score < 0) {
-    throw new Error("Max score must be a positive number.");
+    throw new Error("Max score must be a non-negative number.");
   }
 
   return score;
@@ -778,15 +788,14 @@ export async function updateAssignment(input: UpdateAssignmentInput) {
     throw new Error("Assignment not found in this workspace.");
   }
 
-  const { decision, role, user } = await ensureCanManageAssignment({
+  const { decision, user } = await ensureCanManageAssignment({
     assignmentId: input.assignmentId,
     assignmentTrainerUserId: existing.trainer_user_id,
     cohortId: input.cohortId,
     courseId: input.courseId,
     tenantId: input.tenantId,
   });
-  const trainerUserId =
-    role === "trainer" ? user.id : input.trainerUserId?.trim() || null;
+  const trainerUserId = input.trainerUserId?.trim() || null;
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
     .rpc("update_assignment_secure", {

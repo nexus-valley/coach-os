@@ -427,6 +427,7 @@ export async function getAssignmentSubmissionRoster(params: {
 
   return {
     assignment,
+    hasPersistedSubmissions: submissions.length > 0,
     roster,
     summary: calculateSummary(roster.length, submissions),
   };

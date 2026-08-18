@@ -309,7 +309,7 @@ test.describe("UX-6D3 assignment trainer integrity", () => {
     expect(executable).not.toContain("notify pgrst");
   });
 
-  test("remains compatible with active create callers and exposes no edit caller yet", () => {
+  test("keeps create compatibility and exposes the hardened edit caller", () => {
     expect(assignmentsPage).toMatch(
       /await createAssignment\(\{[\s\S]*?cohortId:[\s\S]*?courseId:[\s\S]*?tenantId:[\s\S]*?title:/,
     );
@@ -317,7 +317,15 @@ test.describe("UX-6D3 assignment trainer integrity", () => {
     expect(assignmentLibrary).toContain(
       'role === "trainer" ? user.id : input.trainerUserId?.trim() || null',
     );
-    expect(assignmentDetail).not.toContain("updateAssignment(");
+    const updateHelper = assignmentLibrary.slice(
+      assignmentLibrary.indexOf("export async function updateAssignment("),
+      assignmentLibrary.indexOf("async function updateAssignmentStatus("),
+    );
+    expect(updateHelper).toContain(
+      "const trainerUserId = input.trainerUserId?.trim() || null;",
+    );
+    expect(updateHelper).not.toContain('role === "trainer"');
+    expect(assignmentDetail).toContain("await updateAssignment(input)");
     expect(assignmentsPage).not.toContain("updateAssignment(");
   });
 });
