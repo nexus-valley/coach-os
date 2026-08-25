@@ -33,6 +33,7 @@ const portalNavItems = [
   { href: "/portal/courses", label: "My Programs" },
   { href: "/portal/sessions", label: "Live Classes" },
   { href: "/portal/assignments", label: "Assignments" },
+  { href: "/portal/notifications", label: "Notifications" },
   { href: "/portal/documents", label: "Materials" },
   { href: "/portal/community", label: "Community" },
   { href: "/portal/announcements", label: "Announcements" },
@@ -91,9 +92,19 @@ export function StudentPortalLayout({
   const brandColor = getSafeTenantBrandColor(
     settings?.student_portal_theme_color || settings?.brand_color,
   );
-  const visiblePortalNavItems = portalNavItems.filter((item) =>
-    isFeatureEnabled(featureAccess, portalNavFeatureByLabel[item.label]),
-  );
+  const notificationsFeatureEnabled =
+    featureAccessLoaded &&
+    Boolean(featureAccess) &&
+    isFeatureEnabled(featureAccess, "notifications");
+  const visiblePortalNavItems = portalNavItems.filter((item) => {
+    const featureKey = portalNavFeatureByLabel[item.label];
+
+    if (featureKey === "notifications") {
+      return notificationsFeatureEnabled;
+    }
+
+    return isFeatureEnabled(featureAccess, featureKey);
+  });
   const activePortalItem = portalNavItems.find(
     (item) =>
       pathname === item.href ||
@@ -106,7 +117,9 @@ export function StudentPortalLayout({
     ? featureAccess?.[activeFeatureKey]?.status
     : undefined;
   const routeFeatureEnabled =
-    !featureAccessLoaded || isFeatureEnabled(featureAccess, activeFeatureKey);
+    activeFeatureKey === "notifications"
+      ? notificationsFeatureEnabled
+      : !featureAccessLoaded || isFeatureEnabled(featureAccess, activeFeatureKey);
 
   const guardedContent = !featureAccessLoaded ? (
     <section className="rounded-2xl border border-[#D8E8F0] bg-white p-6 text-sm font-medium text-[#5D7185] shadow-sm">

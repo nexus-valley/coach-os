@@ -27,6 +27,11 @@ import type {
 import { getStudentById, type Student } from "@/src/lib/students";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 import type { MemberRole } from "@/src/lib/team";
+import type {
+  NotificationSeverity,
+  NotificationStatus,
+  NotificationType,
+} from "@/src/lib/notifications";
 
 export type LessonProgressStatus =
   | "not_started"
@@ -185,12 +190,15 @@ export type StudentPortalSession = {
 };
 
 export type StudentPortalNotification = {
+  action_url: string | null;
   created_at: string;
   id: string;
   message: string;
-  severity: "critical" | "info" | "warning";
+  read_at: string | null;
+  severity: NotificationSeverity;
+  status: Extract<NotificationStatus, "read" | "unread">;
   title: string;
-  type: string;
+  type: NotificationType;
 };
 
 export type StudentPortalConversation = {
@@ -1158,36 +1166,64 @@ export async function getStudentPortalNotifications(params: StudentPortalRequest
   }
 
   const supabase = getSupabaseClient();
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError) {
+    throw userError;
+  }
+
+  if (!user) {
+    return [] satisfies StudentPortalNotification[];
+  }
+
   const { data, error } = await supabase
     .from("notifications")
-    .select("id,type,title,message,severity,created_at")
+    .select("id,type,title,message,severity,status,action_url,created_at,read_at")
     .eq("tenant_id", params.tenantId)
+    .eq("user_id", user.id)
+    .in("status", ["unread", "read"])
     .order("created_at", { ascending: false })
-    .limit(10);
+    .order("id", { ascending: false })
+    .limit(25);
 
   if (error) {
-    const message = error.message?.toLowerCase() ?? "";
-
-    if (
-      error.code === "42P01" ||
-      error.code === "PGRST205" ||
-      message.includes("schema cache") ||
-      message.includes("does not exist")
-    ) {
-      return [];
-    }
-
     throw error;
   }
 
   return ((data ?? []) as StudentPortalNotification[]).map((notification) => ({
+    action_url: notification.action_url,
     created_at: notification.created_at,
     id: notification.id,
     message: notification.message,
+    read_at: notification.read_at,
     severity: notification.severity,
+    status: notification.status,
     title: notification.title,
     type: notification.type,
   }));
+}
+
+export async function markStudentPortalNotificationRead(params: {
+  notificationId: string;
+  tenantId: string;
+}) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .rpc("mark_notification_read_secure", {
+      p_notification_id: params.notificationId,
+      p_tenant_id: params.tenantId,
+    })
+    .select("id,status,read_at")
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  return data as Pick<StudentPortalNotification, "id" | "read_at" | "status">;
 }
 
 export async function getStudentPortalConversations(params: StudentPortalRequest) {
