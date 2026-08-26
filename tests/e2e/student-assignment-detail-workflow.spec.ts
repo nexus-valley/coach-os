@@ -209,7 +209,9 @@ test.describe("UX-6C Student assignment detail workflow", () => {
     expect(detail).toContain(
       "submissionText.trim() !== initialText.trim()",
     );
-    expect(detail).toContain("disabled={Boolean(submission) && !resubmissionDirty}");
+    expect(detail).toContain("!nativeSelectionDirty");
+    expect(detail).toContain("!nativeWorkspaceReady");
+    expect(detail).toContain("nativeFilesBusy");
     expect(detail).toContain(
       "Resubmit this assignment? Your current submission will be replaced.",
     );

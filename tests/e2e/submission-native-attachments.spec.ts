@@ -9,10 +9,14 @@ const migration = readFileSync(
   ),
   "utf8",
 );
-const existingSubmitCallers = [
-  "src/lib/studentPortalAssignments.ts",
-  "src/lib/submissions.ts",
-].map((path) => readFileSync(join(process.cwd(), path), "utf8"));
+const studentSubmitCaller = readFileSync(
+  join(process.cwd(), "src/lib/studentPortalAssignments.ts"),
+  "utf8",
+);
+const coachSubmitCaller = readFileSync(
+  join(process.cwd(), "src/lib/submissions.ts"),
+  "utf8",
+);
 const reviewArchitecture = readFileSync(
   join(process.cwd(), "supabase/module69_4_assignments_submissions_rpcs.sql"),
   "utf8",
@@ -156,7 +160,7 @@ test.describe("UX-6F2 Student submission native attachment backend", () => {
     expect(sql.match(/notify pgrst, 'reload schema';/g)).toHaveLength(1);
   });
 
-  test("keeps both deployed five-named-argument callers compatible", () => {
+  test("supports the six-argument Student caller and legacy-compatible coach caller", () => {
     const submit = functionDefinition("public", "submit_assignment_secure");
 
     expect(submit).toContain("p_submission_text text default null");
@@ -170,22 +174,25 @@ test.describe("UX-6F2 Student submission native attachment backend", () => {
       /p_student_id uuid,\s*p_submission_text text default null/,
     );
 
-    for (const caller of existingSubmitCallers) {
-      const rpc = caller.match(
-        /\.rpc\("submit_assignment_secure", \{([\s\S]*?)\n\s*\}\)/,
-      )?.[1] ?? "";
+    const studentRpc = studentSubmitCaller.match(
+      /\.rpc\("submit_assignment_secure", \{([\s\S]*?)\n\s*\}\)/,
+    )?.[1] ?? "";
+    const coachRpc = coachSubmitCaller.match(
+      /\.rpc\("submit_assignment_secure", \{([\s\S]*?)\n\s*\}\)/,
+    )?.[1] ?? "";
 
-      for (const argument of [
-        "p_assignment_id",
-        "p_attachment_urls_json",
-        "p_student_id",
-        "p_submission_text",
-        "p_tenant_id",
-      ]) {
-        expect(rpc).toContain(`${argument}:`);
-      }
-      expect(rpc).not.toContain("p_native_attachment_ids");
+    for (const argument of [
+      "p_assignment_id",
+      "p_attachment_urls_json",
+      "p_student_id",
+      "p_submission_text",
+      "p_tenant_id",
+    ]) {
+      expect(studentRpc).toContain(`${argument}:`);
+      expect(coachRpc).toContain(`${argument}:`);
     }
+    expect(studentRpc).toContain("p_native_attachment_ids:");
+    expect(coachRpc).not.toContain("p_native_attachment_ids");
   });
 
   test("derives one active portal Student and exposes three fail-closed modes", () => {

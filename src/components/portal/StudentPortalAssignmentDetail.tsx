@@ -5,6 +5,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { AssignmentAttachmentPanel } from "@/src/components/assignments/AssignmentAttachmentPanel";
 import {
+  StudentSubmissionAttachmentPanel,
+  type StudentSubmissionAttachmentPanelHandle,
+} from "@/src/components/portal/StudentSubmissionAttachmentPanel";
+import {
   PortalEmptyState,
   PortalError,
   PortalLoadingCard,
@@ -25,20 +29,14 @@ import {
 } from "@/src/lib/studentPortalAssignments";
 import type { StudentPortalContext } from "@/src/lib/studentPortalAuth";
 
-function AttachmentLinks({
-  label,
-  urls,
-}: {
-  label: string;
-  urls: string[];
-}) {
+function AttachmentLinks({ urls }: { urls: string[] }) {
   if (urls.length === 0) {
     return null;
   }
 
   return (
     <div>
-      <p className="text-sm font-semibold text-[#334155]">{label}</p>
+      <p className="text-sm font-semibold text-[#334155]">External links</p>
       <div className="mt-2 flex flex-wrap gap-2">
         {urls.map((url, index) => (
           <a
@@ -48,7 +46,7 @@ function AttachmentLinks({
             rel="noopener noreferrer"
             target="_blank"
           >
-            {label} {index + 1}
+            External link {index + 1}
           </a>
         ))}
       </div>
@@ -169,11 +167,30 @@ export function StudentPortalAssignmentDetail({
   const [error, setError] = useState("");
   const [initialText, setInitialText] = useState("");
   const [loading, setLoading] = useState(true);
+  const [nativeFilesBusy, setNativeFilesBusy] = useState(false);
+  const [nativeSelectionDirty, setNativeSelectionDirty] = useState(false);
+  const [nativeWorkspaceReady, setNativeWorkspaceReady] = useState(false);
   const [resubmitOpen, setResubmitOpen] = useState(false);
+  const [selectedNativeAttachmentIds, setSelectedNativeAttachmentIds] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [submissionText, setSubmissionText] = useState("");
   const [success, setSuccess] = useState("");
   const submittingRef = useRef(false);
+  const submissionAttachmentPanelRef = useRef<StudentSubmissionAttachmentPanelHandle>(null);
+
+  const handleNativeBusyChange = useCallback((busy: boolean) => {
+    setNativeFilesBusy(busy);
+  }, []);
+  const handleNativeReadyChange = useCallback((ready: boolean) => {
+    setNativeWorkspaceReady(ready);
+  }, []);
+  const handleNativeSelectionChange = useCallback(
+    (ids: string[], dirty: boolean) => {
+      setSelectedNativeAttachmentIds(ids);
+      setNativeSelectionDirty(dirty);
+    },
+    [],
+  );
 
   const applyDetail = useCallback((next: StudentAssignmentItem | null) => {
     setDetail(next);
@@ -236,6 +253,16 @@ export function StudentPortalAssignmentDetail({
       return;
     }
 
+    if (!nativeWorkspaceReady || nativeFilesBusy) {
+      setActionError("Wait for submission files to finish loading or updating.");
+      return;
+    }
+
+    if (selectedNativeAttachmentIds.length > 10) {
+      setActionError("A submission can include no more than 10 native files.");
+      return;
+    }
+
     const isResubmission = Boolean(detail.submission);
     submittingRef.current = true;
     setSubmitting(true);
@@ -243,19 +270,47 @@ export function StudentPortalAssignmentDetail({
     setSuccess("");
 
     try {
-      await submitStudentAssignment({
+      const savedSubmission = await submitStudentAssignment({
         assignmentId,
         attachmentUrls: detail.submission?.attachment_urls_json ?? [],
         context,
+        nativeAttachmentIds: selectedNativeAttachmentIds,
         submissionText,
       });
-      await loadDetail();
+      setDetail({ ...detail, submission: savedSubmission });
+      setSubmissionText(savedSubmission.submission_text ?? "");
+      setInitialText(savedSubmission.submission_text ?? "");
       setResubmitOpen(false);
       setSuccess(
         isResubmission
           ? "Assignment resubmitted successfully."
           : "Assignment submitted successfully.",
       );
+
+      let refreshFailed = false;
+      let cleanupFailed = false;
+      try {
+        await loadDetail();
+      } catch {
+        refreshFailed = true;
+      }
+      try {
+        cleanupFailed =
+          (await submissionAttachmentPanelRef.current?.refreshAfterSubmit())
+            ?.cleanupFailed ?? false;
+      } catch {
+        cleanupFailed = true;
+      }
+
+      if (refreshFailed) {
+        setActionError(
+          "Assignment submitted, but the latest details could not be refreshed. Reload this page.",
+        );
+      } else if (cleanupFailed) {
+        setActionError(
+          "Assignment submitted. Some file cleanup is incomplete and can be retried below.",
+        );
+      }
     } catch (caught) {
       let refreshed: StudentAssignmentItem | null = detail;
 
@@ -397,10 +452,7 @@ export function StudentPortalAssignmentDetail({
                 {submission.submission_text || "No submission text recorded."}
               </p>
             </div>
-            <AttachmentLinks
-              label="Submission attachment"
-              urls={submission.attachment_urls_json}
-            />
+            <AttachmentLinks urls={submission.attachment_urls_json} />
           </div>
         ) : (
           <div className="mt-5">
@@ -411,6 +463,16 @@ export function StudentPortalAssignmentDetail({
             </PortalEmptyState>
           </div>
         )}
+
+        <StudentSubmissionAttachmentPanel
+          assignmentId={assignmentId}
+          canSubmit={view.canSubmit}
+          mutationsDisabled={submitting}
+          onBusyChange={handleNativeBusyChange}
+          onReadyChange={handleNativeReadyChange}
+          onSelectionChange={handleNativeSelectionChange}
+          ref={submissionAttachmentPanelRef}
+        />
 
         {view.canSubmit ? (
           <div className="mt-6 border-t border-[#D8E8F0] pt-6">
@@ -435,7 +497,13 @@ export function StudentPortalAssignmentDetail({
                   : "Your coach will see this as your current submission."}
               </p>
               <Button
-                disabled={Boolean(submission) && !resubmissionDirty}
+                disabled={
+                  nativeFilesBusy ||
+                  !nativeWorkspaceReady ||
+                  (Boolean(submission) &&
+                    !resubmissionDirty &&
+                    !nativeSelectionDirty)
+                }
                 isLoading={submitting && !resubmitOpen}
                 loadingText="Submitting..."
                 onClick={() => {

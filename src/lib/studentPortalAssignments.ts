@@ -348,6 +348,7 @@ export async function submitStudentAssignment(params: {
   assignmentId: string;
   attachmentUrls?: string[];
   context: StudentPortalContext;
+  nativeAttachmentIds: string[];
   submissionText: string;
 }) {
   const { studentId, tenantId } = contextIds(params.context);
@@ -357,6 +358,7 @@ export async function submitStudentAssignment(params: {
     p_attachment_urls_json: getSafeStudentAttachmentUrls(
       params.attachmentUrls ?? [],
     ),
+    p_native_attachment_ids: params.nativeAttachmentIds,
     p_student_id: studentId,
     p_submission_text: params.submissionText.trim() || null,
     p_tenant_id: tenantId,
