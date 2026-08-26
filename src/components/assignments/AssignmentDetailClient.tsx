@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { AssignmentEditDialog } from "@/src/components/assignments/AssignmentEditDialog";
+import { AssignmentAttachmentPanel } from "@/src/components/assignments/AssignmentAttachmentPanel";
 import { AccessDeniedCard } from "@/src/components/security/AccessDeniedCard";
 import { Badge } from "@/src/components/ui/Badge";
 import { Button } from "@/src/components/ui/Button";
@@ -342,6 +343,15 @@ export function AssignmentDetailClient({ assignmentId }: AssignmentDetailClientP
       <section className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-5"><SummaryCard label="Roster" value={summary?.total ?? 0} /><SummaryCard label="Submitted" value={summary?.submitted ?? 0} /><SummaryCard label="Late" value={summary?.late ?? 0} /><SummaryCard label="Reviewed" value={summary?.reviewed ?? 0} /><SummaryCard label="Avg score" value={summary?.averageScore ?? "N/A"} /></section>
       {actionError ? <div className="mt-6"><FeedbackAlert>{actionError}</FeedbackAlert></div> : null}
       {success ? <div className="mt-6"><FeedbackAlert tone="success">{success}</FeedbackAlert></div> : null}
+
+      <Card className="mt-6 border-[#D8E8F0] bg-white p-5 sm:p-6">
+        <AssignmentAttachmentPanel
+          assignmentId={assignment.id}
+          assignmentStatus={assignment.status}
+          canManage={canManage}
+          legacyUrls={assignment.attachment_urls_json}
+        />
+      </Card>
 
       <section className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,0.78fr)_minmax(0,1.22fr)]">
         <Card className="border-[#D8E8F0] bg-white p-5 sm:p-6">

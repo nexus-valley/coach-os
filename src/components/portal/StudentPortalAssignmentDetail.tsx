@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { AssignmentAttachmentPanel } from "@/src/components/assignments/AssignmentAttachmentPanel";
 import {
   PortalEmptyState,
   PortalError,
@@ -357,9 +358,11 @@ export function StudentPortalAssignmentDetail({
               {detail.assignment.instructions || "No additional instructions were provided."}
             </p>
           </div>
-          <AttachmentLinks
-            label="Assignment attachment"
-            urls={detail.assignment.attachment_urls_json}
+          <AssignmentAttachmentPanel
+            assignmentId={detail.assignment.id}
+            assignmentStatus={detail.assignment.status}
+            canManage={false}
+            legacyUrls={detail.assignment.attachment_urls_json}
           />
         </div>
       </Card>
