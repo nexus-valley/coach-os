@@ -30,6 +30,7 @@ const webhookRoute = read("app/api/webhooks/resend/route.ts");
 const drainRoute = read(
   "app/api/internal/transactional-email/drain/route.ts",
 );
+const drainHandler = read("src/lib/server/transactionalEmailDrain.ts");
 
 function executableSql() {
   const matches = migration.match(/^begin;\s*$[\s\S]*?^commit;\s*$/gm);
@@ -480,8 +481,10 @@ test.describe("UX-8B transactional email delivery foundation", () => {
 
   test("protects the drain route independently from browser roles", () => {
     expect(drainRoute).toContain("COACHFORT_EMAIL_WORKER_SECRET");
-    expect(drainRoute).toContain("timingSafeEqual");
-    expect(drainRoute).toContain('return Response.json({ message: "Not found." }');
+    expect(drainHandler).toContain("timingSafeEqual");
+    expect(drainHandler).toContain(
+      'return Response.json({ message: "Not found." }',
+    );
     expect(drainRoute).not.toMatch(/owner|admin|authenticated/i);
     expect(drainRoute).toContain('export const runtime = "nodejs"');
   });
@@ -672,7 +675,7 @@ test.describe("UX-8B transactional email delivery foundation", () => {
   });
 
   test("returns only sanitized worker and webhook errors", () => {
-    expect(drainRoute).toContain(
+    expect(drainHandler).toContain(
       "Transactional email processing is temporarily unavailable.",
     );
     expect(webhookRoute).toContain("Invalid webhook.");
@@ -681,7 +684,9 @@ test.describe("UX-8B transactional email delivery foundation", () => {
       "Webhook processing is temporarily unavailable.",
     );
     expect(webhookRoute).not.toMatch(/error\.message|error\.details|error\.hint/);
-    expect(drainRoute).not.toMatch(/error\.message|error\.details|error\.hint/);
+    expect(drainHandler).not.toMatch(
+      /error\.message|error\.details|error\.hint/,
+    );
   });
 
   test("POST verifier covers ACL, payloads, lifecycle, retry, and suppression", () => {
