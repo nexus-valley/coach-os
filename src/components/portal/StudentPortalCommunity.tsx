@@ -1,25 +1,19 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
-
 import {
-  createStudentCommunityComment,
-  createStudentCommunityPostV2,
-  formatCommunityDate,
-  getCommunityPostTypeLabel,
-  getStudentCommunityCreateScopes,
-  getStudentCommunityComments,
-  getStudentCommunityPosts,
-  type CommunityCreateScope,
-  type CommunityPostType,
-  type StudentCommunityComment,
-  type StudentCommunityPost,
-} from "@/src/lib/community";
-import type { StudentPortalContext } from "@/src/lib/studentPortalAuth";
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+} from "react";
+
+import { CommunityDialog } from "@/src/components/community/CommunityDialog";
+import { CommunityPostCard } from "@/src/components/community/CommunityPostCard";
+import { CommunitySpaceSelector } from "@/src/components/community/CommunitySpaceSelector";
 import {
   PortalEmptyState,
   PortalError,
-  PortalLoadingCard,
 } from "@/src/components/portal/StudentPortalShared";
 import { Badge } from "@/src/components/ui/Badge";
 import { Button } from "@/src/components/ui/Button";
@@ -28,6 +22,25 @@ import { FeedbackAlert } from "@/src/components/ui/FeedbackAlert";
 import { FormField } from "@/src/components/ui/FormField";
 import { PageHeader } from "@/src/components/ui/PageHeader";
 import { SectionHeader } from "@/src/components/ui/SectionHeader";
+import { Skeleton } from "@/src/components/ui/Skeleton";
+import {
+  appendUniqueCommunityItems,
+  canWriteCommunityPost,
+  communityPageSize,
+  createStudentCommunityComment,
+  createStudentCommunityPostV2,
+  executeCommunityMutation,
+  formatCommunityDate,
+  getCommunityPostTypeLabel,
+  getStudentCommunityCommentsV2,
+  getStudentCommunityPostsV2,
+  getStudentCommunityScopes,
+  type CommunityCreateScope,
+  type CommunityPostType,
+  type StudentCommunityComment,
+  type StudentCommunityPost,
+} from "@/src/lib/community";
+import type { StudentPortalContext } from "@/src/lib/studentPortalAuth";
 
 type PostFormState = {
   body: string;
@@ -40,7 +53,8 @@ const emptyPostForm: PostFormState = {
   postType: "discussion",
   title: "",
 };
-
+const refreshFailureMessage =
+  "Your Community action succeeded, but the latest view could not be refreshed. Refresh the page to see the current state.";
 const postTypes: CommunityPostType[] = [
   "discussion",
   "question",
@@ -48,24 +62,30 @@ const postTypes: CommunityPostType[] = [
   "update",
 ];
 
-function getErrorMessage(_caught: unknown, fallback: string) {
-  return fallback;
-}
-
 function isPlainText(value: string) {
   return !/[<>]/.test(value);
 }
 
-function getAuthorLabel(post: StudentCommunityPost) {
-  if (post.author_type === "student") {
-    return post.author_name || "Community member";
+function getCommunityErrorMessage(
+  caught: unknown,
+  fallback = "Unable to complete the Community action.",
+) {
+  const candidate = caught as { code?: unknown; message?: unknown } | null;
+  const code = typeof candidate?.code === "string" ? candidate.code : "";
+  const message =
+    typeof candidate?.message === "string" ? candidate.message.toLowerCase() : "";
+
+  if (code === "42501" || /permission|participation|scope access/.test(message)) {
+    return "Your Community access changed. Refresh to see the spaces currently available to you.";
+  }
+  if (/not found|unavailable/.test(message)) {
+    return "This Community discussion is no longer available.";
+  }
+  if (/plain text|required|title|body/.test(message)) {
+    return "Enter a plain-text title and message before posting.";
   }
 
-  return post.author_name || "Coach team";
-}
-
-function getAuthorTone(authorType: StudentCommunityPost["author_type"]) {
-  return authorType === "student" ? "light" : "info";
+  return fallback;
 }
 
 export function StudentPortalCommunity({
@@ -73,89 +93,66 @@ export function StudentPortalCommunity({
 }: {
   context: StudentPortalContext;
 }) {
+  const successRef = useRef<HTMLDivElement>(null);
   const [actionError, setActionError] = useState("");
   const [commentBody, setCommentBody] = useState("");
   const [comments, setComments] = useState<StudentCommunityComment[]>([]);
+  const [commentsHasMore, setCommentsHasMore] = useState(false);
   const [commentsLoading, setCommentsLoading] = useState(false);
+  const [commentsLoadingMore, setCommentsLoadingMore] = useState(false);
   const [composerOpen, setComposerOpen] = useState(false);
-  const [createScopes, setCreateScopes] = useState<CommunityCreateScope[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [feedLoading, setFeedLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [mutating, setMutating] = useState("");
   const [postForm, setPostForm] = useState<PostFormState>(emptyPostForm);
   const [posts, setPosts] = useState<StudentCommunityPost[]>([]);
+  const [postsHasMore, setPostsHasMore] = useState(false);
+  const [refreshWarning, setRefreshWarning] = useState("");
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
-  const [selectedScopeKey, setSelectedScopeKey] = useState("");
+  const [selectedSpaceKey, setSelectedSpaceKey] = useState("");
+  const [spaces, setSpaces] = useState<CommunityCreateScope[]>([]);
   const [success, setSuccess] = useState("");
 
+  const selectedSpace = useMemo(
+    () => spaces.find((space) => space.key === selectedSpaceKey) ?? null,
+    [selectedSpaceKey, spaces],
+  );
   const selectedPost = useMemo(
     () => posts.find((post) => post.id === selectedPostId) ?? null,
     [posts, selectedPostId],
   );
-  const canCreatePost = createScopes.length > 0;
-
-  function openComposer() {
-    setActionError("");
-    setSelectedScopeKey(createScopes.length === 1 ? createScopes[0]?.key ?? "" : "");
-    setComposerOpen(true);
-  }
-
-  async function loadPosts(preferredPostId?: string | null) {
-    setActionError("");
-    setLoading(true);
-
-    try {
-      const nextPosts = await getStudentCommunityPosts();
-      const nextSelectedPostId =
-        preferredPostId && nextPosts.some((post) => post.id === preferredPostId)
-          ? preferredPostId
-          : nextPosts[0]?.id ?? null;
-
-      setPosts(nextPosts);
-      setSelectedPostId(nextSelectedPostId);
-    } catch (caught) {
-      setActionError(getErrorMessage(caught, "Unable to load community posts."));
-    } finally {
-      setLoading(false);
-    }
-  }
+  const canWriteSelectedPost = Boolean(
+    selectedPost && canWriteCommunityPost(selectedPost, spaces),
+  );
 
   useEffect(() => {
     let active = true;
 
-    async function loadInitialPosts() {
+    async function loadSpaces() {
+      setInitialLoading(true);
       setActionError("");
-      setLoading(true);
 
       try {
-        const [nextPosts, nextCreateScopes] = await Promise.all([
-          getStudentCommunityPosts(),
-          getStudentCommunityCreateScopes({
-            studentId: context.student.id,
-            tenantId: context.tenant.id,
-          }),
-        ]);
-
-        if (active) {
-          setPosts(nextPosts);
-          setCreateScopes(nextCreateScopes);
-          setSelectedScopeKey(
-            nextCreateScopes.length === 1 ? nextCreateScopes[0]?.key ?? "" : "",
-          );
-          setSelectedPostId(nextPosts[0]?.id ?? null);
-        }
+        const nextSpaces = await getStudentCommunityScopes({
+          studentId: context.student.id,
+          tenantId: context.tenant.id,
+        });
+        if (!active) return;
+        setSpaces(nextSpaces);
+        setSelectedSpaceKey(nextSpaces.length === 1 ? nextSpaces[0].key : "");
       } catch (caught) {
         if (active) {
-          setActionError(getErrorMessage(caught, "Unable to load community posts."));
+          setActionError(
+            getCommunityErrorMessage(caught, "Unable to load your Community spaces."),
+          );
         }
       } finally {
-        if (active) {
-          setLoading(false);
-        }
+        if (active) setInitialLoading(false);
       }
     }
 
-    void loadInitialPosts();
-
+    void loadSpaces();
     return () => {
       active = false;
     };
@@ -164,134 +161,254 @@ export function StudentPortalCommunity({
   useEffect(() => {
     let active = true;
 
+    async function loadFeed() {
+      if (!selectedSpace) {
+        setPosts([]);
+        setSelectedPostId(null);
+        setFeedLoading(false);
+        return;
+      }
+
+      setFeedLoading(true);
+      setActionError("");
+
+      try {
+        const nextPosts = await getStudentCommunityPostsV2({ scope: selectedSpace });
+        if (!active) return;
+        setPosts(nextPosts);
+        setPostsHasMore(nextPosts.length === communityPageSize);
+        setSelectedPostId((current) =>
+          current && nextPosts.some((post) => post.id === current)
+            ? current
+            : nextPosts[0]?.id ?? null,
+        );
+      } catch (caught) {
+        if (active) {
+          setActionError(
+            getCommunityErrorMessage(caught, "Unable to load Community discussions."),
+          );
+        }
+      } finally {
+        if (active) setFeedLoading(false);
+      }
+    }
+
+    void loadFeed();
+    return () => {
+      active = false;
+    };
+  }, [selectedSpace]);
+
+  useEffect(() => {
+    let active = true;
+
     async function loadComments() {
       if (!selectedPostId) {
         setComments([]);
+        setCommentsHasMore(false);
         return;
       }
 
       setCommentsLoading(true);
 
       try {
-        const nextComments = await getStudentCommunityComments(selectedPostId);
-
-        if (active) {
-          setComments(nextComments);
-        }
+        const nextComments = await getStudentCommunityCommentsV2({
+          postId: selectedPostId,
+        });
+        if (!active) return;
+        setComments(nextComments);
+        setCommentsHasMore(nextComments.length === communityPageSize);
       } catch (caught) {
         if (active) {
-          setActionError(getErrorMessage(caught, "Unable to load comments."));
+          setActionError(
+            getCommunityErrorMessage(caught, "Unable to load Community comments."),
+          );
         }
       } finally {
-        if (active) {
-          setCommentsLoading(false);
-        }
+        if (active) setCommentsLoading(false);
       }
     }
 
     void loadComments();
-
     return () => {
       active = false;
     };
   }, [selectedPostId]);
 
-  async function refreshSelectedPost() {
-    if (!selectedPostId) {
-      return;
-    }
-
-    const [nextPosts, nextComments] = await Promise.all([
-      getStudentCommunityPosts(),
-      getStudentCommunityComments(selectedPostId),
-    ]);
-
+  async function refreshPosts(preferredPostId?: string | null) {
+    if (!selectedSpace) return false;
+    const nextPosts = await getStudentCommunityPostsV2({ scope: selectedSpace });
     setPosts(nextPosts);
+    setPostsHasMore(nextPosts.length === communityPageSize);
+    setSelectedPostId(
+      preferredPostId && nextPosts.some((post) => post.id === preferredPostId)
+        ? preferredPostId
+        : nextPosts[0]?.id ?? null,
+    );
+    return true;
+  }
+
+  async function refreshComments(postId: string) {
+    const nextComments = await getStudentCommunityCommentsV2({ postId });
     setComments(nextComments);
+    setCommentsHasMore(nextComments.length === communityPageSize);
+    return true;
+  }
+
+  async function loadMorePosts() {
+    if (!selectedSpace || loadingMore || posts.length === 0) return;
+    const last = posts[posts.length - 1];
+    setLoadingMore(true);
+
+    try {
+      const nextPosts = await getStudentCommunityPostsV2({
+        cursor: { id: last.id, timestamp: last.published_at ?? last.updated_at },
+        scope: selectedSpace,
+      });
+      setPosts((current) => appendUniqueCommunityItems(current, nextPosts));
+      setPostsHasMore(nextPosts.length === communityPageSize);
+    } catch (caught) {
+      setActionError(
+        getCommunityErrorMessage(caught, "Unable to load more Community discussions."),
+      );
+    } finally {
+      setLoadingMore(false);
+    }
+  }
+
+  async function loadMoreComments() {
+    if (!selectedPost || commentsLoadingMore || comments.length === 0) return;
+    const last = comments[comments.length - 1];
+    setCommentsLoadingMore(true);
+
+    try {
+      const nextComments = await getStudentCommunityCommentsV2({
+        cursor: { id: last.id, timestamp: last.created_at },
+        postId: selectedPost.id,
+      });
+      setComments((current) => appendUniqueCommunityItems(current, nextComments));
+      setCommentsHasMore(nextComments.length === communityPageSize);
+    } catch (caught) {
+      setActionError(
+        getCommunityErrorMessage(caught, "Unable to load more Community comments."),
+      );
+    } finally {
+      setCommentsLoadingMore(false);
+    }
+  }
+
+  function openComposer() {
+    if (!selectedSpace?.canWrite) return;
+    setActionError("");
+    setSuccess("");
+    setRefreshWarning("");
+    setPostForm(emptyPostForm);
+    setComposerOpen(true);
   }
 
   async function handlePostSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!selectedSpace?.canWrite || mutating) return;
 
     const title = postForm.title.trim();
     const body = postForm.body.trim();
 
-    if (!title || !body) {
-      setActionError("Add a title and message before starting a discussion.");
-      return;
-    }
-
-    if (!isPlainText(title) || !isPlainText(body)) {
-      setActionError("Community posts must use plain text without HTML.");
-      return;
-    }
-
-    const selectedScope =
-      createScopes.find((scope) => scope.key === selectedScopeKey) ?? null;
-
-    if (!selectedScope) {
-      setActionError("Choose a Program or Cohort Community space.");
+    if (!title || !body || !isPlainText(title) || !isPlainText(body)) {
+      setActionError("Enter a plain-text title and message before posting.");
       return;
     }
 
     setActionError("");
     setSuccess("");
+    setRefreshWarning("");
     setMutating("save-post");
+    let savedId: string | null = null;
 
-    try {
-      const savedPost = await createStudentCommunityPostV2(
-        selectedScope.courseId,
-        selectedScope.cohortId,
-        title,
-        body,
-        postForm.postType,
+    const outcome = await executeCommunityMutation({
+      mutate: async () => {
+        const saved = await createStudentCommunityPostV2(
+          selectedSpace.courseId,
+          selectedSpace.cohortId,
+          title,
+          body,
+          postForm.postType,
+        );
+        savedId = saved.id;
+      },
+      onMutationSuccess: () => {
+        setPostForm(emptyPostForm);
+        setComposerOpen(false);
+        setSuccess("Your Community post is live.");
+      },
+      refresh: () => refreshPosts(savedId),
+    });
+
+    if (!outcome.mutationSucceeded) {
+      setActionError(
+        getCommunityErrorMessage(outcome.mutationError, "Unable to publish your Community post."),
       );
-
-      setPostForm(emptyPostForm);
-      setComposerOpen(false);
-      setSuccess("Your discussion is live in the community.");
-      await loadPosts(savedPost.id);
-    } catch (caught) {
-      setActionError(getErrorMessage(caught, "Unable to start the discussion."));
-    } finally {
-      setMutating("");
+    } else {
+      if (!outcome.refreshSucceeded) setRefreshWarning(refreshFailureMessage);
+      window.requestAnimationFrame(() => successRef.current?.focus());
     }
+    setMutating("");
   }
 
   async function handleCommentSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!selectedPost || !canWriteSelectedPost || mutating) return;
+    const body = commentBody.trim();
 
-    if (!selectedPost) {
-      setActionError("Select a community post first.");
-      return;
-    }
-
-    if (!isPlainText(commentBody)) {
-      setActionError("Community comments must use plain text without HTML.");
+    if (!body || !isPlainText(body)) {
+      setActionError("Enter a plain-text comment before posting.");
       return;
     }
 
     setActionError("");
     setSuccess("");
+    setRefreshWarning("");
     setMutating("save-comment");
 
-    try {
-      await createStudentCommunityComment(selectedPost.id, commentBody);
-      setCommentBody("");
-      setSuccess("Your comment was added.");
-      await refreshSelectedPost();
-    } catch (caught) {
-      setActionError(getErrorMessage(caught, "Unable to add your comment."));
-    } finally {
-      setMutating("");
+    const outcome = await executeCommunityMutation({
+      mutate: () => createStudentCommunityComment(selectedPost.id, body),
+      onMutationSuccess: () => {
+        setCommentBody("");
+        setSuccess("Your Community comment was added.");
+      },
+      refresh: async () => {
+        await Promise.all([
+          refreshComments(selectedPost.id),
+          refreshPosts(selectedPost.id),
+        ]);
+        return true;
+      },
+    });
+
+    if (!outcome.mutationSucceeded) {
+      setActionError(
+        getCommunityErrorMessage(outcome.mutationError, "Unable to add your Community comment."),
+      );
+    } else {
+      if (!outcome.refreshSucceeded) setRefreshWarning(refreshFailureMessage);
+      window.requestAnimationFrame(() => successRef.current?.focus());
     }
+    setMutating("");
   }
 
-  if (loading) {
-    return <PortalLoadingCard label="Loading community" />;
+  if (initialLoading) {
+    return (
+      <div aria-label="Loading Community" className="mx-auto max-w-6xl space-y-5">
+        <Skeleton className="h-28" />
+        <Skeleton className="h-24" />
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
+          <Skeleton className="h-64" />
+          <Skeleton className="h-64" />
+        </div>
+      </div>
+    );
   }
 
-  if (actionError && posts.length === 0) {
+  if (actionError && spaces.length === 0) {
     return <PortalError message={actionError} />;
   }
 
@@ -299,329 +416,286 @@ export function StudentPortalCommunity({
     <div className="mx-auto max-w-6xl space-y-6">
       <PageHeader
         actions={
-          canCreatePost ? (
+          selectedSpace?.canWrite ? (
             <Button onClick={openComposer} type="button">
-              Start discussion
+              Start a post
             </Button>
           ) : null
         }
-        description={`Connect with students and the ${context.tenant.name} coach team in a private workspace community.`}
-        eyebrow="Private coach community"
+        description={`Join focused Program and Cohort discussions with the ${context.tenant.name} Coach team.`}
+        eyebrow="Your coaching Community"
         metadata={
           <>
-            <Badge tone="light">{posts.length} published posts</Badge>
-            <Badge tone="outline">Students and coach team</Badge>
+            <Badge tone="light">Coach and Student discussions</Badge>
+            {selectedSpace && !selectedSpace.canWrite ? (
+              <Badge tone="neutral">Historical read only</Badge>
+            ) : null}
           </>
         }
         title="Community"
       />
 
-      <Card className="overflow-hidden border-[#CBD5E1] bg-white shadow-sm">
-        <div className="border-b border-[#E2E8F0] bg-[#F8FAFC] px-5 py-4">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#0B1F33] text-sm font-bold text-white">
-                {context.student.full_name
-                  .split(" ")
-                  .map((part) => part[0])
-                  .join("")
-                  .slice(0, 2)
-                  .toUpperCase() || "ST"}
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-[#0B1F33]">
-                  Share a win, question, or resource
-                </p>
-                <p className="text-sm text-[#425B76]">
-                  Posts are visible to your private coach community.
-                </p>
-              </div>
-            </div>
-            {canCreatePost ? (
+      <div aria-live="polite" className="space-y-3">
+        {actionError ? <FeedbackAlert>{actionError}</FeedbackAlert> : null}
+        {success ? (
+          <div ref={successRef} tabIndex={-1}>
+            <FeedbackAlert tone="success">{success}</FeedbackAlert>
+          </div>
+        ) : null}
+        {refreshWarning ? <FeedbackAlert tone="warning">{refreshWarning}</FeedbackAlert> : null}
+      </div>
+
+      <CommunitySpaceSelector
+        id="student-community-space"
+        onChange={(key) => {
+          setSelectedSpaceKey(key);
+          setSelectedPostId(null);
+          setPosts([]);
+        }}
+        selectedKey={selectedSpaceKey}
+        spaces={spaces}
+      />
+
+      {spaces.length === 0 ? (
+        <PortalEmptyState>
+          No Program or Cohort Community space is available for your current access.
+        </PortalEmptyState>
+      ) : !selectedSpace ? (
+        <PortalEmptyState>
+          Choose a Program or Cohort space to open its Community discussions.
+        </PortalEmptyState>
+      ) : (
+        <>
+          <section className="flex flex-col gap-3 border-b border-[#D8E8F0] pb-4 sm:flex-row sm:items-end sm:justify-between">
+            <SectionHeader
+              description={selectedSpace.description}
+              title={selectedSpace.label}
+            />
+            {selectedSpace.canWrite ? (
               <Button onClick={openComposer} type="button" variant="secondary">
                 Write a post
               </Button>
-            ) : null}
-          </div>
-        </div>
-      </Card>
+            ) : (
+              <Badge tone="neutral">Read-only history</Badge>
+            )}
+          </section>
 
-      {actionError ? <FeedbackAlert>{actionError}</FeedbackAlert> : null}
-      {success ? <FeedbackAlert tone="success">{success}</FeedbackAlert> : null}
-
-      {posts.length === 0 ? (
-        <PortalEmptyState>
-          No community discussions yet. Start a conversation when you have a
-          question, resource, or update for your private coach community.
-        </PortalEmptyState>
-      ) : (
-        <section className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
-          <div className="space-y-5">
-            {posts.map((post) => {
-              const isSelected = post.id === selectedPostId;
-
-              return (
-                <Card
-                  className={[
-                    "border-[#CBD5E1] bg-white p-0 shadow-sm transition",
-                    isSelected ? "ring-2 ring-[#2ECBEA]/35" : "hover:border-[#94A3B8]",
-                  ].join(" ")}
-                  key={post.id}
-                >
-                  <button
-                    className="block w-full p-5 text-left"
-                    onClick={() => setSelectedPostId(post.id)}
-                    type="button"
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex min-w-0 items-center gap-3">
-                        <div
-                          className={[
-                            "flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-bold",
-                            post.author_type === "student"
-                              ? "bg-[#EAF8FC] text-[#0B2A3D]"
-                              : "bg-[#0B1F33] text-white",
-                          ].join(" ")}
-                        >
-                          {getAuthorLabel(post).slice(0, 2).toUpperCase()}
-                        </div>
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <p className="font-semibold text-[#0B1F33]">
-                              {getAuthorLabel(post)}
-                            </p>
-                            <Badge tone={getAuthorTone(post.author_type)}>
-                              {post.author_type === "student"
-                                ? "Community member"
-                                : "Coach team"}
-                            </Badge>
-                          </div>
-                          <p className="mt-1 text-xs font-medium text-[#64748B]">
-                            Published {formatCommunityDate(post.published_at)}
-                          </p>
-                        </div>
-                      </div>
-                      <Badge tone="outline">
-                        {getCommunityPostTypeLabel(post.post_type)}
-                      </Badge>
-                    </div>
-                    <h2 className="mt-5 text-xl font-semibold text-[#0B1F33]">
-                      {post.title}
-                    </h2>
-                    <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-[#334155]">
-                      {post.body}
-                    </p>
-                    <div className="mt-5 flex flex-wrap items-center gap-3 border-t border-[#E2E8F0] pt-4 text-sm font-medium text-[#425B76]">
-                      <span>{post.comment_count} comments</span>
-                      <span aria-hidden="true" className="text-[#CBD5E1]">
-                        |
-                      </span>
-                      <span>{isSelected ? "Discussion open" : "Open discussion"}</span>
-                    </div>
-                  </button>
-                </Card>
-              );
-            })}
-          </div>
-
-          <aside className="lg:sticky lg:top-6 lg:self-start">
-            <Card className="border-[#CBD5E1] bg-white p-5 shadow-sm">
-              {selectedPost ? (
-                <div className="space-y-5">
-                  <SectionHeader
-                    description="Reply with respectful, plain-text comments."
-                    title="Discussion thread"
+          {feedLoading ? (
+            <div aria-label="Loading Community discussions" className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
+              <div className="space-y-4">
+                <Skeleton className="h-56" />
+                <Skeleton className="h-48" />
+              </div>
+              <Skeleton className="h-72" />
+            </div>
+          ) : posts.length === 0 ? (
+            <PortalEmptyState>
+              {selectedSpace.canWrite
+                ? "No discussions yet. Start a focused question, resource, update, or conversation."
+                : "No historical Community discussions are available in this space."}
+            </PortalEmptyState>
+          ) : (
+            <section className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
+              <div className="min-w-0 space-y-4">
+                {posts.map((post) => (
+                  <CommunityPostCard
+                    isSelected={post.id === selectedPostId}
+                    key={post.id}
+                    onSelect={() => setSelectedPostId(post.id)}
+                    post={post}
+                    scopeLabel={selectedSpace.label}
                   />
-                  <div className="rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] p-4">
-                    <p className="text-sm font-semibold text-[#0B1F33]">
-                      {selectedPost.title}
-                    </p>
-                    <p className="mt-2 text-xs font-medium text-[#64748B]">
-                      Started by {getAuthorLabel(selectedPost)}
-                    </p>
-                  </div>
-
-                  <form
-                    className="rounded-xl border border-[#D8E8F0] bg-white p-4 shadow-sm"
-                    onSubmit={handleCommentSubmit}
-                  >
-                    <FormField
-                      description="Your reply appears in this private community thread."
-                      label="Add a comment"
-                    >
-                      <textarea
-                        className="min-h-28 w-full resize-none rounded-xl border border-[#CBD5E1] bg-white px-4 py-3 text-sm leading-6 text-[#0B1F33] outline-none transition focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
-                        maxLength={3000}
-                        onChange={(event) => setCommentBody(event.target.value)}
-                        placeholder="Add a thoughtful reply."
-                        value={commentBody}
-                      />
-                    </FormField>
+                ))}
+                {postsHasMore ? (
+                  <div className="flex justify-center">
                     <Button
-                      className="mt-3"
-                      disabled={mutating === "save-comment" || !commentBody.trim()}
-                      size="sm"
-                      type="submit"
+                      isLoading={loadingMore}
+                      loadingText="Loading..."
+                      onClick={() => void loadMorePosts()}
+                      type="button"
+                      variant="secondary"
                     >
-                      {mutating === "save-comment" ? "Posting..." : "Post comment"}
+                      Load more posts
                     </Button>
-                  </form>
-
-                  {commentsLoading ? (
-                    <div className="h-32 animate-pulse rounded-xl border border-[#E2E8F0] bg-[#F8FAFC]" />
-                  ) : comments.length === 0 ? (
-                    <PortalEmptyState>
-                      No comments yet. Add a thoughtful reply when you are ready.
-                    </PortalEmptyState>
-                  ) : (
-                    <div className="space-y-3">
-                      {comments.map((comment) => (
-                        <div
-                          className="rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] p-4"
-                          key={comment.id}
-                        >
-                          <div className="flex flex-wrap items-center gap-2">
-                            <Badge tone={comment.author_type === "team" ? "info" : "light"}>
-                              {comment.author_name}
-                            </Badge>
-                            <span className="text-xs font-medium text-[#64748B]">
-                              {formatCommunityDate(comment.created_at)}
-                            </span>
-                          </div>
-                          <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-[#334155]">
-                            {comment.body}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <PortalEmptyState>Select a discussion to read comments.</PortalEmptyState>
-              )}
-            </Card>
-          </aside>
-        </section>
-      )}
-
-      {composerOpen ? (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-[#0B1F33]/70 px-4 py-4 backdrop-blur-sm">
-          <div className="flex min-h-full items-end justify-center sm:items-center">
-            <div className="w-full max-w-2xl max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-xl border border-[#CBD5E1] bg-white p-5 text-[#0B1F33] shadow-2xl sm:p-6">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <Badge tone="info">Private community</Badge>
-                  <h2 className="mt-3 text-2xl font-semibold text-[#0B1F33]">
-                    Start a discussion
-                  </h2>
-                  <p className="mt-2 text-sm leading-6 text-[#425B76]">
-                    Ask a question, share a win, or start a useful conversation
-                    with your coach community.
-                  </p>
-                </div>
-                <Button
-                  onClick={() => setComposerOpen(false)}
-                  type="button"
-                  variant="secondary"
-                >
-                  Close
-                </Button>
+                  </div>
+                ) : null}
               </div>
 
-              <form className="mt-6 space-y-4" onSubmit={handlePostSubmit}>
-                <FormField
-                  description="Choose the exact Program or Cohort where this discussion belongs."
-                  htmlFor="student-community-space"
-                  label="Community space"
-                  required
-                >
-                  <select
-                    className="h-12 w-full rounded-xl border border-[#CBD5E1] bg-white px-4 text-sm text-[#0B1F33] outline-none transition focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
-                    id="student-community-space"
-                    onChange={(event) => setSelectedScopeKey(event.target.value)}
-                    required
-                    value={selectedScopeKey}
-                  >
-                    <option value="">Choose a Community space</option>
-                    {createScopes.map((scope) => (
-                      <option key={scope.key} value={scope.key}>
-                        {scope.label}
-                      </option>
-                    ))}
-                  </select>
-                </FormField>
-                <FormField
-                  description="Use a clear title so other students can scan the feed."
-                  label="Title"
-                  required
-                >
-                  <input
-                    className="h-12 w-full rounded-xl border border-[#CBD5E1] bg-white px-4 text-sm text-[#0B1F33] outline-none transition focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
-                    maxLength={180}
-                    onChange={(event) =>
-                      setPostForm((current) => ({
-                        ...current,
-                        title: event.target.value,
-                      }))
+              <aside className="min-w-0 lg:sticky lg:top-6 lg:self-start">
+                <Card className="p-5">
+                  <SectionHeader
+                    description={
+                      selectedPost
+                        ? "Read and join this one-level discussion."
+                        : "Select a post to open its comments."
                     }
-                    placeholder="What would you like to discuss?"
-                    required
-                    value={postForm.title}
+                    title="Comments"
                   />
-                </FormField>
-                <FormField description="Choose the best fit for this post." label="Type">
-                  <select
-                    className="h-12 w-full rounded-xl border border-[#CBD5E1] bg-white px-4 text-sm text-[#0B1F33] outline-none transition focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
-                    onChange={(event) =>
-                      setPostForm((current) => ({
-                        ...current,
-                        postType: event.target.value as CommunityPostType,
-                      }))
-                    }
-                    value={postForm.postType}
-                  >
-                    {postTypes.map((postType) => (
-                      <option key={postType} value={postType}>
-                        {getCommunityPostTypeLabel(postType)}
-                      </option>
-                    ))}
-                  </select>
-                </FormField>
-                <FormField
-                  description="Write a clear message for your private coach community. Keep it respectful and useful for other students."
-                  label="Message"
-                  required
-                >
-                  <textarea
-                    className="min-h-44 w-full resize-none rounded-xl border border-[#CBD5E1] bg-white px-4 py-3 text-sm leading-6 text-[#0B1F33] outline-none transition focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
-                    maxLength={6000}
-                    onChange={(event) =>
-                      setPostForm((current) => ({
-                        ...current,
-                        body: event.target.value,
-                      }))
-                    }
-                    placeholder="Write your discussion in plain text."
-                    required
-                    value={postForm.body}
-                  />
-                </FormField>
-                <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end">
-                  <Button
-                    onClick={() => setComposerOpen(false)}
-                    type="button"
-                    variant="secondary"
-                  >
-                    Cancel
-                  </Button>
-                  <Button disabled={mutating === "save-post"} type="submit">
-                    {mutating === "save-post" ? "Posting..." : "Publish discussion"}
-                  </Button>
-                </div>
-              </form>
-            </div>
+
+                  {selectedPost ? (
+                    <div className="mt-5 space-y-4">
+                      <div className="rounded-lg border border-[#D8E8F0] bg-[#F8FAFC] p-4">
+                        <p className="break-words text-sm font-semibold text-[#0B1F33]">
+                          {selectedPost.title}
+                        </p>
+                        <p className="mt-1 text-xs text-[#64748B]">
+                          Started by {selectedPost.author_name || "Community member"}
+                        </p>
+                      </div>
+
+                      {canWriteSelectedPost ? (
+                        <form onSubmit={handleCommentSubmit}>
+                          <FormField
+                            description="Your reply appears in this exact Community space."
+                            htmlFor="student-community-comment"
+                            label="Add a comment"
+                          >
+                            <textarea
+                              className="min-h-28 w-full resize-y rounded-lg border border-[#CBD5E1] bg-white px-3 py-3 text-sm leading-6 outline-none focus:border-[#2ECBEA] focus:ring-4 focus:ring-[#2ECBEA]/10"
+                              id="student-community-comment"
+                              maxLength={3000}
+                              onChange={(event) => setCommentBody(event.target.value)}
+                              placeholder="Add a thoughtful reply."
+                              value={commentBody}
+                            />
+                          </FormField>
+                          <Button
+                            className="mt-3"
+                            disabled={!commentBody.trim()}
+                            isLoading={mutating === "save-comment"}
+                            loadingText="Posting..."
+                            size="sm"
+                            type="submit"
+                          >
+                            Post comment
+                          </Button>
+                        </form>
+                      ) : (
+                        <p className="rounded-lg border border-[#D8E8F0] bg-[#F8FAFC] p-4 text-sm leading-6 text-[#425B76]">
+                          This Community space is available as read-only history. New posts and comments are unavailable.
+                        </p>
+                      )}
+
+                      {commentsLoading ? (
+                        <div aria-label="Loading comments" className="space-y-3">
+                          <Skeleton className="h-24" />
+                          <Skeleton className="h-20" />
+                        </div>
+                      ) : comments.length === 0 ? (
+                        <p className="rounded-lg border border-dashed border-[#C7DDEA] bg-[#F8FAFC] p-4 text-sm text-[#425B76]">
+                          No comments yet.
+                        </p>
+                      ) : (
+                        <div className="space-y-3">
+                          {comments.map((comment) => (
+                            <article className="rounded-lg border border-[#D8E8F0] bg-[#F8FAFC] p-4" key={comment.id}>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <Badge tone={comment.author_type === "team" ? "info" : "light"}>
+                                  {comment.author_name}
+                                </Badge>
+                                <Badge tone={comment.author_type === "team" ? "info" : "neutral"}>
+                                  {comment.author_type === "team" ? "Coach" : "Student"}
+                                </Badge>
+                                <span className="text-xs text-[#64748B]">
+                                  {formatCommunityDate(comment.created_at)}
+                                </span>
+                              </div>
+                              <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-6 text-[#334155]">
+                                {comment.body}
+                              </p>
+                            </article>
+                          ))}
+                          {commentsHasMore ? (
+                            <Button
+                              fullWidth
+                              isLoading={commentsLoadingMore}
+                              loadingText="Loading..."
+                              onClick={() => void loadMoreComments()}
+                              size="sm"
+                              type="button"
+                              variant="secondary"
+                            >
+                              Load more comments
+                            </Button>
+                          ) : null}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="mt-5 rounded-lg border border-dashed border-[#C7DDEA] bg-[#F8FAFC] p-4 text-sm text-[#425B76]">
+                      Select a Community post to read its comments.
+                    </p>
+                  )}
+                </Card>
+              </aside>
+            </section>
+          )}
+        </>
+      )}
+
+      {composerOpen && selectedSpace?.canWrite ? (
+        <CommunityDialog
+          description={`Publish a focused post directly in ${selectedSpace.label}.`}
+          disabled={mutating === "save-post"}
+          onClose={() => setComposerOpen(false)}
+          title="Start a Community post"
+        >
+          <div className="mb-5 flex flex-wrap items-center gap-2 rounded-lg border border-[#D8E8F0] bg-[#F8FAFC] p-3">
+            <Badge tone={selectedSpace.kind === "cohort" ? "trainer" : "info"}>
+              {selectedSpace.label}
+            </Badge>
+            <span className="text-sm text-[#425B76]">Publishes immediately</span>
           </div>
-        </div>
+          <form className="space-y-4" onSubmit={handlePostSubmit}>
+            <FormField htmlFor="student-community-title" label="Title" required>
+              <input
+                className="h-11 w-full rounded-lg border border-[#CBD5E1] bg-white px-3 text-sm outline-none focus:border-[#2ECBEA] focus:ring-4 focus:ring-[#2ECBEA]/10"
+                id="student-community-title"
+                maxLength={180}
+                onChange={(event) => setPostForm((current) => ({ ...current, title: event.target.value }))}
+                required
+                value={postForm.title}
+              />
+            </FormField>
+            <FormField htmlFor="student-community-type" label="Post type">
+              <select
+                className="h-11 w-full rounded-lg border border-[#CBD5E1] bg-white px-3 text-sm outline-none focus:border-[#2ECBEA] focus:ring-4 focus:ring-[#2ECBEA]/10"
+                id="student-community-type"
+                onChange={(event) => setPostForm((current) => ({ ...current, postType: event.target.value as CommunityPostType }))}
+                value={postForm.postType}
+              >
+                {postTypes.map((postType) => (
+                  <option key={postType} value={postType}>
+                    {getCommunityPostTypeLabel(postType)}
+                  </option>
+                ))}
+              </select>
+            </FormField>
+            <FormField
+              description="Plain text only. Keep the message useful for this coaching space."
+              htmlFor="student-community-message"
+              label="Message"
+              required
+            >
+              <textarea
+                className="min-h-44 w-full resize-y rounded-lg border border-[#CBD5E1] bg-white px-3 py-3 text-sm leading-6 outline-none focus:border-[#2ECBEA] focus:ring-4 focus:ring-[#2ECBEA]/10"
+                id="student-community-message"
+                maxLength={6000}
+                onChange={(event) => setPostForm((current) => ({ ...current, body: event.target.value }))}
+                required
+                value={postForm.body}
+              />
+            </FormField>
+            <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <Button disabled={mutating === "save-post"} onClick={() => setComposerOpen(false)} type="button" variant="secondary">
+                Cancel
+              </Button>
+              <Button isLoading={mutating === "save-post"} loadingText="Publishing..." type="submit">
+                Publish post
+              </Button>
+            </div>
+          </form>
+        </CommunityDialog>
       ) : null}
     </div>
   );

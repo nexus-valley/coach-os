@@ -1,28 +1,48 @@
 import { getCohortsForStudent, getCohortsForTenant } from "@/src/lib/cohorts";
+import { communityPageSize } from "@/src/lib/communityExperience";
 import { getCoursesForTenant } from "@/src/lib/courses";
 import { getUserDelegatedPermissions } from "@/src/lib/delegatedPermissions";
 import { getStudentPortalCourses } from "@/src/lib/studentPortal";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 import type { MemberRole } from "@/src/lib/team";
+export {
+  appendUniqueCommunityItems,
+  canWriteCommunityPost,
+  communityPageSize,
+  communityPostMatchesScope,
+  executeCommunityMutation,
+} from "@/src/lib/communityExperience";
 
 export type CommunityPostStatus = "archived" | "draft" | "hidden" | "published";
 export type CommunityPostType = "discussion" | "question" | "resource" | "update";
 export type CommunityAuthorType = "student" | "team";
 export type CommunityCommentStatus = "hidden" | "published";
+export type CommunityAudienceType = "cohort" | "program";
 
 export type CommunityCreateScope = {
+  canWrite: boolean;
   cohortId: string | null;
   courseId: string;
+  description: string;
   key: string;
   kind: "cohort" | "program";
   label: string;
 };
 
+export type CommunityPostCursor = {
+  id: string;
+  timestamp: string;
+};
+
+export type CommunityCommentCursor = CommunityPostCursor;
+
 export type StudentCommunityPost = {
   author_name: string;
   author_type: CommunityAuthorType;
   body: string;
+  cohort_id: string | null;
   comment_count: number;
+  course_id: string;
   created_at: string;
   id: string;
   post_type: CommunityPostType;
@@ -30,6 +50,7 @@ export type StudentCommunityPost = {
   tenant_id: string;
   title: string;
   updated_at: string;
+  audience_type: CommunityAudienceType;
 };
 
 export type StudentCommunityComment = {
@@ -44,10 +65,6 @@ export type StudentCommunityComment = {
 
 export type TeamCommunityPost = StudentCommunityPost & {
   archived_at: string | null;
-  audience_type: "all_students";
-  created_by_student_id: string | null;
-  created_by_user_id: string | null;
-  hidden_by_user_id: string | null;
   hidden_at: string | null;
   status: CommunityPostStatus;
 };
@@ -60,6 +77,10 @@ export type TeamCommunityComment = StudentCommunityComment & {
 
 type CommunityPostRow = Partial<StudentCommunityPost & TeamCommunityPost>;
 type CommunityCommentRow = Partial<StudentCommunityComment & TeamCommunityComment>;
+
+type CommunityMutationRow = CommunityPostRow & {
+  author_display_name?: string | null;
+};
 
 function assertRpcSuccess(error: unknown) {
   if (error) {
@@ -80,14 +101,21 @@ function normalizeCommentCount(value: unknown) {
   return 0;
 }
 
-function normalizeStudentPost(row: CommunityPostRow): StudentCommunityPost {
+function normalizeStudentPost(row: CommunityMutationRow): StudentCommunityPost {
+  const cohortId = row.cohort_id ? String(row.cohort_id) : null;
+
   return {
     author_name: String(
-      row.author_name ?? (row.author_type === "student" ? "Student" : "Coach team"),
+      row.author_name ??
+        row.author_display_name ??
+        (row.author_type === "student" ? "Student" : "Coach team"),
     ),
     author_type: (row.author_type ?? "team") as CommunityAuthorType,
+    audience_type: (row.audience_type ?? (cohortId ? "cohort" : "program")) as CommunityAudienceType,
     body: String(row.body ?? ""),
+    cohort_id: cohortId,
     comment_count: normalizeCommentCount(row.comment_count),
+    course_id: String(row.course_id ?? ""),
     created_at: String(row.created_at ?? ""),
     id: String(row.id ?? ""),
     post_type: (row.post_type ?? "discussion") as CommunityPostType,
@@ -98,18 +126,12 @@ function normalizeStudentPost(row: CommunityPostRow): StudentCommunityPost {
   };
 }
 
-function normalizeTeamPost(row: CommunityPostRow): TeamCommunityPost {
+function normalizeTeamPost(row: CommunityMutationRow): TeamCommunityPost {
   const studentPost = normalizeStudentPost(row);
 
   return {
     ...studentPost,
     archived_at: row.archived_at ?? null,
-    audience_type: "all_students",
-    created_by_student_id: row.created_by_student_id
-      ? String(row.created_by_student_id)
-      : null,
-    created_by_user_id: row.created_by_user_id ? String(row.created_by_user_id) : null,
-    hidden_by_user_id: row.hidden_by_user_id ? String(row.hidden_by_user_id) : null,
     hidden_at: row.hidden_at ?? null,
     status: (row.status ?? "draft") as CommunityPostStatus,
   };
@@ -117,7 +139,9 @@ function normalizeTeamPost(row: CommunityPostRow): TeamCommunityPost {
 
 function normalizeStudentComment(row: CommunityCommentRow): StudentCommunityComment {
   return {
-    author_name: String(row.author_name ?? "Academy"),
+    author_name: String(
+      row.author_name ?? (row.author_type === "student" ? "Student" : "Coach team"),
+    ),
     author_type: (row.author_type ?? "team") as CommunityAuthorType,
     body: String(row.body ?? ""),
     created_at: String(row.created_at ?? ""),
@@ -170,13 +194,19 @@ export function formatCommunityDate(value: string | null | undefined) {
     return "Not set";
   }
 
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "Not set";
+  }
+
   return new Intl.DateTimeFormat("en-IN", {
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
     month: "short",
     year: "numeric",
-  }).format(new Date(value));
+  }).format(date);
 }
 
 export function getCommunityPostTypeLabel(postType: CommunityPostType) {
@@ -191,7 +221,7 @@ export function getCommunityPostTypeLabel(postType: CommunityPostType) {
 }
 
 function sortCommunityScopes(scopes: CommunityCreateScope[]) {
-  return scopes.sort(
+  return [...scopes].sort(
     (left, right) =>
       left.kind.localeCompare(right.kind) ||
       left.label.localeCompare(right.label) ||
@@ -238,7 +268,9 @@ export async function getTeamCommunityCreateScopes(params: {
       (course) =>
         ({
           cohortId: null,
+          canWrite: true,
           courseId: course.id,
+          description: "Program-wide discussions for this coaching Program.",
           key: `program:${course.id}`,
           kind: "program",
           label: `Program - ${course.title}`,
@@ -256,7 +288,9 @@ export async function getTeamCommunityCreateScopes(params: {
       (cohort) =>
         ({
           cohortId: cohort.id,
+          canWrite: true,
           courseId: cohort.course_id,
+          description: `Focused discussions for ${cohort.name}.`,
           key: `cohort:${cohort.id}`,
           kind: "cohort",
           label: `Cohort - ${cohort.name}${cohort.course?.title ? ` (${cohort.course.title})` : ""}`,
@@ -270,21 +304,32 @@ export async function getStudentCommunityCreateScopes(params: {
   studentId: string;
   tenantId: string;
 }) {
+  return (await getStudentCommunityScopes(params)).filter((scope) => scope.canWrite);
+}
+
+export async function getStudentCommunityScopes(params: {
+  studentId: string;
+  tenantId: string;
+}) {
   const [courseOverview, memberships] = await Promise.all([
     getStudentPortalCourses({ ...params, accessMode: "student" }),
     getCohortsForStudent(params),
   ]);
-  const activeCourses = (courseOverview?.courses ?? []).filter(
-    (item) => item.enrollment.status === "active" && item.course.status === "published",
+  const readableCourses = courseOverview?.courses ?? [];
+  const readableCourseById = new Map(
+    readableCourses.map((item) => [item.course.id, item]),
   );
-  const activeCourseById = new Map(
-    activeCourses.map((item) => [item.course.id, item.course]),
-  );
-  const programScopes = activeCourses.map(
+  const programScopes = readableCourses.map(
     (item) =>
       ({
+        canWrite:
+          item.enrollment.status === "active" && item.course.status === "published",
         cohortId: null,
         courseId: item.course.id,
+        description:
+          item.enrollment.status === "completed"
+            ? "Historical Program discussions are available to read."
+            : "Program-wide discussions with your Coach and peers.",
         key: `program:${item.course.id}`,
         kind: "program",
         label: `Program - ${item.course.title}`,
@@ -292,7 +337,7 @@ export async function getStudentCommunityCreateScopes(params: {
   );
   const cohortScopes = memberships.flatMap((membership) => {
     const cohort = membership.cohort;
-    const course = cohort ? activeCourseById.get(cohort.course_id) : null;
+    const course = cohort ? readableCourseById.get(cohort.course_id) : null;
 
     if (!cohort || !course) {
       return [];
@@ -300,16 +345,57 @@ export async function getStudentCommunityCreateScopes(params: {
 
     return [
       {
+        canWrite:
+          course.enrollment.status === "active" && course.course.status === "published",
         cohortId: cohort.id,
         courseId: cohort.course_id,
+        description:
+          course.enrollment.status === "completed"
+            ? `Historical discussions for ${cohort.name} are available to read.`
+            : `Focused discussions for ${cohort.name}.`,
         key: `cohort:${cohort.id}`,
         kind: "cohort",
-        label: `Cohort - ${cohort.name} (${course.title})`,
+        label: `Cohort - ${cohort.name} (${course.course.title})`,
       } satisfies CommunityCreateScope,
     ];
   });
 
   return sortCommunityScopes([...programScopes, ...cohortScopes]);
+}
+
+export async function getStudentCommunityPostsV2(params: {
+  cursor?: CommunityPostCursor | null;
+  limit?: number;
+  scope: Pick<CommunityCreateScope, "cohortId" | "courseId">;
+}) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.rpc("get_student_community_posts_v2", {
+    p_cohort_id: params.scope.cohortId,
+    p_course_id: params.scope.courseId,
+    p_cursor_id: params.cursor?.id ?? null,
+    p_cursor_published_at: params.cursor?.timestamp ?? null,
+    p_limit: params.limit ?? communityPageSize,
+  });
+
+  assertRpcSuccess(error);
+  return normalizeList(data, normalizeStudentPost);
+}
+
+export async function getStudentCommunityCommentsV2(params: {
+  cursor?: CommunityCommentCursor | null;
+  limit?: number;
+  postId: string;
+}) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.rpc("get_student_community_comments_v2", {
+    p_cursor_created_at: params.cursor?.timestamp ?? null,
+    p_cursor_id: params.cursor?.id ?? null,
+    p_limit: params.limit ?? communityPageSize,
+    p_post_id: params.postId,
+  });
+
+  assertRpcSuccess(error);
+  return normalizeList(data, normalizeStudentComment);
 }
 
 export async function getStudentCommunityPosts() {
@@ -376,6 +462,28 @@ export async function getTeamCommunityPosts(tenantId: string) {
   return normalizeList(data, normalizeTeamPost);
 }
 
+export async function getTeamCommunityPostsV2(params: {
+  cursor?: CommunityPostCursor | null;
+  limit?: number;
+  scope: Pick<CommunityCreateScope, "cohortId" | "courseId">;
+  status?: CommunityPostStatus | null;
+  tenantId: string;
+}) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.rpc("get_team_community_posts_v2", {
+    p_cohort_id: params.scope.cohortId,
+    p_course_id: params.scope.courseId,
+    p_cursor_id: params.cursor?.id ?? null,
+    p_cursor_updated_at: params.cursor?.timestamp ?? null,
+    p_limit: params.limit ?? communityPageSize,
+    p_status: params.status ?? null,
+    p_tenant_id: params.tenantId,
+  });
+
+  assertRpcSuccess(error);
+  return normalizeList(data, normalizeTeamPost);
+}
+
 export async function getTeamCommunityComments(postId: string) {
   const supabase = getSupabaseClient();
   const { data, error } = await supabase.rpc("get_team_community_comments", {
@@ -384,6 +492,23 @@ export async function getTeamCommunityComments(postId: string) {
 
   assertRpcSuccess(error);
 
+  return normalizeList(data, normalizeTeamComment);
+}
+
+export async function getTeamCommunityCommentsV2(params: {
+  cursor?: CommunityCommentCursor | null;
+  limit?: number;
+  postId: string;
+}) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.rpc("get_team_community_comments_v2", {
+    p_cursor_created_at: params.cursor?.timestamp ?? null,
+    p_cursor_id: params.cursor?.id ?? null,
+    p_limit: params.limit ?? communityPageSize,
+    p_post_id: params.postId,
+  });
+
+  assertRpcSuccess(error);
   return normalizeList(data, normalizeTeamComment);
 }
 

@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -9,6 +8,9 @@ import {
   type FormEvent,
 } from "react";
 
+import { CommunityDialog } from "@/src/components/community/CommunityDialog";
+import { CommunityPostCard } from "@/src/components/community/CommunityPostCard";
+import { CommunitySpaceSelector } from "@/src/components/community/CommunitySpaceSelector";
 import { Badge } from "@/src/components/ui/Badge";
 import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
@@ -17,23 +19,26 @@ import { FeedbackAlert } from "@/src/components/ui/FeedbackAlert";
 import { FormField } from "@/src/components/ui/FormField";
 import { PageHeader } from "@/src/components/ui/PageHeader";
 import { SectionHeader } from "@/src/components/ui/SectionHeader";
-import { StatCard } from "@/src/components/ui/StatCard";
+import { Skeleton } from "@/src/components/ui/Skeleton";
 import {
+  appendUniqueCommunityItems,
   archiveCommunityPost,
+  communityPageSize,
   createTeamCommunityComment,
   createTeamCommunityPostV2,
+  executeCommunityMutation,
   formatCommunityDate,
   getCommunityPostTypeLabel,
+  getTeamCommunityCommentsV2,
   getTeamCommunityCreateScopes,
-  getTeamCommunityComments,
-  getTeamCommunityPosts,
+  getTeamCommunityPostsV2,
   hideCommunityComment,
   hideCommunityPost,
   publishCommunityPost,
   updateTeamCommunityPost,
+  type CommunityCreateScope,
   type CommunityPostStatus,
   type CommunityPostType,
-  type CommunityCreateScope,
   type TeamCommunityComment,
   type TeamCommunityPost,
 } from "@/src/lib/community";
@@ -42,6 +47,10 @@ import { getCurrentMemberRole, type MemberRole } from "@/src/lib/team";
 import { getCurrentTenant, type Tenant } from "@/src/lib/tenant";
 
 type FilterStatus = CommunityPostStatus | "all";
+type PostAction = "archive" | "hide" | "publish";
+type Confirmation =
+  | { action: PostAction; kind: "post"; post: TeamCommunityPost }
+  | { comment: TeamCommunityComment; kind: "comment" };
 
 type FormState = {
   body: string;
@@ -54,15 +63,15 @@ const emptyForm: FormState = {
   postType: "discussion",
   title: "",
 };
-
+const refreshFailureMessage =
+  "The Community action succeeded, but the latest view could not be refreshed. Refresh the page to see the current state.";
 const statusFilters: Array<{ label: string; value: FilterStatus }> = [
-  { label: "All", value: "all" },
+  { label: "All states", value: "all" },
   { label: "Draft", value: "draft" },
   { label: "Published", value: "published" },
   { label: "Archived", value: "archived" },
   { label: "Hidden", value: "hidden" },
 ];
-
 const postTypes: CommunityPostType[] = [
   "discussion",
   "question",
@@ -70,7 +79,7 @@ const postTypes: CommunityPostType[] = [
   "update",
 ];
 
-function canCreateCommunity(role: MemberRole | null) {
+function canAccessCommunity(role: MemberRole | null) {
   return role === "owner" || role === "admin" || role === "staff" || role === "trainer";
 }
 
@@ -78,776 +87,905 @@ function canModerateCommunity(role: MemberRole | null) {
   return role === "owner" || role === "admin" || role === "staff";
 }
 
-function getErrorMessage(_caught: unknown, fallback: string) {
-  return fallback;
-}
-
 function isPlainText(value: string) {
   return !/[<>]/.test(value);
 }
 
-function postStatusTone(status: CommunityPostStatus) {
-  if (status === "published") return "success" as const;
-  if (status === "hidden") return "danger" as const;
-  if (status === "archived") return "staff" as const;
-  return "warning" as const;
-}
+function getCommunityErrorMessage(
+  caught: unknown,
+  fallback = "Unable to complete the Community action.",
+) {
+  const candidate = caught as { code?: unknown; message?: unknown } | null;
+  const code = typeof candidate?.code === "string" ? candidate.code : "";
+  const message =
+    typeof candidate?.message === "string" ? candidate.message.toLowerCase() : "";
 
-function commentStatusTone(status: TeamCommunityComment["status"]) {
-  return status === "hidden" ? "danger" : "success";
-}
-
-function getPostAuthorLabel(post: TeamCommunityPost) {
-  if (post.author_type === "student") {
-    return post.author_name || "Community member";
+  if (code === "42501" || /permission|not authorized|scope access/.test(message)) {
+    return "Your Community access or scope changed. Refresh and try again.";
+  }
+  if (/not found|unavailable/.test(message)) {
+    return "This Community item is no longer available.";
+  }
+  if (/plain text|required|title|body/.test(message)) {
+    return "Enter a plain-text title and message before saving.";
   }
 
-  return post.author_name || "Coach team";
+  return fallback;
 }
 
-function getPostAuthorBadge(post: TeamCommunityPost) {
-  return post.author_type === "student" ? "Student post" : "Team post";
+function confirmationCopy(confirmation: Confirmation) {
+  if (confirmation.kind === "comment") {
+    return {
+      confirm: "Hide comment",
+      description:
+        "This removes the comment from the Student view while retaining the moderation record.",
+      title: "Hide this comment?",
+    };
+  }
+
+  if (confirmation.action === "publish") {
+    return {
+      confirm: "Publish post",
+      description:
+        "The Draft becomes visible to Students who can access this exact Community space.",
+      title: "Publish this Community post?",
+    };
+  }
+
+  if (confirmation.action === "archive") {
+    return {
+      confirm: "Archive post",
+      description:
+        "The post leaves the Student feed and remains available to the Coach team as history.",
+      title: "Archive this Community post?",
+    };
+  }
+
+  return {
+    confirm: "Hide post",
+    description:
+      "The post is removed from the Student feed and retained for moderation review.",
+    title: "Hide this Community post?",
+  };
 }
 
 export function CommunityPageClient() {
-  const initialLoadStarted = useRef(false);
+  const successRef = useRef<HTMLDivElement>(null);
   const [actionError, setActionError] = useState("");
   const [commentBody, setCommentBody] = useState("");
   const [comments, setComments] = useState<TeamCommunityComment[]>([]);
+  const [commentsHasMore, setCommentsHasMore] = useState(false);
   const [commentsLoading, setCommentsLoading] = useState(false);
-  const [createScopes, setCreateScopes] = useState<CommunityCreateScope[]>([]);
+  const [commentsLoadingMore, setCommentsLoadingMore] = useState(false);
+  const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
   const [editing, setEditing] = useState<TeamCommunityPost | null>(null);
+  const [feedLoading, setFeedLoading] = useState(false);
   const [filter, setFilter] = useState<FilterStatus>("all");
   const [form, setForm] = useState<FormState>(emptyForm);
   const [formOpen, setFormOpen] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [mutating, setMutating] = useState("");
   const [posts, setPosts] = useState<TeamCommunityPost[]>([]);
+  const [postsHasMore, setPostsHasMore] = useState(false);
+  const [refreshWarning, setRefreshWarning] = useState("");
   const [role, setRole] = useState<MemberRole | null>(null);
-  const [selectedCreateScopeKey, setSelectedCreateScopeKey] = useState("");
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
+  const [selectedSpaceKey, setSelectedSpaceKey] = useState("");
+  const [spaces, setSpaces] = useState<CommunityCreateScope[]>([]);
   const [success, setSuccess] = useState("");
   const [tenant, setTenant] = useState<Tenant | null>(null);
+  const [workspaceLoading, setWorkspaceLoading] = useState(true);
 
-  const canAccess = canCreateCommunity(role);
-  const canCreate = canAccess && createScopes.length > 0;
+  const selectedSpace = useMemo(
+    () => spaces.find((space) => space.key === selectedSpaceKey) ?? null,
+    [selectedSpaceKey, spaces],
+  );
+  const selectedPost = useMemo(
+    () => posts.find((post) => post.id === selectedPostId) ?? null,
+    [posts, selectedPostId],
+  );
+  const canAccess = canAccessCommunity(role);
+  const canCreate = canAccess && Boolean(selectedSpace?.canWrite);
   const canModerate = canModerateCommunity(role);
-  const selectedPost = posts.find((post) => post.id === selectedPostId) ?? null;
-  const filteredPosts = useMemo(
-    () => posts.filter((post) => filter === "all" || post.status === filter),
-    [filter, posts],
-  );
-  const stats = useMemo(
-    () => ({
-      archived: posts.filter((item) => item.status === "archived").length,
-      draft: posts.filter((item) => item.status === "draft").length,
-      hidden: posts.filter((item) => item.status === "hidden").length,
-      published: posts.filter((item) => item.status === "published").length,
-      total: posts.length,
-    }),
-    [posts],
-  );
-
-  const loadComments = useCallback(async (postId: string | null) => {
-    if (!postId) {
-      setComments([]);
-      return;
-    }
-
-    setCommentsLoading(true);
-
-    try {
-      const nextComments = await getTeamCommunityComments(postId);
-      setComments(nextComments);
-    } catch (caught) {
-      setActionError(getErrorMessage(caught, "Unable to load community comments."));
-    } finally {
-      setCommentsLoading(false);
-    }
-  }, []);
-
-  const loadPosts = useCallback(async () => {
-    setActionError("");
-    setLoading(true);
-
-    try {
-      const currentTenant = await getCurrentTenant();
-
-      if (!currentTenant) {
-        setTenant(null);
-        setPosts([]);
-        return;
-      }
-
-      const supabase = getSupabaseClient();
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
-
-      if (userError) {
-        throw userError;
-      }
-
-      if (!user) {
-        throw new Error("You must be logged in to manage community posts.");
-      }
-
-      const currentRole = await getCurrentMemberRole(currentTenant.id, user.id);
-
-      setTenant(currentTenant);
-      setRole(currentRole);
-
-      if (!canCreateCommunity(currentRole)) {
-        setPosts([]);
-        setCreateScopes([]);
-        return;
-      }
-
-      const [nextPosts, nextCreateScopes] = await Promise.all([
-        getTeamCommunityPosts(currentTenant.id),
-        getTeamCommunityCreateScopes({
-          role: currentRole as MemberRole,
-          tenantId: currentTenant.id,
-        }),
-      ]);
-      setPosts(nextPosts);
-      setCreateScopes(nextCreateScopes);
-      setSelectedCreateScopeKey(
-        nextCreateScopes.length === 1 ? nextCreateScopes[0].key : "",
-      );
-
-      const nextSelectedPostId =
-        selectedPostId && nextPosts.some((post) => post.id === selectedPostId)
-          ? selectedPostId
-          : nextPosts[0]?.id ?? null;
-
-      setSelectedPostId(nextSelectedPostId);
-      await loadComments(nextSelectedPostId);
-    } catch (caught) {
-      setActionError(getErrorMessage(caught, "Unable to load community posts."));
-    } finally {
-      setLoading(false);
-    }
-  }, [loadComments, selectedPostId]);
 
   useEffect(() => {
-    if (initialLoadStarted.current) {
-      return;
+    let active = true;
+
+    async function loadWorkspace() {
+      setWorkspaceLoading(true);
+      setActionError("");
+
+      try {
+        const currentTenant = await getCurrentTenant();
+
+        if (!currentTenant) {
+          if (active) setTenant(null);
+          return;
+        }
+
+        const supabase = getSupabaseClient();
+        const {
+          data: { user },
+          error,
+        } = await supabase.auth.getUser();
+
+        if (error) throw error;
+        if (!user) throw new Error("Authentication required.");
+
+        const currentRole = await getCurrentMemberRole(currentTenant.id, user.id);
+        const nextSpaces = canAccessCommunity(currentRole)
+          ? await getTeamCommunityCreateScopes({
+              role: currentRole as MemberRole,
+              tenantId: currentTenant.id,
+            })
+          : [];
+
+        if (!active) return;
+        setTenant(currentTenant);
+        setRole(currentRole);
+        setSpaces(nextSpaces);
+        setSelectedSpaceKey(nextSpaces.length === 1 ? nextSpaces[0].key : "");
+      } catch (caught) {
+        if (active) {
+          setActionError(
+            getCommunityErrorMessage(caught, "Unable to load Community access."),
+          );
+        }
+      } finally {
+        if (active) setWorkspaceLoading(false);
+      }
     }
 
-    initialLoadStarted.current = true;
-    void loadPosts();
-  }, [loadPosts]);
+    void loadWorkspace();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadFeed() {
+      if (!tenant || !selectedSpace) {
+        setPosts([]);
+        setSelectedPostId(null);
+        setFeedLoading(false);
+        return;
+      }
+
+      setFeedLoading(true);
+      setActionError("");
+
+      try {
+        const nextPosts = await getTeamCommunityPostsV2({
+          scope: selectedSpace,
+          status: filter === "all" ? null : filter,
+          tenantId: tenant.id,
+        });
+
+        if (!active) return;
+        setPosts(nextPosts);
+        setPostsHasMore(nextPosts.length === communityPageSize);
+        setSelectedPostId((current) =>
+          current && nextPosts.some((post) => post.id === current)
+            ? current
+            : nextPosts[0]?.id ?? null,
+        );
+      } catch (caught) {
+        if (active) {
+          setActionError(
+            getCommunityErrorMessage(caught, "Unable to load Community posts."),
+          );
+        }
+      } finally {
+        if (active) setFeedLoading(false);
+      }
+    }
+
+    void loadFeed();
+    return () => {
+      active = false;
+    };
+  }, [filter, selectedSpace, tenant]);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadComments() {
+      if (!selectedPostId) {
+        setComments([]);
+        setCommentsHasMore(false);
+        return;
+      }
+
+      setCommentsLoading(true);
+
+      try {
+        const nextComments = await getTeamCommunityCommentsV2({
+          postId: selectedPostId,
+        });
+        if (!active) return;
+        setComments(nextComments);
+        setCommentsHasMore(nextComments.length === communityPageSize);
+      } catch (caught) {
+        if (active) {
+          setActionError(
+            getCommunityErrorMessage(caught, "Unable to load Community comments."),
+          );
+        }
+      } finally {
+        if (active) setCommentsLoading(false);
+      }
+    }
+
+    void loadComments();
+    return () => {
+      active = false;
+    };
+  }, [selectedPostId]);
+
+  async function refreshPosts(
+    preferredPostId?: string | null,
+    statusOverride?: CommunityPostStatus | "all",
+  ) {
+    if (!tenant || !selectedSpace) return false;
+    const nextStatus = statusOverride ?? filter;
+    const nextPosts = await getTeamCommunityPostsV2({
+      scope: selectedSpace,
+      status: nextStatus === "all" ? null : nextStatus,
+      tenantId: tenant.id,
+    });
+    setPosts(nextPosts);
+    setPostsHasMore(nextPosts.length === communityPageSize);
+    setSelectedPostId(
+      preferredPostId && nextPosts.some((post) => post.id === preferredPostId)
+        ? preferredPostId
+        : nextPosts[0]?.id ?? null,
+    );
+    return true;
+  }
+
+  async function refreshComments(postId: string) {
+    const nextComments = await getTeamCommunityCommentsV2({ postId });
+    setComments(nextComments);
+    setCommentsHasMore(nextComments.length === communityPageSize);
+    return true;
+  }
+
+  async function loadMorePosts() {
+    if (!tenant || !selectedSpace || loadingMore || posts.length === 0) return;
+    const last = posts[posts.length - 1];
+    setLoadingMore(true);
+
+    try {
+      const nextPosts = await getTeamCommunityPostsV2({
+        cursor: { id: last.id, timestamp: last.updated_at },
+        scope: selectedSpace,
+        status: filter === "all" ? null : filter,
+        tenantId: tenant.id,
+      });
+      setPosts((current) => appendUniqueCommunityItems(current, nextPosts));
+      setPostsHasMore(nextPosts.length === communityPageSize);
+    } catch (caught) {
+      setActionError(
+        getCommunityErrorMessage(caught, "Unable to load more Community posts."),
+      );
+    } finally {
+      setLoadingMore(false);
+    }
+  }
+
+  async function loadMoreComments() {
+    if (!selectedPost || commentsLoadingMore || comments.length === 0) return;
+    const last = comments[comments.length - 1];
+    setCommentsLoadingMore(true);
+
+    try {
+      const nextComments = await getTeamCommunityCommentsV2({
+        cursor: { id: last.id, timestamp: last.created_at },
+        postId: selectedPost.id,
+      });
+      setComments((current) => appendUniqueCommunityItems(current, nextComments));
+      setCommentsHasMore(nextComments.length === communityPageSize);
+    } catch (caught) {
+      setActionError(
+        getCommunityErrorMessage(caught, "Unable to load more Community comments."),
+      );
+    } finally {
+      setCommentsLoadingMore(false);
+    }
+  }
 
   function openCreateForm() {
+    if (!selectedSpace) return;
     setActionError("");
     setSuccess("");
+    setRefreshWarning("");
     setEditing(null);
     setForm(emptyForm);
-    setSelectedCreateScopeKey(createScopes.length === 1 ? createScopes[0].key : "");
     setFormOpen(true);
   }
 
   function openEditForm(post: TeamCommunityPost) {
-    if (post.author_type === "student") {
-      setActionError("Student-authored posts can be moderated but not edited by the team.");
+    if (post.author_type !== "team") {
+      setActionError("Student-authored posts can be moderated but not edited by the Coach team.");
       return;
     }
 
     setActionError("");
     setSuccess("");
+    setRefreshWarning("");
     setEditing(post);
-    setForm({
-      body: post.body,
-      postType: post.post_type,
-      title: post.title,
-    });
+    setForm({ body: post.body, postType: post.post_type, title: post.title });
     setFormOpen(true);
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (mutating || !tenant || !selectedSpace) return;
 
-    if (!tenant) {
-      setActionError("Workspace context is not available.");
-      return;
-    }
+    const title = form.title.trim();
+    const body = form.body.trim();
 
-    if (!isPlainText(form.title) || !isPlainText(form.body)) {
-      setActionError("Community posts must use plain text without HTML.");
-      return;
-    }
-
-    const selectedCreateScope = editing
-      ? null
-      : createScopes.find((scope) => scope.key === selectedCreateScopeKey) ?? null;
-
-    if (!editing && !selectedCreateScope) {
-      setActionError("Choose a Program or Cohort Community space.");
+    if (!title || !body || !isPlainText(title) || !isPlainText(body)) {
+      setActionError("Enter a plain-text title and message before saving.");
       return;
     }
 
     setActionError("");
     setSuccess("");
+    setRefreshWarning("");
     setMutating("save-post");
+    let savedId = editing?.id ?? null;
 
-    try {
-      const savedPost = editing
-        ? await updateTeamCommunityPost(
-            editing.id,
-            form.title,
-            form.body,
-            form.postType,
-          )
-        : selectedCreateScope
-          ? await createTeamCommunityPostV2(
+    const outcome = await executeCommunityMutation({
+      mutate: async () => {
+        const saved = editing
+          ? await updateTeamCommunityPost(editing.id, title, body, form.postType)
+          : await createTeamCommunityPostV2(
               tenant.id,
-              selectedCreateScope.courseId,
-              selectedCreateScope.cohortId,
-              form.title,
-              form.body,
+              selectedSpace.courseId,
+              selectedSpace.cohortId,
+              title,
+              body,
               form.postType,
-            )
-          : null;
+            );
+        savedId = saved.id;
+      },
+      onMutationSuccess: () => {
+        setForm(emptyForm);
+        setEditing(null);
+        setFormOpen(false);
+        if (!editing) setFilter("draft");
+        setSuccess(editing ? "Community post updated." : "Draft Community post created.");
+      },
+      refresh: () => refreshPosts(savedId, editing ? undefined : "draft"),
+    });
 
-      if (!savedPost) {
-        setActionError("Choose a Program or Cohort Community space.");
-        return;
-      }
-
-      setSuccess(editing ? "Community post updated." : "Draft community post created.");
-      setForm(emptyForm);
-      setEditing(null);
-      setFormOpen(false);
-      setSelectedPostId(savedPost.id);
-      await loadPosts();
-    } catch (caught) {
-      setActionError(getErrorMessage(caught, "Unable to save community post."));
-    } finally {
-      setMutating("");
+    if (!outcome.mutationSucceeded) {
+      setActionError(
+        getCommunityErrorMessage(outcome.mutationError, "Unable to save the Community post."),
+      );
+    } else {
+      if (!outcome.refreshSucceeded) setRefreshWarning(refreshFailureMessage);
+      window.requestAnimationFrame(() => successRef.current?.focus());
     }
+    setMutating("");
   }
 
-  async function handlePostAction(
-    postId: string,
-    action: "archive" | "hide" | "publish",
-  ) {
-    const labels = {
-      archive: "archive",
-      hide: "hide",
-      publish: "publish",
-    };
-
+  async function handleConfirm() {
+    if (!confirmation || mutating) return;
+    const current = confirmation;
     setActionError("");
     setSuccess("");
-    setMutating(`${action}-${postId}`);
+    setRefreshWarning("");
+    setMutating(
+      current.kind === "comment"
+        ? `hide-comment-${current.comment.id}`
+        : `${current.action}-${current.post.id}`,
+    );
 
-    try {
-      if (action === "publish") {
-        await publishCommunityPost(postId);
-        setSuccess("Community post published.");
-      } else if (action === "archive") {
-        await archiveCommunityPost(postId);
-        setSuccess("Community post archived.");
-      } else {
-        await hideCommunityPost(postId);
-        setSuccess("Community post hidden.");
-      }
+    const outcome = await executeCommunityMutation({
+      mutate: async () => {
+        if (current.kind === "comment") {
+          await hideCommunityComment(current.comment.id);
+        } else if (current.action === "publish") {
+          await publishCommunityPost(current.post.id);
+        } else if (current.action === "archive") {
+          await archiveCommunityPost(current.post.id);
+        } else {
+          await hideCommunityPost(current.post.id);
+        }
+      },
+      onMutationSuccess: () => {
+        setConfirmation(null);
+        setSuccess(
+          current.kind === "comment"
+            ? "Community comment hidden."
+            : current.action === "publish"
+              ? "Community post published."
+              : current.action === "archive"
+                ? "Community post archived."
+                : "Community post hidden.",
+        );
+      },
+      refresh: async () => {
+        if (current.kind === "comment") {
+          await Promise.all([
+            refreshComments(current.comment.post_id),
+            refreshPosts(selectedPostId),
+          ]);
+          return true;
+        }
+        return refreshPosts(current.post.id);
+      },
+    });
 
-      await loadPosts();
-    } catch (caught) {
+    if (!outcome.mutationSucceeded) {
       setActionError(
-        getErrorMessage(caught, `Unable to ${labels[action]} community post.`),
+        getCommunityErrorMessage(outcome.mutationError, "Unable to update the Community item."),
       );
-    } finally {
-      setMutating("");
+    } else {
+      if (!outcome.refreshSucceeded) setRefreshWarning(refreshFailureMessage);
+      window.requestAnimationFrame(() => successRef.current?.focus());
     }
+    setMutating("");
   }
 
   async function handleCommentSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!selectedPost || mutating) return;
+    const body = commentBody.trim();
 
-    if (!selectedPost) {
-      setActionError("Select a community post first.");
-      return;
-    }
-
-    if (!isPlainText(commentBody)) {
-      setActionError("Community comments must use plain text without HTML.");
+    if (!body || !isPlainText(body)) {
+      setActionError("Enter a plain-text comment before posting.");
       return;
     }
 
     setActionError("");
     setSuccess("");
+    setRefreshWarning("");
     setMutating("save-comment");
 
-    try {
-      await createTeamCommunityComment(selectedPost.id, commentBody);
-      setCommentBody("");
-      setSuccess("Comment added.");
-      await loadComments(selectedPost.id);
-      await loadPosts();
-    } catch (caught) {
-      setActionError(getErrorMessage(caught, "Unable to add comment."));
-    } finally {
-      setMutating("");
+    const outcome = await executeCommunityMutation({
+      mutate: () => createTeamCommunityComment(selectedPost.id, body),
+      onMutationSuccess: () => {
+        setCommentBody("");
+        setSuccess("Community comment added.");
+      },
+      refresh: async () => {
+        await Promise.all([
+          refreshComments(selectedPost.id),
+          refreshPosts(selectedPost.id),
+        ]);
+        return true;
+      },
+    });
+
+    if (!outcome.mutationSucceeded) {
+      setActionError(
+        getCommunityErrorMessage(outcome.mutationError, "Unable to add the Community comment."),
+      );
+    } else {
+      if (!outcome.refreshSucceeded) setRefreshWarning(refreshFailureMessage);
+      window.requestAnimationFrame(() => successRef.current?.focus());
     }
+    setMutating("");
   }
 
-  async function handleHideComment(commentId: string) {
-    if (!selectedPost) {
-      return;
-    }
+  function postActions(post: TeamCommunityPost) {
+    const canEdit =
+      post.author_type === "team" &&
+      post.status !== "archived" &&
+      post.status !== "hidden";
+    const hasModeration = canModerate;
 
-    setActionError("");
-    setSuccess("");
-    setMutating(`hide-comment-${commentId}`);
+    if (!canEdit && !hasModeration) return null;
 
-    try {
-      await hideCommunityComment(commentId);
-      setSuccess("Comment hidden.");
-      await loadComments(selectedPost.id);
-      await loadPosts();
-    } catch (caught) {
-      setActionError(getErrorMessage(caught, "Unable to hide comment."));
-    } finally {
-      setMutating("");
-    }
+    return (
+      <details className="relative text-sm">
+        <summary className="cursor-pointer list-none rounded-lg px-3 py-2 font-semibold text-[#0B2A3D] hover:bg-[#EAF7FC] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#2ECBEA]">
+          Post actions
+        </summary>
+        <div className="mt-2 flex flex-wrap justify-end gap-2" role="group" aria-label={`Actions for ${post.title}`}>
+          {canEdit ? (
+            <Button onClick={() => openEditForm(post)} size="sm" type="button" variant="secondary">
+              Edit
+            </Button>
+          ) : null}
+          {post.status === "draft" && canModerate ? (
+            <Button
+              onClick={() => setConfirmation({ action: "publish", kind: "post", post })}
+              size="sm"
+              type="button"
+            >
+              Publish
+            </Button>
+          ) : null}
+          {post.status !== "archived" && canModerate ? (
+            <Button
+              onClick={() => setConfirmation({ action: "archive", kind: "post", post })}
+              size="sm"
+              type="button"
+              variant="outline"
+            >
+              Archive
+            </Button>
+          ) : null}
+          {post.status !== "hidden" && canModerate ? (
+            <Button
+              onClick={() => setConfirmation({ action: "hide", kind: "post", post })}
+              size="sm"
+              type="button"
+              variant="destructive"
+            >
+              Hide
+            </Button>
+          ) : null}
+        </div>
+      </details>
+    );
   }
 
-  function handleSelectPost(postId: string) {
-    setSelectedPostId(postId);
-    void loadComments(postId);
-  }
+  const confirmationDetails = confirmation ? confirmationCopy(confirmation) : null;
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
       <PageHeader
         actions={
           <>
-            <Button onClick={loadPosts} type="button" variant="secondary">
+            <Button
+              disabled={!selectedSpace || feedLoading}
+              onClick={() => void refreshPosts(selectedPostId)}
+              type="button"
+              variant="secondary"
+            >
               Refresh
             </Button>
             {canCreate ? (
               <Button onClick={openCreateForm} type="button">
-                New community post
+                Create post
               </Button>
             ) : null}
           </>
         }
-        description="Moderate a private coaching community where students can start discussions and comment under published posts."
-        eyebrow="Student communication"
+        description="Run focused Program and Cohort discussions with Students from one operational view."
+        eyebrow="Coaching Community"
         metadata={
           <>
             <Badge tone="info">Program and Cohort spaces</Badge>
-            <Badge tone="outline">No attachments or reactions</Badge>
+            <Badge tone="outline">Draft, publish, moderate</Badge>
           </>
         }
         title="Community"
       />
 
-      {actionError ? <FeedbackAlert>{actionError}</FeedbackAlert> : null}
-      {success ? <FeedbackAlert tone="success">{success}</FeedbackAlert> : null}
+      <div aria-live="polite" className="space-y-3">
+        {actionError ? <FeedbackAlert>{actionError}</FeedbackAlert> : null}
+        {success ? (
+          <div ref={successRef} tabIndex={-1}>
+            <FeedbackAlert tone="success">{success}</FeedbackAlert>
+          </div>
+        ) : null}
+        {refreshWarning ? <FeedbackAlert tone="warning">{refreshWarning}</FeedbackAlert> : null}
+      </div>
 
-      {!loading && !canAccess ? (
+      <CommunitySpaceSelector
+        id="coach-community-space"
+        onChange={(key) => {
+          setSelectedSpaceKey(key);
+          setSelectedPostId(null);
+          setPosts([]);
+        }}
+        selectedKey={selectedSpaceKey}
+        spaces={spaces}
+      />
+
+      {!workspaceLoading && !canAccess ? (
         <FeedbackAlert tone="warning">
-          Owner, admin, staff, or trainer access is required to manage community
-          posts. Moderation is enforced again by the server.
+          Community is not available for your current Workspace role.
         </FeedbackAlert>
       ) : null}
 
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        <StatCard label="Total" value={stats.total} />
-        <StatCard label="Draft" value={stats.draft} />
-        <StatCard label="Published" value={stats.published} />
-        <StatCard label="Archived" value={stats.archived} />
-        <StatCard label="Hidden" value={stats.hidden} />
-      </section>
-
-      <Card className="p-5">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <SectionHeader
-            description="Review team updates and student discussions. Student-authored posts can be hidden or archived by moderators."
-            title="Community board"
-          />
-          <select
-            className="h-11 rounded-2xl border border-[#D8E8F0] bg-white px-4 text-sm outline-none transition focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
-            onChange={(event) => setFilter(event.target.value as FilterStatus)}
-            value={filter}
-          >
-            {statusFilters.map((item) => (
-              <option key={item.value} value={item.value}>
-                {item.label}
-              </option>
-            ))}
-          </select>
+      {workspaceLoading ? (
+        <div aria-label="Loading Community" className="space-y-4">
+          <Skeleton className="h-24" />
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
+            <Skeleton className="h-64" />
+            <Skeleton className="h-64" />
+          </div>
         </div>
-      </Card>
-
-      {loading ? (
-        <Card className="h-64 animate-pulse border-[#D8E8F0] bg-white">
-          <span className="sr-only">Loading community posts</span>
-        </Card>
-      ) : filteredPosts.length === 0 ? (
+      ) : !selectedSpace ? (
         <EmptyState
-          action={
-            canCreate
-              ? {
-                  label: "Create draft post",
-                  onClick: openCreateForm,
-                }
-              : undefined
+          description={
+            spaces.length === 0
+              ? "No Program or Cohort Community space is available in your current assignment or delegation scope."
+              : "Choose a Program or Cohort space to load its discussions."
           }
-          description="No community posts match the selected view."
           icon="CM"
-          title="No community posts yet"
+          title={spaces.length === 0 ? "No Community spaces available" : "Choose a Community space"}
         />
       ) : (
-        <section className="grid gap-5 xl:grid-cols-[minmax(0,1.1fr)_minmax(360px,0.9fr)]">
-          <div className="space-y-4">
-            {filteredPosts.map((post) => (
-              <Card
-                className={[
-                  "border-[#D8E8F0] bg-white p-6 transition",
-                  selectedPostId === post.id
-                    ? "ring-2 ring-[#2ECBEA]/35"
-                    : "hover:border-[#9ADDEA]",
-                ].join(" ")}
-                key={post.id}
+        <>
+          <div className="flex flex-col gap-3 border-b border-[#D8E8F0] pb-4 sm:flex-row sm:items-end sm:justify-between">
+            <SectionHeader
+              description={`Showing ${selectedSpace.label}. Posts are filtered by this exact space.`}
+              title="Discussion feed"
+            />
+            <FormField htmlFor="community-status-filter" label="Post state">
+              <select
+                className="h-11 min-w-44 rounded-lg border border-[#CBD5E1] bg-white px-3 text-sm text-[#0B1F33] outline-none focus:border-[#2ECBEA] focus:ring-4 focus:ring-[#2ECBEA]/10"
+                id="community-status-filter"
+                onChange={(event) => setFilter(event.target.value as FilterStatus)}
+                value={filter}
               >
-                <button
-                  className="block w-full text-left"
-                  onClick={() => handleSelectPost(post.id)}
-                  type="button"
-                >
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge tone={postStatusTone(post.status)}>{post.status}</Badge>
-                    <Badge tone="light">
-                      {getCommunityPostTypeLabel(post.post_type)}
-                    </Badge>
-                    <Badge tone={post.author_type === "student" ? "premium" : "info"}>
-                      {getPostAuthorBadge(post)}
-                    </Badge>
-                    <Badge tone="outline">{post.comment_count} comments</Badge>
-                  </div>
-                  <div className="mt-4 flex items-center gap-3">
-                    <div
-                      className={[
-                        "flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-xs font-bold",
-                        post.author_type === "student"
-                          ? "bg-[#EAF8FC] text-[#0B2A3D]"
-                          : "bg-[#0B1F33] text-white",
-                      ].join(" ")}
-                    >
-                      {getPostAuthorLabel(post).slice(0, 2).toUpperCase()}
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-[#0B1F33]">
-                        {getPostAuthorLabel(post)}
-                      </p>
-                      <p className="text-xs font-medium text-[#64748B]">
-                        {post.author_type === "student"
-                          ? "Community member discussion"
-                          : "Coach-team post"}
-                      </p>
-                    </div>
-                  </div>
-                  <h2 className="mt-4 text-2xl font-semibold text-[#0B1F33]">
-                    {post.title}
-                  </h2>
-                  <p className="mt-3 line-clamp-4 whitespace-pre-wrap text-sm leading-6 text-[#425B76]">
-                    {post.body}
-                  </p>
-                  <div className="mt-5 grid gap-3 border-t border-[#D8E8F0] pt-4 text-xs font-medium text-[#64748B] sm:grid-cols-2">
-                    <p>Created {formatCommunityDate(post.created_at)}</p>
-                    <p>Published {formatCommunityDate(post.published_at)}</p>
-                  </div>
-                </button>
-                <div className="mt-5 flex flex-wrap gap-3">
-                  {post.author_type === "team" &&
-                  post.status !== "archived" &&
-                  post.status !== "hidden" ? (
+                {statusFilters.map((item) => (
+                  <option key={item.value} value={item.value}>
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+            </FormField>
+          </div>
+
+          {feedLoading ? (
+            <div aria-label="Loading Community posts" className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
+              <div className="space-y-4">
+                <Skeleton className="h-56" />
+                <Skeleton className="h-48" />
+              </div>
+              <Skeleton className="h-72" />
+            </div>
+          ) : posts.length === 0 ? (
+            <EmptyState
+              action={canCreate && filter === "all" ? { label: "Create Draft", onClick: openCreateForm } : undefined}
+              description={
+                filter === "all"
+                  ? `Start the first focused discussion in ${selectedSpace.label}.`
+                  : `No ${filter} posts are available in ${selectedSpace.label}.`
+              }
+              icon="CM"
+              title={filter === "all" ? "No discussions in this space" : "No matching posts"}
+            />
+          ) : (
+            <section className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
+              <div className="min-w-0 space-y-4">
+                {posts.map((post) => (
+                  <CommunityPostCard
+                    actions={postActions(post)}
+                    isSelected={selectedPostId === post.id}
+                    key={post.id}
+                    onSelect={() => setSelectedPostId(post.id)}
+                    post={post}
+                    scopeLabel={selectedSpace.label}
+                    status={post.status}
+                  />
+                ))}
+                {postsHasMore ? (
+                  <div className="flex justify-center">
                     <Button
-                      onClick={() => openEditForm(post)}
-                      size="sm"
+                      isLoading={loadingMore}
+                      loadingText="Loading..."
+                      onClick={() => void loadMorePosts()}
                       type="button"
                       variant="secondary"
                     >
-                      Edit
+                      Load more posts
                     </Button>
-                  ) : null}
-                  {post.status === "draft" && canModerate ? (
-                    <Button
-                      disabled={mutating === `publish-${post.id}`}
-                      onClick={() => handlePostAction(post.id, "publish")}
-                      size="sm"
-                      type="button"
-                    >
-                      {mutating === `publish-${post.id}` ? "Publishing..." : "Publish"}
-                    </Button>
-                  ) : null}
-                  {post.status !== "archived" && canModerate ? (
-                    <Button
-                      disabled={mutating === `archive-${post.id}`}
-                      onClick={() => handlePostAction(post.id, "archive")}
-                      size="sm"
-                      type="button"
-                      variant="outline"
-                    >
-                      {mutating === `archive-${post.id}` ? "Archiving..." : "Archive"}
-                    </Button>
-                  ) : null}
-                  {post.status !== "hidden" && canModerate ? (
-                    <Button
-                      disabled={mutating === `hide-${post.id}`}
-                      onClick={() => handlePostAction(post.id, "hide")}
-                      size="sm"
-                      type="button"
-                      variant="destructive"
-                    >
-                      {mutating === `hide-${post.id}` ? "Hiding..." : "Hide"}
-                    </Button>
-                  ) : null}
-                </div>
-              </Card>
-            ))}
-          </div>
-
-          <Card className="border-[#D8E8F0] bg-white p-6">
-            <SectionHeader
-              description={
-                selectedPost
-                  ? "Review student and coach-team comments for the selected post."
-                  : "Select a post to review its comments."
-              }
-              title="Comments"
-            />
-            {selectedPost ? (
-              <div className="mt-5 space-y-4">
-                <div className="rounded-2xl border border-[#D8E8F0] bg-[#F6FBFE] p-4">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge tone={selectedPost.author_type === "student" ? "premium" : "info"}>
-                      {getPostAuthorBadge(selectedPost)}
-                    </Badge>
-                    <span className="text-xs font-semibold text-[#64748B]">
-                      {getPostAuthorLabel(selectedPost)}
-                    </span>
                   </div>
-                  <p className="mt-3 text-sm font-semibold text-[#0B1F33]">
-                    {selectedPost.title}
-                  </p>
-                  <p className="mt-1 text-xs font-medium text-[#64748B]">
-                    {selectedPost.comment_count} visible or moderated comments
-                  </p>
-                </div>
-                {canCreate && selectedPost.status !== "archived" && selectedPost.status !== "hidden" ? (
-                  <form className="space-y-3" onSubmit={handleCommentSubmit}>
-                    <FormField
-                      description="Reply as the coach team. Plain text only."
-                      label="Team comment"
-                    >
-                      <textarea
-                        className="min-h-28 w-full resize-none rounded-2xl border border-[#D8E8F0] bg-white px-4 py-3 text-sm leading-6 text-[#0B1F33] outline-none transition focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
-                        maxLength={3000}
-                        onChange={(event) => setCommentBody(event.target.value)}
-                        placeholder="Write a team reply for this discussion."
-                        value={commentBody}
-                      />
-                    </FormField>
-                    <Button
-                      disabled={mutating === "save-comment" || !commentBody.trim()}
-                      size="sm"
-                      type="submit"
-                    >
-                      {mutating === "save-comment" ? "Adding..." : "Add comment"}
-                    </Button>
-                  </form>
                 ) : null}
-                {commentsLoading ? (
-                  <div className="h-32 animate-pulse rounded-2xl border border-[#D8E8F0] bg-[#F6FBFE]" />
-                ) : comments.length === 0 ? (
-                  <p className="rounded-2xl border border-dashed border-[#C7DDEA] bg-[#F6FBFE] p-4 text-sm text-[#425B76]">
-                    No comments yet.
-                  </p>
-                ) : (
-                  <div className="space-y-3">
-                    {comments.map((comment) => (
-                      <div
-                        className="rounded-2xl border border-[#D8E8F0] bg-[#F6FBFE] p-4"
-                        key={comment.id}
-                      >
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Badge
-                            tone={comment.author_type === "team" ? "info" : "light"}
-                          >
-                            {comment.author_name}
-                          </Badge>
-                          <Badge tone={commentStatusTone(comment.status)}>
-                            {comment.status}
-                          </Badge>
-                          <span className="text-xs font-medium text-[#64748B]">
-                            {formatCommunityDate(comment.created_at)}
-                          </span>
-                        </div>
-                        <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-[#425B76]">
-                          {comment.body}
-                        </p>
-                        {comment.status !== "hidden" && canModerate ? (
-                          <Button
-                            className="mt-4"
-                            disabled={mutating === `hide-comment-${comment.id}`}
-                            onClick={() => handleHideComment(comment.id)}
-                            size="sm"
-                            type="button"
-                            variant="destructive"
-                          >
-                            {mutating === `hide-comment-${comment.id}`
-                              ? "Hiding..."
-                              : "Hide comment"}
-                          </Button>
-                        ) : null}
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
-            ) : (
-              <p className="mt-5 rounded-2xl border border-dashed border-[#C7DDEA] bg-[#F6FBFE] p-4 text-sm text-[#425B76]">
-                Select a community post to review comments.
-              </p>
-            )}
-          </Card>
-        </section>
+
+              <aside className="min-w-0 lg:sticky lg:top-6 lg:self-start">
+                <Card className="p-5">
+                  <SectionHeader
+                    description={
+                      selectedPost
+                        ? "One-level replies for the selected discussion."
+                        : "Select a post to open its discussion."
+                    }
+                    title="Comments"
+                  />
+
+                  {selectedPost ? (
+                    <div className="mt-5 space-y-4">
+                      <div className="rounded-lg border border-[#D8E8F0] bg-[#F8FAFC] p-4">
+                        <p className="break-words text-sm font-semibold text-[#0B1F33]">
+                          {selectedPost.title}
+                        </p>
+                        <p className="mt-1 text-xs text-[#64748B]">
+                          {selectedPost.comment_count} {selectedPost.comment_count === 1 ? "comment" : "comments"}
+                        </p>
+                      </div>
+
+                      {canCreate && selectedPost.status !== "archived" && selectedPost.status !== "hidden" ? (
+                        <form onSubmit={handleCommentSubmit}>
+                          <FormField
+                            description="Reply as the Coach team in this exact Community space."
+                            htmlFor="coach-community-comment"
+                            label="Add a comment"
+                          >
+                            <textarea
+                              className="min-h-28 w-full resize-y rounded-lg border border-[#CBD5E1] bg-white px-3 py-3 text-sm leading-6 outline-none focus:border-[#2ECBEA] focus:ring-4 focus:ring-[#2ECBEA]/10"
+                              id="coach-community-comment"
+                              maxLength={3000}
+                              onChange={(event) => setCommentBody(event.target.value)}
+                              placeholder="Write a focused reply."
+                              value={commentBody}
+                            />
+                          </FormField>
+                          <Button
+                            className="mt-3"
+                            disabled={!commentBody.trim()}
+                            isLoading={mutating === "save-comment"}
+                            loadingText="Posting..."
+                            size="sm"
+                            type="submit"
+                          >
+                            Post comment
+                          </Button>
+                        </form>
+                      ) : null}
+
+                      {commentsLoading ? (
+                        <div aria-label="Loading comments" className="space-y-3">
+                          <Skeleton className="h-24" />
+                          <Skeleton className="h-20" />
+                        </div>
+                      ) : comments.length === 0 ? (
+                        <p className="rounded-lg border border-dashed border-[#C7DDEA] bg-[#F8FAFC] p-4 text-sm text-[#425B76]">
+                          No comments yet.
+                        </p>
+                      ) : (
+                        <div className="space-y-3">
+                          {comments.map((comment) => (
+                            <article className="rounded-lg border border-[#D8E8F0] bg-[#F8FAFC] p-4" key={comment.id}>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <Badge tone={comment.author_type === "team" ? "info" : "light"}>
+                                  {comment.author_name}
+                                </Badge>
+                                <Badge tone={comment.status === "hidden" ? "danger" : "success"}>
+                                  {comment.status === "hidden" ? "Hidden" : "Visible"}
+                                </Badge>
+                                <span className="text-xs text-[#64748B]">
+                                  {formatCommunityDate(comment.created_at)}
+                                </span>
+                              </div>
+                              <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-6 text-[#334155]">
+                                {comment.body}
+                              </p>
+                              {comment.status !== "hidden" && canModerate ? (
+                                <Button
+                                  className="mt-3"
+                                  onClick={() => setConfirmation({ comment, kind: "comment" })}
+                                  size="sm"
+                                  type="button"
+                                  variant="destructive"
+                                >
+                                  Hide comment
+                                </Button>
+                              ) : null}
+                            </article>
+                          ))}
+                          {commentsHasMore ? (
+                            <Button
+                              fullWidth
+                              isLoading={commentsLoadingMore}
+                              loadingText="Loading..."
+                              onClick={() => void loadMoreComments()}
+                              size="sm"
+                              type="button"
+                              variant="secondary"
+                            >
+                              Load more comments
+                            </Button>
+                          ) : null}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="mt-5 rounded-lg border border-dashed border-[#C7DDEA] bg-[#F8FAFC] p-4 text-sm text-[#425B76]">
+                      Select a Community post to review its comments.
+                    </p>
+                  )}
+                </Card>
+              </aside>
+            </section>
+          )}
+        </>
       )}
 
-      {formOpen ? (
-        <div className="fixed inset-0 z-50 flex min-h-full items-end justify-center overflow-y-auto bg-[#0B1F33]/70 px-4 py-4 backdrop-blur-sm sm:items-center">
-          <Card className="max-h-[calc(100dvh-2rem)] w-full max-w-2xl overflow-y-auto rounded-xl border-[#CBD5E1] bg-white p-5 text-[#0B1F33] shadow-2xl shadow-slate-950/25 sm:p-6">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <Badge tone="info">
-                  {editing ? "Edit community post" : "Draft community post"}
-                </Badge>
-                <h2 className="mt-3 text-2xl font-semibold text-[#0B1F33]">
-                  {editing ? "Update post" : "Create post"}
-                </h2>
-                <p className="mt-2 text-sm leading-6 text-[#425B76]">
-                  Team posts stay private until an owner, admin, or staff user
-                  publishes them. Student posts are moderated from the board.
-                </p>
-              </div>
-              <Button
-                onClick={() => setFormOpen(false)}
-                type="button"
-                variant="secondary"
+      {formOpen && selectedSpace ? (
+        <CommunityDialog
+          description={
+            editing
+              ? `Update this ${selectedSpace.label} post without changing its Community space.`
+              : `Create a private Draft in ${selectedSpace.label}. Publishing is a separate confirmed action.`
+          }
+          disabled={mutating === "save-post"}
+          onClose={() => setFormOpen(false)}
+          title={editing ? "Edit Community post" : "Create Community post"}
+        >
+          <div className="mb-5 flex flex-wrap items-center gap-2 rounded-lg border border-[#D8E8F0] bg-[#F8FAFC] p-3">
+            <Badge tone={selectedSpace.kind === "cohort" ? "trainer" : "info"}>
+              {selectedSpace.label}
+            </Badge>
+            <span className="text-sm text-[#425B76]">Exact Community space</span>
+          </div>
+          <form className="space-y-4" onSubmit={handleSubmit}>
+            <FormField htmlFor="coach-community-title" label="Title" required>
+              <input
+                className="h-11 w-full rounded-lg border border-[#CBD5E1] bg-white px-3 text-sm outline-none focus:border-[#2ECBEA] focus:ring-4 focus:ring-[#2ECBEA]/10"
+                id="coach-community-title"
+                maxLength={180}
+                onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))}
+                required
+                value={form.title}
+              />
+            </FormField>
+            <FormField htmlFor="coach-community-type" label="Post type">
+              <select
+                className="h-11 w-full rounded-lg border border-[#CBD5E1] bg-white px-3 text-sm outline-none focus:border-[#2ECBEA] focus:ring-4 focus:ring-[#2ECBEA]/10"
+                id="coach-community-type"
+                onChange={(event) => setForm((current) => ({ ...current, postType: event.target.value as CommunityPostType }))}
+                value={form.postType}
               >
-                Close
+                {postTypes.map((postType) => (
+                  <option key={postType} value={postType}>
+                    {getCommunityPostTypeLabel(postType)}
+                  </option>
+                ))}
+              </select>
+            </FormField>
+            <FormField
+              description="Plain text only. Keep the message focused on this coaching space."
+              htmlFor="coach-community-message"
+              label="Message"
+              required
+            >
+              <textarea
+                className="min-h-44 w-full resize-y rounded-lg border border-[#CBD5E1] bg-white px-3 py-3 text-sm leading-6 outline-none focus:border-[#2ECBEA] focus:ring-4 focus:ring-[#2ECBEA]/10"
+                id="coach-community-message"
+                maxLength={6000}
+                onChange={(event) => setForm((current) => ({ ...current, body: event.target.value }))}
+                required
+                value={form.body}
+              />
+            </FormField>
+            <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <Button disabled={mutating === "save-post"} onClick={() => setFormOpen(false)} type="button" variant="secondary">
+                Cancel
+              </Button>
+              <Button isLoading={mutating === "save-post"} loadingText="Saving..." type="submit">
+                {editing ? "Save changes" : "Create Draft"}
               </Button>
             </div>
+          </form>
+        </CommunityDialog>
+      ) : null}
 
-            <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
-              {!editing ? (
-                <FormField
-                  description="Choose the exact Program or Cohort where this post belongs."
-                  htmlFor="coach-community-space"
-                  label="Community space"
-                  required
-                >
-                  <select
-                    className="h-12 w-full rounded-2xl border border-[#D8E8F0] bg-white px-4 text-sm text-[#0B1F33] outline-none transition focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
-                    id="coach-community-space"
-                    onChange={(event) => setSelectedCreateScopeKey(event.target.value)}
-                    required
-                    value={selectedCreateScopeKey}
-                  >
-                    <option value="">Choose a Community space</option>
-                    {createScopes.map((scope) => (
-                      <option key={scope.key} value={scope.key}>
-                        {scope.label}
-                      </option>
-                    ))}
-                  </select>
-                </FormField>
-              ) : null}
-              <FormField
-                description="Keep titles short and student-facing."
-                label="Title"
-                required
-              >
-                <input
-                  className="h-12 w-full rounded-2xl border border-[#D8E8F0] bg-white px-4 text-sm text-[#0B1F33] outline-none transition focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
-                  maxLength={180}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      title: event.target.value,
-                    }))
-                  }
-                  placeholder="Example: Share your weekly practice wins"
-                  required
-                  value={form.title}
-                />
-              </FormField>
-              <FormField
-                description="Choose the discussion type students will see."
-                label="Post type"
-              >
-                <select
-                  className="h-12 w-full rounded-2xl border border-[#D8E8F0] bg-white px-4 text-sm text-[#0B1F33] outline-none transition focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      postType: event.target.value as CommunityPostType,
-                    }))
-                  }
-                  value={form.postType}
-                >
-                  {postTypes.map((postType) => (
-                    <option key={postType} value={postType}>
-                      {getCommunityPostTypeLabel(postType)}
-                    </option>
-                  ))}
-                </select>
-              </FormField>
-              <FormField
-                description="Plain text only. Attachments, reactions, and rich text are outside this MVP."
-                label="Body"
-                required
-              >
-                <textarea
-                  className="min-h-40 w-full resize-none rounded-2xl border border-[#D8E8F0] bg-white px-4 py-3 text-sm leading-6 text-[#0B1F33] outline-none transition focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
-                  maxLength={6000}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      body: event.target.value,
-                    }))
-                  }
-                  placeholder="Write the community post in plain text."
-                  required
-                  value={form.body}
-                />
-              </FormField>
-              <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end">
-                <Button
-                  onClick={() => setFormOpen(false)}
-                  type="button"
-                  variant="secondary"
-                >
-                  Cancel
-                </Button>
-                <Button disabled={mutating === "save-post"} type="submit">
-                  {mutating === "save-post"
-                    ? "Saving..."
-                    : editing
-                      ? "Save changes"
-                      : "Create draft"}
-                </Button>
-              </div>
-            </form>
-          </Card>
-        </div>
+      {confirmation && confirmationDetails ? (
+        <CommunityDialog
+          description={confirmationDetails.description}
+          disabled={Boolean(mutating)}
+          onClose={() => setConfirmation(null)}
+          title={confirmationDetails.title}
+        >
+          <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+            <Button disabled={Boolean(mutating)} onClick={() => setConfirmation(null)} type="button" variant="secondary">
+              Cancel
+            </Button>
+            <Button
+              isLoading={Boolean(mutating)}
+              loadingText="Working..."
+              onClick={() => void handleConfirm()}
+              type="button"
+              variant={confirmation.kind === "post" && confirmation.action === "publish" ? "primary" : "destructive"}
+            >
+              {confirmationDetails.confirm}
+            </Button>
+          </div>
+        </CommunityDialog>
       ) : null}
     </div>
   );

@@ -13,6 +13,9 @@ const coachCommunity = read("src/components/community/CommunityPageClient.tsx");
 const studentCommunity = read(
   "src/components/portal/StudentPortalCommunity.tsx",
 );
+const communitySpaceSelector = read(
+  "src/components/community/CommunitySpaceSelector.tsx",
+);
 
 function executableSql() {
   const matches = migration.match(/^begin;\s*$[\s\S]*?^commit;\s*$/gm);
@@ -152,7 +155,7 @@ test.describe("UX-7E Community backend security", () => {
   test("loads Student Community scopes with Student portal access semantics", () => {
     const scopeLoader = sourceFunction(
       communityLibrary,
-      "getStudentCommunityCreateScopes",
+      "getStudentCommunityScopes",
     );
 
     expect(scopeLoader).toContain(
@@ -167,9 +170,10 @@ test.describe("UX-7E Community backend security", () => {
   test("uses scoped Community copy and accessible scope selectors", () => {
     expect(coachCommunity).not.toContain("All students audience");
     expect(coachCommunity).toContain("Program and Cohort spaces");
-    expect(coachCommunity).toContain('htmlFor="coach-community-space"');
+    expect(communitySpaceSelector).toMatch(/<FormField[\s\S]*?htmlFor=\{id\}/);
+    expect(communitySpaceSelector).toContain("<select");
+    expect(communitySpaceSelector).toContain("id={id}");
     expect(coachCommunity).toContain('id="coach-community-space"');
-    expect(studentCommunity).toContain('htmlFor="student-community-space"');
     expect(studentCommunity).toContain('id="student-community-space"');
     expect(coachCommunity.match(/id="coach-community-space"/g)).toHaveLength(1);
     expect(studentCommunity.match(/id="student-community-space"/g)).toHaveLength(
@@ -395,15 +399,15 @@ test.describe("UX-7E Community backend security", () => {
     const sql = executableSql();
     expect(communityLibrary).toContain('rpc("create_team_community_post_v2"');
     expect(communityLibrary).toContain('rpc("create_student_community_post_v2"');
-    expect(coachCommunity).toContain("selectedCreateScope.courseId");
-    expect(coachCommunity).toContain("selectedCreateScope.cohortId");
-    expect(studentCommunity).toContain("selectedScope.courseId");
-    expect(studentCommunity).toContain("selectedScope.cohortId");
+    expect(coachCommunity).toContain("selectedSpace.courseId");
+    expect(coachCommunity).toContain("selectedSpace.cohortId");
+    expect(studentCommunity).toContain("selectedSpace.courseId");
+    expect(studentCommunity).toContain("selectedSpace.cohortId");
     expect(studentCommunity).not.toContain("context.tenant.id,\n        title");
     expect(coachCommunity).toContain("Choose a Community space");
-    expect(studentCommunity).toContain("Choose a Community space");
-    expect(coachCommunity).toContain("createScopes.length === 1");
-    expect(studentCommunity).toContain("createScopes.length === 1");
+    expect(communitySpaceSelector).toContain("Choose a Community space");
+    expect(coachCommunity).toContain("nextSpaces.length === 1");
+    expect(studentCommunity).toContain("nextSpaces.length === 1");
     expect(coachCommunity).toContain("return fallback");
     expect(studentCommunity).toContain("return fallback");
     expect(communityLibrary).toContain('item.enrollment.status === "active"');
