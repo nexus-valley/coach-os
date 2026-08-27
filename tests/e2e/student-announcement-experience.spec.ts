@@ -136,7 +136,10 @@ test.describe("UX-7D Student announcement experience", () => {
   test("loads deep-linked detail through the authoritative V2 detail RPC", () => {
     const detail = library.slice(
       library.indexOf("export async function getStudentAnnouncementV2"),
-      library.indexOf("export async function getTeamAnnouncements", library.indexOf("export async function getStudentAnnouncementV2")),
+      library.indexOf(
+        "export async function getTeamAnnouncementsV2",
+        library.indexOf("export async function getStudentAnnouncementV2"),
+      ),
     );
 
     expect(route).toContain("Suspense");

@@ -17,8 +17,6 @@ export type AcademyAnnouncement = {
   updated_at: string;
 };
 
-export type StudentAnnouncement = Omit<AcademyAnnouncement, "created_by">;
-
 export type AnnouncementAudience = "cohort" | "program" | "tenant";
 
 export type StudentAnnouncementAttentionState = "read" | "unread" | null;
@@ -151,17 +149,6 @@ export function formatAnnouncementDate(value: string | null | undefined) {
   }).format(new Date(value));
 }
 
-export async function getStudentAnnouncements() {
-  const supabase = getSupabaseClient();
-  const { data, error } = await supabase.rpc("get_student_announcements");
-
-  if (error) {
-    throw error;
-  }
-
-  return normalizeAnnouncementList<StudentAnnouncement>(data);
-}
-
 export async function getStudentAnnouncementsV2({
   cursor = null,
   limit = 25,
@@ -191,87 +178,6 @@ export async function getStudentAnnouncementV2(announcementId: string) {
   }
 
   return normalizeStudentAnnouncement(data);
-}
-
-export async function getTeamAnnouncements(tenantId: string) {
-  const supabase = getSupabaseClient();
-  const { data, error } = await supabase.rpc("get_team_announcements", {
-    p_tenant_id: tenantId,
-  });
-
-  if (error) {
-    throw error;
-  }
-
-  return normalizeAnnouncementList<AcademyAnnouncement>(data);
-}
-
-export async function createAcademyAnnouncement(
-  tenantId: string,
-  title: string,
-  body: string,
-  expiresAt?: string | null,
-) {
-  const supabase = getSupabaseClient();
-  const { data, error } = await supabase.rpc("create_academy_announcement", {
-    p_body: body,
-    p_expires_at: expiresAt ?? null,
-    p_tenant_id: tenantId,
-    p_title: title,
-  });
-
-  if (error) {
-    throw error;
-  }
-
-  return normalizeAnnouncement(data);
-}
-
-export async function updateAcademyAnnouncement(
-  announcementId: string,
-  title: string,
-  body: string,
-  expiresAt?: string | null,
-) {
-  const supabase = getSupabaseClient();
-  const { data, error } = await supabase.rpc("update_academy_announcement", {
-    p_announcement_id: announcementId,
-    p_body: body,
-    p_expires_at: expiresAt ?? null,
-    p_title: title,
-  });
-
-  if (error) {
-    throw error;
-  }
-
-  return normalizeAnnouncement(data);
-}
-
-export async function publishAcademyAnnouncement(announcementId: string) {
-  const supabase = getSupabaseClient();
-  const { data, error } = await supabase.rpc("publish_academy_announcement", {
-    p_announcement_id: announcementId,
-  });
-
-  if (error) {
-    throw error;
-  }
-
-  return normalizeAnnouncement(data);
-}
-
-export async function archiveAcademyAnnouncement(announcementId: string) {
-  const supabase = getSupabaseClient();
-  const { data, error } = await supabase.rpc("archive_academy_announcement", {
-    p_announcement_id: announcementId,
-  });
-
-  if (error) {
-    throw error;
-  }
-
-  return normalizeAnnouncement(data);
 }
 
 export async function getTeamAnnouncementsV2({
