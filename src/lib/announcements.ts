@@ -21,6 +21,34 @@ export type StudentAnnouncement = Omit<AcademyAnnouncement, "created_by">;
 
 export type AnnouncementAudience = "cohort" | "program" | "tenant";
 
+export type StudentAnnouncementAttentionState = "read" | "unread" | null;
+
+export type StudentAnnouncementSummary = {
+  attention_state: StudentAnnouncementAttentionState;
+  audience_type: AnnouncementAudience;
+  body: string;
+  cohort_id: string | null;
+  cohort_name: string | null;
+  course_id: string | null;
+  course_title: string | null;
+  expires_at: string | null;
+  id: string;
+  notification_id: string | null;
+  published_at: string;
+  title: string;
+  updated_at: string;
+};
+
+export type StudentAnnouncementCursor = {
+  id: string;
+  publishedAt: string;
+};
+
+export type StudentAnnouncementListInput = {
+  cursor?: StudentAnnouncementCursor | null;
+  limit?: number;
+};
+
 export type TeamAnnouncementSummary = {
   archived_at: string | null;
   audience_type: AnnouncementAudience;
@@ -102,6 +130,16 @@ function normalizeTeamAnnouncement(data: unknown) {
     : null;
 }
 
+function normalizeStudentAnnouncement(data: unknown) {
+  if (Array.isArray(data)) {
+    return (data[0] as StudentAnnouncementSummary | undefined) ?? null;
+  }
+
+  return data && typeof data === "object"
+    ? (data as StudentAnnouncementSummary)
+    : null;
+}
+
 export function formatAnnouncementDate(value: string | null | undefined) {
   if (!value) {
     return "Not set";
@@ -122,6 +160,37 @@ export async function getStudentAnnouncements() {
   }
 
   return normalizeAnnouncementList<StudentAnnouncement>(data);
+}
+
+export async function getStudentAnnouncementsV2({
+  cursor = null,
+  limit = 25,
+}: StudentAnnouncementListInput = {}) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.rpc("get_student_announcements_v2", {
+    p_cursor_id: cursor?.id ?? null,
+    p_cursor_published_at: cursor?.publishedAt ?? null,
+    p_limit: limit,
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  return normalizeAnnouncementList<StudentAnnouncementSummary>(data);
+}
+
+export async function getStudentAnnouncementV2(announcementId: string) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.rpc("get_student_announcement_v2", {
+    p_announcement_id: announcementId,
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  return normalizeStudentAnnouncement(data);
 }
 
 export async function getTeamAnnouncements(tenantId: string) {

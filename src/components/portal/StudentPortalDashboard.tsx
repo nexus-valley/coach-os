@@ -10,8 +10,8 @@ import { SectionHeader } from "@/src/components/ui/SectionHeader";
 import { StatCard } from "@/src/components/ui/StatCard";
 import {
   formatAnnouncementDate,
-  getStudentAnnouncements,
-  type StudentAnnouncement,
+  getStudentAnnouncementsV2,
+  type StudentAnnouncementSummary,
 } from "@/src/lib/announcements";
 import type { StudentPortalContext } from "@/src/lib/studentPortalAuth";
 import {
@@ -63,7 +63,9 @@ function getDashboardJoinLabel(session: DashboardLiveClass) {
 
 export function StudentPortalDashboard({ context }: { context: StudentPortalContext }) {
   const { error, loading, overview } = usePortalSection(context);
-  const [announcements, setAnnouncements] = useState<StudentAnnouncement[]>([]);
+  const [announcements, setAnnouncements] = useState<
+    StudentAnnouncementSummary[]
+  >([]);
   const [financeSummary, setFinanceSummary] =
     useState<FinanceStudentSummary | null>(null);
   const [settings, setSettings] = useState<TenantSettings | null>(null);
@@ -111,10 +113,10 @@ export function StudentPortalDashboard({ context }: { context: StudentPortalCont
   useEffect(() => {
     let active = true;
 
-    getStudentAnnouncements()
+    getStudentAnnouncementsV2({ limit: 3 })
       .then((nextAnnouncements) => {
         if (active) {
-          setAnnouncements(nextAnnouncements.slice(0, 3));
+          setAnnouncements(nextAnnouncements);
         }
       })
       .catch(() => {
@@ -276,6 +278,14 @@ export function StudentPortalDashboard({ context }: { context: StudentPortalCont
                   <p className="mt-1 line-clamp-2 text-sm leading-6 text-[#425B76]">
                     {announcement.body}
                   </p>
+                  <Button
+                    className="mt-3"
+                    href={`/portal/announcements?announcement=${announcement.id}`}
+                    size="sm"
+                    variant="secondary"
+                  >
+                    Read announcement
+                  </Button>
                 </div>
               ))
             )}

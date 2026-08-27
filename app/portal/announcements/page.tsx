@@ -1,9 +1,12 @@
 "use client";
 
+import { Suspense } from "react";
+
 import { FeatureGate } from "@/src/components/features/FeatureGate";
 import { StudentPortalAnnouncements } from "@/src/components/portal/StudentPortalAnnouncements";
 import { StudentPortalGuard } from "@/src/components/portal/StudentPortalGuard";
 import { StudentPortalLayout } from "@/src/components/portal/StudentPortalLayout";
+import { PortalLoadingCard } from "@/src/components/portal/StudentPortalShared";
 
 export default function PortalAnnouncementsPage() {
   return (
@@ -15,7 +18,11 @@ export default function PortalAnnouncementsPage() {
             mode="portal"
             tenantId={context.tenant.id}
           >
-            <StudentPortalAnnouncements context={context} />
+            <Suspense
+              fallback={<PortalLoadingCard label="Loading announcements" />}
+            >
+              <StudentPortalAnnouncements context={context} />
+            </Suspense>
           </FeatureGate>
         </StudentPortalLayout>
       )}
