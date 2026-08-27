@@ -21,9 +21,10 @@ import { StatCard } from "@/src/components/ui/StatCard";
 import {
   archiveCommunityPost,
   createTeamCommunityComment,
-  createTeamCommunityPost,
+  createTeamCommunityPostV2,
   formatCommunityDate,
   getCommunityPostTypeLabel,
+  getTeamCommunityCreateScopes,
   getTeamCommunityComments,
   getTeamCommunityPosts,
   hideCommunityComment,
@@ -32,6 +33,7 @@ import {
   updateTeamCommunityPost,
   type CommunityPostStatus,
   type CommunityPostType,
+  type CommunityCreateScope,
   type TeamCommunityComment,
   type TeamCommunityPost,
 } from "@/src/lib/community";
@@ -76,8 +78,8 @@ function canModerateCommunity(role: MemberRole | null) {
   return role === "owner" || role === "admin" || role === "staff";
 }
 
-function getErrorMessage(caught: unknown, fallback: string) {
-  return caught instanceof Error ? caught.message : fallback;
+function getErrorMessage(_caught: unknown, fallback: string) {
+  return fallback;
 }
 
 function isPlainText(value: string) {
@@ -113,6 +115,7 @@ export function CommunityPageClient() {
   const [commentBody, setCommentBody] = useState("");
   const [comments, setComments] = useState<TeamCommunityComment[]>([]);
   const [commentsLoading, setCommentsLoading] = useState(false);
+  const [createScopes, setCreateScopes] = useState<CommunityCreateScope[]>([]);
   const [editing, setEditing] = useState<TeamCommunityPost | null>(null);
   const [filter, setFilter] = useState<FilterStatus>("all");
   const [form, setForm] = useState<FormState>(emptyForm);
@@ -121,11 +124,13 @@ export function CommunityPageClient() {
   const [mutating, setMutating] = useState("");
   const [posts, setPosts] = useState<TeamCommunityPost[]>([]);
   const [role, setRole] = useState<MemberRole | null>(null);
+  const [selectedCreateScopeKey, setSelectedCreateScopeKey] = useState("");
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
   const [success, setSuccess] = useState("");
   const [tenant, setTenant] = useState<Tenant | null>(null);
 
-  const canCreate = canCreateCommunity(role);
+  const canAccess = canCreateCommunity(role);
+  const canCreate = canAccess && createScopes.length > 0;
   const canModerate = canModerateCommunity(role);
   const selectedPost = posts.find((post) => post.id === selectedPostId) ?? null;
   const filteredPosts = useMemo(
@@ -195,11 +200,22 @@ export function CommunityPageClient() {
 
       if (!canCreateCommunity(currentRole)) {
         setPosts([]);
+        setCreateScopes([]);
         return;
       }
 
-      const nextPosts = await getTeamCommunityPosts(currentTenant.id);
+      const [nextPosts, nextCreateScopes] = await Promise.all([
+        getTeamCommunityPosts(currentTenant.id),
+        getTeamCommunityCreateScopes({
+          role: currentRole as MemberRole,
+          tenantId: currentTenant.id,
+        }),
+      ]);
       setPosts(nextPosts);
+      setCreateScopes(nextCreateScopes);
+      setSelectedCreateScopeKey(
+        nextCreateScopes.length === 1 ? nextCreateScopes[0].key : "",
+      );
 
       const nextSelectedPostId =
         selectedPostId && nextPosts.some((post) => post.id === selectedPostId)
@@ -229,6 +245,7 @@ export function CommunityPageClient() {
     setSuccess("");
     setEditing(null);
     setForm(emptyForm);
+    setSelectedCreateScopeKey(createScopes.length === 1 ? createScopes[0].key : "");
     setFormOpen(true);
   }
 
@@ -262,6 +279,15 @@ export function CommunityPageClient() {
       return;
     }
 
+    const selectedCreateScope = editing
+      ? null
+      : createScopes.find((scope) => scope.key === selectedCreateScopeKey) ?? null;
+
+    if (!editing && !selectedCreateScope) {
+      setActionError("Choose a Program or Cohort Community space.");
+      return;
+    }
+
     setActionError("");
     setSuccess("");
     setMutating("save-post");
@@ -274,12 +300,21 @@ export function CommunityPageClient() {
             form.body,
             form.postType,
           )
-        : await createTeamCommunityPost(
-            tenant.id,
-            form.title,
-            form.body,
-            form.postType,
-          );
+        : selectedCreateScope
+          ? await createTeamCommunityPostV2(
+              tenant.id,
+              selectedCreateScope.courseId,
+              selectedCreateScope.cohortId,
+              form.title,
+              form.body,
+              form.postType,
+            )
+          : null;
+
+      if (!savedPost) {
+        setActionError("Choose a Program or Cohort Community space.");
+        return;
+      }
 
       setSuccess(editing ? "Community post updated." : "Draft community post created.");
       setForm(emptyForm);
@@ -415,7 +450,7 @@ export function CommunityPageClient() {
       {actionError ? <FeedbackAlert>{actionError}</FeedbackAlert> : null}
       {success ? <FeedbackAlert tone="success">{success}</FeedbackAlert> : null}
 
-      {!loading && !canCreate ? (
+      {!loading && !canAccess ? (
         <FeedbackAlert tone="warning">
           Owner, admin, staff, or trainer access is required to manage community
           posts. Moderation is enforced again by the server.
@@ -712,6 +747,27 @@ export function CommunityPageClient() {
             </div>
 
             <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
+              {!editing ? (
+                <FormField
+                  description="Choose the exact Program or Cohort where this post belongs."
+                  label="Community space"
+                  required
+                >
+                  <select
+                    className="h-12 w-full rounded-2xl border border-[#D8E8F0] bg-white px-4 text-sm text-[#0B1F33] outline-none transition focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
+                    onChange={(event) => setSelectedCreateScopeKey(event.target.value)}
+                    required
+                    value={selectedCreateScopeKey}
+                  >
+                    <option value="">Choose a Community space</option>
+                    {createScopes.map((scope) => (
+                      <option key={scope.key} value={scope.key}>
+                        {scope.label}
+                      </option>
+                    ))}
+                  </select>
+                </FormField>
+              ) : null}
               <FormField
                 description="Keep titles short and student-facing."
                 label="Title"

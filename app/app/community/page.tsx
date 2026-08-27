@@ -7,7 +7,7 @@ export default function CommunityPage() {
   return (
     <RouteGuard mode="app">
       <AppShell activeItem="Community">
-        <FeatureGate featureKey="messages">
+        <FeatureGate featureKey="community_hub">
           <CommunityPageClient />
         </FeatureGate>
       </AppShell>

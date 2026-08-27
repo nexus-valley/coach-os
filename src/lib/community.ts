@@ -1,9 +1,22 @@
+import { getCohortsForStudent, getCohortsForTenant } from "@/src/lib/cohorts";
+import { getCoursesForTenant } from "@/src/lib/courses";
+import { getUserDelegatedPermissions } from "@/src/lib/delegatedPermissions";
+import { getStudentPortalCourses } from "@/src/lib/studentPortal";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
+import type { MemberRole } from "@/src/lib/team";
 
 export type CommunityPostStatus = "archived" | "draft" | "hidden" | "published";
 export type CommunityPostType = "discussion" | "question" | "resource" | "update";
 export type CommunityAuthorType = "student" | "team";
 export type CommunityCommentStatus = "hidden" | "published";
+
+export type CommunityCreateScope = {
+  cohortId: string | null;
+  courseId: string;
+  key: string;
+  kind: "cohort" | "program";
+  label: string;
+};
 
 export type StudentCommunityPost = {
   author_name: string;
@@ -177,6 +190,128 @@ export function getCommunityPostTypeLabel(postType: CommunityPostType) {
   return labels[postType];
 }
 
+function sortCommunityScopes(scopes: CommunityCreateScope[]) {
+  return scopes.sort(
+    (left, right) =>
+      left.kind.localeCompare(right.kind) ||
+      left.label.localeCompare(right.label) ||
+      left.key.localeCompare(right.key),
+  );
+}
+
+export async function getTeamCommunityCreateScopes(params: {
+  role: MemberRole;
+  tenantId: string;
+}) {
+  const [courses, cohorts, delegatedPermissions] = await Promise.all([
+    getCoursesForTenant(params.tenantId),
+    getCohortsForTenant(params.tenantId),
+    params.role === "owner" || params.role === "admin"
+      ? Promise.resolve([])
+      : getUserDelegatedPermissions(params.tenantId),
+  ]);
+  const messagePermissions = delegatedPermissions.filter(
+    (permission) => permission.permission_key === "manage_messages",
+  );
+  const hasWorkspacePermission = messagePermissions.some(
+    (permission) => permission.scope_type === "workspace",
+  );
+  const allowedCourseIds = new Set(
+    messagePermissions
+      .filter((permission) => permission.scope_type === "course")
+      .map((permission) => permission.scope_id)
+      .filter((scopeId): scopeId is string => Boolean(scopeId)),
+  );
+  const allowedCohortIds = new Set(
+    messagePermissions
+      .filter((permission) => permission.scope_type === "cohort")
+      .map((permission) => permission.scope_id)
+      .filter((scopeId): scopeId is string => Boolean(scopeId)),
+  );
+  const hasRoleWideAccess = params.role === "owner" || params.role === "admin";
+  const programScopes = courses
+    .filter(
+      (course) =>
+        hasRoleWideAccess || hasWorkspacePermission || allowedCourseIds.has(course.id),
+    )
+    .map(
+      (course) =>
+        ({
+          cohortId: null,
+          courseId: course.id,
+          key: `program:${course.id}`,
+          kind: "program",
+          label: `Program - ${course.title}`,
+        }) satisfies CommunityCreateScope,
+    );
+  const cohortScopes = cohorts
+    .filter(
+      (cohort) =>
+        hasRoleWideAccess ||
+        hasWorkspacePermission ||
+        allowedCourseIds.has(cohort.course_id) ||
+        allowedCohortIds.has(cohort.id),
+    )
+    .map(
+      (cohort) =>
+        ({
+          cohortId: cohort.id,
+          courseId: cohort.course_id,
+          key: `cohort:${cohort.id}`,
+          kind: "cohort",
+          label: `Cohort - ${cohort.name}${cohort.course?.title ? ` (${cohort.course.title})` : ""}`,
+        }) satisfies CommunityCreateScope,
+    );
+
+  return sortCommunityScopes([...programScopes, ...cohortScopes]);
+}
+
+export async function getStudentCommunityCreateScopes(params: {
+  studentId: string;
+  tenantId: string;
+}) {
+  const [courseOverview, memberships] = await Promise.all([
+    getStudentPortalCourses(params),
+    getCohortsForStudent(params),
+  ]);
+  const activeCourses = (courseOverview?.courses ?? []).filter(
+    (item) => item.enrollment.status === "active" && item.course.status === "published",
+  );
+  const activeCourseById = new Map(
+    activeCourses.map((item) => [item.course.id, item.course]),
+  );
+  const programScopes = activeCourses.map(
+    (item) =>
+      ({
+        cohortId: null,
+        courseId: item.course.id,
+        key: `program:${item.course.id}`,
+        kind: "program",
+        label: `Program - ${item.course.title}`,
+      }) satisfies CommunityCreateScope,
+  );
+  const cohortScopes = memberships.flatMap((membership) => {
+    const cohort = membership.cohort;
+    const course = cohort ? activeCourseById.get(cohort.course_id) : null;
+
+    if (!cohort || !course) {
+      return [];
+    }
+
+    return [
+      {
+        cohortId: cohort.id,
+        courseId: cohort.course_id,
+        key: `cohort:${cohort.id}`,
+        kind: "cohort",
+        label: `Cohort - ${cohort.name} (${course.title})`,
+      } satisfies CommunityCreateScope,
+    ];
+  });
+
+  return sortCommunityScopes([...programScopes, ...cohortScopes]);
+}
+
 export async function getStudentCommunityPosts() {
   const supabase = getSupabaseClient();
   const { data, error } = await supabase.rpc("get_student_community_posts");
@@ -209,17 +344,19 @@ export async function createStudentCommunityComment(postId: string, body: string
   return String(data ?? "");
 }
 
-export async function createStudentCommunityPost(
-  tenantId: string,
+export async function createStudentCommunityPostV2(
+  courseId: string,
+  cohortId: string | null,
   title: string,
   body: string,
   postType: CommunityPostType = "discussion",
 ) {
   const supabase = getSupabaseClient();
-  const { data, error } = await supabase.rpc("create_student_community_post", {
+  const { data, error } = await supabase.rpc("create_student_community_post_v2", {
     p_body: body,
+    p_cohort_id: cohortId,
+    p_course_id: courseId,
     p_post_type: postType,
-    p_tenant_id: tenantId,
     p_title: title,
   });
 
@@ -250,15 +387,19 @@ export async function getTeamCommunityComments(postId: string) {
   return normalizeList(data, normalizeTeamComment);
 }
 
-export async function createTeamCommunityPost(
+export async function createTeamCommunityPostV2(
   tenantId: string,
+  courseId: string,
+  cohortId: string | null,
   title: string,
   body: string,
   postType: CommunityPostType = "discussion",
 ) {
   const supabase = getSupabaseClient();
-  const { data, error } = await supabase.rpc("create_team_community_post", {
+  const { data, error } = await supabase.rpc("create_team_community_post_v2", {
     p_body: body,
+    p_cohort_id: cohortId,
+    p_course_id: courseId,
     p_post_type: postType,
     p_tenant_id: tenantId,
     p_title: title,

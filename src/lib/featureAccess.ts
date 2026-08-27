@@ -17,6 +17,7 @@ export type FeatureKey =
   | "documents"
   | "document_uploads"
   | "messages"
+  | "community_hub"
   | "crm"
   | "marketing"
   | "automations"
@@ -122,6 +123,12 @@ export const featureDefinitions: FeatureDefinition[] = [
     section: "Portal",
   },
   {
+    description: "Program and cohort discussions for coaches and students.",
+    key: "community_hub",
+    label: "Community",
+    section: "Portal",
+  },
+  {
     description: "CRM leads, follow-ups, and admissions pipeline.",
     key: "crm",
     label: "CRM",
@@ -222,7 +229,7 @@ export const navFeatureByLabel: Record<string, FeatureKey | undefined> = {
   Certificates: "certificates",
   Cohorts: "courses",
   Compliance: "audit_compliance",
-  Community: "messages",
+  Community: "community_hub",
   "Content Library": "documents",
   Courses: "courses",
   CRM: "crm",
@@ -255,7 +262,7 @@ export const portalNavFeatureByLabel: Record<string, FeatureKey | undefined> = {
   Announcements: "messages",
   Assignments: "assignments",
   Certificates: "certificates",
-  Community: "messages",
+  Community: "community_hub",
   Courses: "courses",
   Documents: "documents",
   "Live Classes": "attendance",

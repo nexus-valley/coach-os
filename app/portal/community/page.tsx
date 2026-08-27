@@ -10,7 +10,11 @@ export default function PortalCommunityPage() {
     <StudentPortalGuard>
       {(context) => (
         <StudentPortalLayout context={context}>
-          <FeatureGate featureKey="messages" mode="portal" tenantId={context.tenant.id}>
+          <FeatureGate
+            featureKey="community_hub"
+            mode="portal"
+            tenantId={context.tenant.id}
+          >
             <StudentPortalCommunity context={context} />
           </FeatureGate>
         </StudentPortalLayout>

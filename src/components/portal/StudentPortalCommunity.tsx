@@ -4,11 +4,13 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 
 import {
   createStudentCommunityComment,
-  createStudentCommunityPost,
+  createStudentCommunityPostV2,
   formatCommunityDate,
   getCommunityPostTypeLabel,
+  getStudentCommunityCreateScopes,
   getStudentCommunityComments,
   getStudentCommunityPosts,
+  type CommunityCreateScope,
   type CommunityPostType,
   type StudentCommunityComment,
   type StudentCommunityPost,
@@ -46,8 +48,8 @@ const postTypes: CommunityPostType[] = [
   "update",
 ];
 
-function getErrorMessage(caught: unknown, fallback: string) {
-  return caught instanceof Error ? caught.message : fallback;
+function getErrorMessage(_caught: unknown, fallback: string) {
+  return fallback;
 }
 
 function isPlainText(value: string) {
@@ -76,17 +78,26 @@ export function StudentPortalCommunity({
   const [comments, setComments] = useState<StudentCommunityComment[]>([]);
   const [commentsLoading, setCommentsLoading] = useState(false);
   const [composerOpen, setComposerOpen] = useState(false);
+  const [createScopes, setCreateScopes] = useState<CommunityCreateScope[]>([]);
   const [loading, setLoading] = useState(true);
   const [mutating, setMutating] = useState("");
   const [postForm, setPostForm] = useState<PostFormState>(emptyPostForm);
   const [posts, setPosts] = useState<StudentCommunityPost[]>([]);
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
+  const [selectedScopeKey, setSelectedScopeKey] = useState("");
   const [success, setSuccess] = useState("");
 
   const selectedPost = useMemo(
     () => posts.find((post) => post.id === selectedPostId) ?? null,
     [posts, selectedPostId],
   );
+  const canCreatePost = createScopes.length > 0;
+
+  function openComposer() {
+    setActionError("");
+    setSelectedScopeKey(createScopes.length === 1 ? createScopes[0]?.key ?? "" : "");
+    setComposerOpen(true);
+  }
 
   async function loadPosts(preferredPostId?: string | null) {
     setActionError("");
@@ -116,10 +127,20 @@ export function StudentPortalCommunity({
       setLoading(true);
 
       try {
-        const nextPosts = await getStudentCommunityPosts();
+        const [nextPosts, nextCreateScopes] = await Promise.all([
+          getStudentCommunityPosts(),
+          getStudentCommunityCreateScopes({
+            studentId: context.student.id,
+            tenantId: context.tenant.id,
+          }),
+        ]);
 
         if (active) {
           setPosts(nextPosts);
+          setCreateScopes(nextCreateScopes);
+          setSelectedScopeKey(
+            nextCreateScopes.length === 1 ? nextCreateScopes[0]?.key ?? "" : "",
+          );
           setSelectedPostId(nextPosts[0]?.id ?? null);
         }
       } catch (caught) {
@@ -138,7 +159,7 @@ export function StudentPortalCommunity({
     return () => {
       active = false;
     };
-  }, []);
+  }, [context.student.id, context.tenant.id]);
 
   useEffect(() => {
     let active = true;
@@ -205,13 +226,22 @@ export function StudentPortalCommunity({
       return;
     }
 
+    const selectedScope =
+      createScopes.find((scope) => scope.key === selectedScopeKey) ?? null;
+
+    if (!selectedScope) {
+      setActionError("Choose a Program or Cohort Community space.");
+      return;
+    }
+
     setActionError("");
     setSuccess("");
     setMutating("save-post");
 
     try {
-      const savedPost = await createStudentCommunityPost(
-        context.tenant.id,
+      const savedPost = await createStudentCommunityPostV2(
+        selectedScope.courseId,
+        selectedScope.cohortId,
         title,
         body,
         postForm.postType,
@@ -269,9 +299,11 @@ export function StudentPortalCommunity({
     <div className="mx-auto max-w-6xl space-y-6">
       <PageHeader
         actions={
-          <Button onClick={() => setComposerOpen(true)} type="button">
-            Start discussion
-          </Button>
+          canCreatePost ? (
+            <Button onClick={openComposer} type="button">
+              Start discussion
+            </Button>
+          ) : null
         }
         description={`Connect with students and the ${context.tenant.name} coach team in a private workspace community.`}
         eyebrow="Private coach community"
@@ -305,9 +337,11 @@ export function StudentPortalCommunity({
                 </p>
               </div>
             </div>
-            <Button onClick={() => setComposerOpen(true)} type="button" variant="secondary">
-              Write a post
-            </Button>
+            {canCreatePost ? (
+              <Button onClick={openComposer} type="button" variant="secondary">
+                Write a post
+              </Button>
+            ) : null}
           </div>
         </div>
       </Card>
@@ -495,6 +529,25 @@ export function StudentPortalCommunity({
               </div>
 
               <form className="mt-6 space-y-4" onSubmit={handlePostSubmit}>
+                <FormField
+                  description="Choose the exact Program or Cohort where this discussion belongs."
+                  label="Community space"
+                  required
+                >
+                  <select
+                    className="h-12 w-full rounded-xl border border-[#CBD5E1] bg-white px-4 text-sm text-[#0B1F33] outline-none transition focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
+                    onChange={(event) => setSelectedScopeKey(event.target.value)}
+                    required
+                    value={selectedScopeKey}
+                  >
+                    <option value="">Choose a Community space</option>
+                    {createScopes.map((scope) => (
+                      <option key={scope.key} value={scope.key}>
+                        {scope.label}
+                      </option>
+                    ))}
+                  </select>
+                </FormField>
                 <FormField
                   description="Use a clear title so other students can scan the feed."
                   label="Title"
