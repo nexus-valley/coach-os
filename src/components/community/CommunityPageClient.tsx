@@ -440,7 +440,7 @@ export function CommunityPageClient() {
         eyebrow="Student communication"
         metadata={
           <>
-            <Badge tone="info">All students audience</Badge>
+            <Badge tone="info">Program and Cohort spaces</Badge>
             <Badge tone="outline">No attachments or reactions</Badge>
           </>
         }
@@ -750,11 +750,13 @@ export function CommunityPageClient() {
               {!editing ? (
                 <FormField
                   description="Choose the exact Program or Cohort where this post belongs."
+                  htmlFor="coach-community-space"
                   label="Community space"
                   required
                 >
                   <select
                     className="h-12 w-full rounded-2xl border border-[#D8E8F0] bg-white px-4 text-sm text-[#0B1F33] outline-none transition focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
+                    id="coach-community-space"
                     onChange={(event) => setSelectedCreateScopeKey(event.target.value)}
                     required
                     value={selectedCreateScopeKey}

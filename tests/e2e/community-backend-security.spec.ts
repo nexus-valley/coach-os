@@ -149,6 +149,34 @@ test.describe("UX-7E Community backend security", () => {
     ).not.toContain("p_tenant_id");
   });
 
+  test("loads Student Community scopes with Student portal access semantics", () => {
+    const scopeLoader = sourceFunction(
+      communityLibrary,
+      "getStudentCommunityCreateScopes",
+    );
+
+    expect(scopeLoader).toContain(
+      'getStudentPortalCourses({ ...params, accessMode: "student" })',
+    );
+    expect(scopeLoader).not.toContain("getStudentPortalCourses(params)");
+    expect(scopeLoader).toContain('item.enrollment.status === "active"');
+    expect(scopeLoader).toContain('item.course.status === "published"');
+    expect(scopeLoader).toContain("getCohortsForStudent(params)");
+  });
+
+  test("uses scoped Community copy and accessible scope selectors", () => {
+    expect(coachCommunity).not.toContain("All students audience");
+    expect(coachCommunity).toContain("Program and Cohort spaces");
+    expect(coachCommunity).toContain('htmlFor="coach-community-space"');
+    expect(coachCommunity).toContain('id="coach-community-space"');
+    expect(studentCommunity).toContain('htmlFor="student-community-space"');
+    expect(studentCommunity).toContain('id="student-community-space"');
+    expect(coachCommunity.match(/id="coach-community-space"/g)).toHaveLength(1);
+    expect(studentCommunity.match(/id="student-community-space"/g)).toHaveLength(
+      1,
+    );
+  });
+
   test("attributes comments to the exact eligible Student identity", () => {
     const create = functionBody("public", "create_student_community_comment");
     expect(create).toContain("join public.students s");

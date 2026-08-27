@@ -531,11 +531,13 @@ export function StudentPortalCommunity({
               <form className="mt-6 space-y-4" onSubmit={handlePostSubmit}>
                 <FormField
                   description="Choose the exact Program or Cohort where this discussion belongs."
+                  htmlFor="student-community-space"
                   label="Community space"
                   required
                 >
                   <select
                     className="h-12 w-full rounded-xl border border-[#CBD5E1] bg-white px-4 text-sm text-[#0B1F33] outline-none transition focus:border-[#2ECBEA]/70 focus:ring-4 focus:ring-[#2ECBEA]/10"
+                    id="student-community-space"
                     onChange={(event) => setSelectedScopeKey(event.target.value)}
                     required
                     value={selectedScopeKey}

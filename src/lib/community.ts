@@ -271,7 +271,7 @@ export async function getStudentCommunityCreateScopes(params: {
   tenantId: string;
 }) {
   const [courseOverview, memberships] = await Promise.all([
-    getStudentPortalCourses(params),
+    getStudentPortalCourses({ ...params, accessMode: "student" }),
     getCohortsForStudent(params),
   ]);
   const activeCourses = (courseOverview?.courses ?? []).filter(
