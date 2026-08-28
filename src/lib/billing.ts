@@ -1,8 +1,8 @@
-import { getInvoices, getPaymentHistory } from "@/src/lib/invoices";
 import {
   getBillingCountryDisplayName,
   getTenantBillingProfile,
 } from "@/src/lib/billingProfile";
+import { getPlatformBillingDocuments } from "@/src/lib/platformBillingDocuments";
 import {
   getAvailablePlans,
   getPlanUpgradeRecommendation,
@@ -78,14 +78,13 @@ export async function updateBillingProfile(input: BillingProfileInput) {
 }
 
 export async function getBillingSummary(tenantId: string) {
-  const [subscription, invoices, paymentHistory, billingProfile, usage] =
+  const [subscription, billingDocuments, billingProfile, usage] =
     await Promise.all([
-    getCurrentSubscription(tenantId),
-    getInvoices(tenantId),
-    getPaymentHistory(tenantId),
-    getBillingProfile(tenantId),
-    refreshWorkspaceUsageSnapshot(tenantId),
-  ]);
+      getCurrentSubscription(tenantId),
+      getPlatformBillingDocuments(tenantId),
+      getBillingProfile(tenantId),
+      refreshWorkspaceUsageSnapshot(tenantId),
+    ]);
   const currentSubscriptionStatus = await getBillingAccessState(tenantId);
   const usageForRecommendation = Object.fromEntries(
     Object.entries(usage).map(([key, value]) => [key, value]),
@@ -94,10 +93,9 @@ export async function getBillingSummary(tenantId: string) {
   return {
     accessState: getSubscriptionAccessState(subscription),
     availablePlans: getAvailablePlans(),
+    billingDocuments,
     billingProfile,
     currentSubscriptionStatus,
-    invoices,
-    paymentHistory,
     planRecommendation: getPlanUpgradeRecommendation(
       usageForRecommendation,
       subscription?.plan_code,
