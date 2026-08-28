@@ -1506,8 +1506,20 @@ export function SubscriptionPageClient() {
               value={billingProfile?.billingEmail ?? ""}
             />
             <ReadOnlyField
-              label="GST number"
-              value={billingProfile?.billingGstNumber ?? ""}
+              label="Tax registration"
+              value={
+                billingProfile?.taxRegistrationType === "NONE"
+                  ? ""
+                  : billingProfile?.taxRegistrationType ?? ""
+              }
+            />
+            <ReadOnlyField
+              label="Tax registration ID"
+              value={billingProfile?.taxRegistrationId ?? ""}
+            />
+            <ReadOnlyField
+              label="Billing currency"
+              value={billingProfile?.billingCurrency ?? ""}
             />
             <ReadOnlyField
               label="Address line 1"

@@ -1,4 +1,12 @@
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
+import {
+  getBillingCountryDisplayName,
+  getBillingCurrencyForCountry,
+  normalizeBillingCountryCode,
+  normalizeTaxRegistrationType,
+  type BillingCurrency,
+  type TaxRegistrationType,
+} from "@/src/lib/billingCountries";
 
 export type TenantBillingProfile = {
   address_line1: string | null;
@@ -13,8 +21,9 @@ export type TenantBillingProfile = {
   invoice_contact_name: string | null;
   legal_name: string | null;
   postal_code: string | null;
-  preferred_currency: "INR" | "USD";
+  preferred_currency: BillingCurrency | null;
   state: string | null;
+  tax_registration_type: TaxRegistrationType;
   tax_id: string | null;
   tenant_id: string;
   updated_at: string | null;
@@ -32,8 +41,9 @@ export type TenantBillingProfileInput = {
   invoice_contact_name?: string | null;
   legal_name?: string | null;
   postal_code?: string | null;
-  preferred_currency?: "INR" | "USD";
+  preferred_currency?: BillingCurrency;
   state?: string | null;
+  tax_registration_type?: TaxRegistrationType;
   tax_id?: string | null;
 };
 
@@ -48,10 +58,10 @@ const missingFieldLabels: Record<string, string> = {
   address_line1: "Address line 1",
   billing_email: "Billing email",
   city: "City",
-  country: "Country",
+  country: "Billing country",
   legal_name: "Legal name",
   postal_code: "Postal code",
-  preferred_currency: "Preferred currency",
+  preferred_currency: "Billing currency",
   state: "State",
 };
 
@@ -59,8 +69,8 @@ function asNullableString(value: unknown) {
   return typeof value === "string" && value.trim() ? value : null;
 }
 
-function normalizeCurrency(value: unknown): "INR" | "USD" {
-  return value === "USD" ? "USD" : "INR";
+function normalizeCurrency(value: unknown): BillingCurrency | null {
+  return value === "USD" || value === "EUR" || value === "INR" ? value : null;
 }
 
 function normalizeProfile(row: Record<string, unknown>): TenantBillingProfile {
@@ -79,6 +89,9 @@ function normalizeProfile(row: Record<string, unknown>): TenantBillingProfile {
     postal_code: asNullableString(row.postal_code),
     preferred_currency: normalizeCurrency(row.preferred_currency),
     state: asNullableString(row.state),
+    tax_registration_type: normalizeTaxRegistrationType(
+      asNullableString(row.tax_registration_type),
+    ),
     tax_id: asNullableString(row.tax_id),
     tenant_id: String(row.tenant_id ?? ""),
     updated_at: asNullableString(row.updated_at),
@@ -125,6 +138,8 @@ export function getBillingProfileMissingFieldLabels(fields: string[]) {
   return fields.map(getBillingProfileMissingFieldLabel);
 }
 
+export { getBillingCountryDisplayName, getBillingCurrencyForCountry };
+
 export async function getTenantBillingProfile(tenantId: string) {
   const supabase = getSupabaseClient();
   const { data, error } = await supabase.rpc("get_tenant_billing_profile", {
@@ -150,12 +165,13 @@ export async function upsertTenantBillingProfile(
     p_billing_notes: cleanInput(payload.billing_notes),
     p_billing_phone: cleanInput(payload.billing_phone),
     p_city: cleanInput(payload.city),
-    p_country: cleanInput(payload.country),
+    p_country: cleanInput(normalizeBillingCountryCode(payload.country)),
     p_invoice_contact_name: cleanInput(payload.invoice_contact_name),
     p_legal_name: cleanInput(payload.legal_name),
     p_postal_code: cleanInput(payload.postal_code),
     p_preferred_currency: payload.preferred_currency ?? "INR",
     p_state: cleanInput(payload.state),
+    p_tax_registration_type: payload.tax_registration_type ?? "NONE",
     p_tax_id: cleanInput(payload.tax_id),
     p_tenant_id: tenantId,
   });

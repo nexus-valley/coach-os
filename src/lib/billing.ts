@@ -1,5 +1,9 @@
 import { getInvoices, getPaymentHistory } from "@/src/lib/invoices";
 import {
+  getBillingCountryDisplayName,
+  getTenantBillingProfile,
+} from "@/src/lib/billingProfile";
+import {
   getAvailablePlans,
   getPlanUpgradeRecommendation,
   type PlanResource,
@@ -10,7 +14,6 @@ import {
   getCurrentSubscription,
   getSubscriptionAccessState,
 } from "@/src/lib/subscriptions";
-import { getSupabaseClient } from "@/src/lib/supabaseClient";
 import { refreshWorkspaceUsageSnapshot } from "@/src/lib/usage";
 
 export type BillingAddress = {
@@ -25,7 +28,9 @@ export type BillingAddress = {
 export type BillingProfile = {
   billingAddress: BillingAddress;
   billingEmail: string;
-  billingGstNumber: string;
+  billingCurrency: string;
+  taxRegistrationId: string;
+  taxRegistrationType: string;
   billingStatus: string;
   featureFlags: Record<string, unknown>;
 };
@@ -38,35 +43,6 @@ export type BillingProfileInput = {
   tenantId: string;
 };
 
-function isMissingBillingColumnError(error: { code?: string; message?: string } | null) {
-  const message = error?.message?.toLowerCase() ?? "";
-
-  return (
-    error?.code === "PGRST204" ||
-    error?.code === "42703" ||
-    message.includes("column") ||
-    message.includes("schema cache")
-  );
-}
-
-function normalizeAddress(value: unknown): BillingAddress {
-  if (!value || typeof value !== "object") {
-    return {};
-  }
-
-  const record = value as Record<string, unknown>;
-
-  return {
-    city: typeof record.city === "string" ? record.city : "",
-    country: typeof record.country === "string" ? record.country : "",
-    line1: typeof record.line1 === "string" ? record.line1 : "",
-    line2: typeof record.line2 === "string" ? record.line2 : "",
-    postalCode:
-      typeof record.postalCode === "string" ? record.postalCode : "",
-    state: typeof record.state === "string" ? record.state : "",
-  };
-}
-
 export async function getBillingProfile(tenantId: string): Promise<BillingProfile> {
   await requireTenantPermission({
     description: "Blocked billing profile access without billing permission.",
@@ -74,35 +50,23 @@ export async function getBillingProfile(tenantId: string): Promise<BillingProfil
     tenantId,
   });
 
-  const supabase = getSupabaseClient();
-  const { data, error } = await supabase
-    .from("tenants")
-    .select(
-      "billing_status,billing_email,billing_gst_number,billing_address_json,feature_flags_json",
-    )
-    .eq("id", tenantId)
-    .maybeSingle();
-
-  if (error) {
-    if (isMissingBillingColumnError(error)) {
-      return {
-        billingAddress: {},
-        billingEmail: "",
-        billingGstNumber: "",
-        billingStatus: "not_configured",
-        featureFlags: {},
-      };
-    }
-
-    throw error;
-  }
+  const profile = await getTenantBillingProfile(tenantId);
 
   return {
-    billingAddress: normalizeAddress(data?.billing_address_json),
-    billingEmail: data?.billing_email ?? "",
-    billingGstNumber: data?.billing_gst_number ?? "",
-    billingStatus: data?.billing_status ?? "not_configured",
-    featureFlags: data?.feature_flags_json ?? {},
+    billingAddress: {
+      city: profile.city ?? "",
+      country: getBillingCountryDisplayName(profile.country),
+      line1: profile.address_line1 ?? "",
+      line2: profile.address_line2 ?? "",
+      postalCode: profile.postal_code ?? "",
+      state: profile.state ?? "",
+    },
+    billingCurrency: profile.preferred_currency ?? "",
+    billingEmail: profile.billing_email ?? "",
+    billingStatus: profile.id ? "configured" : "not_configured",
+    featureFlags: {},
+    taxRegistrationId: profile.tax_id ?? "",
+    taxRegistrationType: profile.tax_registration_type,
   };
 }
 

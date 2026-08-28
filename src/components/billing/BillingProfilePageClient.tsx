@@ -14,6 +14,16 @@ import { SectionHeader } from "@/src/components/ui/SectionHeader";
 import { Skeleton } from "@/src/components/ui/Skeleton";
 import { StatCard } from "@/src/components/ui/StatCard";
 import {
+  billingCountryOptions,
+  billingTaxRegistrationTypes,
+  getBillingCountryOption,
+  getBillingCurrencyForCountry,
+  isSupportedBillingCountry,
+  normalizeBillingCountryCode,
+  type BillingCurrency,
+  type TaxRegistrationType,
+} from "@/src/lib/billingCountries";
+import {
   getBillingProfileMissingFieldLabels,
   getTenantBillingProfile,
   getTenantBillingProfileCompletion,
@@ -37,8 +47,9 @@ type BillingProfileForm = {
   invoice_contact_name: string;
   legal_name: string;
   postal_code: string;
-  preferred_currency: "INR" | "USD";
+  preferred_currency: BillingCurrency;
   state: string;
+  tax_registration_type: TaxRegistrationType;
   tax_id: string;
 };
 
@@ -55,6 +66,7 @@ const emptyForm: BillingProfileForm = {
   postal_code: "",
   preferred_currency: "INR",
   state: "",
+  tax_registration_type: "NONE",
   tax_id: "",
 };
 
@@ -65,13 +77,14 @@ const textFieldLabels: Record<keyof BillingProfileForm, string> = {
   billing_notes: "Billing notes",
   billing_phone: "Billing phone",
   city: "City",
-  country: "Country",
+  country: "Billing country",
   invoice_contact_name: "Invoice contact name",
   legal_name: "Legal name",
   postal_code: "Postal code",
-  preferred_currency: "Preferred currency",
+  preferred_currency: "Billing currency",
   state: "State",
-  tax_id: "Tax ID / GSTIN",
+  tax_registration_type: "Tax registration type",
+  tax_id: "Tax registration ID",
 };
 
 const maxLengths: Partial<Record<keyof BillingProfileForm, number>> = {
@@ -81,7 +94,6 @@ const maxLengths: Partial<Record<keyof BillingProfileForm, number>> = {
   billing_notes: 2000,
   billing_phone: 40,
   city: 120,
-  country: 120,
   invoice_contact_name: 180,
   legal_name: 180,
   postal_code: 40,
@@ -125,9 +137,11 @@ function profileToForm(profile: TenantBillingProfile | null): BillingProfileForm
     invoice_contact_name: valueOrEmpty(profile.invoice_contact_name),
     legal_name: valueOrEmpty(profile.legal_name),
     postal_code: valueOrEmpty(profile.postal_code),
-    preferred_currency: profile.preferred_currency,
-    state: valueOrEmpty(profile.state),
-    tax_id: valueOrEmpty(profile.tax_id),
+    preferred_currency:
+      profile.preferred_currency ?? getBillingCurrencyForCountry(profile.country),
+  state: valueOrEmpty(profile.state),
+  tax_registration_type: profile.tax_registration_type,
+  tax_id: valueOrEmpty(profile.tax_id),
   };
 }
 
@@ -145,6 +159,7 @@ function toInput(form: BillingProfileForm): TenantBillingProfileInput {
     postal_code: form.postal_code,
     preferred_currency: form.preferred_currency,
     state: form.state,
+    tax_registration_type: form.tax_registration_type,
     tax_id: form.tax_id,
   };
 }
@@ -166,6 +181,14 @@ function validateForm(form: BillingProfileForm) {
 
   if (!isEmail(form.billing_email)) {
     return "Billing email must be a valid email address.";
+  }
+
+  if (!isSupportedBillingCountry(form.country)) {
+    return "Choose a supported billing country.";
+  }
+
+  if (form.preferred_currency !== getBillingCurrencyForCountry(form.country)) {
+    return "Billing currency must match the selected billing country.";
   }
 
   return "";
@@ -270,7 +293,18 @@ export function BillingProfilePageClient() {
     key: Key,
     value: BillingProfileForm[Key],
   ) {
-    setForm((current) => ({ ...current, [key]: value }));
+    setForm((current) => {
+      if (key === "country") {
+        const country = normalizeBillingCountryCode(value as string);
+        return {
+          ...current,
+          country,
+          preferred_currency: getBillingCurrencyForCountry(country),
+        };
+      }
+
+      return { ...current, [key]: value };
+    });
     setSuccess("");
     setActionError("");
   }
@@ -406,7 +440,7 @@ export function BillingProfilePageClient() {
       {!completion?.is_complete && missingLabels.length > 0 ? (
         <Card padding="md" variant="subtle">
           <SectionHeader
-            description="These fields are advisory readiness checks only. Tax ID/GSTIN is optional because requirements vary by coaching business and jurisdiction."
+            description="These fields are advisory readiness checks only. Tax registration is optional because requirements vary by coaching business and jurisdiction."
             title="Missing readiness fields"
           />
           <div className="mt-4 flex flex-wrap gap-2">
@@ -426,7 +460,7 @@ export function BillingProfilePageClient() {
               Back to subscription
             </Button>
           }
-          description="Add the business details CoachFort should use for your workspace subscription records."
+          description="Add the coaching business details CoachFort should use for your workspace subscription records."
           title="Billing identity"
         />
 
@@ -435,7 +469,7 @@ export function BillingProfilePageClient() {
             <FormField
               description="Registered coaching business or legal business name."
               htmlFor="legal_name"
-              label="Legal name"
+              label="Legal business name"
               required
             >
               <input
@@ -496,9 +530,33 @@ export function BillingProfilePageClient() {
             </FormField>
 
             <FormField
-              description="GSTIN or another tax identifier, if applicable."
+              description="Choose the type of tax registration recorded for this billing profile."
+              htmlFor="tax_registration_type"
+              label="Tax registration type"
+            >
+              <select
+                className="h-11 w-full rounded-lg border border-[#BFD7E6] bg-white px-3 text-sm text-[#0B1F33] outline-none transition focus:border-[#145DA0] focus:ring-4 focus:ring-[#2ECBEA]/15"
+                id="tax_registration_type"
+                onChange={(event) =>
+                  updateField(
+                    "tax_registration_type",
+                    event.target.value as TaxRegistrationType,
+                  )
+                }
+                value={form.tax_registration_type}
+              >
+                {billingTaxRegistrationTypes.map((type) => (
+                  <option key={type.value} value={type.value}>
+                    {type.label}
+                  </option>
+                ))}
+              </select>
+            </FormField>
+
+            <FormField
+              description="GSTIN, VAT number, or another tax registration identifier, if applicable."
               htmlFor="tax_id"
-              label="Tax ID / GSTIN"
+              label="Tax registration ID"
             >
               <input
                 className="h-11 w-full rounded-lg border border-[#BFD7E6] bg-white px-3 text-sm text-[#0B1F33] outline-none transition focus:border-[#145DA0] focus:ring-4 focus:ring-[#2ECBEA]/15"
@@ -507,27 +565,6 @@ export function BillingProfilePageClient() {
                 onChange={(event) => updateField("tax_id", event.target.value)}
                 value={form.tax_id}
               />
-            </FormField>
-
-            <FormField
-              htmlFor="preferred_currency"
-              label="Preferred currency"
-              required
-            >
-              <select
-                className="h-11 w-full rounded-lg border border-[#BFD7E6] bg-white px-3 text-sm text-[#0B1F33] outline-none transition focus:border-[#145DA0] focus:ring-4 focus:ring-[#2ECBEA]/15"
-                id="preferred_currency"
-                onChange={(event) =>
-                  updateField(
-                    "preferred_currency",
-                    event.target.value === "USD" ? "USD" : "INR",
-                  )
-                }
-                value={form.preferred_currency}
-              >
-                <option value="INR">INR</option>
-                <option value="USD">USD</option>
-              </select>
             </FormField>
           </div>
 
@@ -572,7 +609,7 @@ export function BillingProfilePageClient() {
               />
             </FormField>
 
-            <FormField htmlFor="state" label="State" required>
+            <FormField htmlFor="state" label="State/Province">
               <input
                 className="h-11 w-full rounded-lg border border-[#BFD7E6] bg-white px-3 text-sm text-[#0B1F33] outline-none transition focus:border-[#145DA0] focus:ring-4 focus:ring-[#2ECBEA]/15"
                 id="state"
@@ -594,13 +631,42 @@ export function BillingProfilePageClient() {
               />
             </FormField>
 
-            <FormField htmlFor="country" label="Country" required>
-              <input
+            <FormField
+              description="Billing country determines CoachFort billing currency: India uses INR, supported EUR countries use EUR, and other supported regions use USD."
+              htmlFor="country"
+              label="Billing country"
+              required
+            >
+              <select
                 className="h-11 w-full rounded-lg border border-[#BFD7E6] bg-white px-3 text-sm text-[#0B1F33] outline-none transition focus:border-[#145DA0] focus:ring-4 focus:ring-[#2ECBEA]/15"
                 id="country"
-                maxLength={120}
                 onChange={(event) => updateField("country", event.target.value)}
                 value={form.country}
+              >
+                <option value="">Choose country</option>
+                {billingCountryOptions.map((country) => (
+                  <option key={country.code} value={country.code}>
+                    {country.name}
+                  </option>
+                ))}
+              </select>
+            </FormField>
+
+            <FormField
+              description="Derived from billing country and validated on save."
+              htmlFor="preferred_currency"
+              label="Billing currency"
+              required
+            >
+              <input
+                className="h-11 w-full rounded-lg border border-[#BFD7E6] bg-[#F4F8FB] px-3 text-sm font-semibold text-[#0B1F33] outline-none"
+                id="preferred_currency"
+                readOnly
+                value={
+                  getBillingCountryOption(form.country)
+                    ? form.preferred_currency
+                    : ""
+                }
               />
             </FormField>
           </div>
