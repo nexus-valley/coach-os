@@ -7,6 +7,7 @@ import {
   InvalidJsonPayloadError,
   parseJsonBody,
 } from "@/src/lib/server/requestJson";
+import { drainPlatformBillingDocumentFulfillments } from "@/src/lib/server/platformBillingFulfillment";
 import { getSupabaseAdminClient } from "@/src/lib/server/supabaseAdmin";
 
 export const dynamic = "force-dynamic";
@@ -51,6 +52,10 @@ const paidOrActivatableStatuses = new Set([
   "activated",
   "order_paid",
   "payment_captured",
+]);
+const successfulActivationStatuses = new Set([
+  "activated",
+  "skipped_already_active",
 ]);
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -343,6 +348,25 @@ export async function POST(request: Request) {
       orderId: order.id,
       tenantId: order.tenant_id,
     });
+
+    if (
+      successfulActivationStatuses.has(result.activationStatus) &&
+      result.activationEventId
+    ) {
+      try {
+        await drainPlatformBillingDocumentFulfillments({
+          batchSize: 3,
+          discoveryBatchSize: 25,
+          workerId: `activation:${result.activationEventId}`,
+        });
+      } catch (fulfillmentError) {
+        captureServerException(fulfillmentError, {
+          activationEventId: result.activationEventId,
+          operation: "platform_billing_fulfillment_after_activation",
+          route: "/api/billing/razorpay/activate",
+        });
+      }
+    }
 
     return Response.json(result, {
       status: result.activationStatus === "failed" ? 409 : 200,

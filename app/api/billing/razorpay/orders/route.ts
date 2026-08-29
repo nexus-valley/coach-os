@@ -43,6 +43,18 @@ type PriceRow = {
   tax_behavior: string;
 };
 
+type CheckoutAuthority = {
+  billing_snapshot: Record<string, unknown>;
+  issuer_snapshot: Record<string, unknown>;
+  order_id: string;
+  order_metadata: Record<string, unknown>;
+  plan_snapshot: Record<string, unknown>;
+  provider_receipt: string;
+  tax_amount_minor: number | null;
+  tax_calculation_status: "not_applicable" | "not_calculated";
+  total_amount_minor: number;
+};
+
 const allowedPlanCodes = new Set(["starter", "growth"]);
 const allowedBillingCycles = new Set(["monthly", "yearly"]);
 const uuidPattern =
@@ -92,6 +104,10 @@ function getRouteErrorStatus(error: unknown) {
 
   if (error.message === "Authentication required.") {
     return 401;
+  }
+
+  if (/already active|already in progress|renewal checkout/i.test(error.message)) {
+    return 409;
   }
 
   if (/not allowlisted|restricted|denied|not available|not allowed/i.test(error.message)) {
@@ -221,8 +237,85 @@ async function loadPlanAndPrice(
   };
 }
 
-function buildReceipt(orderId: string) {
-  return `cf_${orderId.replace(/-/g, "").slice(0, 28)}`;
+function asRecord(value: unknown) {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function normalizeCheckoutAuthority(value: unknown): CheckoutAuthority {
+  const row = asRecord(value);
+  const billingSnapshot = asRecord(row?.billing_snapshot);
+  const issuerSnapshot = asRecord(row?.issuer_snapshot);
+  const orderId = row?.order_id;
+  const orderMetadata = asRecord(row?.order_metadata);
+  const planSnapshot = asRecord(row?.plan_snapshot);
+  const providerReceipt = row?.provider_receipt;
+  const taxAmountMinor = row?.tax_amount_minor;
+  const taxCalculationStatus = row?.tax_calculation_status;
+  const totalAmountMinor = row?.total_amount_minor;
+
+  if (
+    !billingSnapshot ||
+    !issuerSnapshot ||
+    typeof orderId !== "string" ||
+    !uuidPattern.test(orderId) ||
+    !orderMetadata ||
+    !planSnapshot ||
+    typeof providerReceipt !== "string" ||
+    !providerReceipt.trim() ||
+    (taxAmountMinor !== null && !Number.isSafeInteger(taxAmountMinor)) ||
+    (taxCalculationStatus !== "not_applicable" &&
+      taxCalculationStatus !== "not_calculated") ||
+    !Number.isSafeInteger(totalAmountMinor) ||
+    Number(totalAmountMinor) <= 0
+  ) {
+    throw new Error("Canonical checkout authority is invalid.");
+  }
+
+  return {
+    billing_snapshot: billingSnapshot,
+    issuer_snapshot: issuerSnapshot,
+    order_id: orderId,
+    order_metadata: orderMetadata,
+    plan_snapshot: planSnapshot,
+    provider_receipt: providerReceipt,
+    tax_amount_minor: taxAmountMinor as number | null,
+    tax_calculation_status: taxCalculationStatus,
+    total_amount_minor: Number(totalAmountMinor),
+  };
+}
+
+async function loadCheckoutAuthority(
+  admin: ReturnType<typeof getSupabaseAdminClient>,
+  tenantId: string,
+  userId: string,
+  planId: string,
+  priceId: string,
+) {
+  const { data, error } = await admin.rpc(
+    "create_platform_payment_order_authority_server",
+    {
+      p_created_by: userId,
+      p_plan_id: planId,
+      p_price_id: priceId,
+      p_tenant_id: tenantId,
+    },
+  );
+
+  if (error) {
+    if (
+      error.code === "22023" ||
+      error.code === "42501" ||
+      error.code === "55000"
+    ) {
+      throw new Error(error.message);
+    }
+
+    throw new Error("Checkout prerequisites could not be verified.");
+  }
+
+  return normalizeCheckoutAuthority(data);
 }
 
 function buildDescription(planName: string, billingCycle: string) {
@@ -274,49 +367,19 @@ export async function POST(request: Request) {
       body.planCode,
       body.billingCycle,
     );
+    const checkoutAuthority = await loadCheckoutAuthority(
+      admin,
+      body.tenantId,
+      user.id,
+      plan.id,
+      price.id,
+    );
 
-    const orderId = crypto.randomUUID();
+    const orderId = checkoutAuthority.order_id;
     internalOrderId = orderId;
-    const providerReceipt = buildReceipt(orderId);
-    const idempotencyKey = `r3_${crypto.randomUUID()}`;
-    const totalAmountMinor =
-      price.amount_minor + price.setup_fee_amount_minor;
-    const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
-    const metadata = {
-      activation_enabled: false,
-      browser_success_not_activation: true,
-      module: "71.7R3",
-      price_metadata_snapshot: price.metadata_json ?? {},
-      public_launch_pending: true,
-      test_tenant_allowlisted: true,
-    };
-
-    const inserted = await admin.from("tenant_payment_orders").insert({
-      amount_minor: price.amount_minor,
-      billing_cycle: body.billingCycle,
-      checkout_enabled_source: "regression_test_gate",
-      created_by: user.id,
-      currency: "INR",
-      expires_at: expiresAt,
-      id: orderId,
-      idempotency_key: idempotencyKey,
-      internal_status: "created",
-      metadata_json: metadata,
-      plan_code: plan.code,
-      plan_id: plan.id,
-      price_id: price.id,
-      provider: "razorpay",
-      provider_mode: config.mode,
-      provider_receipt: providerReceipt,
-      setup_fee_amount_minor: price.setup_fee_amount_minor,
-      tax_amount_minor: null,
-      tenant_id: body.tenantId,
-      total_amount_minor: totalAmountMinor,
-    });
-
-    if (inserted.error) {
-      throw new Error("Internal payment order could not be created.");
-    }
+    const providerReceipt = checkoutAuthority.provider_receipt;
+    const totalAmountMinor = checkoutAuthority.total_amount_minor;
+    const metadata = checkoutAuthority.order_metadata;
 
     const razorpayOrder = await createRazorpayOrder(config, {
       amount: totalAmountMinor,

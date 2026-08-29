@@ -25,7 +25,9 @@ type PaymentOrderRow = {
 
 type WebhookEventRow = {
   id: string;
+  payload_hash: string;
   processing_status: string;
+  signature_valid: boolean;
 };
 
 type ProcessResult = {
@@ -146,7 +148,7 @@ async function findExistingWebhookEvent(
   if (providerEventId) {
     const { data, error } = await admin
       .from("razorpay_webhook_events")
-      .select("id,processing_status")
+      .select("id,payload_hash,processing_status,signature_valid")
       .eq("provider", "razorpay")
       .eq("provider_event_id", providerEventId)
       .maybeSingle();
@@ -162,7 +164,7 @@ async function findExistingWebhookEvent(
 
   const { data, error } = await admin
     .from("razorpay_webhook_events")
-    .select("id,processing_status")
+    .select("id,payload_hash,processing_status,signature_valid")
     .eq("provider", "razorpay")
     .eq("payload_hash", payloadHash)
     .maybeSingle();
@@ -207,7 +209,7 @@ async function insertWebhookEvent(params: {
       signature_header: sanitizeText(params.signatureHeader, 512),
       signature_valid: params.signatureValid,
     })
-    .select("id,processing_status")
+    .select("id,payload_hash,processing_status,signature_valid")
     .single();
 
   if (error) {
@@ -219,6 +221,35 @@ async function insertWebhookEvent(params: {
   }
 
   return { duplicate: false, event: data as WebhookEventRow };
+}
+
+async function prepareFailedWebhookEventForRetry(params: {
+  admin: ReturnType<typeof getSupabaseAdminClient>;
+  eventId: string;
+}) {
+  const { data, error } = await params.admin
+    .from("razorpay_webhook_events")
+    .update({
+      error_message: null,
+      metadata_json: {
+        activation_enabled: false,
+        module: "71.7R4",
+        retry_source: "verified_provider_redelivery",
+      },
+      processed_at: null,
+      processing_status: "verified",
+    })
+    .eq("id", params.eventId)
+    .eq("processing_status", "failed")
+    .eq("signature_valid", true)
+    .select("id")
+    .maybeSingle();
+
+  if (error) {
+    throw new Error("Failed webhook event could not be prepared for retry.");
+  }
+
+  return Boolean(data?.id);
 }
 
 async function updateWebhookEvent(params: {
@@ -702,13 +733,38 @@ async function handleWebhookPost(request: Request) {
       payloadHash,
     );
 
-    if (existing) {
+    if (
+      existing &&
+      !(
+        existing.processing_status === "failed" &&
+        existing.payload_hash === payloadHash &&
+        existing.signature_valid &&
+        signatureValid &&
+        !parseError
+      )
+    ) {
       return jsonResponse(200, {
         duplicate: true,
         eventType,
         processed: false,
         received: true,
       });
+    }
+
+    if (existing) {
+      const retryClaimed = await prepareFailedWebhookEventForRetry({
+        admin,
+        eventId: existing.id,
+      });
+      if (!retryClaimed) {
+        return jsonResponse(200, {
+          duplicate: true,
+          eventType,
+          processed: false,
+          received: true,
+        });
+      }
+      verifiedWebhookEventId = existing.id;
     }
 
     if (parseError) {
@@ -755,34 +811,40 @@ async function handleWebhookPost(request: Request) {
       });
     }
 
-    const inserted = await insertWebhookEvent({
-      admin,
-      eventType,
-      payload,
-      payloadHash,
-      processingStatus: "verified",
-      providerEventId,
-      relatedProviderOrderId,
-      relatedProviderPaymentId,
-      signatureHeader,
-      signatureValid: true,
-    });
-
-    if (inserted.duplicate || !inserted.event) {
-      return jsonResponse(200, {
-        duplicate: true,
+    if (!existing) {
+      const inserted = await insertWebhookEvent({
+        admin,
         eventType,
-        processed: false,
-        received: true,
+        payload,
+        payloadHash,
+        processingStatus: "verified",
+        providerEventId,
+        relatedProviderOrderId,
+        relatedProviderPaymentId,
+        signatureHeader,
+        signatureValid: true,
       });
+
+      if (inserted.duplicate || !inserted.event) {
+        return jsonResponse(200, {
+          duplicate: true,
+          eventType,
+          processed: false,
+          received: true,
+        });
+      }
+
+      verifiedWebhookEventId = inserted.event.id;
     }
 
-    verifiedWebhookEventId = inserted.event.id;
+    if (!verifiedWebhookEventId) {
+      throw new Error("Verified webhook event identity is missing.");
+    }
 
     if (!supportedEventTypes.has(eventType)) {
       await updateWebhookEvent({
         admin,
-        eventId: inserted.event.id,
+        eventId: verifiedWebhookEventId,
         metadata: { reason: "unsupported_event" },
         processingStatus: "ignored",
       });
@@ -807,7 +869,7 @@ async function handleWebhookPost(request: Request) {
     await updateWebhookEvent({
       admin,
       errorMessage: result.errorMessage,
-      eventId: inserted.event.id,
+      eventId: verifiedWebhookEventId,
       metadata: {
         event_type: eventType,
         related_provider_order_id: relatedProviderOrderId,
