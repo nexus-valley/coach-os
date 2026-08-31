@@ -1,10 +1,14 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 
 import { CoachFortBrandAsset } from "@/src/components/branding/CoachFortBrandAsset";
 import { NotificationBell } from "@/src/components/notifications/NotificationBell";
+import { InactiveWorkspacePanel } from "@/src/components/subscription/InactiveWorkspacePanel";
+import { SubscriptionLifecycleBanner } from "@/src/components/subscription/SubscriptionLifecycleBanner";
+import { Button } from "@/src/components/ui/Button";
 import {
   featureListToMap,
   getFeatureStatusLabel,
@@ -14,6 +18,17 @@ import {
   type FeatureAccessMap,
 } from "@/src/lib/featureAccess";
 import { canAccessNavigationItem } from "@/src/lib/permissions";
+import {
+  getCurrentTenantOperationalState,
+  getTenantSubscriptionLifecycle,
+} from "@/src/lib/subscriptionLifecycle";
+import {
+  deriveSubscriptionLifecyclePresentation,
+  getInactiveShellMode,
+  isInactiveLifecycleState,
+  type SubscriptionLifecyclePresentation,
+  type TenantOperationalState,
+} from "@/src/lib/subscriptionLifecycleModel";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 import { getCurrentMemberRole, type MemberRole } from "@/src/lib/team";
 import { getCurrentTenant } from "@/src/lib/tenant";
@@ -451,6 +466,8 @@ function getMobilePrimaryNavItems(items: typeof navItems) {
 }
 
 export function AppShell({ activeItem = "Home", children }: AppShellProps) {
+  const pathname = usePathname();
+  const router = useRouter();
   const [brandColor, setBrandColor] = useState(defaultTenantBrandColor);
   const [currentRole, setCurrentRole] = useState<MemberRole | null>(null);
   const [featureAccess, setFeatureAccess] = useState<FeatureAccessMap | null>(
@@ -458,6 +475,8 @@ export function AppShell({ activeItem = "Home", children }: AppShellProps) {
   );
   const [routeAccessLoaded, setRouteAccessLoaded] = useState(false);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [lifecyclePresentation, setLifecyclePresentation] =
+    useState<SubscriptionLifecyclePresentation | null>(null);
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
   const [workspaceName, setWorkspaceName] = useState("CoachFort");
 
@@ -479,13 +498,33 @@ export function AppShell({ activeItem = "Home", children }: AppShellProps) {
         const {
           data: { user },
         } = await supabase.auth.getUser();
-        const [settings, role, featureResponse] = await Promise.all([
-          getTenantSettings(currentTenant.id),
-          user
-            ? getCurrentMemberRole(currentTenant.id, user.id)
-            : Promise.resolve(null),
-          getTenantFeatureAccess(currentTenant.id).catch(() => null),
-        ]);
+        const [settings, role, featureResponse, operationalState] =
+          await Promise.all([
+            getTenantSettings(currentTenant.id).catch(() => null),
+            user
+              ? getCurrentMemberRole(currentTenant.id, user.id)
+              : Promise.resolve(null),
+            getTenantFeatureAccess(currentTenant.id).catch(() => null),
+            getCurrentTenantOperationalState(currentTenant.id).catch(() => null),
+          ]);
+        const canManageSubscription = role === "owner" || role === "admin";
+        const needsDetailedLifecycle =
+          canManageSubscription &&
+          (!operationalState || operationalState.effectiveState !== "active");
+        const detailedLifecycle = needsDetailedLifecycle
+          ? await getTenantSubscriptionLifecycle(currentTenant.id).catch(() => null)
+          : null;
+        const resolvedOperationalState =
+          operationalState ??
+          ({
+            effectiveState: "inactive",
+            operationalAllowed: false,
+            tenantId: currentTenant.id,
+          } satisfies TenantOperationalState);
+        const presentation = deriveSubscriptionLifecyclePresentation(
+          resolvedOperationalState,
+          detailedLifecycle,
+        );
 
         if (active) {
           const branding = getWorkspaceBranding(settings, currentTenant);
@@ -495,6 +534,7 @@ export function AppShell({ activeItem = "Home", children }: AppShellProps) {
           setFeatureAccess(
             featureResponse ? featureListToMap(featureResponse.features) : null,
           );
+          setLifecyclePresentation(presentation);
           setLogoUrl(branding.logoUrl || branding.iconUrl);
           setWorkspaceName(branding.displayName);
           setRouteAccessLoaded(true);
@@ -514,11 +554,48 @@ export function AppShell({ activeItem = "Home", children }: AppShellProps) {
     };
   }, []);
 
+  async function handleLogout() {
+    const supabase = getSupabaseClient();
+    await supabase.auth.signOut();
+    router.replace("/login");
+  }
+
   const shellStyle = {
     "--coachos-brand": brandColor,
   } as CSSProperties;
 
-  const visibleNavItems = navItems.filter((item) => {
+  const lifecycleInactive = lifecyclePresentation
+    ? isInactiveLifecycleState(lifecyclePresentation.state)
+    : false;
+  const canManageSubscription =
+    currentRole === "owner" || currentRole === "admin";
+  const ownerAdminGrace =
+    canManageSubscription && lifecyclePresentation?.state === "grace";
+  const workspaceStatusLabel = !routeAccessLoaded
+    ? "Checking access"
+    : lifecycleInactive
+      ? "Workspace paused"
+      : ownerAdminGrace
+        ? "Renewal window"
+        : "Workspace open";
+  const workspaceStatusClasses = !routeAccessLoaded
+    ? "border-[#CBD5E1] bg-[#F8FAFC] text-[#475569]"
+    : lifecycleInactive
+      ? "border-[#FECACA] bg-[#FEF2F2] text-[#B91C1C]"
+      : ownerAdminGrace
+        ? "border-[#FED7AA] bg-[#FFF7ED] text-[#C2410C]"
+        : "border-[#9ADDEA] bg-[#EAF8FC] text-[#0B2A3D]";
+  const workspaceStatusDotClasses = !routeAccessLoaded
+    ? "bg-[#94A3B8]"
+    : lifecycleInactive
+      ? "bg-[#DC2626]"
+      : ownerAdminGrace
+        ? "bg-[#F59E0B]"
+        : "bg-[#14B8C6]";
+  const inactiveShellMode = lifecycleInactive
+    ? getInactiveShellMode(currentRole, pathname)
+    : null;
+  const roleAndFeatureNavItems = navItems.filter((item) => {
     const featureKey = navFeatureByLabel[item.label];
 
     return (
@@ -526,6 +603,11 @@ export function AppShell({ activeItem = "Home", children }: AppShellProps) {
       isFeatureEnabled(featureAccess, featureKey)
     );
   });
+  const visibleNavItems = lifecycleInactive
+    ? canManageSubscription
+      ? navItems.filter((item) => ["Home", "Subscription"].includes(item.label))
+      : []
+    : roleAndFeatureNavItems;
   const groupedNavItems = getGroupedNavItems(visibleNavItems);
   const mobilePrimaryNavItems = getMobilePrimaryNavItems(visibleNavItems);
   const mobilePrimaryLabelsSet = new Set(
@@ -550,6 +632,15 @@ export function AppShell({ activeItem = "Home", children }: AppShellProps) {
     <section className="rounded-2xl border border-[#D8E8F0] bg-white p-6 text-sm font-medium text-[#5D7185] shadow-sm">
       Checking module access...
     </section>
+  ) : lifecycleInactive && lifecyclePresentation ? (
+    inactiveShellMode === "recovery_content" ? (
+      children
+    ) : (
+      <InactiveWorkspacePanel
+        canManageSubscription={canManageSubscription}
+        lifecycle={lifecyclePresentation}
+      />
+    )
   ) : !routeRoleAllowed ? (
     <section className="rounded-2xl border border-[#FCA5A5] bg-white p-8 shadow-sm shadow-[#0B2A3D]/5">
       <div className="max-w-2xl">
@@ -681,8 +772,8 @@ export function AppShell({ activeItem = "Home", children }: AppShellProps) {
 
         <div className="flex h-screen min-w-0 flex-1 flex-col overflow-y-auto pb-24 lg:pb-0">
           <header className="sticky top-0 z-20 border-b border-[#D8E8F0] bg-white/90 text-[#0B2A3D] shadow-sm shadow-[#0B2A3D]/5 backdrop-blur-xl">
-            <div className="flex h-18 min-h-18 items-center justify-between px-5 py-3 sm:px-6 lg:px-8">
-              <div className="flex items-center gap-3">
+            <div className="flex h-18 min-h-18 items-center justify-between gap-3 px-5 py-3 sm:px-6 lg:px-8">
+              <div className="flex min-w-0 items-center gap-3">
                 {logoUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
@@ -705,19 +796,36 @@ export function AppShell({ activeItem = "Home", children }: AppShellProps) {
                   </h1>
                 </div>
               </div>
-              <div className="flex items-center gap-3">
-                <NotificationBell />
+              <div className="flex shrink-0 items-center gap-3">
+                {routeAccessLoaded && !lifecycleInactive ? <NotificationBell /> : null}
                 <div
-                  className="hidden items-center gap-3 rounded-lg border border-[#9ADDEA] bg-[#EAF8FC] px-3 py-2 text-sm font-semibold text-[#0B2A3D] shadow-sm shadow-[#0B2A3D]/5 sm:flex"
+                  className={[
+                    "hidden items-center gap-3 rounded-lg border px-3 py-2 text-sm font-semibold shadow-sm shadow-[#0B2A3D]/5 sm:flex",
+                    workspaceStatusClasses,
+                  ].join(" ")}
                 >
-                  <span className="h-2 w-2 rounded-full bg-[#14B8C6]" />
-                  Workspace open
+                  <span
+                    className={[
+                      "h-2 w-2 rounded-full",
+                      workspaceStatusDotClasses,
+                    ].join(" ")}
+                  />
+                  {workspaceStatusLabel}
                 </div>
+                {lifecycleInactive ? (
+                  <Button onClick={handleLogout} size="sm" variant="secondary">
+                    Logout
+                  </Button>
+                ) : null}
               </div>
             </div>
           </header>
 
           <main className="coachos-content flex-1 px-5 py-6 sm:px-6 lg:px-8 lg:py-8">
+            {routeAccessLoaded &&
+            ownerAdminGrace ? (
+              <SubscriptionLifecycleBanner lifecycle={lifecyclePresentation} />
+            ) : null}
             {guardedContent}
           </main>
         </div>
@@ -788,11 +896,21 @@ export function AppShell({ activeItem = "Home", children }: AppShellProps) {
           </div>
         ) : null}
 
-        <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-[#D8E8F0] bg-white/95 px-3 py-3 shadow-2xl shadow-[#0B2A3D]/10 backdrop-blur-xl lg:hidden">
+        <nav
+          className={
+            visibleNavItems.length > 0
+              ? "fixed inset-x-0 bottom-0 z-40 border-t border-[#D8E8F0] bg-white/95 px-3 py-3 shadow-2xl shadow-[#0B2A3D]/10 backdrop-blur-xl lg:hidden"
+              : "hidden"
+          }
+        >
           <div
             className={[
               "grid gap-1",
-              mobileOverflowNavItems.length > 0 ? "grid-cols-5" : "grid-cols-4",
+              mobileOverflowNavItems.length > 0
+                ? "grid-cols-5"
+                : mobilePrimaryNavItems.length <= 2
+                  ? "grid-cols-2"
+                  : "grid-cols-4",
             ].join(" ")}
           >
             {mobilePrimaryNavItems.map((item) => {
