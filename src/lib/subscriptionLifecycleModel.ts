@@ -8,13 +8,17 @@ export type TenantOperationalState = {
 
 export type TenantSubscriptionLifecycle = {
   assignmentId: string | null;
+  currentPeriodEnd: string | null;
+  currentPeriodStart: string | null;
   effectiveState: string | null;
   gracePeriodEndsAt: string | null;
   operationalAllowed: boolean;
+  paymentStatus: string | null;
   reason: string | null;
   storedStatus: string | null;
   tenantId: string;
   trialEndsAt: string | null;
+  trialStartedAt: string | null;
 };
 
 export type SubscriptionLifecyclePresentationState =
@@ -37,6 +41,8 @@ export type SubscriptionLifecyclePresentation = {
   state: SubscriptionLifecyclePresentationState;
   title: string;
 };
+
+export type SubscriptionPlanRequestMode = "change" | "selection";
 
 export type InactiveShellMode = "blocked" | "recovery_content" | "recovery_home";
 
@@ -84,13 +90,17 @@ export function normalizeTenantSubscriptionLifecycle(
 
   return {
     assignmentId: asString(row.assignment_id),
+    currentPeriodEnd: asString(row.current_period_end),
+    currentPeriodStart: asString(row.current_period_start),
     effectiveState: asString(row.effective_state),
     gracePeriodEndsAt: asString(row.grace_period_ends_at),
     operationalAllowed: row.operational_allowed === true,
+    paymentStatus: asString(row.payment_status),
     reason: asString(row.reason),
     storedStatus: asString(row.stored_status),
     tenantId,
     trialEndsAt: asString(row.trial_ends_at),
+    trialStartedAt: asString(row.trial_started_at),
   };
 }
 
@@ -191,9 +201,13 @@ function presentation(
 }
 
 export function deriveSubscriptionLifecyclePresentation(
-  operationalState: TenantOperationalState,
+  operationalState: TenantOperationalState | null,
   lifecycle: TenantSubscriptionLifecycle | null = null,
 ): SubscriptionLifecyclePresentation {
+  if (!operationalState) {
+    return presentation("needs_attention");
+  }
+
   if (operationalState.operationalAllowed) {
     if (lifecycle?.storedStatus === "trial") {
       return presentation("trial_active", lifecycle.trialEndsAt);
@@ -231,6 +245,16 @@ export function isInactiveLifecycleState(
   return !["active", "grace", "trial_active"].includes(state);
 }
 
+export function getSubscriptionPlanRequestMode(
+  state: SubscriptionLifecyclePresentationState,
+): SubscriptionPlanRequestMode {
+  return ["subscription_required", "trial_active", "trial_expired"].includes(
+    state,
+  )
+    ? "selection"
+    : "change";
+}
+
 function normalizePathname(pathname: string) {
   if (pathname === "/") return pathname;
   return pathname.replace(/\/+$/, "") || "/";
@@ -256,4 +280,3 @@ export function getInactiveShellMode(
     ? "recovery_content"
     : "blocked";
 }
-

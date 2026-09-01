@@ -894,8 +894,10 @@ test.describe("static route guard coverage", () => {
     const source = read("src/components/subscription/SubscriptionPageClient.tsx");
 
     expect(source).toContain("Plan changes require CoachFort review.");
-    expect(source).toContain("These details are read-only for tenant users.");
-    expect(source).toContain("Platform-managed");
+    expect(source).toContain("These details are read-only for workspace members.");
+    expect(source).toContain("Managed by CoachFort");
+    expect(source).not.toContain("tenant users");
+    expect(source).not.toContain("Platform-managed");
 
     for (const forbidden of [
       "updateBillingProfile",

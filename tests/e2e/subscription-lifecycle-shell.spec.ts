@@ -32,13 +32,17 @@ function lifecycle(
 ): TenantSubscriptionLifecycle {
   return {
     assignmentId: "assignment-a",
+    currentPeriodEnd: null,
+    currentPeriodStart: null,
     effectiveState: "expired",
     gracePeriodEndsAt: null,
     operationalAllowed: false,
+    paymentStatus: null,
     reason: "grace_period_elapsed",
     storedStatus: "active",
     tenantId: "tenant-a",
     trialEndsAt: null,
+    trialStartedAt: null,
     ...overrides,
   };
 }
@@ -164,6 +168,8 @@ test.describe("UX-8G2A lifecycle-aware workspace shell", () => {
     expect(
       normalizeTenantSubscriptionLifecycle({
         assignment_id: "assignment-a",
+        current_period_end: "2026-08-20T00:00:00.000Z",
+        current_period_start: "2026-07-20T00:00:00.000Z",
         effective_state: "expired",
         grace_period_ends_at: "2026-08-27T00:00:00.000Z",
         operational_allowed: false,
@@ -172,16 +178,21 @@ test.describe("UX-8G2A lifecycle-aware workspace shell", () => {
         stored_status: "past_due",
         tenant_id: "tenant-a",
         trial_ends_at: null,
+        trial_started_at: null,
       }),
     ).toEqual({
       assignmentId: "assignment-a",
+      currentPeriodEnd: "2026-08-20T00:00:00.000Z",
+      currentPeriodStart: "2026-07-20T00:00:00.000Z",
       effectiveState: "expired",
       gracePeriodEndsAt: "2026-08-27T00:00:00.000Z",
       operationalAllowed: false,
+      paymentStatus: "overdue",
       reason: "grace_period_elapsed",
       storedStatus: "past_due",
       tenantId: "tenant-a",
       trialEndsAt: null,
+      trialStartedAt: null,
     });
   });
 

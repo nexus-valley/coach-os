@@ -1,8 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 
 import { Badge } from "@/src/components/ui/Badge";
 import { Button } from "@/src/components/ui/Button";
@@ -10,32 +9,22 @@ import { Card } from "@/src/components/ui/Card";
 import { PageHeader } from "@/src/components/ui/PageHeader";
 import { AccessDeniedCard } from "@/src/components/security/AccessDeniedCard";
 import {
-  getBillingSummary,
-  type BillingProfile,
-} from "@/src/lib/billing";
-import {
   getBillingProfileMissingFieldLabels,
+  getTenantBillingProfile,
   getTenantBillingProfileCompletion,
+  type TenantBillingProfile,
   type TenantBillingProfileCompletion,
 } from "@/src/lib/billingProfile";
-import type { PlatformBillingDocument } from "@/src/lib/platformBillingDocuments";
+import {
+  getPlatformBillingDocuments,
+  type PlatformBillingDocument,
+} from "@/src/lib/platformBillingDocuments";
 import {
   formatResourceLimit,
-  getPlanDefinition,
-  getPlanDisplayName,
-  getPlanLimits,
-  normalizePlanKey,
-  planOrder,
   planResourceLabels,
-  type PlanKey,
   type PlanResource,
   type ResourceLimit,
 } from "@/src/lib/plans";
-import {
-  getTenantSubscription,
-  type SubscriptionPlan,
-  type TenantSubscription,
-} from "@/src/lib/subscription";
 import {
   getTenantEntitlementState,
   getTenantRequestablePlanCatalog,
@@ -47,82 +36,31 @@ import {
   type TenantRequestablePlan,
   type TenantUpgradeRequest,
 } from "@/src/lib/subscriptionEntitlements";
-import type {
-  BillingSubscription,
-  SubscriptionAccessState,
-} from "@/src/lib/subscriptions";
+import {
+  getCurrentTenantOperationalState,
+  getTenantSubscriptionLifecycle,
+} from "@/src/lib/subscriptionLifecycle";
+import {
+  deriveSubscriptionLifecyclePresentation,
+  getSubscriptionPlanRequestMode,
+  type SubscriptionPlanRequestMode,
+  type TenantOperationalState,
+  type TenantSubscriptionLifecycle,
+} from "@/src/lib/subscriptionLifecycleModel";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
 import { canAccessSubscription } from "@/src/lib/permissions";
 import { getCurrentMemberRole, type MemberRole } from "@/src/lib/team";
 import { getCurrentTenant, type Tenant } from "@/src/lib/tenant";
 import {
-  getTrialStatus,
   getUsagePercent,
-  refreshWorkspaceUsageSnapshot,
-  type TrialStatus,
+  getWorkspaceUsage,
   type WorkspaceUsage,
 } from "@/src/lib/usage";
 
 type UsageCounts = WorkspaceUsage;
 
-type BillingSummary = {
-  accessState: SubscriptionAccessState;
-  billingDocuments: PlatformBillingDocument[];
-  billingProfile: BillingProfile;
-  currentSubscriptionStatus: {
-    billingCycle: "monthly" | "yearly";
-    cancelAtPeriodEnd: boolean;
-    currentPeriodEnd: string | null;
-    provider: string;
-    status: string;
-  };
-  planRecommendation: {
-    reason: string;
-    recommendedPlan: PlanKey;
-    recommendedPlanName: string;
-  } | null;
-  subscription: BillingSubscription | null;
-};
-
-const plans: {
-  description: string;
-  plan: PlanKey;
-  target: string;
-}[] = planOrder.map((plan) => {
-  const definition = getPlanDefinition(plan);
-
-  return {
-    description: definition.description,
-    plan,
-    target: definition.target,
-  };
-});
-
-const emptyUsage: UsageCounts = {
-  automations: 0,
-  courses: 0,
-  students: 0,
-  team_members: 0,
-  trainers: 0,
-};
-
-const planComparisonResources: PlanResource[] = [
-  "students",
-  "courses",
-  "team_members",
-  "trainers",
-];
-
-function formatPlan(plan: SubscriptionPlan) {
-  return getPlanDisplayName(plan);
-}
-
-function normalizeBillingPlan(plan: string) {
-  return normalizePlanKey(plan);
-}
-
 function formatStatus(value: string) {
-  return value.replace("_", " ");
+  return value.replace(/_/g, " ");
 }
 
 function formatCanonicalStatus(value: string | null | undefined) {
@@ -164,8 +102,52 @@ function formatCanonicalLimit(value: number | string | null | undefined) {
   return value === null || typeof value === "undefined" ? "Unlimited" : String(value);
 }
 
+function asPlanResource(value: string | null): PlanResource | null {
+  return value === "automations" ||
+    value === "courses" ||
+    value === "students" ||
+    value === "team_members" ||
+    value === "trainers"
+    ? value
+    : null;
+}
+
+function canonicalResourceLimit(
+  value: number | string | null | undefined,
+): ResourceLimit {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : "unlimited";
+  }
+
+  return "unlimited";
+}
+
+function resourceDisplayName(value: string | null | undefined) {
+  const resource = asPlanResource(value ?? null);
+  return resource ? planResourceLabels[resource] : formatCanonicalStatus(value);
+}
+
+function customerUsageWarning(warning: Record<string, unknown>) {
+  const currentUsage = warning.current_usage;
+  const limitValue = warning.limit_value;
+
+  if (
+    (typeof currentUsage === "number" || typeof currentUsage === "string") &&
+    (typeof limitValue === "number" || typeof limitValue === "string")
+  ) {
+    return `${String(currentUsage)} used of ${String(limitValue)}`;
+  }
+
+  return "Current usage needs attention for this plan limit.";
+}
+
 function booleanLabel(value: boolean | null | undefined) {
-  return value ? "true" : "false";
+  return value ? "Yes" : "No";
 }
 
 function entitlementTone(value: string | null | undefined) {
@@ -184,8 +166,7 @@ function entitlementTone(value: string | null | undefined) {
     value === "open" ||
     value === "platform_approval_required" ||
     value === "addon" ||
-    value === "past_due" ||
-    value === "warn"
+    value === "past_due"
   ) {
     return "warning" as const;
   }
@@ -195,13 +176,45 @@ function entitlementTone(value: string | null | undefined) {
     value === "disabled" ||
     value === "suspended" ||
     value === "cancelled" ||
-    value === "expired" ||
-    value === "hard"
+    value === "expired"
   ) {
     return "danger" as const;
   }
 
   return "light" as const;
+}
+
+function featureDisplayName(featureKey: string) {
+  const labels: Record<string, string> = {
+    ai_assistant: "AI assistant",
+    courses: "Programs",
+    document_uploads: "Document uploads",
+    live_classes: "Live classes",
+    payment_gateway: "Online payments",
+    students: "Students",
+  };
+
+  return labels[featureKey] ?? formatCanonicalStatus(featureKey);
+}
+
+function featureAvailability(status: string | null | undefined) {
+  if (["active", "approved", "enabled", "included", "trial"].includes(status ?? "")) {
+    return { label: "Available", tone: "success" as const };
+  }
+
+  if (status === "coming_soon") {
+    return { label: "Coming soon", tone: "warning" as const };
+  }
+
+  if (["addon", "platform_approval_required"].includes(status ?? "")) {
+    return { label: "Contact CoachFort", tone: "warning" as const };
+  }
+
+  if (["disabled", "expired", "locked", "suspended"].includes(status ?? "")) {
+    return { label: "Not available", tone: "danger" as const };
+  }
+
+  return { label: "Not included", tone: "light" as const };
 }
 
 function requestBlockingLabel(plan: TenantRequestablePlan) {
@@ -224,9 +237,14 @@ function requestBlockingLabel(plan: TenantRequestablePlan) {
   return "Requestable";
 }
 
-function requestBlockingDescription(plan: TenantRequestablePlan) {
+function requestBlockingDescription(
+  plan: TenantRequestablePlan,
+  mode: "change" | "selection",
+) {
   if (plan.blocking_request_status === "approved") {
-    return "CoachFort approved this request for follow-up. Your current plan and billing remain unchanged until the update is confirmed.";
+    return mode === "change"
+      ? "CoachFort approved this request for follow-up. Your current plan and billing remain unchanged until the update is confirmed."
+      : "CoachFort approved this request for follow-up. Workspace access and billing remain unchanged until the selection is confirmed.";
   }
 
   if (
@@ -240,24 +258,24 @@ function requestBlockingDescription(plan: TenantRequestablePlan) {
   return "CoachFort is already reviewing this request.";
 }
 
-function getErrorMessage(caught: unknown, fallback: string) {
-  return caught instanceof Error ? caught.message : fallback;
+function safeLoadError(fallback: string) {
+  return fallback;
 }
 
-function StatusBadge({ status }: { status: string }) {
-  const active = status === "active" || status === "trialing";
+type IsolatedLoadResult<T> = {
+  data: T | null;
+  error: string | null;
+};
 
-  return (
-    <Badge
-      className={
-        active
-          ? "border-teal-400/30 bg-teal-400/10 text-teal-300"
-          : "border-red-400/30 bg-red-500/10 text-red-200"
-      }
-    >
-      {formatStatus(status)}
-    </Badge>
-  );
+async function isolatedLoad<T>(
+  loader: () => Promise<T>,
+  fallback: string,
+): Promise<IsolatedLoadResult<T>> {
+  try {
+    return { data: await loader(), error: null };
+  } catch {
+    return { data: null, error: safeLoadError(fallback) };
+  }
 }
 
 function BillingStatusBadge({ status }: { status: string }) {
@@ -303,14 +321,15 @@ function UsageCard({
   limit,
   resource,
   used,
+  warning,
 }: {
   limit: ResourceLimit;
   resource: PlanResource;
   used: number;
+  warning: boolean;
 }) {
   const percent = getUsagePercent(used, limit);
   const overLimit = limit !== "unlimited" && used > limit;
-  const nearLimit = limit !== "unlimited" && !overLimit && percent >= 80;
 
   return (
     <Card className="border-white/10 bg-[#101214] p-5 text-white shadow-2xl shadow-black/10">
@@ -330,9 +349,9 @@ function UsageCard({
           <Badge className="border-red-400/30 bg-red-500/10 text-red-200">
             Over limit
           </Badge>
-        ) : nearLimit ? (
+        ) : warning ? (
           <Badge className="border-amber-400/30 bg-amber-400/10 text-amber-200">
-            Near limit
+            Plan attention
           </Badge>
         ) : (
           <Badge className="border-white/10 bg-white/10 text-slate-300">
@@ -367,7 +386,7 @@ function BillingProfileReadinessCard({
   completion: TenantBillingProfileCompletion | null;
   error: string | null;
 }) {
-  const score = completion?.completion_score ?? 0;
+  const completionUnavailable = Boolean(error) || completion === null;
   const complete = completion?.is_complete === true;
   const missingLabels = getBillingProfileMissingFieldLabels(
     completion?.missing_fields ?? [],
@@ -390,9 +409,9 @@ function BillingProfileReadinessCard({
             Invoice and receipt readiness
           </h3>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
-            Complete your legal, tax, and billing contact details before payment
-            support and invoice workflows go live. This does not change your
-            plan or record a payment.
+            Keep your legal, tax, address, and billing contact details accurate
+            for CoachFort invoices, payment receipts, and renewal support. This
+            does not change your plan or record a payment.
           </p>
         </div>
         <Button href="/app/billing-profile" type="button" variant="secondary">
@@ -403,9 +422,13 @@ function BillingProfileReadinessCard({
       <div className="mt-6 grid gap-4 md:grid-cols-[0.8fr_1.2fr]">
         <div className="rounded-3xl border border-white/10 bg-[#15181b] p-5">
           <p className="text-sm text-slate-500">Readiness score</p>
-          <p className="mt-2 text-3xl font-semibold">{score}%</p>
+          <p className="mt-2 text-3xl font-semibold">
+            {completionUnavailable ? "Unavailable" : `${completion.completion_score}%`}
+          </p>
           <p className="mt-2 text-sm leading-6 text-slate-400">
-            {complete
+            {completionUnavailable
+              ? "Billing profile readiness could not be loaded."
+              : complete
               ? "Required billing profile fields are ready."
               : "Some billing profile fields are still missing."}
           </p>
@@ -484,10 +507,8 @@ function CanonicalEntitlementSummary({
       entitlement?.features.find((item) => item.feature_key === featureKey) ?? null,
     featureKey,
   }));
-  const usageEntries = entitlement
-    ? Object.entries(entitlement.latest_usage).filter(([, value]) => value !== null)
-    : [];
   const visibleLimits = entitlement?.limits ?? [];
+  const trialAssignment = assignment?.status === "trial";
 
   return (
     <Card className="mt-6 border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/10">
@@ -527,77 +548,54 @@ function CanonicalEntitlementSummary({
       ) : (
         <div className="mt-6 grid gap-5">
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <ReadOnlyField label="Plan" value={assignment?.plan_code ?? ""} />
+            <ReadOnlyField
+              label="Plan"
+              value={assignment?.plan_name ?? assignment?.plan_code ?? ""}
+            />
             <ReadOnlyField label="Status" value={formatCanonicalStatus(assignment?.status)} />
             <ReadOnlyField
               label="Payment status"
               value={formatCanonicalStatus(assignment?.payment_status)}
             />
-            <ReadOnlyField label="Currency" value={assignment?.currency ?? ""} />
-            <ReadOnlyField
-              label="Billing cycle"
-              value={formatCanonicalStatus(assignment?.billing_cycle)}
-            />
-            <ReadOnlyField
-              label="Payment required"
-              value={booleanLabel(entitlement.payment_forced)}
-            />
-            <ReadOnlyField
-              label="Online payment required"
-              value={booleanLabel(entitlement.gateway_required)}
-            />
-            <ReadOnlyField
-              label="Warnings"
-              value={entitlement.warnings.length.toString()}
-            />
+            {!trialAssignment ? (
+              <>
+                <ReadOnlyField label="Currency" value={assignment?.currency ?? ""} />
+                <ReadOnlyField
+                  label="Billing cycle"
+                  value={formatCanonicalStatus(assignment?.billing_cycle)}
+                />
+              </>
+            ) : null}
           </div>
 
-          <div className="grid gap-5 xl:grid-cols-[0.95fr_1.05fr]">
-            <div className="rounded-3xl border border-white/10 bg-[#15181b] p-5">
-              <p className="text-sm font-semibold text-white">Latest usage</p>
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                {usageEntries.length === 0 ? (
-                  <p className="text-sm text-slate-400">No usage summary is available yet.</p>
-                ) : (
-                  usageEntries.slice(0, 10).map(([key, value]) => (
-                    <CanonicalInfoRow
-                      key={key}
-                      label={formatCanonicalStatus(key)}
-                      value={String(value)}
-                    />
-                  ))
-                )}
-              </div>
-            </div>
-
-            <div className="rounded-3xl border border-white/10 bg-[#15181b] p-5">
-              <p className="text-sm font-semibold text-white">Usage limits</p>
-              <div className="mt-4 space-y-3">
-                {visibleLimits.length === 0 ? (
-                  <p className="text-sm text-slate-400">No plan limits are available yet.</p>
-                ) : (
-                  visibleLimits.map((limit, index) => (
-                    <CanonicalLimitRow
-                      key={limit.resource_key ?? `limit-${index}`}
-                      limit={limit}
-                    />
-                  ))
-                )}
-              </div>
+          <div className="rounded-3xl border border-white/10 bg-[#15181b] p-5">
+            <p className="text-sm font-semibold text-white">Usage limits</p>
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              {visibleLimits.length === 0 ? (
+                <p className="text-sm text-slate-400">No plan limits are available yet.</p>
+              ) : (
+                visibleLimits.map((limit, index) => (
+                  <CanonicalLimitRow
+                    key={limit.resource_key ?? `limit-${index}`}
+                    limit={limit}
+                  />
+                ))
+              )}
             </div>
           </div>
 
           {entitlement.warnings.length > 0 ? (
             <div className="rounded-3xl border border-amber-400/30 bg-amber-400/10 p-5 text-amber-100">
-              <p className="text-sm font-semibold">Usage warnings</p>
+              <p className="text-sm font-semibold">Plan attention</p>
+              <p className="mt-2 text-sm leading-6 text-amber-100/80">
+                Review the following workspace usage against your current plan.
+              </p>
               <div className="mt-3 grid gap-3 md:grid-cols-2">
                 {entitlement.warnings.map((warning, index) => (
                   <CanonicalInfoRow
                     key={`${String(warning.resource_key ?? "warning")}-${index}`}
-                    label={formatCanonicalStatus(String(warning.resource_key ?? "Warning"))}
-                    value={`${String(warning.current_usage ?? "0")} / ${formatCanonicalLimit(
-                      warning.limit_value as number | string | null | undefined,
-                    )}`}
+                    label={resourceDisplayName(String(warning.resource_key ?? ""))}
+                    value={customerUsageWarning(warning)}
                   />
                 ))}
               </div>
@@ -605,7 +603,7 @@ function CanonicalEntitlementSummary({
           ) : null}
 
           <div className="rounded-3xl border border-white/10 bg-[#15181b] p-5">
-            <p className="text-sm font-semibold text-white">Key feature statuses</p>
+            <p className="text-sm font-semibold text-white">Plan features</p>
             <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               {keyFeatures.map(({ feature, featureKey }) => (
                 <CanonicalFeatureRow
@@ -637,20 +635,10 @@ function CanonicalLimitRow({ limit }: { limit: TenantEntitlementLimit }) {
   return (
     <div className="rounded-2xl border border-white/10 bg-[#101214] p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="text-sm font-semibold text-white">
-            {formatCanonicalStatus(limit.resource_key)}
-          </p>
-          <p className="mt-1 text-xs text-slate-500">
-            Base {formatCanonicalLimit(limit.base_limit_value)}
-            {limit.override_type
-              ? ` | ${formatCanonicalStatus(limit.override_type)}`
-              : ""}
-          </p>
-        </div>
-        <Badge tone={entitlementTone(limit.enforcement_mode)}>
-          {formatCanonicalStatus(limit.enforcement_mode)}
-        </Badge>
+        <p className="text-sm font-semibold text-white">
+          {resourceDisplayName(limit.resource_key)}
+        </p>
+        <Badge tone="light">Plan limit</Badge>
       </div>
       <p className="mt-3 text-xl font-semibold text-white">
         {formatCanonicalLimit(limit.limit_value)}
@@ -666,14 +654,16 @@ function CanonicalFeatureRow({
   feature: TenantEntitlementFeature | null;
   featureKey: string;
 }) {
+  const availability = featureAvailability(feature?.effective_status);
+
   return (
     <div className="rounded-2xl border border-white/10 bg-[#101214] p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <p className="text-sm font-semibold text-white">
-          {formatCanonicalStatus(featureKey)}
+          {featureDisplayName(featureKey)}
         </p>
-        <Badge tone={entitlementTone(feature?.effective_status)}>
-          {formatCanonicalStatus(feature?.effective_status ?? "not configured")}
+        <Badge tone={availability.tone}>
+          {availability.label}
         </Badge>
       </div>
       <p className="mt-2 text-xs leading-5 text-slate-500">
@@ -685,6 +675,7 @@ function CanonicalFeatureRow({
 
 function RequestPlanUpgradePanel({
   error,
+  mode,
   onSubmit,
   plans,
   submitError,
@@ -692,6 +683,7 @@ function RequestPlanUpgradePanel({
   submitting,
 }: {
   error: string | null;
+  mode: SubscriptionPlanRequestMode;
   onSubmit: (input: {
     reason: string;
     requestedPlanCode: string;
@@ -707,6 +699,7 @@ function RequestPlanUpgradePanel({
   const selectedPlan =
     plans.find((plan) => plan.plan_code === selectedPlanCode) ?? null;
   const blockingPlans = plans.filter((plan) => plan.has_blocking_request);
+  const selectingFirstPlan = mode === "selection";
   const submitDisabled =
     submitting ||
     !selectedPlan ||
@@ -738,15 +731,17 @@ function RequestPlanUpgradePanel({
       <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
         <div>
           <Badge className="border-white/15 bg-white/10 text-white">
-            Request plan upgrade
+            {selectingFirstPlan ? "Choose a CoachFort plan" : "Request a plan change"}
           </Badge>
           <h3 className="mt-4 text-2xl font-semibold">
-            Ask CoachFort to review a plan change
+            {selectingFirstPlan
+              ? "Ask CoachFort to review your plan selection"
+              : "Ask CoachFort to review a plan change"}
           </h3>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
-            This sends a review request only. Your current plan, payment status,
-            and workspace access stay unchanged until CoachFort confirms a
-            separate plan update.
+            {selectingFirstPlan
+              ? "This sends a plan selection request only. Workspace access and billing stay unchanged until CoachFort confirms the selection."
+              : "This sends a plan change request only. Your current plan, payment status, and workspace access stay unchanged until CoachFort confirms a separate update."}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -819,7 +814,7 @@ function RequestPlanUpgradePanel({
                         {plan.plan_name ?? plan.plan_code}:{" "}
                         {requestBlockingLabel(plan)}
                       </p>
-                      <p className="mt-1">{requestBlockingDescription(plan)}</p>
+                      <p className="mt-1">{requestBlockingDescription(plan, mode)}</p>
                     </div>
                     <Badge tone="warning">
                       {formatCanonicalStatus(plan.blocking_request_status)}
@@ -835,12 +830,16 @@ function RequestPlanUpgradePanel({
               <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
                 <div>
                   <p className="text-sm font-semibold text-white">
-                    {selectedPlan.request_label ??
-                      `Request ${selectedPlan.plan_name ?? selectedPlan.plan_code}`}
+                    {selectingFirstPlan
+                      ? `Choose ${selectedPlan.plan_name ?? selectedPlan.plan_code}`
+                      : selectedPlan.request_label ??
+                        `Request ${selectedPlan.plan_name ?? selectedPlan.plan_code}`}
                   </p>
                   <p className="mt-2 text-sm leading-6 text-slate-400">
-                    {selectedPlan.request_description ??
-                      "Request access to this plan. CoachFort review is required before any plan change."}
+                    {selectingFirstPlan
+                      ? "Ask CoachFort to review this plan selection. No plan or billing change occurs until CoachFort confirms it."
+                      : selectedPlan.request_description ??
+                        "Request access to this plan. CoachFort review is required before any plan change."}
                   </p>
                 </div>
                 <Badge tone={selectedPlan.has_blocking_request ? "warning" : "success"}>
@@ -849,7 +848,7 @@ function RequestPlanUpgradePanel({
               </div>
               {selectedPlan.has_blocking_request ? (
                 <p className="mt-4 rounded-2xl border border-amber-400/30 bg-amber-400/10 p-4 text-sm text-amber-100">
-                  {requestBlockingDescription(selectedPlan)}
+                  {requestBlockingDescription(selectedPlan, mode)}
                 </p>
               ) : null}
               {selectedPlan.blocking_request_status === "approved" ? (
@@ -859,8 +858,9 @@ function RequestPlanUpgradePanel({
                   </p>
                   <p className="mt-1">
                     Approval does not activate the requested plan or change
-                    billing. Keep using the current plan shown above until
-                    CoachFort confirms the update.
+                    billing. {selectingFirstPlan
+                      ? "Workspace access remains unchanged until CoachFort confirms the selection."
+                      : "Keep using the current plan shown above until CoachFort confirms the update."}
                   </p>
                   {selectedPlan.latest_reviewed_at ? (
                     <p className="mt-2 text-teal-200">
@@ -916,10 +916,16 @@ function RequestPlanUpgradePanel({
 
           <div className="flex flex-wrap items-center gap-3">
             <Button disabled={submitDisabled} type="submit">
-              {submitting ? "Sending request..." : "Submit upgrade request"}
+              {submitting
+                ? "Sending request..."
+                : selectingFirstPlan
+                  ? "Submit plan request"
+                  : "Submit plan change request"}
             </Button>
             <p className="text-sm text-slate-500">
-              Your current plan and billing remain unchanged.
+              {selectingFirstPlan
+                ? "Workspace access and billing remain unchanged until confirmation."
+                : "Your current plan and billing remain unchanged."}
             </p>
           </div>
         </form>
@@ -930,19 +936,25 @@ function RequestPlanUpgradePanel({
 
 function UpgradeRequestStatusPanel({
   error,
+  mode,
   requests,
 }: {
   error: string | null;
+  mode: SubscriptionPlanRequestMode;
   requests: TenantUpgradeRequest[];
 }) {
+  const selectingFirstPlan = mode === "selection";
+
   return (
     <Card className="mt-6 border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/10">
       <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
         <div>
           <Badge className="border-white/15 bg-white/10 text-white">
-            Upgrade request status
+            {selectingFirstPlan ? "Plan request status" : "Plan change request status"}
           </Badge>
-          <h3 className="mt-4 text-2xl font-semibold">Plan upgrade request history</h3>
+          <h3 className="mt-4 text-2xl font-semibold">
+            {selectingFirstPlan ? "Plan request history" : "Plan change request history"}
+          </h3>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
             Review earlier plan requests and their current status. This section
             cannot submit a request or change your plan.
@@ -1038,7 +1050,15 @@ function UpgradeRequestHistoryCard({
 
 export function SubscriptionPageClient() {
   const router = useRouter();
-  const [billingSummary, setBillingSummary] = useState<BillingSummary | null>(
+  const [billingDocuments, setBillingDocuments] = useState<
+    PlatformBillingDocument[]
+  >([]);
+  const [billingDocumentsError, setBillingDocumentsError] = useState<
+    string | null
+  >(null);
+  const [billingProfile, setBillingProfile] =
+    useState<TenantBillingProfile | null>(null);
+  const [billingProfileError, setBillingProfileError] = useState<string | null>(
     null,
   );
   const [billingProfileCompletion, setBillingProfileCompletion] =
@@ -1051,13 +1071,15 @@ export function SubscriptionPageClient() {
     useState<TenantEntitlementState | null>(null);
   const [currentRole, setCurrentRole] = useState<MemberRole | null>(null);
   const [error, setError] = useState("");
+  const [lifecycle, setLifecycle] =
+    useState<TenantSubscriptionLifecycle | null>(null);
+  const [lifecycleError, setLifecycleError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [subscription, setSubscription] =
-    useState<TenantSubscription | null>(null);
+  const [operationalState, setOperationalState] =
+    useState<TenantOperationalState | null>(null);
   const [selectedBillingDocument, setSelectedBillingDocument] =
     useState<PlatformBillingDocument | null>(null);
   const [tenant, setTenant] = useState<Tenant | null>(null);
-  const [trialStatus, setTrialStatus] = useState<TrialStatus | null>(null);
   const [requestablePlanError, setRequestablePlanError] = useState<string | null>(
     null,
   );
@@ -1071,15 +1093,8 @@ export function SubscriptionPageClient() {
   const [upgradeRequestSubmitSuccess, setUpgradeRequestSubmitSuccess] =
     useState<string | null>(null);
   const [upgradeRequestSubmitting, setUpgradeRequestSubmitting] = useState(false);
-  const [usage, setUsage] = useState<UsageCounts>(emptyUsage);
-
-  const limits = useMemo(
-    () => getPlanLimits(subscription?.plan ?? "free"),
-    [subscription?.plan],
-  );
-  const billingCycle =
-    billingSummary?.currentSubscriptionStatus.billingCycle ?? "monthly";
-  const billingProfile = billingSummary?.billingProfile;
+  const [usage, setUsage] = useState<UsageCounts | null>(null);
+  const [usageError, setUsageError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!selectedBillingDocument) {
@@ -1141,78 +1156,89 @@ export function SubscriptionPageClient() {
         }
 
         const [
-          currentSubscription,
-          currentUsage,
-          currentBillingSummary,
+          lifecycleResult,
           canonicalEntitlementResult,
+          billingProfileResult,
           billingProfileCompletionResult,
+          billingDocumentsResult,
           requestablePlanResult,
           upgradeRequestResult,
         ] = await Promise.all([
-          getTenantSubscription(currentTenant.id),
-          refreshWorkspaceUsageSnapshot(currentTenant.id),
-          getBillingSummary(currentTenant.id),
-          getTenantEntitlementState(currentTenant.id)
-            .then((data) => ({ data, error: null }))
-            .catch((caught: unknown) => ({
-              data: null,
-              error: getErrorMessage(
-                caught,
-                "Unable to load detailed plan access.",
-              ),
-            })),
-          getTenantBillingProfileCompletion(currentTenant.id)
-            .then((data) => ({ data, error: null }))
-            .catch((caught: unknown) => ({
-              data: null,
-              error: getErrorMessage(
-                caught,
-                "Unable to load billing profile readiness.",
-              ),
-            })),
-          getTenantRequestablePlanCatalog(currentTenant.id)
-            .then((data) => ({ data, error: null }))
-            .catch((caught: unknown) => ({
-              data: [],
-              error: getErrorMessage(
-                caught,
-                "Unable to load requestable plans.",
-              ),
-            })),
-          getTenantUpgradeRequests({ tenantId: currentTenant.id })
-            .then((data) => ({ data, error: null }))
-            .catch((caught: unknown) => ({
-              data: [],
-              error: getErrorMessage(
-                caught,
-                "Unable to load upgrade request history.",
-              ),
-            })),
+          isolatedLoad(
+            async () => {
+              const [nextOperationalState, nextLifecycle] = await Promise.all([
+                getCurrentTenantOperationalState(currentTenant.id),
+                getTenantSubscriptionLifecycle(currentTenant.id),
+              ]);
+
+              return {
+                lifecycle: nextLifecycle,
+                operationalState: nextOperationalState,
+              };
+            },
+            "Subscription lifecycle is temporarily unavailable.",
+          ),
+          isolatedLoad(
+            () => getTenantEntitlementState(currentTenant.id),
+            "Unable to load detailed plan access.",
+          ),
+          isolatedLoad(
+            () => getTenantBillingProfile(currentTenant.id),
+            "Unable to load billing profile details.",
+          ),
+          isolatedLoad(
+            () => getTenantBillingProfileCompletion(currentTenant.id),
+            "Unable to load billing profile readiness.",
+          ),
+          isolatedLoad(
+            () => getPlatformBillingDocuments(currentTenant.id),
+            "Unable to load CoachFort billing documents.",
+          ),
+          isolatedLoad(
+            () => getTenantRequestablePlanCatalog(currentTenant.id),
+            "Unable to load requestable plans.",
+          ),
+          isolatedLoad(
+            () => getTenantUpgradeRequests({ tenantId: currentTenant.id }),
+            "Unable to load upgrade request history.",
+          ),
         ]);
-        const currentTrialStatus = await getTrialStatus(currentTenant.id);
+
+        const usageResult = lifecycleResult.data?.operationalState.operationalAllowed
+          ? await isolatedLoad(
+              () => getWorkspaceUsage(currentTenant.id),
+              "Workspace usage is temporarily unavailable.",
+            )
+          : { data: null, error: null };
 
         if (!active) {
           return;
         }
 
-        setSubscription(currentSubscription);
-        setBillingSummary(currentBillingSummary);
+        setOperationalState(lifecycleResult.data?.operationalState ?? null);
+        setLifecycle(lifecycleResult.data?.lifecycle ?? null);
+        setLifecycleError(lifecycleResult.error);
+        setBillingProfile(billingProfileResult.data);
+        setBillingProfileError(billingProfileResult.error);
         setBillingProfileCompletion(billingProfileCompletionResult.data);
         setBillingProfileCompletionError(billingProfileCompletionResult.error);
+        setBillingDocuments(billingDocumentsResult.data ?? []);
+        setBillingDocumentsError(billingDocumentsResult.error);
         setCanonicalEntitlementError(canonicalEntitlementResult.error);
         setCanonicalEntitlementState(canonicalEntitlementResult.data);
         setRequestablePlanError(requestablePlanResult.error);
-        setRequestablePlans(requestablePlanResult.data);
+        setRequestablePlans(requestablePlanResult.data ?? []);
         setUpgradeRequestError(upgradeRequestResult.error);
-        setUpgradeRequests(upgradeRequestResult.data);
-        setTrialStatus(currentTrialStatus);
-        setUsage(currentUsage);
-      } catch (caught) {
+        setUpgradeRequests(upgradeRequestResult.data ?? []);
+        setUsage(usageResult.data);
+        setUsageError(usageResult.error);
+        setError("");
+      } catch {
         if (!active) {
           return;
         }
 
-        setError(getErrorMessage(caught, "Unable to load subscription."));
+        setError("Unable to load subscription. Please try again.");
       } finally {
         if (active) {
           setLoading(false);
@@ -1226,6 +1252,14 @@ export function SubscriptionPageClient() {
       active = false;
     };
   }, [router]);
+
+  const lifecyclePresentation = deriveSubscriptionLifecyclePresentation(
+    operationalState,
+    lifecycle,
+  );
+  const planRequestMode = getSubscriptionPlanRequestMode(
+    lifecyclePresentation.state,
+  );
 
   async function handleUpgradeRequestSubmit({
     reason,
@@ -1260,12 +1294,14 @@ export function SubscriptionPageClient() {
       setRequestablePlans(nextRequestablePlans);
       setRequestablePlanError(null);
       setUpgradeRequestSubmitSuccess(
-        "Plan request sent for CoachFort review. Your current plan and billing remain unchanged.",
+        planRequestMode === "selection"
+          ? "Plan request sent for CoachFort review. Workspace access and billing remain unchanged until confirmation."
+          : "Plan change request sent for CoachFort review. Your current plan and billing remain unchanged.",
       );
       return true;
-    } catch (caught) {
+    } catch {
       setUpgradeRequestSubmitError(
-        getErrorMessage(caught, "Unable to submit upgrade request."),
+        "Unable to submit the plan request. Please try again.",
       );
       return false;
     } finally {
@@ -1286,43 +1322,155 @@ export function SubscriptionPageClient() {
   if (currentRole && !canAccessSubscription(currentRole)) {
     return (
       <div className="mx-auto max-w-7xl">
-        <AccessDeniedCard description="Subscription and billing controls are available to workspace owners only." />
+        <AccessDeniedCard description="Subscription and billing controls are available to workspace Owners and Admins." />
       </div>
     );
   }
 
-  if (error || !subscription) {
+  if (error) {
     return (
       <div className="mx-auto max-w-7xl">
         <Card className="border-red-400/30 bg-red-500/10 p-6 text-red-100">
-          {error || "Subscription is not available for this workspace."}
+          {error}
         </Card>
       </div>
     );
   }
 
+  const assignment = canonicalEntitlementState?.assignment ?? null;
+  const currentPlanName = assignment?.plan_name ?? assignment?.plan_code ?? null;
+  const trialAssignment = lifecycle?.storedStatus === "trial";
+  const usageLimits = (canonicalEntitlementState?.limits ?? [])
+    .map((limit) => ({ limit, resource: asPlanResource(limit.resource_key) }))
+    .filter(
+      (entry): entry is {
+        limit: TenantEntitlementLimit;
+        resource: PlanResource;
+      } => entry.resource !== null,
+    );
+  const warningResources = new Set(
+    (canonicalEntitlementState?.warnings ?? []).map((warning) =>
+      String(warning.resource_key ?? ""),
+    ),
+  );
+  const renewalHelpAvailable =
+    lifecyclePresentation.state === "grace" ||
+    lifecyclePresentation.state === "expired_paid";
+  const planChoiceNeeded =
+    lifecyclePresentation.state === "trial_expired" ||
+    lifecyclePresentation.state === "subscription_required";
+
   return (
     <div className="mx-auto max-w-7xl">
       <PageHeader
-        actions={<StatusBadge status={subscription.subscription_status} />}
-        description="Review your CoachFort plan, usage, billing profile, and plan request status. Online subscription payment is not available yet."
+        actions={<Badge tone={operationalState?.operationalAllowed ? "success" : "warning"}>{lifecyclePresentation.badge}</Badge>}
+        description="Review your CoachFort plan, workspace access, billing profile, and plan request status."
         eyebrow="CoachFort plan"
-        title="Plan & usage"
+        title="Subscription"
       />
+
+      <Card className="mt-6 border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/10">
+        <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-start">
+          <div>
+            <Badge tone={operationalState?.operationalAllowed ? "success" : "warning"}>
+              {lifecyclePresentation.badge}
+            </Badge>
+            <h2 className="mt-4 text-2xl font-semibold">
+              {lifecyclePresentation.title}
+            </h2>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
+              {lifecyclePresentation.description}
+            </p>
+            {lifecycleError ? (
+              <p className="mt-3 text-sm text-amber-200">
+                Subscription details are temporarily unavailable. Contact CoachFort support if you need help.
+              </p>
+            ) : null}
+          </div>
+          <div className="flex flex-col gap-3 sm:flex-row lg:justify-end">
+            {renewalHelpAvailable ? (
+              <Button href="/support" type="button">
+                Get renewal help
+              </Button>
+            ) : planChoiceNeeded ? (
+              <Button href="#plan-options" type="button">
+                Choose a plan
+              </Button>
+            ) : lifecyclePresentation.state === "needs_attention" ? (
+              <Button href="/support" type="button">
+                Contact CoachFort support
+              </Button>
+            ) : null}
+            <Button href="/app/billing-profile" type="button" variant="secondary">
+              Open billing profile
+            </Button>
+          </div>
+        </div>
+        <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <ReadOnlyField label="Workspace" value={tenant?.name ?? ""} />
+          <ReadOnlyField label="Current plan" value={currentPlanName ?? ""} />
+          <ReadOnlyField
+            label={trialAssignment ? "Trial started" : "Current period started"}
+            value={formatDate(
+              trialAssignment
+                ? lifecycle?.trialStartedAt ?? null
+                : lifecycle?.currentPeriodStart ?? null,
+            )}
+          />
+          <ReadOnlyField
+            label={trialAssignment ? "Trial ends" : "Current period ends"}
+            value={formatDate(
+              trialAssignment
+                ? lifecycle?.trialEndsAt ?? null
+                : lifecycle?.currentPeriodEnd ?? null,
+            )}
+          />
+          {lifecyclePresentation.state === "grace" ? (
+            <ReadOnlyField
+              label="Workspace access through"
+              value={formatDate(lifecycle?.gracePeriodEndsAt ?? null)}
+            />
+          ) : null}
+          {!trialAssignment ? (
+            <>
+              <ReadOnlyField
+                label="Billing cycle"
+                value={formatCanonicalStatus(assignment?.billing_cycle)}
+              />
+              <ReadOnlyField label="Currency" value={assignment?.currency ?? ""} />
+            </>
+          ) : null}
+          <ReadOnlyField
+            label="Payment status"
+            value={formatCanonicalStatus(lifecycle?.paymentStatus)}
+          />
+        </div>
+      </Card>
 
       <Card className="mt-6 border-teal-400/30 bg-teal-400/10 p-5 text-teal-50">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-sm font-semibold">
-              Plan changes require CoachFort review.
+              {planRequestMode === "selection"
+                ? "Plan selections require CoachFort review."
+                : "Plan changes require CoachFort review."}
             </p>
             <p className="mt-2 text-sm leading-6 text-teal-100/80">
-              Use the plan request section below or contact CoachFort support.
-              Your current plan remains active until a change is confirmed.
+              {planRequestMode === "selection" ? (
+                <>
+                  Choose a plan below or contact CoachFort support. Workspace access
+                  and billing remain unchanged until CoachFort confirms the selection.
+                </>
+              ) : (
+                <>
+                  Request a plan change below or contact CoachFort support. Your current
+                  plan and billing remain unchanged until CoachFort confirms the change.
+                </>
+              )}
             </p>
           </div>
-          <Button href="/app/billing-profile" type="button" variant="secondary">
-            Open billing profile
+          <Button href="/support" type="button" variant="secondary">
+            Contact support
           </Button>
         </div>
       </Card>
@@ -1337,170 +1485,106 @@ export function SubscriptionPageClient() {
         error={canonicalEntitlementError}
       />
 
+      <Card className="mt-6 border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/10">
+        <h3 className="text-2xl font-semibold">Workspace usage</h3>
+        <p className="mt-2 text-sm leading-6 text-slate-400">
+          Current workspace usage compared with your plan limits.
+        </p>
+        {!operationalState?.operationalAllowed ? (
+          <div className="mt-5 rounded-3xl border border-white/10 bg-[#15181b] p-5 text-sm text-slate-400" role="status">
+            Usage is unavailable while workspace access is paused.
+          </div>
+        ) : usageError || !usage ? (
+          <div className="mt-5 rounded-3xl border border-amber-400/30 bg-amber-400/10 p-5 text-sm text-amber-100" role="status">
+            Workspace usage is temporarily unavailable. No usage totals have been substituted.
+          </div>
+        ) : usageLimits.length === 0 ? (
+          <div className="mt-5 rounded-3xl border border-white/10 bg-[#15181b] p-5 text-sm text-slate-400" role="status">
+            Usage limits are not available for this plan.
+          </div>
+        ) : (
+          <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {usageLimits.map(({ limit, resource }) => (
+              <UsageCard
+                key={resource}
+                limit={canonicalResourceLimit(limit.limit_value)}
+                resource={resource}
+                used={usage[resource]}
+                warning={warningResources.has(resource)}
+              />
+            ))}
+          </div>
+        )}
+      </Card>
+
       <PaymentGatewayParkedCard />
 
-      <RequestPlanUpgradePanel
-        error={requestablePlanError}
-        onSubmit={handleUpgradeRequestSubmit}
-        plans={requestablePlans}
-        submitError={upgradeRequestSubmitError}
-        submitSuccess={upgradeRequestSubmitSuccess}
-        submitting={upgradeRequestSubmitting}
-      />
+      <section id="plan-options">
+        <RequestPlanUpgradePanel
+          error={requestablePlanError}
+          mode={planRequestMode}
+          onSubmit={handleUpgradeRequestSubmit}
+          plans={requestablePlans}
+          submitError={upgradeRequestSubmitError}
+          submitSuccess={upgradeRequestSubmitSuccess}
+          submitting={upgradeRequestSubmitting}
+        />
+      </section>
 
       <UpgradeRequestStatusPanel
         error={upgradeRequestError}
+        mode={planRequestMode}
         requests={upgradeRequests}
       />
-
-      <section className="mt-8 grid gap-5 xl:grid-cols-[0.8fr_1.2fr]">
-        <Card className="border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/10">
-          <p className="text-sm font-medium text-slate-400">
-            Current workspace
-          </p>
-          <h3 className="mt-3 text-2xl font-semibold">
-            {tenant?.name ?? subscription.name}
-          </h3>
-          <div className="mt-6 rounded-3xl border border-white/10 bg-[#15181b] p-5">
-            <p className="text-sm font-semibold text-slate-400">
-              Current plan
-            </p>
-            <div className="mt-4 flex flex-wrap items-center gap-3">
-              <span className="text-4xl font-semibold">
-                {formatPlan(subscription.plan)}
-              </span>
-              <StatusBadge status={subscription.subscription_status} />
-            </div>
-            <div className="mt-6 grid gap-4 text-sm sm:grid-cols-2">
-              <div>
-                <p className="text-slate-500">Started</p>
-                <p className="mt-1 font-semibold text-white">
-                  {formatDate(subscription.plan_started_at)}
-                </p>
-              </div>
-              <div>
-                <p className="text-slate-500">Renews</p>
-                <p className="mt-1 font-semibold text-white">
-                  {formatDate(subscription.plan_renews_at)}
-                </p>
-              </div>
-            </div>
-          </div>
-          <div className="mt-5 rounded-3xl border border-amber-400/30 bg-amber-400/10 p-4 text-sm leading-6 text-amber-100">
-            Online plan payment is not available yet.
-          </div>
-          <div className="mt-5 rounded-3xl border border-white/10 bg-[#15181b] p-5 text-sm leading-6">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className="font-semibold text-white">Trial status</p>
-              <Badge
-                className={
-                  trialStatus?.active
-                    ? "border-teal-400/30 bg-teal-400/10 text-teal-300"
-                    : "border-amber-400/30 bg-amber-400/10 text-amber-200"
-                }
-              >
-                {trialStatus?.active
-                  ? `${trialStatus.daysRemaining} days left`
-                  : trialStatus?.expired
-                    ? "Expired"
-                    : "Not active"}
-              </Badge>
-            </div>
-            <p className="mt-3 text-slate-400">
-              Trial ends: {formatDate(trialStatus?.endsAt ?? null)}
-            </p>
-          </div>
-        </Card>
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          {(Object.keys(limits) as PlanResource[]).map((resource) => (
-            <UsageCard
-              key={resource}
-              limit={limits[resource]}
-              resource={resource}
-              used={usage[resource]}
-            />
-          ))}
-        </div>
-      </section>
 
       <section className="mt-8 grid gap-5 xl:grid-cols-[0.95fr_1.05fr]">
         <Card className="border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/10">
           <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
             <div>
               <Badge className="border-teal-400/30 bg-teal-400/10 text-teal-300">
-                Subscription status
+                Current plan
               </Badge>
               <h3 className="mt-4 text-2xl font-semibold">
                 CoachFort billing
               </h3>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
-                Review the current plan, billing cycle, payment status, and
-                renewal information recorded for this workspace.
+                Review your current plan, billing cycle, payment status, and billing period.
               </p>
             </div>
-            {billingSummary ? (
-              <BillingStatusBadge status={billingSummary.accessState} />
+            {lifecycle?.storedStatus ? (
+              <BillingStatusBadge status={lifecycle.storedStatus} />
             ) : null}
           </div>
 
           <div className="mt-6 grid gap-4 sm:grid-cols-2">
-            <div className="rounded-3xl border border-white/10 bg-[#15181b] p-5">
-              <p className="text-sm text-slate-500">Billing plan</p>
-              <p className="mt-2 text-xl font-semibold">
-                {billingSummary?.subscription
-                  ? formatPlan(
-                      normalizeBillingPlan(
-                        billingSummary.subscription.plan_code,
-                      ),
-                    )
-                  : formatPlan(subscription.plan)}
-              </p>
-            </div>
-            <div className="rounded-3xl border border-white/10 bg-[#15181b] p-5">
-              <p className="text-sm text-slate-500">Billing cycle</p>
-              <p className="mt-2 text-xl font-semibold">
-                {billingSummary?.subscription?.billing_cycle ?? "monthly"}
-              </p>
-            </div>
-            <div className="rounded-3xl border border-white/10 bg-[#15181b] p-5">
-              <p className="text-sm text-slate-500">Provider</p>
-              <p className="mt-2 text-xl font-semibold">
-                {formatStatus(
-                  billingSummary?.currentSubscriptionStatus.provider ??
-                    "manual",
-                )}
-              </p>
-            </div>
-            <div className="rounded-3xl border border-white/10 bg-[#15181b] p-5">
-              <p className="text-sm text-slate-500">Current period ends</p>
-              <p className="mt-2 text-xl font-semibold">
-                {formatDate(
-                  billingSummary?.currentSubscriptionStatus.currentPeriodEnd ??
-                    billingSummary?.subscription?.renewal_at ??
-                    null,
-                )}
-              </p>
-            </div>
-            <div className="rounded-3xl border border-white/10 bg-[#15181b] p-5">
-              <p className="text-sm text-slate-500">Amount</p>
-              <p className="mt-2 text-xl font-semibold">
-                {formatCurrency(
-                  billingSummary?.subscription?.amount ?? 0,
-                  billingSummary?.subscription?.currency ?? "INR",
-                )}
-              </p>
-            </div>
+            <ReadOnlyField label="Plan" value={currentPlanName ?? ""} />
+            <ReadOnlyField
+              label="Subscription status"
+              value={formatCanonicalStatus(lifecycle?.storedStatus)}
+            />
+            <ReadOnlyField
+              label="Payment status"
+              value={formatCanonicalStatus(lifecycle?.paymentStatus)}
+            />
+            {!trialAssignment ? (
+              <>
+                <ReadOnlyField
+                  label="Billing cycle"
+                  value={formatCanonicalStatus(assignment?.billing_cycle)}
+                />
+                <ReadOnlyField label="Currency" value={assignment?.currency ?? ""} />
+                <ReadOnlyField
+                  label="Current period ends"
+                  value={formatDate(lifecycle?.currentPeriodEnd ?? null)}
+                />
+              </>
+            ) : (
+              <ReadOnlyField
+                label="Trial ends"
+                value={formatDate(lifecycle?.trialEndsAt ?? null)}
+              />
+            )}
           </div>
-          {billingSummary?.planRecommendation ? (
-            <div className="mt-5 rounded-3xl border border-amber-400/30 bg-amber-400/10 p-4 text-sm leading-6 text-amber-100">
-              {billingSummary.planRecommendation.reason} Recommended next plan:{" "}
-              <span className="font-semibold">
-                {billingSummary.planRecommendation.recommendedPlanName}
-              </span>
-              .
-            </div>
-          ) : null}
         </Card>
 
         <Card className="border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/10">
@@ -1513,70 +1597,43 @@ export function SubscriptionPageClient() {
                 Workspace billing details
               </h3>
               <p className="mt-2 text-sm leading-6 text-slate-400">
-                These details are read-only for tenant users. Contact platform
-                support or your platform admin to update subscription billing
-                records.
+                These billing-profile details support CoachFort invoices
+                and payment receipts. These details are read-only for workspace members.
+                Open the billing profile to update them.
               </p>
             </div>
+            <Button href="/app/billing-profile" type="button" variant="secondary">
+              Open billing profile
+            </Button>
           </div>
-          <div className="mt-6 grid gap-4 sm:grid-cols-2">
-            <ReadOnlyField
-              label="Billing email"
-              value={billingProfile?.billingEmail ?? ""}
-            />
-            <ReadOnlyField
-              label="Tax registration"
-              value={
-                billingProfile?.taxRegistrationType === "NONE"
-                  ? ""
-                  : billingProfile?.taxRegistrationType ?? ""
-              }
-            />
-            <ReadOnlyField
-              label="Tax registration ID"
-              value={billingProfile?.taxRegistrationId ?? ""}
-            />
-            <ReadOnlyField
-              label="Billing currency"
-              value={billingProfile?.billingCurrency ?? ""}
-            />
-            <ReadOnlyField
-              label="Address line 1"
-              value={billingProfile?.billingAddress.line1 ?? ""}
-            />
-            <ReadOnlyField
-              label="Address line 2"
-              value={billingProfile?.billingAddress.line2 ?? ""}
-            />
-            <ReadOnlyField
-              label="City"
-              value={billingProfile?.billingAddress.city ?? ""}
-            />
-            <ReadOnlyField
-              label="State"
-              value={billingProfile?.billingAddress.state ?? ""}
-            />
-            <ReadOnlyField
-              label="Country"
-              value={billingProfile?.billingAddress.country ?? ""}
-            />
-            <ReadOnlyField
-              label="Postal code"
-              value={billingProfile?.billingAddress.postalCode ?? ""}
-            />
-          </div>
-          <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-sm text-slate-400">
-              Status:{" "}
-              {formatStatus(
-                billingSummary?.billingProfile.billingStatus ??
-                  "not_configured",
-              )}
-            </p>
-            <p className="rounded-full border border-white/10 bg-white/10 px-4 py-2 text-xs font-semibold uppercase text-slate-400">
-              Platform-managed
-            </p>
-          </div>
+          {billingProfileError ? (
+            <div className="mt-6 rounded-3xl border border-amber-400/30 bg-amber-400/10 p-5 text-sm text-amber-100" role="status">
+              Billing profile details are temporarily unavailable. Lifecycle and plan options remain available.
+            </div>
+          ) : (
+            <div className="mt-6 grid gap-4 sm:grid-cols-2">
+              <ReadOnlyField label="Legal name" value={billingProfile?.legal_name ?? ""} />
+              <ReadOnlyField label="Billing email" value={billingProfile?.billing_email ?? ""} />
+              <ReadOnlyField
+                label="Tax registration"
+                value={
+                  billingProfile?.tax_registration_type === "NONE"
+                    ? ""
+                    : billingProfile?.tax_registration_type ?? ""
+                }
+              />
+              <ReadOnlyField label="Tax registration ID" value={billingProfile?.tax_id ?? ""} />
+              <ReadOnlyField label="Billing currency" value={billingProfile?.preferred_currency ?? ""} />
+              <ReadOnlyField label="Address line 1" value={billingProfile?.address_line1 ?? ""} />
+              <ReadOnlyField label="City" value={billingProfile?.city ?? ""} />
+              <ReadOnlyField label="State" value={billingProfile?.state ?? ""} />
+              <ReadOnlyField label="Country" value={billingProfile?.country ?? ""} />
+              <ReadOnlyField label="Postal code" value={billingProfile?.postal_code ?? ""} />
+            </div>
+          )}
+          <p className="mt-5 text-xs font-semibold uppercase text-slate-500">
+            Managed by CoachFort
+          </p>
         </Card>
       </section>
 
@@ -1593,10 +1650,17 @@ export function SubscriptionPageClient() {
               </p>
             </div>
             <p className="text-sm text-slate-400">
-              {billingSummary?.billingDocuments.length ?? 0} records
+              {billingDocumentsError ? "Unavailable" : `${billingDocuments.length} records`}
             </p>
           </div>
-          {!billingSummary || billingSummary.billingDocuments.length === 0 ? (
+          {billingDocumentsError ? (
+            <div className="p-8 text-center" role="status">
+              <p className="font-semibold">Billing documents are temporarily unavailable</p>
+              <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-400">
+                Lifecycle, billing profile, and plan options remain available.
+              </p>
+            </div>
+          ) : billingDocuments.length === 0 ? (
             <div className="p-8 text-center" role="status">
               <p className="font-semibold">No billing documents yet</p>
               <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-400">
@@ -1617,7 +1681,7 @@ export function SubscriptionPageClient() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/10">
-                    {billingSummary.billingDocuments.map((document) => (
+                    {billingDocuments.map((document) => (
                       <tr key={`${document.document_type}-${document.id}`}>
                         <td className="px-5 py-4">
                           <p className="font-semibold">
@@ -1657,7 +1721,7 @@ export function SubscriptionPageClient() {
                 </table>
               </div>
               <div className="divide-y divide-white/10 md:hidden">
-                {billingSummary.billingDocuments.map((document) => (
+                {billingDocuments.map((document) => (
                   <div
                     className="space-y-4 p-5"
                     key={`${document.document_type}-${document.id}-mobile`}
@@ -1709,146 +1773,6 @@ export function SubscriptionPageClient() {
         </Card>
       </section>
 
-      <section className="mt-8">
-        <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-          <div>
-            <h3 className="text-2xl font-semibold text-white">
-              Plan comparison
-            </h3>
-            <p className="mt-2 text-sm text-slate-400">
-              Compare available plan limits. Ask CoachFort support to review a
-              plan change.
-            </p>
-            <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-500">
-              Prices may be subject to applicable taxes. Starter and Growth
-              plan changes require CoachFort confirmation. Premium remains
-              contact-sales and is not available for self-service selection.{" "}
-              <Link
-                className="font-semibold text-sky-300 underline-offset-4 transition hover:text-white hover:underline"
-                href="/payment-policy"
-              >
-                Review the payment policy
-              </Link>
-            </p>
-          </div>
-          <p className="rounded-full border border-white/10 bg-white/10 px-4 py-2 text-sm text-slate-300">
-            CoachFort-reviewed
-          </p>
-        </div>
-        <p className="mt-5 text-sm font-semibold uppercase text-slate-500">
-          Showing {billingCycle} billing
-        </p>
-
-        <div className="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-          {plans.map((planOption) => {
-            const planOptionLimits = getPlanLimits(planOption.plan);
-            const currentPlan = planOption.plan === subscription.plan;
-            const definition = getPlanDefinition(planOption.plan);
-            const manualLimits = definition.manualLimits;
-            const price = definition.billing[billingCycle];
-
-            return (
-              <Card
-                className={[
-                  "flex flex-col border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/10",
-                  currentPlan ? "ring-2 ring-[var(--coachos-brand)]" : "",
-                ].join(" ")}
-                key={planOption.plan}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <h4 className="text-xl font-semibold">
-                      {formatPlan(planOption.plan)}
-                    </h4>
-                    <p className="mt-2 text-sm leading-6 text-slate-400">
-                      {planOption.description}
-                    </p>
-                  </div>
-                  {currentPlan ? (
-                    <Badge className="border-teal-400/30 bg-teal-400/10 text-teal-300">
-                      Current
-                    </Badge>
-                  ) : null}
-                </div>
-
-                <p className="mt-5 text-sm font-semibold text-slate-300">
-                  {planOption.target}
-                </p>
-                <div className="mt-5">
-                  <p className="text-3xl font-semibold">
-                    {price === null
-                      ? "Custom"
-                      : price === 0
-                        ? "Free"
-                        : formatCurrency(price, "INR")}
-                  </p>
-                  <p className="mt-1 text-xs font-semibold uppercase text-slate-500">
-                    {price === null
-                      ? "Contact sales"
-                      : `${billingCycle} billing`}
-                  </p>
-                </div>
-
-                <div className="mt-6 space-y-3 text-sm">
-                  {planComparisonResources.map((resource) => (
-                    <div
-                      className="flex items-center justify-between gap-4 border-b border-white/10 pb-3 last:border-b-0 last:pb-0"
-                      key={resource}
-                    >
-                      <span className="text-slate-400">
-                        {planResourceLabels[resource]}
-                      </span>
-                      <span className="font-semibold text-white">
-                        {formatLimit(planOptionLimits[resource])}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-
-                {manualLimits.length > 0 ? (
-                  <div className="mt-5 rounded-2xl border border-amber-400/20 bg-amber-400/10 p-4 text-sm">
-                    <p className="font-semibold text-amber-100">
-                      Additional plan limits
-                    </p>
-                    <div className="mt-3 space-y-3">
-                      {manualLimits.map((limit) => (
-                        <div
-                          className="border-b border-amber-100/10 pb-3 last:border-b-0 last:pb-0"
-                          key={`${planOption.plan}-${limit.label}`}
-                        >
-                          <div className="flex items-center justify-between gap-4">
-                            <span className="text-amber-100/80">
-                              {limit.label}
-                            </span>
-                            <span className="font-semibold text-white">
-                              {limit.value}
-                            </span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
-
-                <div className="mt-auto pt-7">
-                  {currentPlan ? (
-                    <Button disabled className="w-full" type="button">
-                      Current plan
-                    </Button>
-                  ) : (
-                    <Button disabled className="w-full" type="button">
-                      Contact CoachFort
-                    </Button>
-                  )}
-                  <p className="mt-3 text-center text-xs text-slate-500">
-                    Online plan changes are not available yet.
-                  </p>
-                </div>
-              </Card>
-            );
-          })}
-        </div>
-      </section>
 
       {selectedBillingDocument ? (
         <div

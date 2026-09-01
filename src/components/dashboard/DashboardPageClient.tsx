@@ -25,22 +25,30 @@ import {
 } from "@/src/lib/notifications";
 import {
   formatResourceLimit,
-  getPlanDisplayName,
-  getPlanLimits,
   planResourceLabels,
-  type PlanKey,
   type PlanResource,
   type ResourceLimit,
 } from "@/src/lib/plans";
+import {
+  getTenantEntitlementState,
+  type TenantEntitlementLimit,
+  type TenantEntitlementState,
+} from "@/src/lib/subscriptionEntitlements";
+import {
+  getCurrentTenantOperationalState,
+  getTenantSubscriptionLifecycle,
+} from "@/src/lib/subscriptionLifecycle";
+import {
+  deriveSubscriptionLifecyclePresentation,
+  type TenantOperationalState,
+  type TenantSubscriptionLifecycle,
+} from "@/src/lib/subscriptionLifecycleModel";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
-import { getTenantSubscription } from "@/src/lib/subscription";
 import { getCurrentMemberRole, type MemberRole } from "@/src/lib/team";
 import { getCurrentTenant, type Tenant } from "@/src/lib/tenant";
 import {
-  getTrialStatus,
   getUsagePercent,
-  refreshWorkspaceUsageSnapshot,
-  type TrialStatus,
+  getWorkspaceUsage,
   type WorkspaceUsage,
 } from "@/src/lib/usage";
 
@@ -62,6 +70,31 @@ function formatDate(value: string) {
 
 function getSafeDashboardError() {
   return "Unable to load dashboard data.";
+}
+
+function asPlanResource(value: string | null): PlanResource | null {
+  return value === "automations" ||
+    value === "courses" ||
+    value === "students" ||
+    value === "team_members" ||
+    value === "trainers"
+    ? value
+    : null;
+}
+
+function canonicalResourceLimit(
+  value: number | string | null | undefined,
+): ResourceLimit {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : "unlimited";
+  }
+
+  return "unlimited";
 }
 
 function canViewAttendanceMetrics(role: MemberRole | null) {
@@ -231,15 +264,20 @@ function RecentStudentsCard({ metrics }: { metrics: DashboardMetrics }) {
 
 export function DashboardPageClient() {
   const router = useRouter();
+  const [canonicalEntitlement, setCanonicalEntitlement] =
+    useState<TenantEntitlementState | null>(null);
   const [currentRole, setCurrentRole] = useState<MemberRole | null>(null);
   const [error, setError] = useState("");
+  const [lifecycle, setLifecycle] =
+    useState<TenantSubscriptionLifecycle | null>(null);
   const [loading, setLoading] = useState(true);
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [plan, setPlan] = useState<PlanKey>("free");
+  const [operationalState, setOperationalState] =
+    useState<TenantOperationalState | null>(null);
   const [tenant, setTenant] = useState<Tenant | null>(null);
-  const [trialStatus, setTrialStatus] = useState<TrialStatus | null>(null);
   const [usage, setUsage] = useState<WorkspaceUsage | null>(null);
+  const [usageUnavailable, setUsageUnavailable] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -276,15 +314,23 @@ export function DashboardPageClient() {
             : Promise.resolve(null),
         ]);
         const canViewUsage = memberRole === "owner" || memberRole === "admin";
-        const [workspaceUsage, workspaceTrialStatus] = canViewUsage
+        const [nextOperationalState, nextLifecycle, nextEntitlement] = canViewUsage
           ? await Promise.all([
-              refreshWorkspaceUsageSnapshot(currentTenant.id),
-              getTrialStatus(currentTenant.id),
+              getCurrentTenantOperationalState(currentTenant.id).catch(() => null),
+              getTenantSubscriptionLifecycle(currentTenant.id).catch(() => null),
+              getTenantEntitlementState(currentTenant.id).catch(() => null),
             ])
-          : [null, null];
-        const workspaceSubscription = canViewUsage
-          ? await getTenantSubscription(currentTenant.id)
-          : null;
+          : [null, null, null];
+        let workspaceUsage: WorkspaceUsage | null = null;
+        let nextUsageUnavailable = false;
+
+        if (nextOperationalState?.operationalAllowed) {
+          try {
+            workspaceUsage = await getWorkspaceUsage(currentTenant.id);
+          } catch {
+            nextUsageUnavailable = true;
+          }
+        }
         const recentNotifications = user
           ? await getUserNotifications(currentTenant.id, {
               limit: 5,
@@ -299,9 +345,11 @@ export function DashboardPageClient() {
         setMetrics(dashboardMetrics);
         setNotifications(recentNotifications);
         setCurrentRole(memberRole);
-        setPlan(workspaceSubscription?.plan ?? "free");
-        setTrialStatus(workspaceTrialStatus);
+        setOperationalState(nextOperationalState);
+        setLifecycle(nextLifecycle);
+        setCanonicalEntitlement(nextEntitlement);
         setUsage(workspaceUsage);
+        setUsageUnavailable(nextUsageUnavailable);
         setError("");
       } catch {
         if (!active) {
@@ -411,15 +459,22 @@ export function DashboardPageClient() {
       : []),
   ];
   const canViewUsage = currentRole === "owner" || currentRole === "admin";
-  const limits = getPlanLimits(plan);
-  const nearLimitResources =
-    usage && canViewUsage
-      ? (Object.keys(limits) as PlanResource[]).filter((resource) => {
-          const limit = limits[resource];
-
-          return limit !== "unlimited" && usage[resource] >= limit * 0.8;
-        })
-      : [];
+  const lifecyclePresentation = deriveSubscriptionLifecyclePresentation(
+    operationalState,
+    lifecycle,
+  );
+  const entitlementAssignment = canonicalEntitlement?.assignment ?? null;
+  const currentPlanName =
+    entitlementAssignment?.plan_name ?? entitlementAssignment?.plan_code ?? "CoachFort";
+  const canonicalUsageLimits = (canonicalEntitlement?.limits ?? [])
+    .map((limit) => ({ limit, resource: asPlanResource(limit.resource_key) }))
+    .filter(
+      (entry): entry is {
+        limit: TenantEntitlementLimit;
+        resource: PlanResource;
+      } => entry.resource !== null,
+    );
+  const canonicalWarnings = canonicalEntitlement?.warnings ?? [];
   const criticalNotifications = notifications.filter(
     (notification) =>
       notification.severity === "critical" &&
@@ -479,20 +534,20 @@ export function DashboardPageClient() {
         </Card>
       ) : null}
 
-      {canViewUsage && (trialStatus?.expired || nearLimitResources.length > 0) ? (
+      {canViewUsage && canonicalWarnings.length > 0 ? (
         <Card className="mt-8 border-[#FED7AA] bg-[#FFFBF7] p-5 text-[#0B1F33] shadow-sm">
           <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
             <div>
               <Badge tone="warning">
-                {trialStatus?.expired ? "Trial expired" : "Plan attention"}
+                Plan attention
               </Badge>
               <h3 className="mt-3 text-lg font-semibold">
                 Review your CoachFort plan
               </h3>
               <p className="mt-2 text-sm leading-6 text-[#66788F]">
-                {trialStatus?.expired
-                  ? "Your workspace trial has ended. Billing controls are ready for the next paid-plan step."
-                  : `${nearLimitResources.length} usage limit${nearLimitResources.length === 1 ? "" : "s"} are nearing capacity.`}
+                {canonicalWarnings.length} plan usage {canonicalWarnings.length === 1
+                  ? "item requires"
+                  : "items require"} review.
               </p>
             </div>
             <Button href="/app/subscription" type="button" variant="secondary">
@@ -502,32 +557,40 @@ export function DashboardPageClient() {
         </Card>
       ) : null}
 
-      {canViewUsage && usage ? (
+      {canViewUsage && operationalState?.operationalAllowed ? (
         <Card className="mt-8 border-[#D8E8F0] bg-white p-6 text-[#0B1F33] shadow-sm shadow-[#0B2A3D]/5">
           <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
             <SectionHeader
-              description="See how current workspace usage compares with your plan. Owners and admins can review plan options when capacity is running low."
+              description="See how current workspace usage compares with your plan limits."
               eyebrow="Workspace usage"
-              title={`${getPlanDisplayName(plan)} plan limits`}
+              title={`${currentPlanName} plan limits`}
             />
-            <div className="rounded-2xl border border-[#D8E8F0] bg-[#F6FBFE] px-4 py-3 text-sm font-semibold text-[#425B76]">
-              {trialStatus?.active
-                ? `Trial: ${trialStatus.daysRemaining} days left`
-                : trialStatus?.expired
-                  ? "Trial expired"
-                  : "Trial status unavailable"}
+            {lifecyclePresentation.state === "trial_active" && lifecycle?.trialEndsAt ? (
+              <div className="rounded-2xl border border-[#D8E8F0] bg-[#F6FBFE] px-4 py-3 text-sm font-semibold text-[#425B76]">
+                Trial ends {formatDate(lifecycle.trialEndsAt)}
+              </div>
+            ) : null}
+          </div>
+          {usageUnavailable || !usage ? (
+            <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800" role="status">
+              Workspace usage is temporarily unavailable. No usage totals have been substituted.
             </div>
-          </div>
-          <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-            {(Object.keys(limits) as PlanResource[]).map((resource) => (
-              <UsageMiniCard
-                key={resource}
-                label={planResourceLabels[resource]}
-                limit={limits[resource]}
-                used={usage[resource]}
-              />
-            ))}
-          </div>
+          ) : canonicalUsageLimits.length === 0 ? (
+            <div className="mt-6 rounded-2xl border border-[#D8E8F0] bg-[#F6FBFE] p-4 text-sm text-[#425B76]" role="status">
+              Usage limits are not available for this plan.
+            </div>
+          ) : (
+            <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+              {canonicalUsageLimits.map(({ limit, resource }) => (
+                <UsageMiniCard
+                  key={resource}
+                  label={planResourceLabels[resource]}
+                  limit={canonicalResourceLimit(limit.limit_value)}
+                  used={usage[resource]}
+                />
+              ))}
+            </div>
+          )}
         </Card>
       ) : null}
 
