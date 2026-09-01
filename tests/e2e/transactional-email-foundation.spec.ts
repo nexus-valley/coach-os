@@ -158,6 +158,7 @@ test.describe("UX-8B transactional email delivery foundation", () => {
     expect(transactionalEmailTemplateKeys).toEqual([
       "coach.welcome",
       "coach.workspace_ready",
+      "billing.subscription_lifecycle",
     ]);
     expect(() => renderTransactionalEmailTemplate("arbitrary", {})).toThrow(
       /unsupported/i,

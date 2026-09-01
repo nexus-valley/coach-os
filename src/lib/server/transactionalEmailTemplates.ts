@@ -1,5 +1,6 @@
 import {
   buildCoachWelcomeEmail,
+  buildSubscriptionLifecycleEmail,
   buildWorkspaceReadyEmail,
   type CoachFortEmailTemplate,
 } from "@/src/lib/server/emailTemplates";
@@ -7,6 +8,7 @@ import {
 export const transactionalEmailTemplateKeys = [
   "coach.welcome",
   "coach.workspace_ready",
+  "billing.subscription_lifecycle",
 ] as const;
 
 export type TransactionalEmailTemplateKey =
@@ -94,6 +96,45 @@ export function renderTransactionalEmailTemplate(
     return buildCoachWelcomeEmail({
       coachName: optionalString(rawPayload, "coachName"),
       tenantName: optionalString(rawPayload, "tenantName"),
+    });
+  }
+
+  if (templateKey === "billing.subscription_lifecycle") {
+    assertExactKeys(rawPayload, [
+      "deadlineDate",
+      "event",
+      "planName",
+      "subscriptionUrl",
+      "supportUrl",
+      "workspaceName",
+    ]);
+    const event = requiredString(rawPayload, "event");
+    if (
+      ![
+        "grace_ending",
+        "grace_started",
+        "renewal_due_soon",
+        "subscription_expired",
+        "trial_ending",
+        "trial_expired",
+      ].includes(event)
+    ) {
+      throw new Error("Transactional email template payload is invalid.");
+    }
+    const deadlineDate = requiredString(rawPayload, "deadlineDate");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(deadlineDate)) {
+      throw new Error("Transactional email template payload is invalid.");
+    }
+
+    return buildSubscriptionLifecycleEmail({
+      deadlineDate,
+      event: event as Parameters<
+        typeof buildSubscriptionLifecycleEmail
+      >[0]["event"],
+      planName: optionalString(rawPayload, "planName"),
+      subscriptionUrl: requiredHttpUrl(rawPayload, "subscriptionUrl"),
+      supportUrl: requiredHttpUrl(rawPayload, "supportUrl"),
+      workspaceName: requiredString(rawPayload, "workspaceName"),
     });
   }
 

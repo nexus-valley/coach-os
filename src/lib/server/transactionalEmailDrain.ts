@@ -16,7 +16,7 @@ type TransactionalEmailDrainRequestOptions = {
   operation: DrainOperation;
 };
 
-function hasMatchingBearerSecret(
+export function hasMatchingBearerSecret(
   request: Request,
   configuredSecret: string | undefined,
   minimumSecretLength: number,

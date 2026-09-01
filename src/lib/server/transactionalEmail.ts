@@ -80,8 +80,40 @@ async function isSuppressed(recipientEmail: string) {
   return data === true;
 }
 
+async function isSubscriptionLifecycleReminderCurrent(outboxId: string) {
+  const admin = getSupabaseAdminClient();
+  const { data, error } = await admin.rpc(
+    "subscription_lifecycle_reminder_delivery_is_current_server",
+    { p_outbox_id: outboxId },
+  );
+
+  if (error || typeof data !== "boolean") {
+    throw new CoachFortEmailDeliveryError({
+      code: "lifecycle_reminder_validation_unavailable",
+      errorClass: "transient",
+      message: "Unable to validate subscription lifecycle reminder.",
+      retryable: true,
+    });
+  }
+
+  return data;
+}
+
 async function processClaim(claim: ClaimedEmail): Promise<DrainItemResult> {
   try {
+    if (
+      claim.template_key === "billing.subscription_lifecycle" &&
+      !(await isSubscriptionLifecycleReminderCurrent(claim.outbox_id))
+    ) {
+      await finalizeAttempt({
+        claim,
+        errorClass: "suppressed",
+        errorCode: "obsolete_lifecycle_event",
+        outcome: "suppressed",
+      });
+      return { id: claim.outbox_id, outcome: "suppressed" };
+    }
+
     if (await isSuppressed(claim.recipient_email)) {
       await finalizeAttempt({
         claim,

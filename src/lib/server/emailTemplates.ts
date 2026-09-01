@@ -22,6 +22,7 @@ export type CoachFortEmailTemplateKey =
   | "billing.payment_failed"
   | "billing.plan_activated"
   | "billing.renewal_reminder"
+  | "billing.subscription_lifecycle"
   | "coach.welcome"
   | "coach.workspace_ready"
   | "student.enrollment_approved"
@@ -65,6 +66,14 @@ type EmailLayoutInput = {
 };
 
 type InviteRole = "admin" | "staff" | "trainer";
+
+export type SubscriptionLifecycleEmailEvent =
+  | "grace_ending"
+  | "grace_started"
+  | "renewal_due_soon"
+  | "subscription_expired"
+  | "trial_ending"
+  | "trial_expired";
 
 const brandName = "CoachFort";
 export const coachFortSupportEmail = "support@coachfort.com";
@@ -134,6 +143,15 @@ export const coachFortEmailTemplateInventory = [
     manualFallback: "Founder confirms activation manually after Manual Activation.",
     notes: "Missing until billing lifecycle email work is approved.",
     wiringStatus: "missing",
+  },
+  {
+    builderName: "buildSubscriptionLifecycleEmail",
+    firstPaidCustomerRequired: true,
+    key: "billing.subscription_lifecycle",
+    lifecycle: "billing",
+    manualFallback: "Founder follows up through CoachFort support.",
+    notes: "Shared lifecycle reminder template; scheduling is activated separately.",
+    wiringStatus: "wired",
   },
   {
     builderName: null,
@@ -241,6 +259,41 @@ function formatDate(value?: string | null) {
     timeStyle: "short",
     timeZone: "Asia/Kolkata",
   }).format(new Date(value));
+}
+
+function formatGlobalDate(value: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) {
+    throw new Error("Subscription lifecycle date is invalid.");
+  }
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  ) {
+    throw new Error("Subscription lifecycle date is invalid.");
+  }
+
+  const monthNames = [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+  ] as const;
+  return `${day} ${monthNames[month - 1]} ${year}`;
 }
 
 export function buildCoachFortEmailLayout(
@@ -445,5 +498,92 @@ export function buildWorkspaceReadyEmail(input: {
       "Do not share passwords, OTPs, API keys, or private access links with anyone.",
     subject: `${workspaceName} is ready on CoachFort`,
     title: "Your workspace is ready",
+  });
+}
+
+export function buildSubscriptionLifecycleEmail(input: {
+  deadlineDate: string;
+  event: SubscriptionLifecycleEmailEvent;
+  planName?: string | null;
+  subscriptionUrl: string;
+  supportUrl: string;
+  workspaceName: string;
+}) {
+  const deadline = formatGlobalDate(input.deadlineDate);
+  const planReference = input.planName?.trim()
+    ? ` for the ${input.planName.trim()} plan`
+    : "";
+  const content: Record<
+    SubscriptionLifecycleEmailEvent,
+    { body: string[]; subject: string; title: string }
+  > = {
+    grace_ending: {
+      body: [
+        `Your CoachFort renewal period${planReference} ends on ${deadline}.`,
+        "Your workspace data remains safe. Review your subscription options or contact CoachFort support for help.",
+      ],
+      subject: "Your CoachFort renewal period ends soon",
+      title: "Your renewal period ends soon",
+    },
+    grace_started: {
+      body: [
+        `Your CoachFort subscription${planReference} reached its renewal date on ${deadline}.`,
+        "Your workspace remains available during the renewal period.",
+      ],
+      subject: "Your CoachFort renewal period has started",
+      title: "Your workspace remains available",
+    },
+    renewal_due_soon: {
+      body: [
+        `Your CoachFort subscription${planReference} is due for renewal on ${deadline}.`,
+        "Review your subscription options or contact CoachFort support if you need help.",
+      ],
+      subject: "Your CoachFort subscription is due for renewal soon",
+      title: "Your subscription is due for renewal soon",
+    },
+    subscription_expired: {
+      body: [
+        `Your CoachFort subscription${planReference} reached the end of its renewal period on ${deadline}.`,
+        "Your workspace access is paused, but your data is safe.",
+      ],
+      subject: "Your CoachFort workspace access is paused",
+      title: "Your workspace access is paused",
+    },
+    trial_ending: {
+      body: [
+        `Your CoachFort trial${planReference} ends on ${deadline}.`,
+        "Choose a CoachFort plan or contact CoachFort support if you need help.",
+      ],
+      subject: "Your CoachFort trial ends soon",
+      title: "Your trial ends soon",
+    },
+    trial_expired: {
+      body: [
+        `Your CoachFort trial${planReference} ended on ${deadline}.`,
+        "Your workspace data is safe. Choose a CoachFort plan or contact CoachFort support for help.",
+      ],
+      subject: "Your CoachFort trial has ended",
+      title: "Your trial has ended",
+    },
+  };
+  const eventContent = content[input.event];
+
+  return buildCoachFortEmailLayout({
+    action: {
+      label:
+        input.event === "trial_ending" || input.event === "trial_expired"
+          ? "Choose a plan"
+          : "Review subscription",
+      url: input.subscriptionUrl,
+    },
+    body: [`${input.workspaceName}:`, ...eventContent.body],
+    footerNote: `Need help? CoachFort support: ${input.supportUrl}`,
+    key: "billing.subscription_lifecycle",
+    lifecycle: "billing",
+    preheader: eventContent.subject,
+    securityNote:
+      "This is a CoachFort account notice. Never share passwords, OTPs, API keys, or private access links.",
+    subject: eventContent.subject,
+    title: eventContent.title,
   });
 }
