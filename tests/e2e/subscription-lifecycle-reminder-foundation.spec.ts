@@ -423,14 +423,29 @@ test.describe("UX-8G3A subscription lifecycle reminder foundation", () => {
     );
   });
 
-  test("performs communication writes only and leaves production scheduling absent", () => {
+  test("performs communication writes only and uses the approved production schedules", () => {
     const sql = executableSql();
     expect(sql).not.toMatch(
       /(?:insert into|update|delete from) public\.(?:tenant_subscription_assignments|tenant_payment_orders|tenant_payment_attempts|platform_invoices|platform_billing_receipts)/,
     );
     expect(sql).toContain("insert into public.notifications");
-    expect(existsSync(join(root, "vercel.json"))).toBe(false);
-    expect(route).toContain("Scheduler activation is intentionally deferred");
+    expect(existsSync(join(root, "vercel.json"))).toBe(true);
+    const vercelConfigSource = read("vercel.json");
+    expect(JSON.parse(vercelConfigSource)).toEqual({
+      crons: [
+        {
+          path: "/api/internal/subscription-lifecycle/reminders",
+          schedule: "0 6 * * *",
+        },
+        {
+          path: "/api/internal/transactional-email/drain",
+          schedule: "*/5 * * * *",
+        },
+      ],
+    });
+    expect(vercelConfigSource).not.toMatch(
+      /\?|dryRun|tenantId|[?&]event=|CRON_SECRET|COACHFORT_EMAIL_WORKER_SECRET|authorization|bearer/i,
+    );
     expect(route).not.toContain("drainTransactionalEmailOutbox");
     for (const block of [
       verificationBlock("PRE-APPLY"),

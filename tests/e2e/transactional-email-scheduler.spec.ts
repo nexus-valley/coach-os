@@ -10,6 +10,11 @@ const routeSource = read(
   "app/api/internal/transactional-email/drain/route.ts",
 );
 const handlerSource = read("src/lib/server/transactionalEmailDrain.ts");
+const vercelConfigPath = join(root, "vercel.json");
+const vercelConfigSource = read("vercel.json");
+const vercelConfig = JSON.parse(vercelConfigSource) as {
+  crons: Array<{ path: string; schedule: string }>;
+};
 
 const cronSecret = "c".repeat(48);
 const workerSecret = "w".repeat(48);
@@ -198,10 +203,27 @@ test.describe("UX-8B1 transactional email scheduler", () => {
     expect(body).not.toContain("provider rejected");
   });
 
-  test("keeps production cron activation deferred while the boundary is ready", () => {
-    expect(existsSync(join(root, "vercel.json"))).toBe(false);
+  test("activates only the approved production cron schedules", () => {
+    expect(existsSync(vercelConfigPath)).toBe(true);
+    expect(vercelConfig).toEqual({
+      crons: [
+        {
+          path: "/api/internal/subscription-lifecycle/reminders",
+          schedule: "0 6 * * *",
+        },
+        {
+          path: "/api/internal/transactional-email/drain",
+          schedule: "*/5 * * * *",
+        },
+      ],
+    });
+    expect(new Set(vercelConfig.crons.map((cron) => cron.path)).size).toBe(2);
+    for (const cron of vercelConfig.crons) {
+      expect(cron.path).not.toMatch(/\?|dryRun|tenantId|[?&]event=/i);
+    }
+    expect(vercelConfigSource).not.toMatch(
+      /CRON_SECRET|COACHFORT_EMAIL_WORKER_SECRET|authorization|bearer/i,
+    );
     expect(read(".env.example")).toMatch(/^CRON_SECRET=$/m);
-    expect(routeSource).toContain("Production activation gate");
-    expect(routeSource).toContain('Vercel Cron at "* * * * *"');
   });
 });
