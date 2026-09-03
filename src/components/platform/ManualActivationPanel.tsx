@@ -6,7 +6,6 @@ import { Badge } from "@/src/components/ui/Badge";
 import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
 import { FeedbackAlert } from "@/src/components/ui/FeedbackAlert";
-import { getPlanAmountMinor } from "@/src/lib/plans";
 import {
   activateTenantSubscriptionManual,
   normalizePlatformError,
@@ -16,7 +15,10 @@ import {
   type PlatformTenantDetail,
   type PlatformTenantSummary,
 } from "@/src/lib/platform";
-import type { TenantEntitlementState } from "@/src/lib/subscriptionEntitlements";
+import type {
+  CanonicalPlanCatalogItem,
+  TenantEntitlementState,
+} from "@/src/lib/subscriptionEntitlements";
 
 type ManualActivationFormState = {
   amountMinor: string;
@@ -42,6 +44,7 @@ type ManualActivationFormState = {
 
 type ManualActivationPanelProps = {
   adminRole: PlatformAdminContext["role"];
+  canonicalPlanCatalog: CanonicalPlanCatalogItem[];
   canonicalEntitlement: TenantEntitlementState | null;
   detail: PlatformTenantDetail | null;
   onActivated?: () => Promise<void> | void;
@@ -56,19 +59,45 @@ const regressionCustomerEmail = "owner.regression@coachfort.demo";
 const regressionPaymentReference = "CF-REGRESSION-STARTER-MONTHLY-20260719-01";
 const regressionIdempotencyKey =
   "manual-activation-regression-starter-monthly-20260719-01";
-const exactAmounts: Record<
+type CanonicalActivationAmounts = Record<
   ManualActivationFormState["planCode"],
-  Record<ManualActivationFormState["billingCycle"], number>
-> = {
-  growth: {
-    monthly: getPlanAmountMinor("growth", "monthly") ?? 0,
-    yearly: getPlanAmountMinor("growth", "yearly") ?? 0,
-  },
-  starter: {
-    monthly: getPlanAmountMinor("starter", "monthly") ?? 0,
-    yearly: getPlanAmountMinor("starter", "yearly") ?? 0,
-  },
-};
+  Record<ManualActivationFormState["billingCycle"], number | null>
+>;
+
+function getCanonicalInrAmount(
+  catalog: CanonicalPlanCatalogItem[],
+  planCode: ManualActivationFormState["planCode"],
+  billingCycle: ManualActivationFormState["billingCycle"],
+) {
+  const amount = catalog
+    .find((plan) => plan.code === planCode)
+    ?.prices.find(
+      (price) =>
+        price.billing_cycle === billingCycle &&
+        price.currency === "INR" &&
+        price.region_code === "GLOBAL" &&
+        price.status === "draft",
+    )?.amount_minor;
+
+  return typeof amount === "number" && Number.isSafeInteger(amount) && amount > 0
+    ? amount
+    : null;
+}
+
+function getCanonicalActivationAmounts(
+  catalog: CanonicalPlanCatalogItem[],
+): CanonicalActivationAmounts {
+  return {
+    growth: {
+      monthly: getCanonicalInrAmount(catalog, "growth", "monthly"),
+      yearly: getCanonicalInrAmount(catalog, "growth", "yearly"),
+    },
+    starter: {
+      monthly: getCanonicalInrAmount(catalog, "starter", "monthly"),
+      yearly: getCanonicalInrAmount(catalog, "starter", "yearly"),
+    },
+  };
+}
 
 const emptyForm: ManualActivationFormState = {
   amountMinor: "",
@@ -128,6 +157,7 @@ function validationErrors(
   form: ManualActivationFormState,
   currentAssignmentExists: boolean,
   tenantSummaryMismatch: boolean,
+  exactAmounts: CanonicalActivationAmounts,
 ) {
   const errors: string[] = [];
   const amount = Number(form.amountMinor);
@@ -151,7 +181,9 @@ function validationErrors(
     errors.push("Only Starter and Growth manual activation are allowed.");
   }
   if (form.currency !== "INR") errors.push("Currency must be INR.");
-  if (!Number.isSafeInteger(amount) || amount <= 0) {
+  if (expectedAmount === null) {
+    errors.push("Canonical INR price is unavailable for this plan and cycle.");
+  } else if (!Number.isSafeInteger(amount) || amount <= 0) {
     errors.push("Amount minor must be a positive integer.");
   } else if (amount !== expectedAmount) {
     errors.push(`Amount minor must be ${expectedAmount} for this plan and cycle.`);
@@ -320,6 +352,7 @@ function activationResultSummary(
 
 export function ManualActivationPanel({
   adminRole,
+  canonicalPlanCatalog,
   canonicalEntitlement,
   detail,
   onActivated,
@@ -338,6 +371,10 @@ export function ManualActivationPanel({
     "selected",
   );
   const canUsePanel = adminRole === "owner" || adminRole === "admin";
+  const exactAmounts = useMemo(
+    () => getCanonicalActivationAmounts(canonicalPlanCatalog),
+    [canonicalPlanCatalog],
+  );
   const currentAssignmentExists = hasCurrentCanonicalAssignment(canonicalEntitlement);
   const selectedTenantId = selectedTenant?.id ?? "";
   const formTenantId = form.tenantId.trim();
@@ -360,8 +397,9 @@ export function ManualActivationPanel({
         form,
         currentAssignmentExists,
         isTenantSummaryMismatch,
+        exactAmounts,
       ),
-    [currentAssignmentExists, form, isTenantSummaryMismatch],
+    [currentAssignmentExists, exactAmounts, form, isTenantSummaryMismatch],
   );
   const canSubmit = canUsePanel && errors.length === 0 && !submitting;
   const resultSummary = activationResultSummary(result);
@@ -393,7 +431,7 @@ export function ManualActivationPanel({
     setActivationMode("regression");
     setForm((current) => ({
       ...current,
-      amountMinor: String(getPlanAmountMinor("starter", "monthly") ?? ""),
+      amountMinor: String(exactAmounts.starter.monthly ?? ""),
       billingCycle: "monthly",
       confirmationPhrase: "",
       currency: "INR",

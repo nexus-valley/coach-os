@@ -7,25 +7,7 @@ import {
   getMemberRoleForTenant,
   type MemberRole,
 } from "@/src/lib/permissions";
-import {
-  formatResourceLimit,
-  getPlanDisplayName,
-  getPlanLimits,
-  getPlanUpgradeRecommendation,
-  normalizePlanKey,
-  planResourceLabels,
-  type PlanKey,
-  type PlanResource,
-  type ResourceLimit,
-} from "@/src/lib/plans";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
-import {
-  getTrialStatus,
-  getUsagePercent,
-  refreshWorkspaceUsageSnapshot,
-  type TrialStatus,
-  type WorkspaceUsage,
-} from "@/src/lib/usage";
 
 export type OperationsStatus = "attention" | "healthy" | "warning";
 
@@ -44,14 +26,6 @@ export type OperationsMetric = {
   label: string;
   tone: "blue" | "cyan" | "emerald" | "orange" | "rose" | "slate";
   value: string;
-};
-
-export type OperationsUsageItem = {
-  key: PlanResource;
-  label: string;
-  limit: ResourceLimit;
-  percent: number;
-  used: number;
 };
 
 export type OperationsAlert = {
@@ -92,19 +66,6 @@ export type OperationsConsoleData = {
   metrics: OperationsMetric[];
   role: MemberRole;
   securitySignals: OperationsMetric[];
-  subscription: {
-    billingStatus: string;
-    plan: PlanKey;
-    planName: string;
-    recommendation: {
-      reason: string;
-      recommendedPlan: PlanKey;
-      recommendedPlanName: string;
-    } | null;
-    trial: TrialStatus;
-    usage: OperationsUsageItem[];
-    warnings: OperationsAlert[];
-  };
 };
 
 type CountResult = {
@@ -145,27 +106,6 @@ type SafeTenantSettings = {
   support_email?: string | null;
   support_phone?: string | null;
   workspace_display_name?: string | null;
-};
-
-type SafeTenantSubscription = {
-  billingStatus: string;
-  plan: PlanKey;
-};
-
-const emptyUsage: WorkspaceUsage = {
-  automations: 0,
-  courses: 0,
-  students: 0,
-  team_members: 0,
-  trainers: 0,
-};
-
-const emptyTrial: TrialStatus = {
-  active: false,
-  daysRemaining: 0,
-  endsAt: null,
-  expired: false,
-  startedAt: null,
 };
 
 const permissionSensitiveActions = [
@@ -276,44 +216,6 @@ async function getSafeTenantSettings(tenantId: string) {
   return (data as SafeTenantSettings | null) ?? null;
 }
 
-async function getSafeTenantSubscription(tenantId: string) {
-  const supabase = getSupabaseClient();
-  const { data, error } = await supabase
-    .from("tenants")
-    .select("plan,billing_status")
-    .eq("id", tenantId)
-    .maybeSingle();
-
-  if (error) {
-    if (isRecoverableAnalyticsError(error)) {
-      const fallbackResult = await supabase
-        .from("tenants")
-        .select("plan")
-        .eq("id", tenantId)
-        .maybeSingle();
-
-      if (!fallbackResult.error) {
-        return {
-          billingStatus: "not_configured",
-          plan: normalizePlanKey(fallbackResult.data?.plan),
-        } satisfies SafeTenantSubscription;
-      }
-
-      return {
-        billingStatus: "not_configured",
-        plan: "free",
-      } satisfies SafeTenantSubscription;
-    }
-
-    throw error;
-  }
-
-  return {
-    billingStatus: data?.billing_status ?? "not_configured",
-    plan: normalizePlanKey(data?.plan),
-  } satisfies SafeTenantSubscription;
-}
-
 function getStatus(score: number): OperationsStatus {
   if (score >= 80) {
     return "healthy";
@@ -324,10 +226,6 @@ function getStatus(score: number): OperationsStatus {
   }
 
   return "warning";
-}
-
-function getLimitLabel(limit: ResourceLimit) {
-  return limit === "unlimited" ? "Unlimited" : formatResourceLimit(limit);
 }
 
 function toFeedItem(row: AuditRow): OperationsFeedItem {
@@ -685,32 +583,6 @@ function buildHealthCards(params: {
   return { cards, readinessPercent: onboardingScore };
 }
 
-function buildUsageItems(plan: PlanKey, usage: WorkspaceUsage) {
-  const limits = getPlanLimits(plan);
-
-  return (Object.keys(limits) as PlanResource[]).map((key) => ({
-    key,
-    label: planResourceLabels[key],
-    limit: limits[key],
-    percent: getUsagePercent(usage[key], limits[key]),
-    used: usage[key],
-  }));
-}
-
-function buildLimitWarnings(usage: OperationsUsageItem[]) {
-  return usage
-    .filter((item) => item.limit !== "unlimited" && item.percent >= 80)
-    .map((item) => ({
-      description: `${item.used.toLocaleString()} of ${getLimitLabel(item.limit)} ${item.label.toLowerCase()} used.`,
-      key: `limit-${item.key}`,
-      severity: item.percent >= 100 ? "warning" : "attention",
-      title:
-        item.percent >= 100
-          ? `${item.label} limit reached`
-          : `${item.label} nearing limit`,
-    })) satisfies OperationsAlert[];
-}
-
 function buildOperationalAlerts(params: {
   activeAutomations: number;
   coursesWithoutCohorts: number;
@@ -824,9 +696,6 @@ export async function getOperationsConsoleData(
 
   const [
     settings,
-    subscription,
-    trial,
-    usage,
     activeStudents,
     activeCourses,
     cohortsCount,
@@ -858,24 +727,6 @@ export async function getOperationsConsoleData(
       "tenants",
       () => getSafeTenantSettings(tenantId),
       null,
-    ),
-    optionalOperationQuery<SafeTenantSubscription>(
-      "getSafeTenantSubscription",
-      "tenants",
-      () => getSafeTenantSubscription(tenantId),
-      { billingStatus: "not_configured", plan: "free" },
-    ),
-    optionalOperationQuery(
-      "getTrialStatus",
-      "tenants",
-      () => getTrialStatus(tenantId),
-      emptyTrial,
-    ),
-    optionalOperationQuery(
-      "refreshWorkspaceUsageSnapshot",
-      "tenants",
-      () => refreshWorkspaceUsageSnapshot(tenantId),
-      emptyUsage,
     ),
     optionalOperationQuery(
       "countActiveStudents",
@@ -1118,10 +969,6 @@ export async function getOperationsConsoleData(
       settings?.brand_color?.trim() &&
       (settings.support_email?.trim() || settings.support_phone?.trim()),
   );
-  const plan = subscription?.plan ?? "free";
-  const usageItems = buildUsageItems(plan, usage);
-  const limitWarnings = buildLimitWarnings(usageItems);
-  const planRecommendation = getPlanUpgradeRecommendation(usage, plan);
   const health = buildHealthCards({
     activeAutomations,
     activeCourses,
@@ -1134,7 +981,6 @@ export async function getOperationsConsoleData(
     unreadNotifications,
   });
   const alerts = [
-    ...limitWarnings,
     ...buildOperationalAlerts({
       activeAutomations,
       draftAutomations,
@@ -1360,14 +1206,5 @@ export async function getOperationsConsoleData(
     metrics,
     role,
     securitySignals,
-    subscription: {
-      billingStatus: subscription.billingStatus,
-      plan,
-      planName: getPlanDisplayName(plan),
-      recommendation: planRecommendation,
-      trial,
-      usage: usageItems,
-      warnings: limitWarnings,
-    },
   };
 }

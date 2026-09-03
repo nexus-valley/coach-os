@@ -215,11 +215,10 @@ export async function createWorkspace(params: {
 
     await logActivity({
       action: "trial_started",
-      description: "Started 14-day workspace trial.",
+      description: "Started workspace trial.",
       entityId: tenant.id,
       entityName: tenant.name,
       entityType: "subscription",
-      metadata: { trialDays: 14 },
       tenantId: tenant.id,
     });
 

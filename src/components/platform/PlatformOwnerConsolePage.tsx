@@ -1071,6 +1071,7 @@ export function PlatformOwnerConsolePage() {
             {canManagePlans(adminContext.role) ? (
               <ManualActivationPanel
                 adminRole={adminContext.role}
+                canonicalPlanCatalog={canonicalPlanCatalog}
                 canonicalEntitlement={canonicalEntitlementState}
                 detail={selectedTenantDetail}
                 selectedTenant={selectedTenant}

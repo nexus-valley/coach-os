@@ -18,7 +18,6 @@ import {
   type OperationsHealthCard,
   type OperationsMetric,
   type OperationsStatus,
-  type OperationsUsageItem,
 } from "@/src/lib/operations";
 import { logOptionalQueryFailure } from "@/src/lib/optionalQuery";
 import { getCurrentTenant, type Tenant } from "@/src/lib/tenant";
@@ -120,34 +119,6 @@ function HealthCard({ card }: { card: OperationsHealthCard }) {
         />
       </div>
     </Card>
-  );
-}
-
-function UsageBar({ item }: { item: OperationsUsageItem }) {
-  return (
-    <div className="rounded-2xl border border-[#D8E8F0] bg-[#F6FBFE] p-4">
-      <div className="flex items-center justify-between gap-4">
-        <p className="text-sm font-semibold text-[#0B1F33]">{item.label}</p>
-        <p className="text-xs font-semibold text-[#425B76]">
-          {item.limit === "unlimited"
-            ? "Unlimited"
-            : `${item.used.toLocaleString()} / ${item.limit.toLocaleString()}`}
-        </p>
-      </div>
-      <div className="mt-3 h-2 overflow-hidden rounded-full bg-white">
-        <div
-          className={[
-            "h-full rounded-full",
-            item.percent >= 100
-              ? "bg-[#DC2626]"
-              : item.percent >= 80
-                ? "bg-[#F59E0B]"
-                : "bg-[#145DA0]",
-          ].join(" ")}
-          style={{ width: `${item.percent}%` }}
-        />
-      </div>
-    </div>
   );
 }
 
@@ -350,7 +321,7 @@ export function OperationsPageClient() {
           </h2>
           <p className="mt-3 max-w-3xl text-base leading-7 text-[#425B76]">
             Tenant-scoped workspace health, SaaS readiness, security signals,
-            communication status, and subscription utilization for{" "}
+            and communication status for{" "}
             {tenant?.name ?? "this workspace"}.
           </p>
         </div>
@@ -366,7 +337,7 @@ export function OperationsPageClient() {
               {data.health.readinessPercent}% ready
             </Badge>
           }
-          description="A read-only owner view of setup health, usage pressure, communication signals, and safe shortcuts. Operational actions still live in their original modules."
+          description="A read-only owner view of setup health, operational signals, communication activity, and safe shortcuts. Operational actions still live in their original modules."
           title="Advanced operations overview"
         />
         <div className="mt-5 grid gap-3 md:grid-cols-4">
@@ -410,8 +381,8 @@ export function OperationsPageClient() {
 
       <section className="mt-10">
         <SectionHeader
-          description="Plan, communication, and activity indicators from existing operations data."
-          title="Usage overview"
+          description="Communication and activity indicators from existing operations data."
+          title="Operations overview"
         />
         <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {data.metrics.map((metric) => (
@@ -422,43 +393,17 @@ export function OperationsPageClient() {
 
       <section className="mt-10 grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
         <Card className="border-[#D8E8F0] bg-white p-6 shadow-sm">
-          <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
-            <div>
-              <Badge tone="owner">{data.subscription.planName} plan</Badge>
-              <h3 className="mt-4 text-xl font-semibold text-[#0B1F33]">
-                Subscription & Limits
-              </h3>
-              <p className="mt-2 text-sm leading-6 text-[#66788F]">
-                Trial status and plan utilization based on cached usage snapshots.
-              </p>
-            </div>
-            <div className="grid gap-3 text-sm font-semibold text-[#425B76] sm:grid-cols-2">
-              <div className="rounded-2xl border border-[#D8E8F0] bg-[#F6FBFE] px-4 py-3">
-                {data.subscription.trial.active
-                  ? `${data.subscription.trial.daysRemaining} trial days left`
-                  : data.subscription.trial.expired
-                    ? "Trial expired"
-                    : "Trial status unavailable"}
-              </div>
-              <div className="rounded-2xl border border-[#D8E8F0] bg-[#F6FBFE] px-4 py-3">
-                Billing: {data.subscription.billingStatus.replace(/_/g, " ")}
-              </div>
-            </div>
-          </div>
-          {data.subscription.recommendation ? (
-            <div className="mt-5 rounded-2xl border border-[#FED7AA] bg-[#FFFBF7] p-4 text-sm leading-6 text-[#9A3412]">
-              {data.subscription.recommendation.reason} Recommended next plan:{" "}
-              <span className="font-semibold">
-                {data.subscription.recommendation.recommendedPlanName}
-              </span>
-              .
-            </div>
-          ) : null}
-          <div className="mt-6 grid gap-4 md:grid-cols-2">
-            {data.subscription.usage.map((item) => (
-              <UsageBar item={item} key={item.key} />
-            ))}
-          </div>
+          <Badge tone="owner">Subscription</Badge>
+          <h3 className="mt-4 text-xl font-semibold text-[#0B1F33]">
+            Plan and billing
+          </h3>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-[#66788F]">
+            Review your current plan, billing period, usage limits, billing
+            profile, and plan requests on the Subscription page.
+          </p>
+          <Button className="mt-5" href="/app/subscription">
+            Open subscription
+          </Button>
         </Card>
 
         <Card className="border-[#D8E8F0] bg-white p-6 shadow-sm">

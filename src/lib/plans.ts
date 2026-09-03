@@ -8,6 +8,64 @@ export type PlanResource =
   | "trainers";
 export type ResourceLimit = number | "unlimited";
 export type BillingCycle = "monthly" | "yearly";
+export type CommercialPlanFeatureStatus =
+  | "addon"
+  | "coming_soon"
+  | "included"
+  | "locked"
+  | "platform_approval_required";
+export type CommercialPlanFeatureKey =
+  | "ai_assistant"
+  | "api_integrations"
+  | "approvals"
+  | "assignments"
+  | "attendance"
+  | "audit_compliance"
+  | "automations"
+  | "backup_recovery"
+  | "certificates"
+  | "community_hub"
+  | "courses"
+  | "crm"
+  | "dashboard"
+  | "document_uploads"
+  | "documents"
+  | "finance"
+  | "live_classes"
+  | "marketing"
+  | "messages"
+  | "mobile_pwa"
+  | "notifications"
+  | "payment_gateway"
+  | "reports"
+  | "students"
+  | "team_operations"
+  | "website_builder"
+  | "workflows"
+  | "custom_branding";
+export type CommercialPlanContract = {
+  billing: {
+    monthly: number | null;
+    yearly: number | null;
+  };
+  code: "growth" | "premium" | "starter";
+  features: Record<CommercialPlanFeatureKey, CommercialPlanFeatureStatus>;
+  limits: {
+    admins: number;
+    aiRequestsMonthly: number;
+    automationRunsMonthly: number;
+    batches: number;
+    cohorts: number;
+    documentUploads: number;
+    messagesMonthly: number;
+    programs: number;
+    staffTrainers: number;
+    storageMb: number;
+    students: number;
+    teamMembers: number;
+  };
+  trialDays: number;
+};
 export type ManualPlanLimit = {
   label: string;
   note?: string;
@@ -35,11 +93,146 @@ export type PlanDefinition = {
   description: string;
   displayName: string;
   features: Record<FeatureKey, boolean>;
+  commercialContract: CommercialPlanContract | null;
   key: PlanKey;
   limits: Record<PlanResource, ResourceLimit>;
   manualLimits: ManualPlanLimit[];
   target: string;
 };
+
+const sharedIncludedFeatures = {
+  assignments: "included",
+  attendance: "included",
+  community_hub: "included",
+  courses: "included",
+  dashboard: "included",
+  document_uploads: "included",
+  documents: "included",
+  finance: "included",
+  messages: "included",
+  mobile_pwa: "included",
+  notifications: "included",
+  reports: "included",
+  students: "included",
+} as const;
+
+export const commercialPlanContracts = {
+  enterprise: {
+    billing: { monthly: null, yearly: null },
+    code: "premium",
+    features: {
+      ...sharedIncludedFeatures,
+      ai_assistant: "platform_approval_required",
+      api_integrations: "included",
+      approvals: "included",
+      audit_compliance: "included",
+      automations: "included",
+      backup_recovery: "included",
+      certificates: "included",
+      crm: "included",
+      custom_branding: "included",
+      live_classes: "coming_soon",
+      marketing: "included",
+      payment_gateway: "coming_soon",
+      team_operations: "included",
+      website_builder: "included",
+      workflows: "included",
+    },
+    limits: {
+      admins: 15,
+      aiRequestsMonthly: 10000,
+      automationRunsMonthly: 25000,
+      batches: 150,
+      cohorts: 150,
+      documentUploads: 50000,
+      messagesMonthly: 100000,
+      programs: 150,
+      staffTrainers: 75,
+      storageMb: 102400,
+      students: 5000,
+      teamMembers: 100,
+    },
+    trialDays: 14,
+  },
+  growth: {
+    billing: { monthly: 5999, yearly: 59990 },
+    code: "growth",
+    features: {
+      ...sharedIncludedFeatures,
+      ai_assistant: "platform_approval_required",
+      api_integrations: "locked",
+      approvals: "included",
+      audit_compliance: "included",
+      automations: "included",
+      backup_recovery: "included",
+      certificates: "included",
+      crm: "included",
+      custom_branding: "addon",
+      live_classes: "coming_soon",
+      marketing: "included",
+      payment_gateway: "coming_soon",
+      team_operations: "included",
+      website_builder: "addon",
+      workflows: "included",
+    },
+    limits: {
+      admins: 5,
+      aiRequestsMonthly: 500,
+      automationRunsMonthly: 5000,
+      batches: 25,
+      cohorts: 25,
+      documentUploads: 10000,
+      messagesMonthly: 25000,
+      programs: 25,
+      staffTrainers: 15,
+      storageMb: 25600,
+      students: 500,
+      teamMembers: 20,
+    },
+    trialDays: 14,
+  },
+  starter: {
+    billing: { monthly: 1499, yearly: 14990 },
+    code: "starter",
+    features: {
+      ...sharedIncludedFeatures,
+      ai_assistant: "locked",
+      api_integrations: "locked",
+      approvals: "locked",
+      audit_compliance: "locked",
+      automations: "locked",
+      backup_recovery: "locked",
+      certificates: "locked",
+      crm: "locked",
+      custom_branding: "locked",
+      live_classes: "coming_soon",
+      marketing: "locked",
+      payment_gateway: "coming_soon",
+      team_operations: "locked",
+      website_builder: "locked",
+      workflows: "locked",
+    },
+    limits: {
+      admins: 2,
+      aiRequestsMonthly: 0,
+      automationRunsMonthly: 0,
+      batches: 5,
+      cohorts: 5,
+      documentUploads: 500,
+      messagesMonthly: 1000,
+      programs: 5,
+      staffTrainers: 3,
+      storageMb: 2048,
+      students: 100,
+      teamMembers: 5,
+    },
+    trialDays: 14,
+  },
+} satisfies Record<"enterprise" | "growth" | "starter", CommercialPlanContract>;
+
+const starterContract = commercialPlanContracts.starter;
+const growthContract = commercialPlanContracts.growth;
+const premiumContract = commercialPlanContracts.enterprise;
 
 const allFeatures: Record<FeatureKey, boolean> = {
   assignments: true,
@@ -58,23 +251,22 @@ const allFeatures: Record<FeatureKey, boolean> = {
 
 export const planDefinitions: Record<PlanKey, PlanDefinition> = {
   enterprise: {
-    billing: {
-      monthly: null,
-      yearly: null,
-    },
+    billing: premiumContract.billing,
+    commercialContract: premiumContract,
     description:
       "Contact-sales/custom plan. Premium activation is deferred until fixed pricing and plan mapping are approved.",
     displayName: "Premium",
     features: {
       ...allFeatures,
+      live_classes: false,
     },
     key: "enterprise",
     limits: {
-      automations: 25000,
-      courses: 150,
-      students: 5000,
-      team_members: 100,
-      trainers: 75,
+      automations: premiumContract.limits.automationRunsMonthly,
+      courses: premiumContract.limits.programs,
+      students: premiumContract.limits.students,
+      team_members: premiumContract.limits.teamMembers,
+      trainers: premiumContract.limits.staffTrainers,
     },
     manualLimits: [
       {
@@ -95,6 +287,7 @@ export const planDefinitions: Record<PlanKey, PlanDefinition> = {
       monthly: 0,
       yearly: 0,
     },
+    commercialContract: null,
     description:
       "Legacy preview fallback. Public paid packaging starts with Starter.",
     displayName: "Starter preview",
@@ -107,99 +300,98 @@ export const planDefinitions: Record<PlanKey, PlanDefinition> = {
     },
     key: "free",
     limits: {
-      automations: 0,
-      courses: 5,
-      students: 100,
-      team_members: 2,
-      trainers: 1,
+      automations: starterContract.limits.automationRunsMonthly,
+      courses: starterContract.limits.programs,
+      students: starterContract.limits.students,
+      team_members: starterContract.limits.teamMembers,
+      trainers: starterContract.limits.staffTrainers,
     },
     manualLimits: [
       {
         label: "Storage",
-        value: "5GB",
+        value: "2 GB",
         note: "Founder-monitored during soft launch.",
       },
       {
         label: "Live classes",
-        value: "20/month",
-        note: "Founder-monitored during soft launch.",
+        value: "Coming soon",
       },
-      { label: "Owner/admin seats", value: "1" },
-      { label: "Trainer seats", value: "1" },
+      { label: "Owner/admin seats", value: "2" },
+      { label: "Staff/Trainer seats", value: "3" },
+      { label: "Total team members", value: "5" },
     ],
     target: "Solo coach starting out",
   },
   growth: {
-    billing: {
-      monthly: 5999,
-      yearly: 59990,
-    },
+    billing: growthContract.billing,
+    commercialContract: growthContract,
     description: "Main paid plan for growing coaching teams and businesses.",
     displayName: "Growth",
     features: {
       ...allFeatures,
+      branded_portal: false,
+      live_classes: false,
     },
     key: "growth",
     limits: {
-      automations: 5000,
-      courses: 25,
-      students: 1000,
-      team_members: 15,
-      trainers: 10,
+      automations: growthContract.limits.automationRunsMonthly,
+      courses: growthContract.limits.programs,
+      students: growthContract.limits.students,
+      team_members: growthContract.limits.teamMembers,
+      trainers: growthContract.limits.staffTrainers,
     },
     manualLimits: [
       {
         label: "Storage",
-        value: "50GB",
+        value: "25 GB",
         note: "Founder-monitored during soft launch.",
       },
       {
         label: "Live classes",
-        value: "100/month",
-        note: "Founder-monitored during soft launch.",
+        value: "Coming soon",
       },
       {
-        label: "Team users",
+        label: "Owner/admin seats",
         value: "5",
-        note: "Non-trainer seats are founder-monitored; automatic team-seat counting includes all roles.",
       },
-      { label: "Trainer seats", value: "10" },
+      { label: "Staff/Trainer seats", value: "15" },
+      { label: "Total team members", value: "20" },
     ],
     target: "Scaling coaching or multi-program business",
   },
   starter: {
-    billing: {
-      monthly: 1499,
-      yearly: 14990,
-    },
+    billing: starterContract.billing,
+    commercialContract: starterContract,
     description: "Paid launch plan for small coaching teams and businesses.",
     displayName: "Starter",
     features: {
       ...allFeatures,
       automations: false,
       branded_portal: false,
+      certificates: false,
+      live_classes: false,
     },
     key: "starter",
     limits: {
-      automations: 0,
-      courses: 5,
-      students: 100,
-      team_members: 2,
-      trainers: 1,
+      automations: starterContract.limits.automationRunsMonthly,
+      courses: starterContract.limits.programs,
+      students: starterContract.limits.students,
+      team_members: starterContract.limits.teamMembers,
+      trainers: starterContract.limits.staffTrainers,
     },
     manualLimits: [
       {
         label: "Storage",
-        value: "5GB",
+        value: "2 GB",
         note: "Founder-monitored during soft launch.",
       },
       {
         label: "Live classes",
-        value: "20/month",
-        note: "Founder-monitored during soft launch.",
+        value: "Coming soon",
       },
-      { label: "Owner/admin seats", value: "1" },
-      { label: "Trainer seats", value: "1" },
+      { label: "Owner/admin seats", value: "2" },
+      { label: "Staff/Trainer seats", value: "3" },
+      { label: "Total team members", value: "5" },
     ],
     target: "Active coach with a small team",
   },
@@ -292,9 +484,7 @@ export function getPlanDisplayPrice(
   const amount = getPlanBillingAmount(plan, billingCycle);
 
   if (amount === null) {
-    return billingCycle === "monthly"
-      ? "Contact us"
-      : "Custom scope and activation terms";
+    return "Contact Sales";
   }
 
   if (amount === 0) {
