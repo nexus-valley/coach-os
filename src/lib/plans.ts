@@ -497,7 +497,20 @@ export function getPlanDisplayPrice(
 }
 
 export function getPlanLimitSummary(plan: StoredPlanKey | PlanKey | unknown) {
-  const limits = getPlanDefinition(plan).limits;
+  const definition = getPlanDefinition(plan);
+  const contract = definition.commercialContract;
+
+  if (contract) {
+    const storageGb = contract.limits.storageMb / 1024;
+
+    return `${formatResourceLimit(contract.limits.students)} Students, ${formatResourceLimit(
+      contract.limits.programs,
+    )} Programs, ${formatResourceLimit(
+      contract.limits.teamMembers,
+    )} Team members, ${formatResourceLimit(storageGb)} GB Storage`;
+  }
+
+  const limits = definition.limits;
 
   return `up to ${formatResourceLimit(limits.students)} students and ${formatResourceLimit(
     limits.courses,

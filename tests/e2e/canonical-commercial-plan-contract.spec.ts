@@ -58,7 +58,7 @@ test.describe("UX-8G4A1 canonical commercial plan contract", () => {
       "INR 14,990 / year",
     );
     expect(getPlanLimitSummary("starter")).toBe(
-      "up to 100 students and 5 active programs",
+      "100 Students, 5 Programs, 5 Team members, 2 GB Storage",
     );
   });
 
@@ -89,7 +89,7 @@ test.describe("UX-8G4A1 canonical commercial plan contract", () => {
       "INR 59,990 / year",
     );
     expect(getPlanLimitSummary("growth")).toBe(
-      "up to 500 students and 25 active programs",
+      "500 Students, 25 Programs, 20 Team members, 25 GB Storage",
     );
   });
 
@@ -169,6 +169,12 @@ test.describe("UX-8G4A1 canonical commercial plan contract", () => {
     expect(onboardingSource).toContain("getPlanLimitSummary");
     expect(getPublicStartingPrice()).toBe("INR 1,499");
     expect(getPublicPlanCards()).toHaveLength(3);
+    expect(
+      getPublicPlanCards().find((plan) => plan.key === "starter")?.limitSummary,
+    ).toBe("100 Students, 5 Programs, 5 Team members, 2 GB Storage");
+    expect(
+      getPublicPlanCards().find((plan) => plan.key === "growth")?.limitSummary,
+    ).toBe("500 Students, 25 Programs, 20 Team members, 25 GB Storage");
   });
 
   test("6. active presentation sources do not retain superseded limits", () => {
@@ -178,6 +184,10 @@ test.describe("UX-8G4A1 canonical commercial plan contract", () => {
     expect(plansSource).not.toContain('value: "5GB"');
     expect(plansSource).not.toContain('label: "Trainer seats", value: "1"');
     expect(commercialPlanContracts.starter.limits.teamMembers).toBe(5);
+    expect(getPlanLimitSummary("starter")).not.toContain("2 Team members");
+    expect(getPlanLimitSummary("starter")).not.toContain("5 GB Storage");
+    expect(getPlanLimitSummary("growth")).not.toContain("1,000 Students");
+    expect(getPlanLimitSummary("growth")).not.toContain("50 GB Storage");
   });
 
   test("7. payment-policy pricing remains shared and final INR pricing stays private", () => {
