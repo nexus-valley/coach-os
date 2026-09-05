@@ -1,10 +1,6 @@
 import { logActivity } from "@/src/lib/auditLogger";
 import { requireTenantPermission } from "@/src/lib/permissions";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
-import {
-  enforceWorkspaceLimit,
-  refreshWorkspaceUsageSnapshot,
-} from "@/src/lib/usage";
 
 export type AutomationTriggerType =
   | "assignment_overdue"
@@ -350,8 +346,6 @@ export async function createAutomationRule(payload: AutomationRulePayload) {
     permission: "manage_automations",
     tenantId: payload.tenant_id,
   });
-  await enforceWorkspaceLimit(payload.tenant_id, "automations");
-
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
     .rpc("create_automation_rule_secure", {
@@ -373,7 +367,6 @@ export async function createAutomationRule(payload: AutomationRulePayload) {
   const rule = normalizeRule(data as Record<string, unknown>);
   const createdRule = await attachRelatedRowsForRule(rule);
 
-  await refreshWorkspaceUsageSnapshot(rule.tenant_id);
   await logActivity({
     action: "automation_created",
     description: `Created automation ${rule.name}.`,
@@ -497,7 +490,6 @@ export async function deleteAutomationRule(ruleId: string, tenantId: string) {
     throw error;
   }
 
-  await refreshWorkspaceUsageSnapshot(tenantId);
 }
 
 export async function getAutomationRuns(tenantId: string, limit = 20) {

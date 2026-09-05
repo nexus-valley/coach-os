@@ -11,6 +11,8 @@ import type {
 } from "@/src/lib/ai/assistantTypes";
 
 const maxMessageLength = 2000;
+const assistantUnavailableMessage =
+  "AI Assistant is not available for this workspace.";
 
 function normalizeMessage(message: string) {
   return message.replace(/\s+/g, " ").trim();
@@ -108,6 +110,36 @@ async function recordAssistantExchange(
   return data as string;
 }
 
+async function assertAssistantFeatureAccess(
+  supabase: SupabaseClient,
+  tenantId: string,
+  mode: "student" | "team",
+) {
+  const { data, error } = await supabase.rpc(
+    mode === "student"
+      ? "get_portal_feature_access"
+      : "get_tenant_feature_access",
+    {
+      p_tenant_id: tenantId,
+    },
+  );
+
+  if (error || !data || typeof data !== "object" || Array.isArray(data)) {
+    throw new AssistantAccessError(assistantUnavailableMessage);
+  }
+
+  const authority = data as {
+    features?: Array<{ feature_key?: unknown; status?: unknown }>;
+  };
+  const assistantFeature = authority.features?.find(
+    (feature) => feature.feature_key === "ai_assistant",
+  );
+
+  if (assistantFeature?.status !== "enabled") {
+    throw new AssistantAccessError(assistantUnavailableMessage);
+  }
+}
+
 export async function handleAssistantMessage(
   supabase: SupabaseClient,
   request: AssistantRequest,
@@ -123,6 +155,7 @@ export async function handleAssistantMessage(
   }
 
   const context = await buildAssistantContext(supabase, request.scope);
+  await assertAssistantFeatureAccess(supabase, context.tenantId, context.mode);
   const {
     data: { user },
   } = await supabase.auth.getUser();

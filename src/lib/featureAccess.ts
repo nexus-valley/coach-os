@@ -31,7 +31,8 @@ export type FeatureKey =
   | "payment_gateway"
   | "live_classes"
   | "notifications"
-  | "mobile_pwa";
+  | "mobile_pwa"
+  | "ai_assistant";
 
 export type FeatureDefinition = {
   description: string;
@@ -223,7 +224,7 @@ export const navFeatureByLabel: Record<string, FeatureKey | undefined> = {
   Announcements: "messages",
   Approvals: "approvals",
   Assignments: "assignments",
-  Assistant: "dashboard",
+  Assistant: "ai_assistant",
   "Backup & Recovery": "backup_recovery",
   Branding: "website_builder",
   Certificates: "certificates",
