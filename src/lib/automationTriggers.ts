@@ -11,6 +11,8 @@ const tenantTrialSelect =
 type AutomationTriggerResult = {
   executed: number;
   failed: number;
+  quotaDenied: number;
+  quotaMessage: string | null;
   results: [];
   skipped: number;
 };
@@ -18,15 +20,25 @@ type AutomationTriggerResult = {
 const emptyTriggerResult: AutomationTriggerResult = {
   executed: 0,
   failed: 0,
+  quotaDenied: 0,
+  quotaMessage: null,
   results: [],
   skipped: 0,
 };
 
+export function createAutomationExecutionId() {
+  return crypto.randomUUID();
+}
+
 export async function runAutomationTrigger(
   triggerType: AutomationTriggerType,
-  context: Omit<AutomationTriggerContext, "triggerSource">,
+  context: Omit<AutomationTriggerContext, "triggerSource"> & {
+    executionId?: string;
+  },
 ): Promise<AutomationTriggerResult> {
   try {
+    const executionId = context.executionId ?? createAutomationExecutionId();
+
     await logActivity({
       action: "automation_trigger_received",
       description: `Received automation trigger ${triggerType}.`,
@@ -46,6 +58,7 @@ export async function runAutomationTrigger(
       entity_id: context.entityId ?? null,
       entity_type: context.entityType ?? "automation",
       metadata_json: context.metadata ?? {},
+      p_execution_id: executionId,
       tenant_id: context.tenantId,
       trigger_type: triggerType,
     });
@@ -55,10 +68,16 @@ export async function runAutomationTrigger(
     }
 
     const summary = Array.isArray(data) ? data[0] : data;
+    const quotaDenied = Number(summary?.quota_denied_count ?? 0);
 
     return {
       executed: Number(summary?.executed_count ?? 0),
       failed: Number(summary?.failed_count ?? 0),
+      quotaDenied,
+      quotaMessage:
+        quotaDenied > 0
+          ? "You've reached your monthly automation run limit."
+          : null,
       results: [],
       skipped: Number(summary?.skipped_count ?? 0),
     };
@@ -78,7 +97,7 @@ export async function runAssignmentOverdueAutomationForTenant(tenantId: string) 
     .limit(100);
 
   if (error) {
-    return { executed: 0, failed: 0, results: [], skipped: 0 };
+    return { ...emptyTriggerResult, results: [] };
   }
 
   const assignments = (data ?? []) as {
@@ -90,7 +109,7 @@ export async function runAssignmentOverdueAutomationForTenant(tenantId: string) 
     tenant_id: string;
     title: string;
   }[];
-  const totals = { executed: 0, failed: 0, results: [], skipped: 0 } as Awaited<
+  const totals = { ...emptyTriggerResult, results: [] } as Awaited<
     ReturnType<typeof runAutomationTrigger>
   >;
 
@@ -109,6 +128,8 @@ export async function runAssignmentOverdueAutomationForTenant(tenantId: string) 
     });
     totals.executed += result.executed;
     totals.failed += result.failed;
+    totals.quotaDenied += result.quotaDenied;
+    totals.quotaMessage ??= result.quotaMessage;
     totals.skipped += result.skipped;
     totals.results.push(...result.results);
   }
@@ -128,7 +149,7 @@ export async function runLowAttendanceAutomationForTenant(
     .limit(5000);
 
   if (error) {
-    return { executed: 0, failed: 0, results: [], skipped: 0 };
+    return { ...emptyTriggerResult, results: [] };
   }
 
   const byStudent = new Map<string, { attended: number; total: number }>();
@@ -147,7 +168,7 @@ export async function runLowAttendanceAutomationForTenant(
     byStudent.set(record.student_id, current);
   }
 
-  const totals = { executed: 0, failed: 0, results: [], skipped: 0 } as Awaited<
+  const totals = { ...emptyTriggerResult, results: [] } as Awaited<
     ReturnType<typeof runAutomationTrigger>
   >;
 
@@ -175,6 +196,8 @@ export async function runLowAttendanceAutomationForTenant(
     });
     totals.executed += result.executed;
     totals.failed += result.failed;
+    totals.quotaDenied += result.quotaDenied;
+    totals.quotaMessage ??= result.quotaMessage;
     totals.skipped += result.skipped;
     totals.results.push(...result.results);
   }
@@ -194,7 +217,7 @@ export async function runTrialExpiringAutomationForTenant(
     .maybeSingle();
 
   if (error || !data) {
-    return { executed: 0, failed: 0, results: [], skipped: 0 };
+    return { ...emptyTriggerResult, results: [] };
   }
 
   const tenant = data as {
@@ -208,7 +231,7 @@ export async function runTrialExpiringAutomationForTenant(
     : null;
 
   if (!tenant.is_trial_active || !trialEndsAt) {
-    return { executed: 0, failed: 0, results: [], skipped: 0 };
+    return { ...emptyTriggerResult, results: [] };
   }
 
   const now = Date.now();
@@ -217,7 +240,7 @@ export async function runTrialExpiringAutomationForTenant(
   );
 
   if (daysRemaining < 0 || daysRemaining > warningWindowDays) {
-    return { executed: 0, failed: 0, results: [], skipped: 0 };
+    return { ...emptyTriggerResult, results: [] };
   }
 
   return runAutomationTrigger("trial_expiring", {
