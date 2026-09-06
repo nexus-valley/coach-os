@@ -7,6 +7,9 @@ const read = (path: string) => readFileSync(join(root, path), "utf8");
 const migration = read(
   "supabase/bundle_ux8g4a2c_chat_monthly_meter_integration.sql",
 );
+const requestIdClosure = read(
+  "supabase/bundle_ux8g4a2c2_chat_request_id_enforcement_closure.sql",
+);
 const academyChat = read("src/lib/academyChat.ts");
 const coachList = read("src/components/messages/MessagesPageClient.tsx");
 const coachThread = read("src/components/messages/ThreadDetailClient.tsx");
@@ -180,7 +183,7 @@ test.describe("UX-8G4A2C Chat monthly meter integration", () => {
     expect(lock).not.toContain("date_trunc");
   });
 
-  test("8. keeps old clients metered while requiring a later legacy-overload removal", () => {
+  test("8. records the metered bridge and requires its exact A2C2 retirement", () => {
     const sql = executableSql();
     for (const identity of [
       "public.create_student_direct_chat(uuid,uuid,text,text)",
@@ -189,10 +192,16 @@ test.describe("UX-8G4A2C Chat monthly meter integration", () => {
       "public.send_student_chat_message(uuid,text)",
     ]) {
       expect(sql).toContain(`grant execute on function ${identity}`);
+      expect(requestIdClosure.toLowerCase()).toContain(
+        `drop function ${identity}`,
+      );
     }
     expect(sql.match(/gen_random_uuid\(\)/g)).toHaveLength(4);
     expect(sql).toContain("ux-8g4a2c2 removes these identities");
     expect(verifier("POST-APPLY")).toContain("authenticated_execute = 8");
+    expect(requestIdClosure).toContain("legacy_identities_absent");
+    expect(requestIdClosure).toContain("authenticated_execute = 4");
+    expect(requestIdClosure).toContain("no_alternate_writer_wrapper");
   });
 
   test("9. preserves private helpers, exact RPC ACLs, and denied table writes", () => {
