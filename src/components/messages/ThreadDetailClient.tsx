@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 
 import { Badge } from "@/src/components/ui/Badge";
 import { Button } from "@/src/components/ui/Button";
@@ -11,10 +11,12 @@ import { PageHeader } from "@/src/components/ui/PageHeader";
 import { SectionHeader } from "@/src/components/ui/SectionHeader";
 import {
   closeChatThread,
+  createChatRequestId,
   formatChatDate,
   formatChatType,
   getTeamChatThread,
   markChatThreadRead,
+  isChatMonthlyLimitError,
   sendTeamChatMessage,
   type AcademyChatMessage,
   type AcademyChatThread,
@@ -65,8 +67,12 @@ export function ThreadDetailClient({ threadId }: ThreadDetailClientProps) {
   const [loading, setLoading] = useState(true);
   const [messages, setMessages] = useState<AcademyChatMessage[]>([]);
   const [mutating, setMutating] = useState("");
+  const [quotaLimited, setQuotaLimited] = useState(false);
   const [success, setSuccess] = useState("");
   const [thread, setThread] = useState<AcademyChatThread | null>(null);
+  const sendRequest = useRef<{ fingerprint: string; requestId: string } | null>(
+    null,
+  );
 
   const readOnly = thread?.status !== "active";
   const subtitle = useMemo(() => {
@@ -137,19 +143,30 @@ export function ThreadDetailClient({ threadId }: ThreadDetailClientProps) {
     }
 
     setActionError("");
+    setQuotaLimited(false);
     setSuccess("");
     setMutating("send");
+
+    const fingerprint = JSON.stringify([threadId, composer.trim()]);
+    const requestId =
+      sendRequest.current?.fingerprint === fingerprint
+        ? sendRequest.current.requestId
+        : createChatRequestId();
+    sendRequest.current = { fingerprint, requestId };
 
     try {
       await sendTeamChatMessage({
         body: composer,
+        requestId,
         threadId,
       });
+      sendRequest.current = null;
       setComposer("");
       await loadThread();
       setSuccess("Message sent.");
     } catch (caught) {
       setActionError(getErrorMessage(caught, "Unable to send message."));
+      setQuotaLimited(isChatMonthlyLimitError(caught));
     } finally {
       setMutating("");
     }
@@ -235,7 +252,16 @@ export function ThreadDetailClient({ threadId }: ThreadDetailClientProps) {
         title={thread.title || "Student chat"}
       />
 
-      {actionError ? <FeedbackAlert>{actionError}</FeedbackAlert> : null}
+      {actionError ? (
+        <div className="space-y-3">
+          <FeedbackAlert>{actionError}</FeedbackAlert>
+          {quotaLimited ? (
+            <Button href="/app/subscription" size="sm" variant="secondary">
+              Review subscription
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
       {success ? <FeedbackAlert tone="success">{success}</FeedbackAlert> : null}
 
       <Card className="p-5">

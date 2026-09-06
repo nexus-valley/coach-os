@@ -53,6 +53,36 @@ type ThreadListPayload = {
   threads?: AcademyChatThread[];
 };
 
+export class ChatMonthlyLimitError extends Error {
+  constructor(audience: "coach" | "student") {
+    super(
+      audience === "coach"
+        ? "You've reached your monthly messaging limit."
+        : "Messaging is temporarily unavailable for this workspace. Please contact your coach.",
+    );
+    this.name = "ChatMonthlyLimitError";
+  }
+}
+
+export function createChatRequestId() {
+  return crypto.randomUUID();
+}
+
+export function isChatMonthlyLimitError(error: unknown) {
+  return error instanceof ChatMonthlyLimitError;
+}
+
+function throwChatMutationError(
+  error: { message?: string },
+  audience: "coach" | "student",
+): never {
+  if (error.message?.includes("Monthly usage limit reached.")) {
+    throw new ChatMonthlyLimitError(audience);
+  }
+
+  throw error;
+}
+
 function normalizeThreadList(data: unknown) {
   const payload = (data ?? {}) as ThreadListPayload;
   return Array.isArray(payload.threads) ? payload.threads : [];
@@ -141,6 +171,7 @@ export async function getStudentChatThread(threadId: string) {
 
 export async function createStudentDirectChat(input: {
   initialMessage: string;
+  requestId: string;
   studentId: string;
   tenantId: string;
   title: string;
@@ -148,13 +179,14 @@ export async function createStudentDirectChat(input: {
   const supabase = getSupabaseClient();
   const { data, error } = await supabase.rpc("create_student_direct_chat", {
     p_initial_message: input.initialMessage,
+    p_request_id: input.requestId,
     p_student_id: input.studentId,
     p_tenant_id: input.tenantId,
     p_title: input.title,
   });
 
   if (error) {
-    throw error;
+    throwChatMutationError(error, "coach");
   }
 
   return data as string;
@@ -162,16 +194,18 @@ export async function createStudentDirectChat(input: {
 
 export async function createStudentSupportThread(input: {
   initialMessage: string;
+  requestId: string;
   title: string;
 }) {
   const supabase = getSupabaseClient();
   const { data, error } = await supabase.rpc("create_student_support_thread", {
     p_initial_message: input.initialMessage,
+    p_request_id: input.requestId,
     p_title: input.title,
   });
 
   if (error) {
-    throw error;
+    throwChatMutationError(error, "student");
   }
 
   return data as string;
@@ -179,16 +213,18 @@ export async function createStudentSupportThread(input: {
 
 export async function sendTeamChatMessage(input: {
   body: string;
+  requestId: string;
   threadId: string;
 }) {
   const supabase = getSupabaseClient();
   const { data, error } = await supabase.rpc("send_team_chat_message", {
     p_body: input.body,
+    p_request_id: input.requestId,
     p_thread_id: input.threadId,
   });
 
   if (error) {
-    throw error;
+    throwChatMutationError(error, "coach");
   }
 
   return data as string;
@@ -196,16 +232,18 @@ export async function sendTeamChatMessage(input: {
 
 export async function sendStudentChatMessage(input: {
   body: string;
+  requestId: string;
   threadId: string;
 }) {
   const supabase = getSupabaseClient();
   const { data, error } = await supabase.rpc("send_student_chat_message", {
     p_body: input.body,
+    p_request_id: input.requestId,
     p_thread_id: input.threadId,
   });
 
   if (error) {
-    throw error;
+    throwChatMutationError(error, "student");
   }
 
   return data as string;

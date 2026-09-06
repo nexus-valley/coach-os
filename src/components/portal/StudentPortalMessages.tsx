@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 
 import { Badge } from "@/src/components/ui/Badge";
 import { Button } from "@/src/components/ui/Button";
@@ -10,6 +10,7 @@ import { PageHeader } from "@/src/components/ui/PageHeader";
 import { SectionHeader } from "@/src/components/ui/SectionHeader";
 import {
   createStudentSupportThread,
+  createChatRequestId,
   formatChatDate,
   formatChatType,
   getStudentChatThread,
@@ -83,6 +84,13 @@ export function StudentPortalMessages({ context }: StudentPortalMessagesProps) {
   const [supportOpen, setSupportOpen] = useState(false);
   const [success, setSuccess] = useState("");
   const [threads, setThreads] = useState<AcademyChatThread[]>([]);
+  const replyRequest = useRef<{ fingerprint: string; requestId: string } | null>(
+    null,
+  );
+  const supportRequest = useRef<{
+    fingerprint: string;
+    requestId: string;
+  } | null>(null);
 
   const replyAllowed = canStudentReply(selectedThread);
 
@@ -197,11 +205,23 @@ export function StudentPortalMessages({ context }: StudentPortalMessagesProps) {
     setSuccess("");
     setMutating("support");
 
+    const fingerprint = JSON.stringify([
+      supportForm.title.trim(),
+      supportForm.initialMessage.trim(),
+    ]);
+    const requestId =
+      supportRequest.current?.fingerprint === fingerprint
+        ? supportRequest.current.requestId
+        : createChatRequestId();
+    supportRequest.current = { fingerprint, requestId };
+
     try {
       const threadId = await createStudentSupportThread({
         initialMessage: supportForm.initialMessage,
+        requestId,
         title: supportForm.title,
       });
+      supportRequest.current = null;
       setSupportForm(emptySupportForm);
       setSupportOpen(false);
       setSuccess("Support request created.");
@@ -227,11 +247,20 @@ export function StudentPortalMessages({ context }: StudentPortalMessagesProps) {
     setSuccess("");
     setMutating("send");
 
+    const fingerprint = JSON.stringify([selectedThread.id, composer.trim()]);
+    const requestId =
+      replyRequest.current?.fingerprint === fingerprint
+        ? replyRequest.current.requestId
+        : createChatRequestId();
+    replyRequest.current = { fingerprint, requestId };
+
     try {
       await sendStudentChatMessage({
         body: composer,
+        requestId,
         threadId: selectedThread.id,
       });
+      replyRequest.current = null;
       setComposer("");
       await loadThreadDetail(selectedThread.id);
       const nextThreads = await getStudentChatThreads();

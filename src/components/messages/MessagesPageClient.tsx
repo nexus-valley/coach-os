@@ -5,10 +5,12 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 
 import {
+  createChatRequestId,
   createStudentDirectChat,
   formatChatDate,
   formatChatType,
   getTeamChatThreads,
+  isChatMonthlyLimitError,
   type AcademyChatThread,
   type AcademyChatThreadType,
 } from "@/src/lib/academyChat";
@@ -73,11 +75,16 @@ function getThreadSubtitle(thread: AcademyChatThread) {
 export function MessagesPageClient() {
   const router = useRouter();
   const initialLoadStarted = useRef(false);
+  const directChatRequest = useRef<{
+    fingerprint: string;
+    requestId: string;
+  } | null>(null);
   const [actionError, setActionError] = useState("");
   const [filter, setFilter] = useState<AcademyChatThreadType | "all">("all");
   const [form, setForm] = useState<ChatFormState>(emptyForm);
   const [formOpen, setFormOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [quotaLimited, setQuotaLimited] = useState(false);
   const [role, setRole] = useState<MemberRole | null>(null);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
@@ -124,6 +131,7 @@ export function MessagesPageClient() {
 
   const loadMessages = useCallback(async () => {
     setActionError("");
+    setQuotaLimited(false);
     setLoading(true);
 
     try {
@@ -179,17 +187,32 @@ export function MessagesPageClient() {
     }
 
     setActionError("");
+    setQuotaLimited(false);
     setSuccess("");
     setSaving(true);
+
+    const fingerprint = JSON.stringify([
+      tenant.id,
+      form.studentId,
+      form.title.trim(),
+      form.initialMessage.trim(),
+    ]);
+    const requestId =
+      directChatRequest.current?.fingerprint === fingerprint
+        ? directChatRequest.current.requestId
+        : createChatRequestId();
+    directChatRequest.current = { fingerprint, requestId };
 
     try {
       const threadId = await createStudentDirectChat({
         initialMessage: form.initialMessage,
+        requestId,
         studentId: form.studentId,
         tenantId: tenant.id,
         title: form.title,
       });
 
+      directChatRequest.current = null;
       setForm(emptyForm);
       setFormOpen(false);
       setSuccess("Student chat created.");
@@ -197,6 +220,7 @@ export function MessagesPageClient() {
       router.push(`/app/messages/${threadId}`);
     } catch (error) {
       setActionError(getErrorMessage(error, "Unable to create student chat."));
+      setQuotaLimited(isChatMonthlyLimitError(error));
     } finally {
       setSaving(false);
     }
@@ -231,7 +255,16 @@ export function MessagesPageClient() {
         title="Messages"
       />
 
-      {actionError ? <FeedbackAlert>{actionError}</FeedbackAlert> : null}
+      {actionError ? (
+        <div className="space-y-3">
+          <FeedbackAlert>{actionError}</FeedbackAlert>
+          {quotaLimited ? (
+            <Button href="/app/subscription" size="sm" variant="secondary">
+              Review subscription
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
       {success ? <FeedbackAlert tone="success">{success}</FeedbackAlert> : null}
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
