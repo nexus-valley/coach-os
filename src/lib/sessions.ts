@@ -1104,6 +1104,7 @@ export async function createSession(input: SessionInput) {
     await runAutomationTrigger("session_scheduled", {
       entityId: session.id,
       entityType: "session",
+      executionId: session.id,
       metadata: {
         cohort_id: session.cohort_id,
         course_id: session.course_id,
@@ -1149,6 +1150,7 @@ export async function createSession(input: SessionInput) {
   await runAutomationTrigger("session_scheduled", {
     entityId: session.id,
     entityType: "session",
+    executionId: session.id,
     metadata: {
       cohort_id: session.cohort_id,
       course_id: session.course_id,

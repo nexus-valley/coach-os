@@ -11,6 +11,8 @@ const migration = read(
 const sql = migration.toLowerCase();
 const triggers = read("src/lib/automationTriggers.ts");
 const browserRunner = read("src/lib/automationRunner.ts");
+const students = read("src/lib/students.ts");
+const sessions = read("src/lib/sessions.ts");
 const a2a = read(
   "supabase/bundle_ux8g4a2a_server_feature_entitlement_closure.sql",
 ).toLowerCase();
@@ -231,6 +233,41 @@ test.describe("UX-8G4A2D1 Automation monthly meter integration", () => {
       "You've reached your monthly automation run limit.",
     );
     expect(triggers).not.toMatch(/automation_runs_monthly|sqlstate|\bcounter\b|\bmeter\b/i);
+  });
+
+  test("14a. anchors active creation executions to canonical entity ids", () => {
+    const studentCalls = [
+      ...students.matchAll(
+        /runAutomationTrigger\("student_created",\s*\{([\s\S]*?)\n\s*\}\);/g,
+      ),
+    ];
+    const sessionCalls = [
+      ...sessions.matchAll(
+        /runAutomationTrigger\("session_scheduled",\s*\{([\s\S]*?)\n\s*\}\);/g,
+      ),
+    ];
+
+    expect(studentCalls).toHaveLength(1);
+    expect(studentCalls[0][1]).toContain("executionId: student.id");
+    expect(sessionCalls).toHaveLength(2);
+    for (const call of sessionCalls) {
+      expect(call[1]).toContain("executionId: session.id");
+    }
+
+    const activeCallBodies = [
+      studentCalls[0][1],
+      ...sessionCalls.map((call) => call[1]),
+    ];
+    expect(
+      activeCallBodies.filter((call) => /executionId:\s*\w+\.id/.test(call)),
+    ).toHaveLength(3);
+    expect(activeCallBodies.join("\n")).not.toContain("createAutomationExecutionId");
+    expect(activeCallBodies.join("\n")).not.toContain("randomUUID");
+
+    expect(students).not.toContain('.rpc("run_automation_trigger"');
+    expect(sessions).not.toContain('.rpc("run_automation_trigger"');
+    expect(triggers.match(/\.rpc\("run_automation_trigger"/g)).toHaveLength(1);
+    expect(triggers.match(/p_execution_id:/g)).toHaveLength(1);
   });
 
   test("15. keeps manual browser execution retired", () => {

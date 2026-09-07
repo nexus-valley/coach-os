@@ -217,6 +217,7 @@ export async function createStudent(input: StudentInput) {
   await runAutomationTrigger("student_created", {
     entityId: student.id,
     entityType: "student",
+    executionId: student.id,
     metadata: {
       email: student.email,
       phone: student.phone,
