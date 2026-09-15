@@ -185,21 +185,33 @@ export type ManualSubscriptionActivationInput = {
   currency: "INR";
   customerEmail: string;
   founderApproval: string;
-  gracePeriodEndsAt?: string | null;
-  idempotencyKey: string;
   operatorNote?: string | null;
   paymentMethod: string;
   paymentReference: string;
   paymentVerifiedAt: string;
   planCode: "starter" | "growth";
   replaceCurrent: boolean;
-  subscriptionEnd: string;
-  subscriptionStart: string;
-  supportTier?: string | null;
+  requestId: string;
   tenantId: string;
 };
 
-export type ManualSubscriptionActivationResult = Record<string, unknown>;
+export type ManualSubscriptionActivationResult = {
+  activated: boolean;
+  activationAuditId: string;
+  assignmentId: string;
+  amountMinor: number;
+  billingCycle: "monthly" | "yearly";
+  currency: string;
+  currentPeriodEnd: string;
+  currentPeriodStart: string;
+  gracePeriodEndsAt: string;
+  idempotent: boolean;
+  paymentStatus: "paid";
+  planCode: string;
+  requestId: string;
+  status: "active";
+  tenantId: string;
+};
 
 export type PlatformSupportNoteInput = {
   metadata?: Record<string, unknown>;
@@ -365,34 +377,38 @@ export async function activateTenantSubscriptionManual(
   input: ManualSubscriptionActivationInput,
 ) {
   const supabase = getSupabaseClient();
-  const { data, error } = await supabase.rpc(
-    "activate_tenant_subscription_manual",
-    {
-      p_amount_minor: input.amountMinor,
-      p_billing_cycle: input.billingCycle,
-      p_currency: input.currency,
-      p_customer_email: input.customerEmail,
-      p_founder_approval: input.founderApproval,
-      p_grace_period_ends_at: input.gracePeriodEndsAt ?? null,
-      p_idempotency_key: input.idempotencyKey,
-      p_operator_note: input.operatorNote ?? null,
-      p_payment_method: input.paymentMethod,
-      p_payment_reference: input.paymentReference,
-      p_payment_verified_at: input.paymentVerifiedAt,
-      p_plan_code: input.planCode,
-      p_replace_current: input.replaceCurrent,
-      p_subscription_end: input.subscriptionEnd,
-      p_subscription_start: input.subscriptionStart,
-      p_support_tier: input.supportTier ?? null,
-      p_tenant_id: input.tenantId,
-    },
-  );
+  const { data, error } = await supabase.auth.getSession();
+  const accessToken = data.session?.access_token;
 
-  if (error) {
-    throw new Error(error.message);
+  if (error || !accessToken) {
+    throw new Error("Please sign in again to continue.");
   }
 
-  return (data ?? {}) as ManualSubscriptionActivationResult;
+  let response: Response;
+
+  try {
+    response = await fetch("/api/platform/manual-subscription-activation", {
+      body: JSON.stringify(input),
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      method: "POST",
+    });
+  } catch {
+    throw new Error("Unable to submit manual activation right now.");
+  }
+
+  const payload = (await response.json().catch(() => ({}))) as {
+    error?: string;
+    result?: ManualSubscriptionActivationResult;
+  };
+
+  if (!response.ok || !payload.result) {
+    throw new Error(payload.error ?? "Unable to submit manual activation.");
+  }
+
+  return payload.result;
 }
 
 export async function recordPlatformSupportNote(input: PlatformSupportNoteInput) {

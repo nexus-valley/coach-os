@@ -1,6 +1,11 @@
 "use client";
 
-import { useMemo, useState, type FormEvent, type ReactNode } from "react";
+import {
+  useMemo,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 
 import { Badge } from "@/src/components/ui/Badge";
 import { Button } from "@/src/components/ui/Button";
@@ -27,17 +32,13 @@ type ManualActivationFormState = {
   currency: ManualSubscriptionActivationInput["currency"];
   customerEmail: string;
   founderApproval: string;
-  gracePeriodEndsAt: string;
-  idempotencyKey: string;
   operatorNote: string;
   paymentMethod: string;
   paymentReference: string;
   paymentVerifiedAt: string;
   planCode: ManualSubscriptionActivationInput["planCode"];
   replaceCurrent: boolean;
-  subscriptionEnd: string;
-  subscriptionStart: string;
-  supportTier: string;
+  requestId: string;
   tenantId: string;
   verified: boolean;
 };
@@ -57,8 +58,8 @@ const regressionTenantName = "CoachFort Regression Coaching";
 const regressionTenantSlug = "coachfort-regression";
 const regressionCustomerEmail = "owner.regression@coachfort.demo";
 const regressionPaymentReference = "CF-REGRESSION-STARTER-MONTHLY-20260719-01";
-const regressionIdempotencyKey =
-  "manual-activation-regression-starter-monthly-20260719-01";
+const uuidPattern =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 type CanonicalActivationAmounts = Record<
   ManualActivationFormState["planCode"],
   Record<ManualActivationFormState["billingCycle"], number | null>
@@ -106,17 +107,13 @@ const emptyForm: ManualActivationFormState = {
   currency: "INR",
   customerEmail: "",
   founderApproval: "",
-  gracePeriodEndsAt: "",
-  idempotencyKey: "",
   operatorNote: "",
   paymentMethod: "",
   paymentReference: "",
   paymentVerifiedAt: "",
   planCode: "starter",
   replaceCurrent: false,
-  subscriptionEnd: "",
-  subscriptionStart: "",
-  supportTier: "",
+  requestId: "",
   tenantId: "",
   verified: false,
 };
@@ -131,14 +128,12 @@ function toDateTimeLocal(date: Date) {
   return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
 }
 
-function addOneMonth(date: Date) {
-  const next = new Date(date);
-  next.setMonth(next.getMonth() + 1);
-  return next;
-}
-
 function subtractMinutes(date: Date, minutes: number) {
   return new Date(date.getTime() - minutes * 60 * 1000);
+}
+
+function createManualActivationRequestId() {
+  return globalThis.crypto.randomUUID();
 }
 
 function hasCurrentCanonicalAssignment(
@@ -162,12 +157,6 @@ function validationErrors(
   const errors: string[] = [];
   const amount = Number(form.amountMinor);
   const expectedAmount = exactAmounts[form.planCode]?.[form.billingCycle];
-  const startTime = form.subscriptionStart
-    ? new Date(form.subscriptionStart).getTime()
-    : Number.NaN;
-  const endTime = form.subscriptionEnd
-    ? new Date(form.subscriptionEnd).getTime()
-    : Number.NaN;
   const paymentVerifiedTime = form.paymentVerifiedAt
     ? new Date(form.paymentVerifiedAt).getTime()
     : Number.NaN;
@@ -188,15 +177,6 @@ function validationErrors(
   } else if (amount !== expectedAmount) {
     errors.push(`Amount minor must be ${expectedAmount} for this plan and cycle.`);
   }
-  if (!form.subscriptionStart) errors.push("Subscription start is required.");
-  if (!form.subscriptionEnd) errors.push("Subscription end is required.");
-  if (
-    form.subscriptionStart &&
-    form.subscriptionEnd &&
-    (!Number.isFinite(startTime) || !Number.isFinite(endTime) || endTime <= startTime)
-  ) {
-    errors.push("Subscription end must be after subscription start.");
-  }
   if (!form.paymentVerifiedAt) {
     errors.push("Payment verified time is required.");
   } else if (!Number.isFinite(paymentVerifiedTime)) {
@@ -207,7 +187,7 @@ function validationErrors(
   if (!form.paymentMethod.trim()) errors.push("Payment method is required.");
   if (!form.paymentReference.trim()) errors.push("Payment reference is required.");
   if (!form.founderApproval.trim()) errors.push("Founder approval is required.");
-  if (!form.idempotencyKey.trim()) errors.push("Idempotency key is required.");
+  if (!uuidPattern.test(form.requestId)) errors.push("Request id is required.");
   if (form.confirmationPhrase !== confirmationPhrase) {
     errors.push("Confirmation phrase is required.");
   }
@@ -286,17 +266,13 @@ function buildInput(form: ManualActivationFormState): ManualSubscriptionActivati
     currency: form.currency,
     customerEmail: form.customerEmail.trim(),
     founderApproval: form.founderApproval.trim(),
-    gracePeriodEndsAt: form.gracePeriodEndsAt || null,
-    idempotencyKey: form.idempotencyKey.trim(),
     operatorNote: form.operatorNote.trim() || null,
     paymentMethod: form.paymentMethod.trim(),
     paymentReference: form.paymentReference.trim(),
     paymentVerifiedAt: form.paymentVerifiedAt,
     planCode: form.planCode,
     replaceCurrent: form.replaceCurrent,
-    subscriptionEnd: form.subscriptionEnd,
-    subscriptionStart: form.subscriptionStart,
-    supportTier: form.supportTier.trim() || null,
+    requestId: form.requestId,
     tenantId: form.tenantId.trim(),
   };
 }
@@ -308,7 +284,7 @@ function resultValue(
   if (!result) return null;
 
   for (const key of keys) {
-    const value = result[key];
+    const value = (result as unknown as Record<string, unknown>)[key];
     if (value === null || value === undefined || value === "") continue;
     if (typeof value === "string" || typeof value === "number") {
       return String(value);
@@ -334,9 +310,10 @@ function activationResultSummary(
     ["Amount minor", ["amount_minor", "amountMinor", "amount"]],
     ["Current period starts", ["current_period_start", "currentPeriodStart"]],
     ["Current period ends", ["current_period_end", "currentPeriodEnd"]],
+    ["Grace period ends", ["gracePeriodEndsAt"]],
     ["Payment reference", ["payment_reference", "paymentReference"]],
-    ["Idempotency key", ["idempotency_key", "idempotencyKey"]],
-    ["Activation audit id", ["audit_id", "auditId", "activation_audit_id"]],
+    ["Request id", ["requestId"]],
+    ["Activation audit id", ["activationAuditId"]],
   ] as const;
   const summary: { label: string; value: string }[] = [];
 
@@ -422,9 +399,7 @@ export function ManualActivationPanel({
 
   const prefillRegressionTest = () => {
     const now = new Date();
-    const safeStart = subtractMinutes(now, 5);
     const safeVerifiedAt = subtractMinutes(now, 5);
-    const end = addOneMonth(safeStart);
 
     setResult(null);
     setError(null);
@@ -437,17 +412,13 @@ export function ManualActivationPanel({
       currency: "INR",
       customerEmail: regressionCustomerEmail,
       founderApproval: "internal-regression-test-approved-by-founder",
-      gracePeriodEndsAt: "",
-      idempotencyKey: regressionIdempotencyKey,
       operatorNote: "controlled regression test activation only",
       paymentMethod: "manual_test",
       paymentReference: regressionPaymentReference,
       paymentVerifiedAt: toDateTimeLocal(safeVerifiedAt),
       planCode: "starter",
       replaceCurrent: true,
-      subscriptionEnd: toDateTimeLocal(end),
-      subscriptionStart: toDateTimeLocal(safeStart),
-      supportTier: "founder",
+      requestId: createManualActivationRequestId(),
       tenantId: regressionTenantId,
       verified: false,
     }));
@@ -460,14 +431,11 @@ export function ManualActivationPanel({
     setActivationMode("selected");
     setForm((current) => ({
       ...current,
-      idempotencyKey:
-        current.idempotencyKey === regressionIdempotencyKey
-          ? ""
-          : current.idempotencyKey,
       paymentReference:
         current.paymentReference === regressionPaymentReference
           ? ""
           : current.paymentReference,
+      requestId: createManualActivationRequestId(),
       tenantId: selectedTenant.id,
     }));
   };
@@ -507,8 +475,8 @@ export function ManualActivationPanel({
           <p className="mt-1 max-w-3xl text-sm text-[#5D7185]">
             This activates a tenant SaaS subscription manually after
             founder-verified payment. This does not collect money, call Razorpay,
-            create a payment link, or enable checkout. Premium is blocked until
-            legacy plan mapping is resolved.
+            create a payment link, or enable checkout. The database validates the
+            selected plan and amount against the current CoachFort catalog.
           </p>
         </div>
         <Badge tone="warning">Owner/admin only</Badge>
@@ -588,9 +556,9 @@ export function ManualActivationPanel({
           <ul className="mt-2 list-disc space-y-1 pl-5">
             <li>Verify the SaaS payment externally before activating.</li>
             <li>
-              Record payment reference, invoice or receipt reference,
-              idempotency key, activation timestamp, and screenshots outside
-              this UI.
+              Record the manual payment reference, request ID, activation
+              timestamp, and supporting evidence in the approved operations
+              record.
             </li>
             <li>
               Confirm tenant id, customer email, plan, billing cycle, amount
@@ -600,11 +568,7 @@ export function ManualActivationPanel({
               After submit, verify visible plan, status, limits, and current
               period dates before telling the customer the subscription is ready.
             </li>
-            <li>
-              If visible period dates differ from the entered dates, stop real
-              customer onboarding and inspect the database/RPC path before
-              proceeding.
-            </li>
+            <li>CoachFort derives the paid period and seven-day grace window.</li>
           </ul>
         </div>
 
@@ -658,26 +622,6 @@ export function ManualActivationPanel({
           >
             <option value="INR">INR</option>
           </SelectField>
-          <InputField
-            label="Subscription start"
-            onChange={(value) => setField("subscriptionStart", value)}
-            type="datetime-local"
-            value={form.subscriptionStart}
-          />
-          <div>
-            <InputField
-              label="Subscription end"
-              onChange={(value) => setField("subscriptionEnd", value)}
-              type="datetime-local"
-              value={form.subscriptionEnd}
-            />
-            <p className="mt-2 text-xs font-normal text-[#5D7185]">
-              Record the exact local start and end values before submitting.
-              Browser datetime-local values can be interpreted by server or
-              database timezone rules, so the visible current-period date must
-              be verified after activation.
-            </p>
-          </div>
           <div>
             <InputField
               label="Payment verified at"
@@ -702,31 +646,28 @@ export function ManualActivationPanel({
           />
           <div>
             <InputField
-              label="Idempotency key"
-              onChange={(value) => setField("idempotencyKey", value)}
-              value={form.idempotencyKey}
+              label="Request id"
+              onChange={() => undefined}
+              readOnly
+              value={form.requestId}
             />
             <p className="mt-2 text-xs font-normal text-[#5D7185]">
-              Payment reference, idempotency key, and operator note are sent to
-              Manual Activation, but they may not be visible in every read-only
-              subscription view yet. Keep an external activation record.
+              This ID is retained when the same submission is retried. Start a
+              new request only for a new activation decision.
             </p>
+            <Button
+              className="mt-2"
+              onClick={() => setField("requestId", createManualActivationRequestId())}
+              type="button"
+              variant="outline"
+            >
+              Start new request
+            </Button>
           </div>
           <InputField
             label="Founder approval"
             onChange={(value) => setField("founderApproval", value)}
             value={form.founderApproval}
-          />
-          <InputField
-            label="Support tier"
-            onChange={(value) => setField("supportTier", value)}
-            value={form.supportTier}
-          />
-          <InputField
-            label="Grace period ends at"
-            onChange={(value) => setField("gracePeriodEndsAt", value)}
-            type="datetime-local"
-            value={form.gracePeriodEndsAt}
           />
         </div>
 
@@ -794,11 +735,13 @@ export function ManualActivationPanel({
               <p className="font-semibold">Post-activation verification required</p>
               <ul className="mt-2 list-disc space-y-1 pl-5">
                 <li>Verify tenant is active/paid on Starter or Growth.</li>
-                <li>Verify amount, limits, billing cycle, and current period dates.</li>
                 <li>
-                  Confirm payment reference, invoice or receipt reference,
-                  idempotency key, and activation timestamp are recorded
-                  externally.
+                  Verify amount, limits, billing cycle, current period dates, and
+                  the seven-day grace window.
+                </li>
+                <li>
+                  Confirm the manual payment evidence and request ID are present
+                  in the activation audit. No provider receipt is created here.
                 </li>
                 <li>
                   Capture screenshot or notes before starting real customer
@@ -823,9 +766,8 @@ export function ManualActivationPanel({
             Submit manual activation
           </Button>
           <p className="max-w-2xl text-sm text-[#5D7185]">
-            This button calls only activate_tenant_subscription_manual through
-            the authenticated browser Supabase session after all safety checks
-            pass.
+            This submits through an authenticated CoachFort server boundary. The
+            financial database authority is not browser-executable.
           </p>
         </div>
       </form>
@@ -849,11 +791,13 @@ function SummaryItem({ label, value }: { label: string; value: string }) {
 function InputField({
   label,
   onChange,
+  readOnly = false,
   type = "text",
   value,
 }: {
   label: string;
   onChange: (value: string) => void;
+  readOnly?: boolean;
   type?: string;
   value: string;
 }) {
@@ -863,6 +807,7 @@ function InputField({
       <input
         className="mt-2 h-11 w-full rounded-2xl border border-[#D8E8F0] bg-white px-3 text-sm font-normal outline-none focus:border-[#145DA0]"
         onChange={(event) => onChange(event.target.value)}
+        readOnly={readOnly}
         type={type}
         value={value}
       />
