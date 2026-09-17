@@ -95,6 +95,7 @@ test.describe("UX-8G4B1B Platform billing readiness surface", () => {
   test("2. authenticates Platform Owner/Admin and denies tenant or inactive authority", () => {
     expect(route).toContain("getBearerToken(request)");
     expect(route).toContain("requireAuthenticatedUser(accessToken)");
+    expect(route).toContain("getUserScopedSupabase(accessToken)");
     expect(route).toContain('.from("platform_admin_users")');
     expect(route).toContain('.eq("user_id", user.id)');
     expect(route).toContain('.eq("status", "active")');
@@ -109,6 +110,9 @@ test.describe("UX-8G4B1B Platform billing readiness surface", () => {
 
   test("3. calls only the service-side safe readiness RPC", () => {
     expect(route).toContain("getSupabaseAdminClient()");
+    expect(route.indexOf("getUserScopedSupabase(accessToken)")).toBeLessThan(
+      route.indexOf("getSupabaseAdminClient()"),
+    );
     expect(route).toContain('"get_platform_billing_readiness_server"');
     expect(route).toContain("p_expected_currency: expectedCurrency");
     expect(route).toContain("p_tenant_id: tenantId");

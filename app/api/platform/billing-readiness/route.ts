@@ -1,5 +1,6 @@
 import {
   getBearerToken,
+  getUserScopedSupabase,
   requireAuthenticatedUser,
 } from "@/src/lib/server/documentStorage";
 import { captureServerException } from "@/src/lib/server/monitoring";
@@ -45,8 +46,8 @@ export async function GET(request: Request) {
       return jsonError("Billing readiness request is invalid.", 400);
     }
 
-    const admin = getSupabaseAdminClient();
-    const { data: platformActor, error: roleError } = await admin
+    const userScopedSupabase = getUserScopedSupabase(accessToken);
+    const { data: platformActor, error: roleError } = await userScopedSupabase
       .from("platform_admin_users")
       .select("role,status")
       .eq("user_id", user.id)
@@ -69,6 +70,7 @@ export async function GET(request: Request) {
       );
     }
 
+    const admin = getSupabaseAdminClient();
     const { data, error } = await admin.rpc(
       "get_platform_billing_readiness_server",
       {
