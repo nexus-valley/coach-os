@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { AccessDeniedCard } from "@/src/components/security/AccessDeniedCard";
+import { BillingReadinessPanel } from "@/src/components/platform/BillingReadinessPanel";
 import { ManualActivationPanel } from "@/src/components/platform/ManualActivationPanel";
 import { Badge } from "@/src/components/ui/Badge";
 import { Button } from "@/src/components/ui/Button";
@@ -11,6 +12,7 @@ import { FeedbackAlert } from "@/src/components/ui/FeedbackAlert";
 import {
   capturePlatformUsageSnapshot,
   getPlatformAdminContext,
+  getPlatformBillingReadiness,
   getPlatformDashboard,
   getPlatformPlans,
   getPlatformTenantDetail,
@@ -29,6 +31,11 @@ import {
   type PlatformTenantDetail,
   type PlatformTenantSummary,
 } from "@/src/lib/platform";
+import {
+  platformBillingCurrencies,
+  type PlatformBillingCurrency,
+  type PlatformBillingReadiness,
+} from "@/src/lib/platformBillingReadiness";
 import {
   getPlatformPlanCatalog,
   getPlatformUpgradeRequests,
@@ -408,6 +415,15 @@ function canManagePlans(role: PlatformAdminContext["role"] | null | undefined) {
   return role === "owner" || role === "admin";
 }
 
+function getBillingReadinessCurrency(
+  entitlement: TenantEntitlementState | null,
+): PlatformBillingCurrency {
+  const currency = entitlement?.assignment?.currency?.toUpperCase();
+  return platformBillingCurrencies.includes(currency as PlatformBillingCurrency)
+    ? (currency as PlatformBillingCurrency)
+    : "INR";
+}
+
 function safeMetadataSummary(metadata: Record<string, unknown>) {
   const text = JSON.stringify(metadata ?? {});
   return text === "{}" ? "No metadata" : text.slice(0, 180);
@@ -489,6 +505,13 @@ function entitlementTone(value: string | null | undefined) {
 export function PlatformOwnerConsolePage() {
   const [adminContext, setAdminContext] = useState<PlatformAdminContext | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [billingReadiness, setBillingReadiness] =
+    useState<PlatformBillingReadiness | null>(null);
+  const [billingReadinessCurrency, setBillingReadinessCurrency] =
+    useState<PlatformBillingCurrency>("INR");
+  const [billingReadinessError, setBillingReadinessError] =
+    useState<string | null>(null);
+  const [billingReadinessLoading, setBillingReadinessLoading] = useState(false);
   const [canonicalAssignmentConfirmed, setCanonicalAssignmentConfirmed] =
     useState(false);
   const [canonicalAssignmentError, setCanonicalAssignmentError] =
@@ -585,13 +608,48 @@ export function PlatformOwnerConsolePage() {
       setCanonicalAssignmentForm(buildCanonicalAssignmentForm(entitlementData));
       setCanonicalAssignmentConfirmed(false);
       setCanonicalAssignmentError(null);
+      return entitlementData;
     } catch (error) {
       setCanonicalEntitlementState(null);
       setCanonicalAssignmentForm(emptyCanonicalAssignmentForm);
       setCanonicalAssignmentConfirmed(false);
       setCanonicalEntitlementError(normalizePlatformError(error));
+      return null;
     }
   }, []);
+
+  const loadBillingReadiness = useCallback(
+    async ({
+      currency,
+      role,
+      tenantId,
+    }: {
+      currency: PlatformBillingCurrency;
+      role: PlatformAdminContext["role"] | null | undefined;
+      tenantId: string | null;
+    }) => {
+      setBillingReadinessError(null);
+
+      if (!tenantId || !canManagePlans(role)) {
+        setBillingReadiness(null);
+        setBillingReadinessLoading(false);
+        return;
+      }
+
+      setBillingReadiness(null);
+      setBillingReadinessLoading(true);
+      try {
+        setBillingReadiness(
+          await getPlatformBillingReadiness(tenantId, currency),
+        );
+      } catch {
+        setBillingReadinessError("Billing readiness could not be checked.");
+      } finally {
+        setBillingReadinessLoading(false);
+      }
+    },
+    [],
+  );
 
   const loadUpgradeRequests = useCallback(
     async ({
@@ -653,6 +711,8 @@ export function PlatformOwnerConsolePage() {
         setCanonicalPlanCatalog([]);
         setCanonicalEntitlementState(null);
         setCanonicalEntitlementError(null);
+        setBillingReadiness(null);
+        setBillingReadinessError(null);
         return;
       }
 
@@ -674,7 +734,7 @@ export function PlatformOwnerConsolePage() {
       if (nextTenantId) {
         await loadTenantDetail(nextTenantId);
       }
-      await Promise.all([
+      const [entitlement] = await Promise.all([
         loadCanonicalEntitlements(nextTenantId),
         loadUpgradeRequests({
           role: context.role,
@@ -683,6 +743,13 @@ export function PlatformOwnerConsolePage() {
           tenantOnly: upgradeRequestsTenantOnly,
         }),
       ]);
+      const readinessCurrency = getBillingReadinessCurrency(entitlement);
+      setBillingReadinessCurrency(readinessCurrency);
+      await loadBillingReadiness({
+        currency: readinessCurrency,
+        role: context.role,
+        tenantId: nextTenantId,
+      });
     } catch (error) {
       setActionError(normalizePlatformError(error));
     } finally {
@@ -690,6 +757,7 @@ export function PlatformOwnerConsolePage() {
     }
   }, [
     loadCanonicalEntitlements,
+    loadBillingReadiness,
     loadTenantDetail,
     loadUpgradeRequests,
     selectedTenantId,
@@ -708,7 +776,7 @@ export function PlatformOwnerConsolePage() {
     setSelectedTenantId(tenantId);
 
     try {
-      await Promise.all([
+      const [, entitlement] = await Promise.all([
         loadTenantDetail(tenantId),
         loadCanonicalEntitlements(tenantId),
         loadUpgradeRequests({
@@ -718,9 +786,27 @@ export function PlatformOwnerConsolePage() {
           tenantOnly: upgradeRequestsTenantOnly,
         }),
       ]);
+      const readinessCurrency = getBillingReadinessCurrency(entitlement);
+      setBillingReadinessCurrency(readinessCurrency);
+      await loadBillingReadiness({
+        currency: readinessCurrency,
+        role: adminContext?.role,
+        tenantId,
+      });
     } catch (error) {
       setActionError(normalizePlatformError(error));
     }
+  };
+
+  const handleBillingReadinessCurrencyChange = (
+    currency: PlatformBillingCurrency,
+  ) => {
+    setBillingReadinessCurrency(currency);
+    void loadBillingReadiness({
+      currency,
+      role: adminContext?.role,
+      tenantId: selectedTenantId,
+    });
   };
 
   const handleSavePlan = async () => {
@@ -1044,6 +1130,25 @@ export function PlatformOwnerConsolePage() {
               detail={selectedTenantDetail}
               selectedTenantName={selectedTenant?.name}
             />
+
+            {canManagePlans(adminContext.role) ? (
+              <BillingReadinessPanel
+                currency={billingReadinessCurrency}
+                error={billingReadinessError}
+                loading={billingReadinessLoading}
+                readiness={billingReadiness}
+                selectedBusinessName={selectedTenant?.name}
+                selectedTenantId={selectedTenantId}
+                onCurrencyChange={handleBillingReadinessCurrencyChange}
+                onRefresh={() =>
+                  void loadBillingReadiness({
+                    currency: billingReadinessCurrency,
+                    role: adminContext.role,
+                    tenantId: selectedTenantId,
+                  })
+                }
+              />
+            ) : null}
 
             <CanonicalEntitlementPanel
               catalog={canonicalPlanCatalog}

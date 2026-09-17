@@ -1,4 +1,8 @@
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
+import type {
+  PlatformBillingCurrency,
+  PlatformBillingReadiness,
+} from "@/src/lib/platformBillingReadiness";
 
 export type PlatformRole = "owner" | "admin" | "support" | "finance";
 export type PlatformAdminStatus = "active" | "suspended";
@@ -409,6 +413,46 @@ export async function activateTenantSubscriptionManual(
   }
 
   return payload.result;
+}
+
+export async function getPlatformBillingReadiness(
+  tenantId: string,
+  expectedCurrency: PlatformBillingCurrency,
+) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.auth.getSession();
+  const accessToken = data.session?.access_token;
+
+  if (error || !accessToken) {
+    throw new Error("Please sign in again to continue.");
+  }
+
+  const search = new URLSearchParams({ expectedCurrency, tenantId });
+  let response: Response;
+
+  try {
+    response = await fetch(`/api/platform/billing-readiness?${search}`, {
+      cache: "no-store",
+      headers: { Authorization: `Bearer ${accessToken}` },
+      method: "GET",
+    });
+  } catch {
+    throw new Error("Billing readiness could not be checked.");
+  }
+
+  const payload = (await response.json().catch(() => ({}))) as
+    | PlatformBillingReadiness
+    | { error?: string };
+
+  if (!response.ok || !("ready" in payload)) {
+    throw new Error(
+      "error" in payload && payload.error
+        ? payload.error
+        : "Billing readiness could not be checked.",
+    );
+  }
+
+  return payload;
 }
 
 export async function recordPlatformSupportNote(input: PlatformSupportNoteInput) {
