@@ -215,9 +215,13 @@ test.describe("UX-8B1 transactional email scheduler", () => {
           path: "/api/internal/transactional-email/drain",
           schedule: "*/5 * * * *",
         },
+        {
+          path: "/api/internal/video/reconcile",
+          schedule: "*/5 * * * *",
+        },
       ],
     });
-    expect(new Set(vercelConfig.crons.map((cron) => cron.path)).size).toBe(2);
+    expect(new Set(vercelConfig.crons.map((cron) => cron.path)).size).toBe(3);
     for (const cron of vercelConfig.crons) {
       expect(cron.path).not.toMatch(/\?|dryRun|tenantId|[?&]event=/i);
     }

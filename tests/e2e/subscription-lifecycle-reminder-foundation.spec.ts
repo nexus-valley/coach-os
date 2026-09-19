@@ -441,6 +441,10 @@ test.describe("UX-8G3A subscription lifecycle reminder foundation", () => {
           path: "/api/internal/transactional-email/drain",
           schedule: "*/5 * * * *",
         },
+        {
+          path: "/api/internal/video/reconcile",
+          schedule: "*/5 * * * *",
+        },
       ],
     });
     expect(vercelConfigSource).not.toMatch(

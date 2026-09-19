@@ -658,6 +658,44 @@ test.describe("VIDEO-2B1B Cloudflare provider lifecycle", () => {
     }
   });
 
+  test("13a. empty reconciliation work performs no provider calls", async () => {
+    const { calls, database } = createReconciliationDatabase([]);
+    const providerCalls = { delete: 0, get: 0, list: 0 };
+    const summary = await runNativeVideoReconciliation({
+      database,
+      provider: createProvider({
+        async deleteVideo() {
+          providerCalls.delete += 1;
+          return { alreadyAbsent: false, deleted: true };
+        },
+        async getVideo() {
+          providerCalls.get += 1;
+          return providerVideo("queued");
+        },
+        async listVideosByCreator() {
+          providerCalls.list += 1;
+          return [];
+        },
+      }),
+    });
+
+    expect(calls.claims).toEqual([
+      {
+        leaseSeconds: nativeVideoReconciliationLeaseSeconds,
+        limit: nativeVideoReconciliationBatchSize,
+      },
+    ]);
+    expect(providerCalls).toEqual({ delete: 0, get: 0, list: 0 });
+    expect(summary).toEqual({
+      claimed: 0,
+      deferred: 0,
+      deleted: 0,
+      failed: 0,
+      processed: 0,
+      reconciled: 0,
+    });
+  });
+
   test("14. ambiguous recovery handles zero, one and multiple creator matches safely", async () => {
     for (const [count, expected] of [
       [0, "deferred"],
@@ -843,7 +881,7 @@ test.describe("VIDEO-2B1B Cloudflare provider lifecycle", () => {
     );
   });
 
-  test("19. routes are server-only, webhook is raw-body POST, and cron remains inactive", () => {
+  test("19. routes are server-only, webhook is raw-body POST, and reconciliation cron is exact", () => {
     const webhookRoute = read("app/api/video/cloudflare/webhook/route.ts");
     const webhook = read("src/lib/server/video/cloudflareStreamWebhook.ts");
     const reconcileRoute = read("app/api/internal/video/reconcile/route.ts");
@@ -851,7 +889,9 @@ test.describe("VIDEO-2B1B Cloudflare provider lifecycle", () => {
     const observation = read(
       "src/lib/server/video/nativeVideoProviderObservation.ts",
     );
-    const vercel = read("vercel.json");
+    const vercel = JSON.parse(read("vercel.json")) as {
+      crons: Array<{ path: string; schedule: string }>;
+    };
 
     expect(webhookRoute).toContain('export const runtime = "nodejs"');
     expect(webhookRoute).toContain("export async function POST");
@@ -866,7 +906,30 @@ test.describe("VIDEO-2B1B Cloudflare provider lifecycle", () => {
     expect(reconcile).toContain("recover_native_video_provider_identity_server");
     expect(reconcile).toContain("confirm_native_video_provider_deletion_server");
     expect(reconcile).not.toMatch(/\.from\(["']video_(?:assets|provider_events)/);
-    expect(vercel).not.toContain("/api/internal/video/reconcile");
+    expect(vercel.crons).toEqual([
+      {
+        path: "/api/internal/subscription-lifecycle/reminders",
+        schedule: "0 6 * * *",
+      },
+      {
+        path: "/api/internal/transactional-email/drain",
+        schedule: "*/5 * * * *",
+      },
+      {
+        path: "/api/internal/video/reconcile",
+        schedule: "*/5 * * * *",
+      },
+    ]);
+    expect(
+      vercel.crons.filter(
+        (cron) => cron.path === "/api/internal/video/reconcile",
+      ),
+    ).toEqual([
+      {
+        path: "/api/internal/video/reconcile",
+        schedule: "*/5 * * * *",
+      },
+    ]);
   });
 
   test("20. provider and webhook secrets stay out of responses, evidence and logs", async () => {
