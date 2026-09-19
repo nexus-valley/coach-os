@@ -8,10 +8,21 @@ export type CloudflareStreamUploadConfig = {
   apiToken: string;
 };
 
+export type CloudflareStreamWebhookConfig = {
+  signingSecret: string;
+};
+
 export class CloudflareStreamConfigurationError extends Error {
   constructor() {
     super("Video uploads are not configured.");
     this.name = "CloudflareStreamConfigurationError";
+  }
+}
+
+export class CloudflareStreamWebhookConfigurationError extends Error {
+  constructor() {
+    super("Video webhook is not configured.");
+    this.name = "CloudflareStreamWebhookConfigurationError";
   }
 }
 
@@ -46,4 +57,18 @@ export function getCloudflareStreamUploadConfig(
   }
 
   return { accountId, apiToken };
+}
+
+export function getCloudflareStreamWebhookConfig(
+  environment: ServerEnvironment = process.env,
+): CloudflareStreamWebhookConfig {
+  const signingSecret = configuredValue(
+    environment.CLOUDFLARE_STREAM_WEBHOOK_SECRET,
+  );
+
+  if (!signingSecret) {
+    throw new CloudflareStreamWebhookConfigurationError();
+  }
+
+  return { signingSecret };
 }
