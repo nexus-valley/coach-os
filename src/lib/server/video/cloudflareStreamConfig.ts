@@ -8,6 +8,10 @@ export type CloudflareStreamUploadConfig = {
   apiToken: string;
 };
 
+export type CloudflareStreamPlaybackConfig = CloudflareStreamUploadConfig & {
+  customerCode: string;
+};
+
 export type CloudflareStreamWebhookConfig = {
   signingSecret: string;
 };
@@ -23,6 +27,13 @@ export class CloudflareStreamWebhookConfigurationError extends Error {
   constructor() {
     super("Video webhook is not configured.");
     this.name = "CloudflareStreamWebhookConfigurationError";
+  }
+}
+
+export class CloudflareStreamPlaybackConfigurationError extends Error {
+  constructor() {
+    super("Video playback is not configured.");
+    this.name = "CloudflareStreamPlaybackConfigurationError";
   }
 }
 
@@ -57,6 +68,30 @@ export function getCloudflareStreamUploadConfig(
   }
 
   return { accountId, apiToken };
+}
+
+export function getCloudflareStreamPlaybackConfig(
+  environment: ServerEnvironment = process.env,
+): CloudflareStreamPlaybackConfig {
+  let uploadConfig: CloudflareStreamUploadConfig;
+  try {
+    uploadConfig = getCloudflareStreamUploadConfig(environment);
+  } catch {
+    throw new CloudflareStreamPlaybackConfigurationError();
+  }
+
+  const customerCode = configuredValue(
+    environment.CLOUDFLARE_STREAM_CUSTOMER_CODE,
+  );
+  if (
+    !/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,126}[A-Za-z0-9])?$/.test(
+      customerCode,
+    )
+  ) {
+    throw new CloudflareStreamPlaybackConfigurationError();
+  }
+
+  return { ...uploadConfig, customerCode };
 }
 
 export function getCloudflareStreamWebhookConfig(

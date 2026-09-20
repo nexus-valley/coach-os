@@ -1,4 +1,5 @@
 import {
+  type CloudflareStreamPlaybackConfig,
   type CloudflareStreamUploadConfig,
 } from "@/src/lib/server/video/cloudflareStreamConfig";
 
@@ -6,6 +7,7 @@ export const cloudflareTusTimeoutMs = 15_000;
 export const cloudflareVideoGetTimeoutMs = 10_000;
 export const cloudflareVideoListTimeoutMs = 10_000;
 export const cloudflareVideoDeleteTimeoutMs = 15_000;
+export const cloudflarePlaybackTokenTimeoutMs = 10_000;
 
 export const cloudflareStreamVideoStates = [
   "pendingupload",
@@ -65,6 +67,15 @@ export interface CloudflareStreamAdapter {
   deleteVideo(providerAssetId: string): Promise<CloudflareStreamDeleteResult>;
   getVideo(providerAssetId: string): Promise<CloudflareStreamVideo>;
   listVideosByCreator(creator: string): Promise<CloudflareStreamVideo[]>;
+}
+
+export interface CloudflareStreamPlaybackAdapter {
+  createSignedPlaybackToken(
+    providerAssetId: string,
+    expiresAtEpochSeconds: number,
+  ): Promise<string>;
+  getIframeUrl(token: string): string;
+  getVideo(providerAssetId: string): Promise<CloudflareStreamVideo>;
 }
 
 export type CloudflareTusUploadInput = {
@@ -372,6 +383,65 @@ export function createCloudflareStreamAdapter(
         });
       }
       return { alreadyAbsent: false, deleted: true };
+    },
+  };
+}
+
+export function createCloudflareStreamPlaybackAdapter(
+  config: CloudflareStreamPlaybackConfig,
+  options: {
+    fetchImpl?: typeof fetch;
+    getTimeoutMs?: number;
+    tokenTimeoutMs?: number;
+  } = {},
+): CloudflareStreamPlaybackAdapter {
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const stream = createCloudflareStreamAdapter(config, {
+    fetchImpl,
+    getTimeoutMs: options.getTimeoutMs,
+  });
+
+  return {
+    getVideo: stream.getVideo,
+
+    async createSignedPlaybackToken(providerAssetId, expiresAtEpochSeconds) {
+      const identifier = normalizedIdentifier(providerAssetId, 255);
+      if (
+        !identifier ||
+        !Number.isSafeInteger(expiresAtEpochSeconds) ||
+        expiresAtEpochSeconds <= 0
+      ) {
+        return invalidProviderResponse();
+      }
+
+      const response = await providerFetch(
+        config,
+        providerUrl(config, `/${encodeURIComponent(identifier)}/token`),
+        {
+          body: JSON.stringify({ exp: expiresAtEpochSeconds }),
+          headers: { "Content-Type": "application/json" },
+          method: "POST",
+        },
+        {
+          fetchImpl,
+          timeoutMs:
+            options.tokenTimeoutMs ?? cloudflarePlaybackTokenTimeoutMs,
+        },
+      );
+      if (!response.ok) providerFailure(response);
+      const envelope = await providerJson(response);
+      const result = asRecord(envelope?.result);
+      const token = normalizedIdentifier(result?.token, 4096);
+      if (envelope?.success !== true || !token) {
+        return invalidProviderResponse();
+      }
+      return token;
+    },
+
+    getIframeUrl(token) {
+      const normalizedToken = normalizedIdentifier(token, 4096);
+      if (!normalizedToken) return invalidProviderResponse();
+      return `https://customer-${config.customerCode}.cloudflarestream.com/${encodeURIComponent(normalizedToken)}/iframe`;
     },
   };
 }
