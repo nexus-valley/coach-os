@@ -8,6 +8,7 @@ import { Badge } from "@/src/components/ui/Badge";
 import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
 import { FeedbackAlert } from "@/src/components/ui/FeedbackAlert";
+import { LessonVideoPlayer } from "@/src/components/video/LessonVideoPlayer";
 import {
   createCourseSection,
   createLesson,
@@ -228,6 +229,7 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
     useState(true);
   const [error, setError] = useState("");
   const [lessonModal, setLessonModal] = useState<LessonModalState | null>(null);
+  const [previewLessonId, setPreviewLessonId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [mutating, setMutating] = useState(false);
   const [publishConfirmOpen, setPublishConfirmOpen] = useState(false);
@@ -1721,60 +1723,90 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
                     <div className="mt-5 space-y-3">
                       {section.lessons.map((lesson, lessonIndex) => (
                         <div
-                          className="flex flex-col gap-4 rounded-2xl border border-white/10 bg-[#15181b] p-4 sm:flex-row sm:items-center sm:justify-between"
+                          className="rounded-2xl border border-white/10 bg-[#15181b] p-4"
                           key={lesson.id}
                         >
-                          <div className="min-w-0">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="text-xs font-semibold text-slate-500">
-                                {String(lessonIndex + 1).padStart(2, "0")}
-                              </span>
-                              <Badge className="border-white/10 bg-white/10 text-slate-300">
-                                {lesson.lesson_type}
-                              </Badge>
-                              {lesson.is_preview ? (
-                                <Badge tone="success">Preview</Badge>
-                              ) : null}
+                          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="min-w-0">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="text-xs font-semibold text-slate-500">
+                                  {String(lessonIndex + 1).padStart(2, "0")}
+                                </span>
+                                <Badge className="border-white/10 bg-white/10 text-slate-300">
+                                  {lesson.lesson_type}
+                                </Badge>
+                                {lesson.is_preview ? (
+                                  <Badge tone="success">Preview</Badge>
+                                ) : null}
+                              </div>
+                              <h5 className="mt-3 truncate text-base font-semibold">
+                                {lesson.title}
+                              </h5>
+                              <p className="mt-1 line-clamp-2 text-sm leading-6 text-slate-500">
+                                {lesson.content ||
+                                  lesson.video_url ||
+                                  lesson.resource_url ||
+                                  "No lesson content added yet."}
+                              </p>
                             </div>
-                            <h5 className="mt-3 truncate text-base font-semibold">
-                              {lesson.title}
-                            </h5>
-                            <p className="mt-1 line-clamp-2 text-sm leading-6 text-slate-500">
-                              {lesson.content ||
-                                lesson.video_url ||
-                                lesson.resource_url ||
-                                "No lesson content added yet."}
-                            </p>
-                          </div>
-                          <div className="flex shrink-0 gap-2">
-                            <Button
-                              className="border-white/15 bg-transparent text-white hover:bg-white/10"
-                              onClick={() => openEditLesson(lesson)}
-                              size="sm"
-                              type="button"
-                              variant="secondary"
-                            >
-                              Edit
-                            </Button>
-                            {canDelete ? (
+                            <div className="flex shrink-0 flex-wrap gap-2">
+                              {(lesson.lesson_type === "video" ||
+                                Boolean(lesson.video_url)) && tenant ? (
+                                <Button
+                                  className="border-white/15 bg-transparent text-white hover:bg-white/10"
+                                  onClick={() =>
+                                    setPreviewLessonId((current) =>
+                                      current === lesson.id ? null : lesson.id,
+                                    )
+                                  }
+                                  size="sm"
+                                  type="button"
+                                  variant="secondary"
+                                >
+                                  {previewLessonId === lesson.id
+                                    ? "Hide video"
+                                  : "Preview video"}
+                                </Button>
+                              ) : null}
                               <Button
-                                className="text-red-200 hover:bg-red-500/10 hover:text-red-100"
-                                onClick={() =>
-                                  setDeleteTarget({
-                                    kind: "lesson",
-                                    lessonId: lesson.id,
-                                    sectionId: section.id,
-                                    title: lesson.title,
-                                  })
-                                }
+                                className="border-white/15 bg-transparent text-white hover:bg-white/10"
+                                onClick={() => openEditLesson(lesson)}
                                 size="sm"
                                 type="button"
-                                variant="ghost"
+                                variant="secondary"
                               >
-                                Delete
+                                Edit
                               </Button>
-                            ) : null}
+                              {canDelete ? (
+                                <Button
+                                  className="text-red-200 hover:bg-red-500/10 hover:text-red-100"
+                                  onClick={() =>
+                                    setDeleteTarget({
+                                      kind: "lesson",
+                                      lessonId: lesson.id,
+                                      sectionId: section.id,
+                                      title: lesson.title,
+                                    })
+                                  }
+                                  size="sm"
+                                  type="button"
+                                  variant="ghost"
+                                >
+                                  Delete
+                                </Button>
+                              ) : null}
+                            </div>
                           </div>
+                          {previewLessonId === lesson.id && tenant ? (
+                            <div className="mt-4 border-t border-white/10 pt-4">
+                              <LessonVideoPlayer
+                                externalVideoUrl={lesson.video_url}
+                                lessonId={lesson.id}
+                                lessonTitle={lesson.title}
+                                tenantId={tenant.id}
+                              />
+                            </div>
+                          ) : null}
                         </div>
                       ))}
                     </div>

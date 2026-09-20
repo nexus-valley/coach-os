@@ -796,9 +796,17 @@ test.describe("VIDEO-2C1 Cloudflare signed native-video playback", () => {
     expect(playback).not.toMatch(/providerAssetId:\s*authority\.providerAssetId/);
   });
 
-  test("20. CSP currently has no Cloudflare Stream frame-src allowlist", () => {
+  test("20. CSP permits only account-scoped Cloudflare Stream player frames", () => {
     const nextConfig = read("next.config.ts");
-    expect(nextConfig).not.toContain("cloudflarestream.com");
-    expect(nextConfig).not.toContain("frame-src");
+    expect(nextConfig).toContain("frame-src");
+    expect(nextConfig).toContain("getCloudflareStreamFrameSources()");
+    expect(nextConfig).toContain("https://www.youtube-nocookie.com");
+    expect(nextConfig).toContain("https://player.vimeo.com");
+    expect(nextConfig).not.toContain('"https://www.youtube.com"');
+    expect(nextConfig).not.toContain("*.cloudflarestream.com");
+    expect(nextConfig).not.toContain("*.videodelivery.net");
+    expect(nextConfig).not.toMatch(
+      /CLOUDFLARE_ACCOUNT_ID|CLOUDFLARE_STREAM_API_TOKEN|WEBHOOK_SECRET/,
+    );
   });
 });

@@ -1,8 +1,30 @@
 import type { NextConfig } from "next";
 import { withSentryConfig } from "@sentry/nextjs";
 
+import { getCloudflareStreamFrameSources } from "./src/lib/server/video/cloudflareStreamConfig";
+
+const frameSources = [
+  "'self'",
+  ...getCloudflareStreamFrameSources(),
+  "https://www.youtube-nocookie.com",
+  "https://player.vimeo.com",
+];
+const contentSecurityPolicy = `frame-src ${frameSources.join(" ")};`;
+
 const nextConfig: NextConfig = {
-  /* config options here */
+  async headers() {
+    return [
+      {
+        headers: [
+          {
+            key: "Content-Security-Policy",
+            value: contentSecurityPolicy,
+          },
+        ],
+        source: "/(.*)",
+      },
+    ];
+  },
 };
 
 const sentrySourceMapUploadConfigured = Boolean(

@@ -43,6 +43,39 @@ function configuredValue(value: string | undefined) {
   return value?.trim() ?? "";
 }
 
+export function normalizeCloudflareStreamCustomerCode(
+  value: string | undefined,
+) {
+  const customerCode = configuredValue(value);
+  return /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,126}[A-Za-z0-9])?$/.test(
+    customerCode,
+  )
+    ? customerCode
+    : null;
+}
+
+export function getCloudflareStreamFrameSources(
+  environment: ServerEnvironment = process.env,
+) {
+  const configuredCustomerCode = configuredValue(
+    environment.CLOUDFLARE_STREAM_CUSTOMER_CODE,
+  );
+
+  if (!configuredCustomerCode) return [];
+
+  const customerCode = normalizeCloudflareStreamCustomerCode(
+    configuredCustomerCode,
+  );
+  if (!customerCode) {
+    throw new CloudflareStreamPlaybackConfigurationError();
+  }
+
+  return [
+    `https://customer-${customerCode}.cloudflarestream.com`,
+    `https://customer-${customerCode}.videodelivery.net`,
+  ];
+}
+
 export function getCloudflareStreamConfigurationState(
   environment: ServerEnvironment = process.env,
 ): CloudflareStreamConfigurationState {
@@ -80,14 +113,10 @@ export function getCloudflareStreamPlaybackConfig(
     throw new CloudflareStreamPlaybackConfigurationError();
   }
 
-  const customerCode = configuredValue(
+  const customerCode = normalizeCloudflareStreamCustomerCode(
     environment.CLOUDFLARE_STREAM_CUSTOMER_CODE,
   );
-  if (
-    !/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,126}[A-Za-z0-9])?$/.test(
-      customerCode,
-    )
-  ) {
+  if (!customerCode) {
     throw new CloudflareStreamPlaybackConfigurationError();
   }
 
