@@ -69,13 +69,16 @@ export function buildNativeVideoProviderObservation(
     throw new NativeVideoProviderObservationError();
   }
 
-  const safeEvidence = {
+  const canonicalSafeEvidence = {
     duration_seconds: video.durationSeconds,
-    observation_source: source,
     provider_modified_at: video.modifiedAt,
     provider_state: video.state,
     ready_to_stream: video.readyToStream,
     safe_error_code: video.safeErrorCode,
+  };
+  const safeEvidence = {
+    ...canonicalSafeEvidence,
+    observation_source: source,
   };
 
   return {
@@ -86,7 +89,7 @@ export function buildNativeVideoProviderObservation(
     providerAssetId: video.providerAssetId,
     safeEvidence,
     safePayloadHash: createHash("sha256")
-      .update(JSON.stringify(safeEvidence), "utf8")
+      .update(JSON.stringify(canonicalSafeEvidence), "utf8")
       .digest("hex"),
     state: video.state,
   };
