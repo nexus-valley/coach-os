@@ -8,8 +8,14 @@ import {
   parseJsonBody,
 } from "@/src/lib/server/requestJson";
 import { getSupabaseAdminClient } from "@/src/lib/server/supabaseAdmin";
-import { createCloudflareTusUpload } from "@/src/lib/server/video/cloudflareStream";
-import { getCloudflareStreamUploadConfig } from "@/src/lib/server/video/cloudflareStreamConfig";
+import {
+  createCloudflareTusUpload,
+  updateCloudflareStreamAllowedOrigins,
+} from "@/src/lib/server/video/cloudflareStream";
+import {
+  getCloudflareStreamAllowedOriginsConfig,
+  getCloudflareStreamUploadConfig,
+} from "@/src/lib/server/video/cloudflareStreamConfig";
 import {
   assertNativeVideoUploadRole,
   createNativeVideoUploadDatabase,
@@ -92,7 +98,21 @@ export async function POST(request: Request) {
       },
       prepareProviderUpload() {
         const config = getCloudflareStreamUploadConfig();
-        return (input) => createCloudflareTusUpload(config, input);
+        return async (input) => {
+          const { allowedOrigins, allowLocalhost } =
+            getCloudflareStreamAllowedOriginsConfig();
+          const providerUpload = await createCloudflareTusUpload(config, input);
+          await updateCloudflareStreamAllowedOrigins(
+            config,
+            {
+              allowedOrigins,
+              creatorCorrelation: input.creatorCorrelation,
+              providerAssetId: providerUpload.providerAssetId,
+            },
+            { allowLocalhost },
+          );
+          return providerUpload;
+        };
       },
       request: body,
     });

@@ -414,7 +414,7 @@ test.describe("VIDEO-2C2A team integration and narrow CSP", () => {
     expect(source).not.toMatch(/default-src|script-src|connect-src|img-src|style-src/);
   });
 
-  test("21. CSP configuration does not expose provider credentials or alter upload metadata", () => {
+  test("21. CSP configuration does not expose credentials or broaden TUS metadata", () => {
     const nextSource = read(nextConfigPath);
     const configSource = read(configPath);
     const uploadSource = read("src/lib/server/video/cloudflareStream.ts");
@@ -422,5 +422,8 @@ test.describe("VIDEO-2C2A team integration and narrow CSP", () => {
     expect(nextSource).not.toMatch(/CLOUDFLARE_ACCOUNT_ID|CLOUDFLARE_STREAM_API_TOKEN|WEBHOOK_SECRET/);
     expect(configSource).toContain("normalizeCloudflareStreamCustomerCode");
     expect(uploadSource).not.toContain("allowedorigins");
+    expect(uploadSource).toContain(
+      "JSON.stringify({ allowedOrigins: requestedOrigins })",
+    );
   });
 });

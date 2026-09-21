@@ -4,12 +4,16 @@ import { join } from "node:path";
 
 import {
   buildCloudflareTusUploadMetadata,
+  cloudflareVideoEditTimeoutMs,
   cloudflareTusTimeoutMs,
+  CloudflareStreamProviderError,
   CloudflareTusCreateError,
   createCloudflareTusUpload,
+  updateCloudflareStreamAllowedOrigins,
 } from "../../src/lib/server/video/cloudflareStream";
 import {
   CloudflareStreamConfigurationError,
+  getCloudflareStreamAllowedOriginsConfig,
   getCloudflareStreamConfigurationState,
   getCloudflareStreamUploadConfig,
 } from "../../src/lib/server/video/cloudflareStreamConfig";
@@ -129,10 +133,11 @@ test.describe("VIDEO-2B1A Cloudflare TUS upload provisioning", () => {
         CLOUDFLARE_ACCOUNT_ID: "account-id",
         CLOUDFLARE_STREAM_API_TOKEN: "private-token",
       }),
-    ).toEqual({ uploadConfigured: true, webhookConfigured: false });
+    ).toEqual({ uploadConfigured: false, webhookConfigured: false });
     expect(
       getCloudflareStreamConfigurationState({
         CLOUDFLARE_ACCOUNT_ID: "account-id",
+        CLOUDFLARE_STREAM_ALLOWED_ORIGINS: "coachfort.com",
         CLOUDFLARE_STREAM_API_TOKEN: "private-token",
         CLOUDFLARE_STREAM_WEBHOOK_SECRET: "optional-secret",
       }),
@@ -156,6 +161,79 @@ test.describe("VIDEO-2B1A Cloudflare TUS upload provisioning", () => {
       }
     }
     expect(read(".env.example")).not.toContain("NEXT_PUBLIC_CLOUDFLARE");
+  });
+
+  test("2A. Allowed Origins config is strict, normalized and deterministic", () => {
+    expect(
+      getCloudflareStreamAllowedOriginsConfig({
+        CLOUDFLARE_STREAM_ALLOWED_ORIGINS:
+          "MEDIA.EXAMPLE.COM,coachfort.com",
+        NODE_ENV: "production",
+      }),
+    ).toEqual({
+      allowedOrigins: ["coachfort.com", "media.example.com"],
+      allowLocalhost: false,
+    });
+    expect(
+      getCloudflareStreamAllowedOriginsConfig({
+        CLOUDFLARE_STREAM_ALLOWED_ORIGINS: "  coachfort.com  ",
+        NODE_ENV: "production",
+      }),
+    ).toEqual({
+      allowedOrigins: ["coachfort.com"],
+      allowLocalhost: false,
+    });
+
+    for (const value of [
+      undefined,
+      "",
+      "coachfort.com,",
+      "coachfort.com, media.example.com",
+      "coachfort.com,COACHFORT.COM",
+      "http://coachfort.com",
+      "https://coachfort.com",
+      "coachfort.com/app",
+      "coachfort.com?mode=video",
+      "coachfort.com#video",
+      "user@coachfort.com",
+      "coachfort.com.",
+      "*",
+      "*.coachfort.com",
+      "media.*.coachfort.com",
+      "coachfort\u0000.com",
+      "café.example",
+      "xn--caf-dma.example",
+      "127.0.0.1",
+      "[::1]",
+      "coachfort.com:443",
+      "localhost",
+      "localhost:3001",
+    ]) {
+      expect(() =>
+        getCloudflareStreamAllowedOriginsConfig({
+          CLOUDFLARE_STREAM_ALLOWED_ORIGINS: value,
+          NODE_ENV: "production",
+        }),
+      ).toThrow(CloudflareStreamConfigurationError);
+    }
+  });
+
+  test("2B. localhost is allowed only by the explicit development policy", () => {
+    expect(
+      getCloudflareStreamAllowedOriginsConfig({
+        CLOUDFLARE_STREAM_ALLOWED_ORIGINS: "localhost:3000",
+        NODE_ENV: "development",
+      }),
+    ).toEqual({
+      allowedOrigins: ["localhost:3000"],
+      allowLocalhost: true,
+    });
+    expect(() =>
+      getCloudflareStreamAllowedOriginsConfig({
+        CLOUDFLARE_STREAM_ALLOWED_ORIGINS: "localhost:3000",
+        NODE_ENV: "production",
+      }),
+    ).toThrow(CloudflareStreamConfigurationError);
   });
 
   test("3. TUS request uses the direct-user endpoint and exact safe headers", async () => {
@@ -223,6 +301,7 @@ test.describe("VIDEO-2B1A Cloudflare TUS upload provisioning", () => {
       "requiresignedurls",
       "expiry",
     ]);
+    expect(metadata.toLowerCase()).not.toContain("allowedorigins");
     for (const forbidden of [
       "tenant",
       "coach",
@@ -234,6 +313,258 @@ test.describe("VIDEO-2B1A Cloudflare TUS upload provisioning", () => {
     ]) {
       expect(metadata.toLowerCase()).not.toContain(forbidden.toLowerCase());
     }
+  });
+
+  test("4A. provider edit applies only Allowed Origins and verifies hardened response", async () => {
+    const calls: Array<{ init?: RequestInit; url: string }> = [];
+    const result = await updateCloudflareStreamAllowedOrigins(
+      { accountId: "account-id", apiToken: "private-token" },
+      {
+        allowedOrigins: ["media.example.com", "coachfort.com"],
+        creatorCorrelation: assetId,
+        providerAssetId: "provider-video-uid",
+      },
+      {
+        fetchImpl: async (url, init) => {
+          calls.push({ init, url: String(url) });
+          return Response.json({
+            result: {
+              allowedOrigins: ["coachfort.com", "media.example.com"],
+              creator: assetId,
+              requireSignedURLs: true,
+              uid: "provider-video-uid",
+            },
+            success: true,
+          });
+        },
+      },
+    );
+
+    expect(result).toEqual({
+      allowedOrigins: ["coachfort.com", "media.example.com"],
+      providerAssetId: "provider-video-uid",
+      requireSignedURLs: true,
+    });
+    expect(calls).toHaveLength(1);
+    expect(calls[0].url).toBe(
+      "https://api.cloudflare.com/client/v4/accounts/account-id/stream/provider-video-uid",
+    );
+    expect(calls[0].init).toMatchObject({
+      cache: "no-store",
+      method: "POST",
+      redirect: "manual",
+    });
+    expect(calls[0].init?.headers).toEqual({
+      Authorization: "Bearer private-token",
+      "Content-Type": "application/json",
+    });
+    expect(JSON.parse(String(calls[0].init?.body))).toEqual({
+      allowedOrigins: ["coachfort.com", "media.example.com"],
+    });
+    expect(Object.keys(JSON.parse(String(calls[0].init?.body)))).toEqual([
+      "allowedOrigins",
+    ]);
+  });
+
+  test("4AA. provider edit accepts localhost only through explicit development policy", async () => {
+    for (const options of [{}, { allowLocalhost: false }]) {
+      let providerFetches = 0;
+      await expect(
+        updateCloudflareStreamAllowedOrigins(
+          { accountId: "account-id", apiToken: "private-token" },
+          {
+            allowedOrigins: ["localhost:3000"],
+            creatorCorrelation: assetId,
+            providerAssetId: "provider-video-uid",
+          },
+          {
+            ...options,
+            fetchImpl: async () => {
+              providerFetches += 1;
+              throw new Error("provider fetch must not run");
+            },
+          },
+        ),
+      ).rejects.toMatchObject({
+        safeCode: "video_provider_response_invalid",
+      });
+      expect(providerFetches).toBe(0);
+    }
+
+    const accepted = await updateCloudflareStreamAllowedOrigins(
+      { accountId: "account-id", apiToken: "private-token" },
+      {
+        allowedOrigins: ["localhost:3000"],
+        creatorCorrelation: assetId,
+        providerAssetId: "provider-video-uid",
+      },
+      {
+        allowLocalhost: true,
+        fetchImpl: async () =>
+          Response.json({
+            result: {
+              allowedOrigins: ["localhost:3000"],
+              creator: assetId,
+              requireSignedURLs: true,
+              uid: "provider-video-uid",
+            },
+            success: true,
+          }),
+      },
+    );
+    expect(accepted.allowedOrigins).toEqual(["localhost:3000"]);
+
+    await expect(
+      updateCloudflareStreamAllowedOrigins(
+        { accountId: "account-id", apiToken: "private-token" },
+        {
+          allowedOrigins: ["coachfort.com"],
+          creatorCorrelation: assetId,
+          providerAssetId: "provider-video-uid",
+        },
+        {
+          allowLocalhost: false,
+          fetchImpl: async () =>
+            Response.json({
+              result: {
+                allowedOrigins: ["localhost:3000"],
+                creator: assetId,
+                requireSignedURLs: true,
+                uid: "provider-video-uid",
+              },
+              success: true,
+            }),
+        },
+      ),
+    ).rejects.toMatchObject({
+      safeCode: "video_provider_response_invalid",
+    });
+
+    const adapterSource = read("src/lib/server/video/cloudflareStream.ts");
+    expect(adapterSource).not.toContain(
+      'input.allowedOrigins.includes("localhost:3000")',
+    );
+    expect(adapterSource).not.toContain(
+      'requestedOrigins.includes("localhost:3000")',
+    );
+    expect(adapterSource).toContain(
+      "allowLocalhost: options.allowLocalhost === true",
+    );
+  });
+
+  test("4B. provider edit rejects every incomplete or conflicting hardened response", async () => {
+    const baseResult = {
+      allowedOrigins: ["coachfort.com"],
+      creator: assetId,
+      requireSignedURLs: true,
+      uid: "provider-video-uid",
+    };
+    const invalidResults: unknown[] = [
+      null,
+      {},
+      { ...baseResult, uid: "wrong-provider-uid" },
+      { ...baseResult, uid: undefined },
+      { ...baseResult, creator: "wrong-creator" },
+      { ...baseResult, creator: undefined },
+      { ...baseResult, requireSignedURLs: false },
+      { ...baseResult, requireSignedURLs: undefined },
+      { ...baseResult, allowedOrigins: undefined },
+      { ...baseResult, allowedOrigins: [] },
+      { ...baseResult, allowedOrigins: ["https://coachfort.com"] },
+      { ...baseResult, allowedOrigins: ["coachfort.com", "coachfort.com"] },
+      { ...baseResult, allowedOrigins: ["coachfort.com", "extra.example.com"] },
+      { ...baseResult, allowedOrigins: ["media.example.com"] },
+    ];
+
+    for (const providerResult of invalidResults) {
+      await expect(
+        updateCloudflareStreamAllowedOrigins(
+          { accountId: "account-id", apiToken: "private-token" },
+          {
+            allowedOrigins: ["coachfort.com"],
+            creatorCorrelation: assetId,
+            providerAssetId: "provider-video-uid",
+          },
+          {
+            fetchImpl: async () =>
+              Response.json({ result: providerResult, success: true }),
+          },
+        ),
+      ).rejects.toMatchObject({
+        safeCode: "video_provider_response_invalid",
+      });
+    }
+
+    await expect(
+      updateCloudflareStreamAllowedOrigins(
+        { accountId: "account-id", apiToken: "private-token" },
+        {
+          allowedOrigins: ["coachfort.com"],
+          creatorCorrelation: assetId,
+          providerAssetId: "provider-video-uid",
+        },
+        {
+          fetchImpl: async () =>
+            Response.json({ result: baseResult, success: false }),
+        },
+      ),
+    ).rejects.toMatchObject({ safeCode: "video_provider_response_invalid" });
+  });
+
+  test("4C. provider edit maps HTTP, network, timeout and malformed JSON failures safely", async () => {
+    for (const status of [302, 401, 403, 404, 429, 500, 503]) {
+      await expect(
+        updateCloudflareStreamAllowedOrigins(
+          { accountId: "account-id", apiToken: "private-token" },
+          {
+            allowedOrigins: ["coachfort.com"],
+            creatorCorrelation: assetId,
+            providerAssetId: "provider-video-uid",
+          },
+          { fetchImpl: async () => new Response(null, { status }) },
+        ),
+      ).rejects.toBeInstanceOf(CloudflareStreamProviderError);
+    }
+
+    for (const fetchImpl of [
+      async () => {
+        throw new Error("private network detail");
+      },
+      async () => new Response("not-json", { status: 200 }),
+    ]) {
+      await expect(
+        updateCloudflareStreamAllowedOrigins(
+          { accountId: "account-id", apiToken: "private-token" },
+          {
+            allowedOrigins: ["coachfort.com"],
+            creatorCorrelation: assetId,
+            providerAssetId: "provider-video-uid",
+          },
+          { fetchImpl },
+        ),
+      ).rejects.toBeInstanceOf(CloudflareStreamProviderError);
+    }
+
+    await expect(
+      updateCloudflareStreamAllowedOrigins(
+        { accountId: "account-id", apiToken: "private-token" },
+        {
+          allowedOrigins: ["coachfort.com"],
+          creatorCorrelation: assetId,
+          providerAssetId: "provider-video-uid",
+        },
+        {
+          fetchImpl: async (_url, init) =>
+            new Promise<Response>((_resolve, reject) => {
+              init?.signal?.addEventListener("abort", () =>
+                reject(new Error("aborted private detail")),
+              );
+            }),
+          timeoutMs: 1,
+        },
+      ),
+    ).rejects.toMatchObject({ safeCode: "video_provider_unavailable" });
+    expect(cloudflareVideoEditTimeoutMs).toBe(10_000);
   });
 
   test("5. provider expiry is rounded down and never exceeds reservation expiry", async () => {
@@ -619,6 +950,54 @@ test.describe("VIDEO-2B1A Cloudflare TUS upload provisioning", () => {
     expect(result.status).toBe(202);
   });
 
+  test("18A. post-create hardening failure is ambiguous and withholds completion", async () => {
+    const { calls, database } = createDatabase();
+    const result = await provisionNativeVideoUpload({
+      actorUserId,
+      database,
+      prepareProviderUpload: () => async () => {
+        throw new CloudflareStreamProviderError({
+          kind: "unavailable",
+          safeCode: "video_provider_unavailable",
+        });
+      },
+      request: validRequest,
+    });
+
+    expect(result).toMatchObject({
+      body: { code: "VIDEO_RECONCILIATION_REQUIRED", status: "pending" },
+      status: 202,
+    });
+    expect(calls.markAmbiguous).toBe(1);
+    expect(calls.complete).toBe(0);
+    expect(calls.fail).toBe(0);
+  });
+
+  test("18B. fresh-only origin configuration failure closes before provider mutation", async () => {
+    let providerMutations = 0;
+    const { calls, database } = createDatabase();
+    await expectPublicError(
+      () =>
+        provisionNativeVideoUpload({
+          actorUserId,
+          database,
+          prepareProviderUpload: () => async () => {
+            getCloudflareStreamAllowedOriginsConfig({ NODE_ENV: "production" });
+            providerMutations += 1;
+            throw new Error("must not run");
+          },
+          request: validRequest,
+        }),
+      "VIDEO_NOT_CONFIGURED",
+    );
+    expect(providerMutations).toBe(0);
+    expect(calls.reserve).toBe(1);
+    expect(calls.claim).toBe(1);
+    expect(calls.fail).toBe(1);
+    expect(calls.markAmbiguous).toBe(0);
+    expect(calls.complete).toBe(0);
+  });
+
   test("19. missing configuration stops before reservation, claim or provider call", async () => {
     let providerCalls = 0;
     const loadMissingConfiguration = () => {
@@ -667,6 +1046,15 @@ test.describe("VIDEO-2B1A Cloudflare TUS upload provisioning", () => {
     expect(route.indexOf("getCloudflareStreamUploadConfig()")).toBeLessThan(
       route.indexOf("createCloudflareTusUpload(config, input)"),
     );
+    expect(route.indexOf("getCloudflareStreamAllowedOriginsConfig()"))
+      .toBeLessThan(route.indexOf("createCloudflareTusUpload(config, input)"));
+    expect(route).toContain("const { allowedOrigins, allowLocalhost }");
+    expect(route).toContain("{ allowLocalhost },");
+    expect(route.indexOf("createCloudflareTusUpload(config, input)"))
+      .toBeLessThan(route.indexOf("updateCloudflareStreamAllowedOrigins("));
+    expect(route.indexOf("updateCloudflareStreamAllowedOrigins("))
+      .toBeLessThan(route.indexOf("return providerUpload"));
+    expect(route).not.toContain("deleteVideo(");
   });
 
   test("21. route and database preserve reservation-claim-provider-completion order", () => {
@@ -697,20 +1085,69 @@ test.describe("VIDEO-2B1A Cloudflare TUS upload provisioning", () => {
     }
   });
 
+  test("21A. replay bypasses fresh origin config and all provider mutations", async () => {
+    let freshConfigurationLoads = 0;
+    let providerMutations = 0;
+    const { calls, database } = createDatabase({
+      async claim() {
+        calls.claim += 1;
+        return {
+          action: "replay_existing",
+          assetId,
+          expiresAt: reservationExpiresAt,
+          reservedSeconds: 600,
+          uploadUrl: "https://upload.cloudflarestream.com/existing",
+        };
+      },
+    });
+    const result = await provisionNativeVideoUpload({
+      actorUserId,
+      database,
+      prepareProviderUpload: () => async () => {
+        freshConfigurationLoads += 1;
+        providerMutations += 1;
+        throw new Error("must not run");
+      },
+      request: validRequest,
+    });
+
+    expect(result).toMatchObject({
+      body: { assetId, replayed: true },
+      status: 200,
+    });
+    expect(freshConfigurationLoads).toBe(0);
+    expect(providerMutations).toBe(0);
+    expect(calls.complete).toBe(0);
+    expect(calls.fail).toBe(0);
+    expect(calls.markAmbiguous).toBe(0);
+  });
+
   test("22. public route errors contain no secrets, SQLSTATE, function names or environment names", () => {
     const route = read("app/api/video/uploads/route.ts");
+    const publicErrors = route.slice(
+      route.indexOf("function errorResponse"),
+      route.indexOf("export async function POST"),
+    );
     for (const forbidden of [
       "CLOUDFLARE_ACCOUNT_ID",
       "CLOUDFLARE_STREAM_API_TOKEN",
+      "CLOUDFLARE_STREAM_ALLOWED_ORIGINS",
       "CLOUDFLARE_STREAM_WEBHOOK_SECRET",
       "SQLSTATE",
       "reserve_native_video_upload_server",
       "claim_native_video_upload_provisioning_server",
-      "providerAssetId",
       "accountId",
       "apiToken",
     ]) {
       expect(route).not.toContain(forbidden);
+    }
+    expect(publicErrors).not.toMatch(/providerAssetId|allowedOrigins|providerUpload/);
+    for (const monitoringCall of route.matchAll(
+      /captureServerException\([\s\S]*?\n\s*}\);/g,
+    )) {
+      expect(monitoringCall[0]).not.toMatch(
+        /providerAssetId|allowedOrigins|apiToken|accountId/,
+      );
     }
   });
 

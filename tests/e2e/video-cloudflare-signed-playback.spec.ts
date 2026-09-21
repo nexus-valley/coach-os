@@ -530,9 +530,15 @@ test.describe("VIDEO-2C1 Cloudflare signed native-video playback", () => {
       apiToken: "private-token",
     });
     expect(getCloudflareStreamConfigurationState(base)).toEqual({
-      uploadConfigured: true,
+      uploadConfigured: false,
       webhookConfigured: false,
     });
+    expect(
+      getCloudflareStreamConfigurationState({
+        ...base,
+        CLOUDFLARE_STREAM_ALLOWED_ORIGINS: "coachfort.com",
+      }),
+    ).toEqual({ uploadConfigured: true, webhookConfigured: false });
     expect(() => getCloudflareStreamPlaybackConfig(base)).toThrow(
       CloudflareStreamPlaybackConfigurationError,
     );

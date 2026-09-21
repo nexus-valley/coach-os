@@ -1,4 +1,5 @@
 import {
+  normalizeCloudflareStreamAllowedOriginEntries,
   type CloudflareStreamPlaybackConfig,
   type CloudflareStreamUploadConfig,
 } from "@/src/lib/server/video/cloudflareStreamConfig";
@@ -8,6 +9,7 @@ export const cloudflareVideoGetTimeoutMs = 10_000;
 export const cloudflareVideoListTimeoutMs = 10_000;
 export const cloudflareVideoDeleteTimeoutMs = 15_000;
 export const cloudflarePlaybackTokenTimeoutMs = 10_000;
+export const cloudflareVideoEditTimeoutMs = 10_000;
 
 export const cloudflareStreamVideoStates = [
   "pendingupload",
@@ -89,6 +91,12 @@ export type CloudflareTusUploadResult = {
   providerAssetId: string;
   providerUploadExpiresAt: string;
   uploadUrl: string;
+};
+
+export type CloudflareStreamAllowedOriginsUpdateInput = {
+  allowedOrigins: readonly string[];
+  creatorCorrelation: string;
+  providerAssetId: string;
 };
 
 export type CloudflareCreateOutcome = "ambiguous" | "definite_failure";
@@ -384,6 +392,84 @@ export function createCloudflareStreamAdapter(
       }
       return { alreadyAbsent: false, deleted: true };
     },
+  };
+}
+
+export async function updateCloudflareStreamAllowedOrigins(
+  config: CloudflareStreamUploadConfig,
+  input: CloudflareStreamAllowedOriginsUpdateInput,
+  options: {
+    allowLocalhost?: boolean;
+    fetchImpl?: typeof fetch;
+    timeoutMs?: number;
+  } = {},
+) {
+  const providerAssetId = normalizedIdentifier(input.providerAssetId, 255);
+  const creatorCorrelation = normalizedIdentifier(
+    input.creatorCorrelation,
+    64,
+  );
+  if (!providerAssetId || !creatorCorrelation) return invalidProviderResponse();
+
+  let requestedOrigins: string[];
+  try {
+    requestedOrigins = normalizeCloudflareStreamAllowedOriginEntries(
+      input.allowedOrigins,
+      { allowLocalhost: options.allowLocalhost === true },
+    );
+  } catch {
+    return invalidProviderResponse();
+  }
+
+  const response = await providerFetch(
+    config,
+    providerUrl(config, `/${encodeURIComponent(providerAssetId)}`),
+    {
+      body: JSON.stringify({ allowedOrigins: requestedOrigins }),
+      headers: { "Content-Type": "application/json" },
+      method: "POST",
+    },
+    {
+      fetchImpl: options.fetchImpl ?? fetch,
+      timeoutMs: options.timeoutMs ?? cloudflareVideoEditTimeoutMs,
+    },
+  );
+  if (!response.ok) providerFailure(response);
+
+  const envelope = await providerJson(response);
+  const result = asRecord(envelope?.result);
+  if (
+    envelope?.success !== true ||
+    !result ||
+    result.uid !== providerAssetId ||
+    result.creator !== creatorCorrelation ||
+    result.requireSignedURLs !== true ||
+    !Array.isArray(result.allowedOrigins)
+  ) {
+    return invalidProviderResponse();
+  }
+
+  let returnedOrigins: string[];
+  try {
+    returnedOrigins = normalizeCloudflareStreamAllowedOriginEntries(
+      result.allowedOrigins,
+      { allowLocalhost: options.allowLocalhost === true },
+    );
+  } catch {
+    return invalidProviderResponse();
+  }
+
+  if (
+    returnedOrigins.length !== requestedOrigins.length ||
+    returnedOrigins.some((origin, index) => origin !== requestedOrigins[index])
+  ) {
+    return invalidProviderResponse();
+  }
+
+  return {
+    allowedOrigins: returnedOrigins,
+    providerAssetId,
+    requireSignedURLs: true as const,
   };
 }
 
