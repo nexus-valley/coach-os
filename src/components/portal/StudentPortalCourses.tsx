@@ -1,5 +1,6 @@
 "use client";
 
+import { Button } from "@/src/components/ui/Button";
 import { Badge } from "@/src/components/ui/Badge";
 import { Card } from "@/src/components/ui/Card";
 import { formatEnrollmentStatus } from "@/src/components/enrollments/EnrollmentStatusBadge";
@@ -81,6 +82,14 @@ export function StudentPortalCourses({ context }: { context: StudentPortalContex
                 </span>
                 <span>{course.progressPercentage}%</span>
               </div>
+              <Button
+                className="mt-5"
+                href={`/portal/courses/${course.course.id}`}
+                size="sm"
+                variant="secondary"
+              >
+                Open program
+              </Button>
             </Card>
           ))
         )}
