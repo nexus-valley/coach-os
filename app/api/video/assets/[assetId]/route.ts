@@ -9,12 +9,27 @@ import {
   parseJsonBody,
 } from "@/src/lib/server/requestJson";
 import { getSupabaseAdminClient } from "@/src/lib/server/supabaseAdmin";
+import {
+  createNativeVideoManagementDatabase,
+  type NativeVideoManagementAsset,
+  NativeVideoManagementPublicError,
+  parseNativeVideoTenantRequest,
+} from "@/src/lib/server/video/nativeVideoManagement";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 type DeletionContext = {
   params: Promise<{ assetId: string }>;
+};
+
+type ExactAssetOptions = {
+  authenticate?: (accessToken: string) => Promise<{ id: string }>;
+  getAsset?: (input: {
+    actorUserId: string;
+    assetId: string;
+    tenantId: string;
+  }) => Promise<NativeVideoManagementAsset | null>;
 };
 
 type DatabaseError = {
@@ -115,6 +130,88 @@ async function requestDeletion(input: DeletionRequest) {
   });
 }
 
+async function getAsset(input: {
+  actorUserId: string;
+  assetId: string;
+  tenantId: string;
+}) {
+  return createNativeVideoManagementDatabase(
+    getSupabaseAdminClient(),
+  ).getAsset(input);
+}
+
+export async function handleNativeVideoExactAssetRequest(
+  request: Request,
+  context: DeletionContext,
+  options: ExactAssetOptions = {},
+) {
+  let assetId = "";
+  let tenantId: string | null = null;
+
+  try {
+    const accessToken = getBearerToken(request);
+    const user = await (options.authenticate ?? requireAuthenticatedUser)(accessToken);
+    ({ assetId } = await context.params);
+    if (!isUuid(assetId)) {
+      return jsonError(
+        "VIDEO_INVALID_REQUEST",
+        "Video management request is invalid.",
+        400,
+      );
+    }
+    assetId = assetId.toLowerCase();
+    ({ tenantId } = parseNativeVideoTenantRequest(request));
+
+    const asset = await (options.getAsset ?? getAsset)({
+      actorUserId: user.id,
+      assetId,
+      tenantId,
+    });
+    if (!asset) {
+      return jsonError("VIDEO_NOT_FOUND", "This video is unavailable.", 404);
+    }
+
+    return Response.json(
+      { asset },
+      {
+        headers: { "Cache-Control": "private, no-store" },
+        status: 200,
+      },
+    );
+  } catch (error) {
+    if (error instanceof Error && error.message === "Authentication required.") {
+      return jsonError(
+        "VIDEO_AUTHENTICATION_REQUIRED",
+        "Authentication required.",
+        401,
+      );
+    }
+    if (error instanceof NativeVideoManagementPublicError) {
+      if (error.status >= 500) {
+        captureServerException(new Error(error.code), {
+          assetId: assetId || undefined,
+          operation: "native_video_management_exact_asset",
+          route: "/api/video/assets/[assetId]",
+          tenantId,
+        });
+      }
+      return jsonError(error.code, error.message, error.status);
+    }
+
+    captureServerException(new Error("VIDEO_MANAGEMENT_UNEXPECTED"), {
+      assetId: assetId || undefined,
+      operation: "native_video_management_exact_asset",
+      route: "/api/video/assets/[assetId]",
+      tenantId,
+    });
+    return jsonError(
+      "VIDEO_MANAGEMENT_UNAVAILABLE",
+      "Video management information is temporarily unavailable.",
+      500,
+    );
+  }
+}
+
 export async function handleNativeVideoDeletionRequest(
   request: Request,
   context: DeletionContext,
@@ -206,4 +303,8 @@ export async function handleNativeVideoDeletionRequest(
 
 export async function DELETE(request: Request, context: DeletionContext) {
   return handleNativeVideoDeletionRequest(request, context);
+}
+
+export async function GET(request: Request, context: DeletionContext) {
+  return handleNativeVideoExactAssetRequest(request, context);
 }
