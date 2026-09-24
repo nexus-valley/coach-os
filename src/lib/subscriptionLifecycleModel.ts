@@ -50,6 +50,7 @@ export const inactiveOwnerAdminRecoveryRoutes = [
   "/app",
   "/app/subscription",
   "/app/billing-profile",
+  "/app/video-library",
 ] as const;
 
 function isRecord(value: unknown): value is Record<string, unknown> {

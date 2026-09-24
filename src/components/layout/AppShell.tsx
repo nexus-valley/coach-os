@@ -64,6 +64,7 @@ const navItems = [
   { href: "/app/enrollments", label: "Enrollments", mobileLabel: "Enroll" },
   { href: "/app/sessions", label: "Live Classes" },
   { href: "/app/documents", label: "Content Library" },
+  { href: "/app/video-library", label: "Video Library" },
   { href: "/app/community", label: "Community" },
   { href: "/app/announcements", label: "Announcements" },
   {
@@ -99,7 +100,13 @@ const navGroups = [
   },
   {
     label: "Deliver",
-    items: ["Live Classes", "Content Library", "Community", "Announcements"],
+    items: [
+      "Live Classes",
+      "Content Library",
+      "Video Library",
+      "Community",
+      "Announcements",
+    ],
   },
   {
     label: "Business",
@@ -403,6 +410,14 @@ function NavIcon({ label }: { label: string }) {
         <path d="M7 21h10" />
       </>
     ),
+    "Video Library": (
+      <>
+        <rect height="14" rx="2" width="18" x="3" y="5" />
+        <path d="m10 9 5 3-5 3V9Z" />
+        <path d="M7 2h10" />
+        <path d="M7 22h10" />
+      </>
+    ),
     Workflows: (
       <>
         <path d="M4 6h5" />
@@ -605,7 +620,9 @@ export function AppShell({ activeItem = "Home", children }: AppShellProps) {
   });
   const visibleNavItems = lifecycleInactive
     ? canManageSubscription
-      ? navItems.filter((item) => ["Home", "Subscription"].includes(item.label))
+      ? navItems.filter((item) =>
+          ["Home", "Subscription", "Video Library"].includes(item.label),
+        )
       : []
     : roleAndFeatureNavItems;
   const groupedNavItems = getGroupedNavItems(visibleNavItems);

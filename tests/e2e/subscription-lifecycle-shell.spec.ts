@@ -201,12 +201,16 @@ test.describe("UX-8G2A lifecycle-aware workspace shell", () => {
       "/app",
       "/app/subscription",
       "/app/billing-profile",
+      "/app/video-library",
     ]);
     expect(getInactiveShellMode("owner", "/app")).toBe("recovery_home");
     expect(getInactiveShellMode("admin", "/app/subscription/")).toBe(
       "recovery_content",
     );
     expect(getInactiveShellMode("owner", "/app/billing-profile")).toBe(
+      "recovery_content",
+    );
+    expect(getInactiveShellMode("admin", "/app/video-library")).toBe(
       "recovery_content",
     );
   });

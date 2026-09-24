@@ -147,6 +147,7 @@ const navAccess: Record<string, (role: MemberRole | null | undefined) => boolean
     Settings: canAccessSettings,
     Students: canAccessStudents,
     Subscription: canAccessSubscription,
+    "Video Library": canAccessVideoLibrary,
     "Team Operations": canAccessTeamOperations,
     Workflows: canAccessWorkflows,
   };
@@ -258,6 +259,10 @@ export function canAccessSettings(role: MemberRole | null | undefined) {
 
 export function canAccessSubscription(role: MemberRole | null | undefined) {
   return hasPermission(role, "access_subscription");
+}
+
+export function canAccessVideoLibrary(role: MemberRole | null | undefined) {
+  return role === "owner" || role === "admin";
 }
 
 export function canAccessTeamOperations(role: MemberRole | null | undefined) {
