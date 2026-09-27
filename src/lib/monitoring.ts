@@ -2,12 +2,46 @@ const redacted = "[redacted]";
 const maxStringLength = 600;
 const maxArrayLength = 25;
 const maxDepth = 5;
+const nativeVideoUploadCapabilityPlaceholder = "[native-video-upload-capability]";
+const nativeVideoUploadCapabilityPattern =
+  /https:\/\/upload\.cloudflarestream\.com\/tus(?:\/|\?)[^\s"'<>]*/gi;
+export const nativeVideoUploadCapabilitySpanPattern =
+  /https:\/\/upload\.cloudflarestream\.com\/tus(?:\/|\?)/i;
 
 const sensitiveKeyPattern =
   /(password|passcode|secret|token|authorization|cookie|otp|code|service.?role|signed.?url|storage_path|storage_bucket|payment_reference|payment.?id|card|cvv|otp_hash|reset.?token|access.?token|refresh.?token|file.?content)/i;
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+export function isNativeVideoUploadCapabilityUrl(value: unknown) {
+  if (typeof value !== "string" || value.length > 8_192) return false;
+  try {
+    const url = new URL(value);
+    return (
+      url.protocol === "https:" &&
+      url.hostname === "upload.cloudflarestream.com" &&
+      url.port === "" &&
+      url.username === "" &&
+      url.password === "" &&
+      url.hash === "" &&
+      (url.pathname === "/tus" || url.pathname.startsWith("/tus/"))
+    );
+  } catch {
+    return false;
+  }
+}
+
+export function scrubNativeVideoUploadCapabilities(value: string) {
+  if (isNativeVideoUploadCapabilityUrl(value)) {
+    return nativeVideoUploadCapabilityPlaceholder;
+  }
+  nativeVideoUploadCapabilityPattern.lastIndex = 0;
+  return value.replace(
+    nativeVideoUploadCapabilityPattern,
+    nativeVideoUploadCapabilityPlaceholder,
+  );
 }
 
 export function getMonitoringEnvironment() {
@@ -26,9 +60,10 @@ export function scrubMonitoringValue(value: unknown, depth = 0): unknown {
   }
 
   if (typeof value === "string") {
-    return value.length > maxStringLength
-      ? `${value.slice(0, maxStringLength)}...[truncated]`
-      : value;
+    const scrubbedValue = scrubNativeVideoUploadCapabilities(value);
+    return scrubbedValue.length > maxStringLength
+      ? `${scrubbedValue.slice(0, maxStringLength)}...[truncated]`
+      : scrubbedValue;
   }
 
   if (
@@ -57,6 +92,14 @@ export function scrubMonitoringValue(value: unknown, depth = 0): unknown {
         : scrubMonitoringValue(entry, depth + 1),
     ]),
   );
+}
+
+export function scrubSentryBreadcrumb<T>(breadcrumb: T): T | null {
+  return scrubMonitoringValue(breadcrumb) as T;
+}
+
+export function scrubSentrySpan<T>(span: T): T {
+  return scrubMonitoringValue(span) as T;
 }
 
 type ScrubbableSentryEvent = {

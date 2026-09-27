@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/src/components/ui/Button";
 import { FeedbackAlert } from "@/src/components/ui/FeedbackAlert";
 import { Skeleton } from "@/src/components/ui/Skeleton";
+import { NativeVideoUploadPanel } from "@/src/components/video/NativeVideoUploadPanel";
 import { getCurrentTenantOperationalState } from "@/src/lib/subscriptionLifecycle";
 import { getCurrentTenant } from "@/src/lib/tenant";
 import {
@@ -414,6 +415,17 @@ export function VideoLibraryClient() {
     }
   }
 
+  function upsertUploadedAsset(asset: NativeVideoManagementAsset) {
+    const existingIndex = assetsRef.current.findIndex(
+      (item) => item.assetId === asset.assetId,
+    );
+    const nextAssets = [...assetsRef.current];
+    if (existingIndex >= 0) nextAssets[existingIndex] = asset;
+    else nextAssets.unshift(asset);
+    assetsRef.current = nextAssets;
+    setAssets(nextAssets);
+  }
+
   async function refreshAsset(assetId: string) {
     if (!pollingRef.current || refreshingAssetId) return;
     setRefreshingAssetId(assetId);
@@ -457,6 +469,15 @@ export function VideoLibraryClient() {
       <div className="overflow-hidden rounded-lg border border-[#D8E8F0] shadow-sm shadow-slate-950/5">
         {capacityLoading ? <CapacitySkeleton /> : null}
         {!capacityLoading && capacity ? <CapacitySummary capacity={capacity} /> : null}
+        {!capacityLoading && capacity && tenantId ? (
+          <NativeVideoUploadPanel
+            capacity={capacity}
+            inactiveWorkspace={inactiveWorkspace}
+            onAsset={upsertUploadedAsset}
+            onRefresh={refreshAll}
+            tenantId={tenantId}
+          />
+        ) : null}
         {!capacityLoading && capacityError ? (
           <div className="bg-white p-5">
             <FeedbackAlert onRetry={() => void refreshAll()}>{capacityError}</FeedbackAlert>
