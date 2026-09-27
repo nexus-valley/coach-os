@@ -26,6 +26,7 @@ const playbackUrl =
 const playerPath = "src/components/video/LessonVideoPlayer.tsx";
 const externalPath = "src/lib/video/externalVideo.ts";
 const coursePath = "src/components/courses/CourseDetailClient.tsx";
+const lessonEditorPath = "src/components/video/LessonNativeVideoEditor.tsx";
 const configPath = "src/lib/server/video/cloudflareStreamConfig.ts";
 const nextConfigPath = "next.config.ts";
 
@@ -373,7 +374,8 @@ test.describe("VIDEO-2C2A team integration and narrow CSP", () => {
     expect(source).toContain("lessonId={lesson.id}");
     expect(source).toContain("lessonTitle={lesson.title}");
     expect(source).toContain("tenantId={tenant.id}");
-    expect(source).toContain("Video URL");
+    expect(source).toContain("<LessonNativeVideoEditor");
+    expect(read(lessonEditorPath)).toContain("Video URL");
 
     const playerSource = read(playerPath);
     expect(playerSource).not.toMatch(/owner|admin|staff|trainer|student/i);

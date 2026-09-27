@@ -8,6 +8,7 @@ import { Badge } from "@/src/components/ui/Badge";
 import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
 import { FeedbackAlert } from "@/src/components/ui/FeedbackAlert";
+import { LessonNativeVideoEditor } from "@/src/components/video/LessonNativeVideoEditor";
 import { LessonVideoPlayer } from "@/src/components/video/LessonVideoPlayer";
 import {
   createCourseSection,
@@ -40,6 +41,16 @@ import {
   type StudentPortalInvitationSummary,
 } from "@/src/lib/studentPortalInvitations";
 import { getSupabaseClient } from "@/src/lib/supabaseClient";
+import {
+  areLessonModalActionsBlocked,
+  buildExternalVideoClearInput,
+  clearExternalVideoWithCanonicalReconciliation,
+  createPersistedLessonEditorSnapshot,
+  ExternalVideoClearError,
+  findLessonInCourseStructure,
+  type CanonicalLessonEditorState,
+  type PersistedLessonEditorSnapshot,
+} from "@/src/lib/video/nativeVideoLessonEditorState";
 import {
   canManageCourses,
   canDeleteRecords,
@@ -229,6 +240,8 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
     useState(true);
   const [error, setError] = useState("");
   const [lessonModal, setLessonModal] = useState<LessonModalState | null>(null);
+  const [persistedLessonSnapshot, setPersistedLessonSnapshot] =
+    useState<PersistedLessonEditorSnapshot | null>(null);
   const [previewLessonId, setPreviewLessonId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [mutating, setMutating] = useState(false);
@@ -255,9 +268,16 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
   );
   const [sections, setSections] = useState<CourseSectionWithLessons[]>([]);
   const [tenant, setTenant] = useState<Tenant | null>(null);
+  const [videoMutationBusy, setVideoMutationBusy] = useState(false);
   const canDelete = canDeleteRecords(currentRole);
   const canManage = canManageCourses(currentRole);
   const canApproveRequests = currentRole === "owner" || currentRole === "admin";
+  const lessonActionsBlocked = areLessonModalActionsBlocked({
+    canManage,
+    lessonMutationBusy: mutating,
+    videoMutationBusy,
+  });
+  const lessonCloseBlocked = mutating || videoMutationBusy;
 
   useEffect(() => {
     let active = true;
@@ -458,6 +478,8 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
   }
 
   function openCreateLesson(sectionId: string) {
+    setPersistedLessonSnapshot(null);
+    setVideoMutationBusy(false);
     setLessonModal({
       content: "",
       isPreview: false,
@@ -471,17 +493,27 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
   }
 
   function openEditLesson(lesson: Lesson) {
+    const snapshot = createPersistedLessonEditorSnapshot(lesson);
+    setPersistedLessonSnapshot(snapshot);
+    setVideoMutationBusy(false);
     setLessonModal({
-      content: lesson.content ?? "",
-      isPreview: lesson.is_preview,
-      lessonId: lesson.id,
-      lessonType: lesson.lesson_type,
+      content: snapshot.content,
+      isPreview: snapshot.isPreview,
+      lessonId: snapshot.lessonId,
+      lessonType: snapshot.lessonType,
       mode: "edit",
-      resourceUrl: lesson.resource_url ?? "",
-      sectionId: lesson.section_id,
-      title: lesson.title,
-      videoUrl: lesson.video_url ?? "",
+      resourceUrl: snapshot.resourceUrl,
+      sectionId: snapshot.sectionId,
+      title: snapshot.title,
+      videoUrl: snapshot.videoUrl,
     });
+  }
+
+  function closeLessonModal() {
+    if (lessonCloseBlocked) return;
+    setLessonModal(null);
+    setPersistedLessonSnapshot(null);
+    setVideoMutationBusy(false);
   }
 
   async function handleSectionSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -525,7 +557,7 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
   async function handleLessonSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!tenant || !lessonModal) {
+    if (!tenant || !lessonModal || lessonActionsBlocked) {
       return;
     }
 
@@ -558,6 +590,8 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
       }
 
       setLessonModal(null);
+      setPersistedLessonSnapshot(null);
+      setVideoMutationBusy(false);
       await refreshStructure();
     } catch (caught) {
       setActionError(
@@ -566,6 +600,78 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
     } finally {
       setMutating(false);
     }
+  }
+
+  async function clearExternalVideoBeforeNative() {
+    if (
+      !tenant ||
+      !lessonModal?.lessonId ||
+      lessonModal.mode !== "edit" ||
+      !persistedLessonSnapshot ||
+      persistedLessonSnapshot.lessonId !== lessonModal.lessonId
+    ) {
+      throw new Error("Save the lesson before attaching a CoachFort video.");
+    }
+
+    const activeLessonId = persistedLessonSnapshot.lessonId;
+    const synchronizeCanonicalVideoState = (
+      canonical: CanonicalLessonEditorState,
+      synchronizeDraftVideo: boolean,
+    ) => {
+      const canonicalSnapshot = createPersistedLessonEditorSnapshot(
+        canonical.lesson,
+      );
+      setPersistedLessonSnapshot(canonicalSnapshot);
+      if (synchronizeDraftVideo) {
+        setLessonModal((current) => {
+          if (
+            !current ||
+            current.mode !== "edit" ||
+            current.lessonId !== canonicalSnapshot.lessonId
+          ) {
+            return current;
+          }
+          return { ...current, videoUrl: canonicalSnapshot.videoUrl };
+        });
+      }
+      setSections(canonical.sections);
+    };
+    const readCanonical = async () => {
+      const canonicalSections = await getCourseStructure(courseId, tenant.id);
+      const canonicalLesson = findLessonInCourseStructure(
+        canonicalSections,
+        activeLessonId,
+      );
+      if (!canonicalLesson) {
+        throw new Error("Lesson is unavailable.");
+      }
+      return { lesson: canonicalLesson, sections: canonicalSections };
+    };
+    let outcome;
+    try {
+      outcome = await clearExternalVideoWithCanonicalReconciliation({
+        async clearCanonical(canonicalLesson) {
+          const canonicalSnapshot = createPersistedLessonEditorSnapshot(
+            canonicalLesson,
+          );
+          await updateLesson(buildExternalVideoClearInput(canonicalSnapshot, {
+            courseId,
+            tenantId: tenant.id,
+          }));
+        },
+        readCanonical,
+      });
+    } catch (error) {
+      if (error instanceof ExternalVideoClearError && error.canonical) {
+        synchronizeCanonicalVideoState(error.canonical, true);
+      }
+      throw error;
+    }
+    synchronizeCanonicalVideoState(
+      outcome.canonical,
+      outcome.status !== "already_clear",
+    );
+    return outcome.status;
   }
 
   async function handleDeleteConfirm() {
@@ -2056,42 +2162,40 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
                 />
               </label>
 
-              <div className="grid gap-4 sm:grid-cols-2">
-                <label className="block">
-                  <span className="text-sm font-medium text-slate-300">
-                    Video URL
-                  </span>
-                  <input
-                    className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition placeholder:text-slate-400 focus:border-teal-400/40 focus:bg-white/15 focus:ring-4 focus:ring-teal-400/10"
-                    onChange={(event) =>
-                      setLessonModal({
-                        ...lessonModal,
-                        videoUrl: event.target.value,
-                      })
-                    }
-                    placeholder="https://..."
-                    type="url"
-                    value={lessonModal.videoUrl}
-                  />
-                </label>
-                <label className="block">
-                  <span className="text-sm font-medium text-slate-300">
-                    Resource URL
-                  </span>
-                  <input
-                    className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition placeholder:text-slate-400 focus:border-teal-400/40 focus:bg-white/15 focus:ring-4 focus:ring-teal-400/10"
-                    onChange={(event) =>
-                      setLessonModal({
-                        ...lessonModal,
-                        resourceUrl: event.target.value,
-                      })
-                    }
-                    placeholder="https://..."
-                    type="url"
-                    value={lessonModal.resourceUrl}
-                  />
-                </label>
-              </div>
+              {tenant ? (
+                <LessonNativeVideoEditor
+                  disabled={lessonActionsBlocked}
+                  externalVideoUrl={lessonModal.videoUrl}
+                  key={`${tenant.id}:${lessonModal.lessonId ?? "new"}`}
+                  lessonId={lessonModal.lessonId}
+                  onClearExternalBeforeNative={clearExternalVideoBeforeNative}
+                  onExternalVideoUrlChange={(videoUrl) =>
+                    setLessonModal((current) =>
+                      current ? { ...current, videoUrl } : current,
+                    )
+                  }
+                  onMutationBusyChange={setVideoMutationBusy}
+                  tenantId={tenant.id}
+                />
+              ) : null}
+
+              <label className="block">
+                <span className="text-sm font-medium text-slate-300">
+                  Resource URL
+                </span>
+                <input
+                  className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none transition placeholder:text-slate-400 focus:border-teal-400/40 focus:bg-white/15 focus:ring-4 focus:ring-teal-400/10"
+                  onChange={(event) =>
+                    setLessonModal({
+                      ...lessonModal,
+                      resourceUrl: event.target.value,
+                    })
+                  }
+                  placeholder="https://..."
+                  type="url"
+                  value={lessonModal.resourceUrl}
+                />
+              </label>
 
               <label className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/10 p-4">
                 <input
@@ -2112,14 +2216,19 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
 
               <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
                 <Button
-                  onClick={() => setLessonModal(null)}
+                  disabled={lessonCloseBlocked}
+                  onClick={closeLessonModal}
                   type="button"
                   variant="secondary"
                 >
                   Cancel
                 </Button>
-                <Button disabled={mutating} type="submit">
-                  {mutating ? "Saving..." : "Save lesson"}
+                <Button disabled={lessonActionsBlocked} type="submit">
+                  {mutating
+                    ? "Saving..."
+                    : videoMutationBusy
+                      ? "Updating video..."
+                      : "Save lesson"}
                 </Button>
               </div>
             </form>

@@ -17,6 +17,38 @@ type DetachAuthorityResult = {
   detached?: unknown;
 };
 
+type ReadAuthorityAttachment = {
+  asset_id?: unknown;
+  attached_at?: unknown;
+  duration_seconds?: unknown;
+  filename?: unknown;
+  status?: unknown;
+};
+
+type ReadAuthorityResult = {
+  attachment?: unknown;
+  lesson_id?: unknown;
+};
+
+export type NativeVideoLessonAssetStatus =
+  | "upload_pending"
+  | "processing"
+  | "ready"
+  | "failed"
+  | "delete_pending"
+  | "deleted";
+
+export type NativeVideoLessonState = {
+  attachment: null | {
+    assetId: string;
+    attachedAt: string;
+    durationSeconds: number | null;
+    filename: string;
+    status: NativeVideoLessonAssetStatus;
+  };
+  lessonId: string;
+};
+
 export type NativeVideoLessonAttachmentInput = {
   actorUserId: string;
   assetId: string;
@@ -47,6 +79,7 @@ export type NativeVideoLessonAttachmentDatabase = {
   detach(
     input: NativeVideoLessonDetachmentInput,
   ): Promise<NativeVideoLessonDetachmentResult>;
+  read(input: NativeVideoLessonDetachmentInput): Promise<NativeVideoLessonState>;
 };
 
 export class NativeVideoLessonAttachmentPublicError extends Error {
@@ -61,8 +94,12 @@ export class NativeVideoLessonAttachmentPublicError extends Error {
   }
 }
 
-function authorityError(operation: "attach" | "detach", error: DatabaseError) {
-  const action = operation === "attach" ? "attach" : "remove";
+function authorityError(
+  operation: "attach" | "detach" | "read",
+  error: DatabaseError,
+) {
+  const action =
+    operation === "attach" ? "attach" : operation === "detach" ? "remove" : "view";
   const message = (error.message ?? "").toLowerCase();
 
   if (error.code === "42501") {
@@ -82,6 +119,14 @@ function authorityError(operation: "attach" | "detach", error: DatabaseError) {
   }
 
   if (error.code === "22023") {
+    if (operation === "read") {
+      return new NativeVideoLessonAttachmentPublicError(
+        "VIDEO_LESSON_ATTACHMENT_INVALID_REQUEST",
+        "Lesson video details are invalid.",
+        400,
+      );
+    }
+
     return new NativeVideoLessonAttachmentPublicError(
       "VIDEO_LESSON_ATTACHMENT_CONFLICT",
       message.includes("external video")
@@ -95,6 +140,15 @@ function authorityError(operation: "attach" | "detach", error: DatabaseError) {
     "VIDEO_LESSON_ATTACHMENT_FAILED",
     "The lesson video could not be updated.",
     500,
+  );
+}
+
+function hasExactKeys(value: object, expected: string[]) {
+  const keys = Object.keys(value).sort();
+  const expectedKeys = [...expected].sort();
+  return (
+    keys.length === expectedKeys.length &&
+    keys.every((key, index) => key === expectedKeys[index])
   );
 }
 
@@ -152,6 +206,100 @@ function normalizeDetachResult(value: unknown, lessonId: string) {
   };
 }
 
+const assetStatuses = new Set<NativeVideoLessonAssetStatus>([
+  "upload_pending",
+  "processing",
+  "ready",
+  "failed",
+  "delete_pending",
+  "deleted",
+]);
+
+export function normalizeNativeVideoLessonReadResult(
+  value: unknown,
+  expectedLessonId: string,
+): NativeVideoLessonState {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    invalidAuthorityResult();
+  }
+
+  const result = value as ReadAuthorityResult;
+  if (!hasExactKeys(result, ["attachment", "lesson_id"])) {
+    invalidAuthorityResult();
+  }
+
+  const lessonId =
+    typeof result.lesson_id === "string" ? result.lesson_id.toLowerCase() : "";
+  if (!isUuid(lessonId) || lessonId !== expectedLessonId) {
+    invalidAuthorityResult();
+  }
+
+  if (result.attachment === null) {
+    return { attachment: null, lessonId };
+  }
+
+  if (
+    !result.attachment ||
+    typeof result.attachment !== "object" ||
+    Array.isArray(result.attachment)
+  ) {
+    invalidAuthorityResult();
+  }
+
+  const attachment = result.attachment as ReadAuthorityAttachment;
+  if (
+    !hasExactKeys(attachment, [
+      "asset_id",
+      "attached_at",
+      "duration_seconds",
+      "filename",
+      "status",
+    ])
+  ) {
+    invalidAuthorityResult();
+  }
+
+  const assetId =
+    typeof attachment.asset_id === "string"
+      ? attachment.asset_id.toLowerCase()
+      : "";
+  const attachedAt =
+    typeof attachment.attached_at === "string" ? attachment.attached_at : "";
+  const durationSeconds = attachment.duration_seconds;
+  const filename =
+    typeof attachment.filename === "string" ? attachment.filename : "";
+  const status = attachment.status;
+
+  if (
+    !isUuid(assetId) ||
+    filename.length < 1 ||
+    filename.length > 255 ||
+    typeof status !== "string" ||
+    !assetStatuses.has(status as NativeVideoLessonAssetStatus) ||
+    !attachedAt ||
+    !Number.isFinite(Date.parse(attachedAt)) ||
+    !(
+      durationSeconds === null ||
+      (Number.isInteger(durationSeconds) &&
+        (durationSeconds as number) >= 1 &&
+        (durationSeconds as number) <= 7200)
+    )
+  ) {
+    invalidAuthorityResult();
+  }
+
+  return {
+    attachment: {
+      assetId,
+      attachedAt,
+      durationSeconds: durationSeconds as number | null,
+      filename,
+      status: status as NativeVideoLessonAssetStatus,
+    },
+    lessonId,
+  };
+}
+
 export function createNativeVideoLessonAttachmentDatabase(
   client: SupabaseClient,
 ): NativeVideoLessonAttachmentDatabase {
@@ -189,6 +337,23 @@ export function createNativeVideoLessonAttachmentDatabase(
       }
 
       return normalizeDetachResult(data, input.lessonId);
+    },
+
+    async read(input) {
+      const { data, error } = await client.rpc(
+        "get_native_video_lesson_attachment_server",
+        {
+          p_actor_user_id: input.actorUserId,
+          p_lesson_id: input.lessonId,
+          p_tenant_id: input.tenantId,
+        },
+      );
+
+      if (error) {
+        throw authorityError("read", error);
+      }
+
+      return normalizeNativeVideoLessonReadResult(data, input.lessonId);
     },
   };
 }

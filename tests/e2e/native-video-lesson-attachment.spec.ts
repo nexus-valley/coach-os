@@ -5,6 +5,7 @@ import { join } from "node:path";
 
 import {
   handleNativeVideoLessonAttachmentDelete,
+  handleNativeVideoLessonAttachmentGet,
   handleNativeVideoLessonAttachmentPut,
 } from "../../app/api/video/lessons/[lessonId]/native-video/route";
 import {
@@ -18,11 +19,26 @@ const read = (path: string) => readFileSync(join(root, path), "utf8");
 const routePath = "app/api/video/lessons/[lessonId]/native-video/route.ts";
 const adapterPath = "src/lib/server/video/nativeVideoLessonAttachment.ts";
 const authorityPath = "supabase/bundle_video_2a_native_video_authority.sql";
+const readAuthorityPath =
+  "supabase/bundle_video_2c2d3b_lesson_attachment_read_authority.sql";
 const tenantId = "11111111-1111-4111-8111-111111111111";
 const lessonId = "22222222-2222-4222-8222-222222222222";
 const assetId = "33333333-3333-4333-8333-333333333333";
 const attachmentId = "44444444-4444-4444-8444-444444444444";
 const actorUserId = "55555555-5555-4555-8555-555555555555";
+const attachedAt = "2026-09-27T08:00:00.000Z";
+
+const attachedState = {
+  attachment: {
+    assetId,
+    attachedAt,
+    durationSeconds: 24,
+    filename: "lesson-video.mp4",
+    status: "ready" as const,
+  },
+  lessonId,
+};
+const detachedState = { attachment: null, lessonId };
 
 function context(id = lessonId) {
   return { params: Promise.resolve({ lessonId: id }) };
@@ -42,6 +58,13 @@ function request(method: "DELETE" | "PUT", body: Record<string, unknown>) {
   );
 }
 
+function getRequest(query = `tenantId=${tenantId}`) {
+  return new Request(
+    `https://coachfort.test/api/video/lessons/${lessonId}/native-video?${query}`,
+    { headers: { Authorization: "Bearer approved-user-token" } },
+  );
+}
+
 function database(
   overrides: Partial<NativeVideoLessonAttachmentDatabase> = {},
 ): NativeVideoLessonAttachmentDatabase {
@@ -55,6 +78,9 @@ function database(
     },
     async detach(input) {
       return { lessonId: input.lessonId, status: "detached" };
+    },
+    async read(input) {
+      return { attachment: null, lessonId: input.lessonId };
     },
     ...overrides,
   };
@@ -80,6 +106,10 @@ test.describe("VIDEO-2C1A native-video lesson attachment bridge", () => {
             calls.push(input);
             return { lessonId, status: "attached", videoAssetId: assetId };
           },
+          async read(input) {
+            calls.push({ operation: "read", ...input });
+            return attachedState;
+          },
         }),
       },
     );
@@ -87,11 +117,12 @@ test.describe("VIDEO-2C1A native-video lesson attachment bridge", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toBe("private, no-store");
     expect(await json(response)).toEqual({
-      lessonId,
-      status: "attached",
-      videoAssetId: assetId,
+      ...attachedState,
     });
-    expect(calls).toEqual([{ actorUserId, assetId, lessonId, tenantId }]);
+    expect(calls).toEqual([
+      { actorUserId, assetId, lessonId, tenantId },
+      { actorUserId, lessonId, operation: "read", tenantId },
+    ]);
   });
 
   test("2. DELETE binds the actor, canonicalizes UUIDs and returns idempotent cleanup", async () => {
@@ -106,17 +137,80 @@ test.describe("VIDEO-2C1A native-video lesson attachment bridge", () => {
             calls.push(input);
             return { lessonId, status: "detached" };
           },
+          async read(input) {
+            calls.push({ operation: "read", ...input });
+            return detachedState;
+          },
         }),
       },
     );
 
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toBe("private, no-store");
-    expect(await json(response)).toEqual({ lessonId, status: "detached" });
-    expect(calls).toEqual([{ actorUserId, lessonId, tenantId }]);
+    expect(await json(response)).toEqual(detachedState);
+    expect(calls).toEqual([
+      { actorUserId, lessonId, tenantId },
+      { actorUserId, lessonId, operation: "read", tenantId },
+    ]);
   });
 
-  test("3. both methods require authentication before database authority", async () => {
+  test("GET uses only exact read authority and returns a safe canonical DTO", async () => {
+    const calls: Array<Record<string, unknown>> = [];
+    const response = await handleNativeVideoLessonAttachmentGet(
+      getRequest(`tenantId=${tenantId.toUpperCase()}`),
+      context(lessonId.toUpperCase()),
+      {
+        authenticate: async () => ({ id: actorUserId }),
+        database: database({
+          async read(input) {
+            calls.push(input);
+            return attachedState;
+          },
+        }),
+      },
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+    expect(await json(response)).toEqual(attachedState);
+    expect(calls).toEqual([{ actorUserId, lessonId, tenantId }]);
+    expect(JSON.stringify(attachedState)).not.toMatch(
+      /provider|requestId|upload|metadata|failure/i,
+    );
+  });
+
+  test("GET strictly rejects missing, duplicate, malformed and unexpected query input", async () => {
+    let calls = 0;
+    const guardedDatabase = database({
+      async read() {
+        calls += 1;
+        throw new Error("must not run");
+      },
+    });
+    const queries = [
+      "",
+      "tenantId=invalid",
+      `tenantId=${tenantId}&tenantId=${tenantId}`,
+      `tenantId=${tenantId}&assetId=${assetId}`,
+      `actorUserId=${actorUserId}`,
+    ];
+
+    for (const query of queries) {
+      const response = await handleNativeVideoLessonAttachmentGet(
+        getRequest(query),
+        context(),
+        {
+          authenticate: async () => ({ id: actorUserId }),
+          database: guardedDatabase,
+        },
+      );
+      expect(response.status).toBe(400);
+      expect(response.headers.get("cache-control")).toBe("private, no-store");
+    }
+    expect(calls).toBe(0);
+  });
+
+  test("3. all methods require authentication before database authority", async () => {
     let calls = 0;
     const noAuthentication = (method: "DELETE" | "PUT") =>
       new Request(
@@ -150,9 +244,17 @@ test.describe("VIDEO-2C1A native-video lesson attachment bridge", () => {
       context(),
       { database: guardedDatabase },
     );
+    const get = await handleNativeVideoLessonAttachmentGet(
+      new Request(
+        `https://coachfort.test/api/video/lessons/${lessonId}/native-video?tenantId=${tenantId}`,
+      ),
+      context(),
+      { database: guardedDatabase },
+    );
 
     expect(put.status).toBe(401);
     expect(remove.status).toBe(401);
+    expect(get.status).toBe(401);
     expect(put.headers.get("cache-control")).toBe("private, no-store");
     expect(remove.headers.get("cache-control")).toBe("private, no-store");
     expect(calls).toBe(0);
@@ -261,21 +363,37 @@ test.describe("VIDEO-2C1A native-video lesson attachment bridge", () => {
     expect(calls).toBe(0);
   });
 
-  test("6. database adapter calls exactly the canonical attach and detach RPCs", async () => {
+  test("6. database adapter calls exactly the canonical attach, detach and read RPCs", async () => {
     const calls: Array<{ name: string; parameters: Record<string, unknown> }> = [];
     const client = {
       async rpc(name: string, parameters: Record<string, unknown>) {
         calls.push({ name, parameters });
-        return name === "attach_native_video_to_lesson_server"
-          ? {
+        if (name === "attach_native_video_to_lesson_server") {
+          return {
               data: {
                 attachment_id: attachmentId,
                 lesson_id: lessonId,
                 video_asset_id: assetId,
               },
               error: null,
-            }
-          : { data: { detached: false }, error: null };
+            };
+        }
+        if (name === "detach_native_video_from_lesson_server") {
+          return { data: { detached: false }, error: null };
+        }
+        return {
+          data: {
+            attachment: {
+              asset_id: assetId,
+              attached_at: attachedAt,
+              duration_seconds: 24,
+              filename: "lesson-video.mp4",
+              status: "ready",
+            },
+            lesson_id: lessonId,
+          },
+          error: null,
+        };
       },
     } as unknown as SupabaseClient;
     const adapter = createNativeVideoLessonAttachmentDatabase(client);
@@ -286,6 +404,9 @@ test.describe("VIDEO-2C1A native-video lesson attachment bridge", () => {
     await expect(
       adapter.detach({ actorUserId, lessonId, tenantId }),
     ).resolves.toEqual({ lessonId, status: "detached" });
+    await expect(
+      adapter.read({ actorUserId, lessonId, tenantId }),
+    ).resolves.toEqual(attachedState);
     expect(calls).toEqual([
       {
         name: "attach_native_video_to_lesson_server",
@@ -298,6 +419,14 @@ test.describe("VIDEO-2C1A native-video lesson attachment bridge", () => {
       },
       {
         name: "detach_native_video_from_lesson_server",
+        parameters: {
+          p_actor_user_id: actorUserId,
+          p_lesson_id: lessonId,
+          p_tenant_id: tenantId,
+        },
+      },
+      {
+        name: "get_native_video_lesson_attachment_server",
         parameters: {
           p_actor_user_id: actorUserId,
           p_lesson_id: lessonId,
@@ -353,6 +482,9 @@ test.describe("VIDEO-2C1A native-video lesson attachment bridge", () => {
       await expect(
         adapter.detach({ actorUserId, lessonId, tenantId }),
       ).rejects.toMatchObject({ status });
+      await expect(
+        adapter.read({ actorUserId, lessonId, tenantId }),
+      ).rejects.toMatchObject({ status: code === "22023" ? 400 : status });
     }
 
     const conflictClient = {
@@ -417,7 +549,7 @@ test.describe("VIDEO-2C1A native-video lesson attachment bridge", () => {
     }
   });
 
-  test("10. malformed attach and detach authority outputs fail closed", async () => {
+  test("10. malformed attach, detach and read authority outputs fail closed", async () => {
     const malformedAttach = {
       async rpc() {
         return {
@@ -433,6 +565,24 @@ test.describe("VIDEO-2C1A native-video lesson attachment bridge", () => {
     const malformedDetach = {
       async rpc() {
         return { data: { detached: "false" }, error: null };
+      },
+    } as unknown as SupabaseClient;
+    const malformedRead = {
+      async rpc() {
+        return {
+          data: {
+            attachment: {
+              asset_id: assetId,
+              attached_at: attachedAt,
+              duration_seconds: 24,
+              filename: "lesson-video.mp4",
+              provider_asset_id: "private-provider-id",
+              status: "ready",
+            },
+            lesson_id: lessonId,
+          },
+          error: null,
+        };
       },
     } as unknown as SupabaseClient;
 
@@ -451,6 +601,13 @@ test.describe("VIDEO-2C1A native-video lesson attachment bridge", () => {
         tenantId,
       }),
     ).rejects.toMatchObject({ status: 500 });
+    await expect(
+      createNativeVideoLessonAttachmentDatabase(malformedRead).read({
+        actorUserId,
+        lessonId,
+        tenantId,
+      }),
+    ).rejects.toMatchObject({ status: 500 });
   });
 
   test("11. route and adapter use only canonical service RPCs with no provider or table authority", () => {
@@ -461,9 +618,10 @@ test.describe("VIDEO-2C1A native-video lesson attachment bridge", () => {
     expect(route).toContain("actorUserId: user.id");
     expect(route).toContain("Object.keys(body).length !== 2");
     expect(route).toContain("Object.keys(body).length !== 1");
-    expect(adapter.match(/\.rpc\(/g)).toHaveLength(2);
+    expect(adapter.match(/\.rpc\(/g)).toHaveLength(3);
     expect(adapter).toContain('"attach_native_video_to_lesson_server"');
     expect(adapter).toContain('"detach_native_video_from_lesson_server"');
+    expect(adapter).toContain('"get_native_video_lesson_attachment_server"');
     expect(combined).not.toMatch(/\.from\(["'](?:video_assets|video_asset_attachments)/);
     expect(combined).not.toMatch(/\.(?:insert|update|upsert|delete)\(/);
     expect(combined).not.toMatch(/cloudflare|provider_asset|provider uid/i);
@@ -473,6 +631,15 @@ test.describe("VIDEO-2C1A native-video lesson attachment bridge", () => {
 
   test("12. installed SQL preserves replacement, attach gates and cleanup-after-inactivity semantics", () => {
     const sql = read(authorityPath).toLowerCase();
+    const readSql = read(readAuthorityPath).toLowerCase();
+    const readStart = readSql.indexOf(
+      "create function public.get_native_video_lesson_attachment_server",
+    );
+    const readEnd = readSql.indexOf(
+      "alter function public.get_native_video_lesson_attachment_server",
+      readStart,
+    );
+    const readAuthority = readSql.slice(readStart, readEnd);
     const attachStart = sql.indexOf(
       "create function public.attach_native_video_to_lesson_server",
     );
@@ -498,6 +665,9 @@ test.describe("VIDEO-2C1A native-video lesson attachment bridge", () => {
     expect(detach).toContain("jsonb_build_object('detached', v_deleted = 1)");
     expect(detach).not.toContain("assert_tenant_operational_access");
     expect(detach).not.toContain("assert_effective_operational_feature");
+    expect(readAuthority).toContain("assert_native_video_owner_admin");
+    expect(readAuthority).not.toContain("assert_tenant_operational_access");
+    expect(readAuthority).not.toContain("assert_effective_operational_feature");
     expect(sql).toContain(
       "grant execute on function public.attach_native_video_to_lesson_server(uuid,uuid,uuid,uuid)\n  to service_role",
     );

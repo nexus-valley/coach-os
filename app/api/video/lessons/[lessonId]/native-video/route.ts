@@ -77,6 +77,21 @@ function normalizeDeleteBody(value: unknown) {
   return { tenantId: body.tenantId.toLowerCase() };
 }
 
+function normalizeGetQuery(request: Request) {
+  const entries = [...new URL(request.url).searchParams.entries()];
+  const [key, value] = entries[0] ?? [];
+  if (
+    entries.length !== 1 ||
+    key !== "tenantId" ||
+    typeof value !== "string" ||
+    !isUuid(value)
+  ) {
+    throw new InvalidJsonPayloadError();
+  }
+
+  return { tenantId: value.toLowerCase() };
+}
+
 function routeError(error: unknown) {
   if (error instanceof InvalidJsonPayloadError) {
     return jsonError(
@@ -130,6 +145,53 @@ function captureRouteFailure(
   (options.captureException ?? captureServerException)(safeError, context);
 }
 
+export async function handleNativeVideoLessonAttachmentGet(
+  request: Request,
+  context: NativeVideoLessonContext,
+  options: NativeVideoLessonRouteOptions = {},
+) {
+  let lessonId = "";
+  let tenantId: string | null = null;
+
+  try {
+    const accessToken = getBearerToken(request);
+    const user = await (options.authenticate ?? requireAuthenticatedUser)(accessToken);
+    ({ lessonId } = await context.params);
+
+    if (!isUuid(lessonId)) {
+      throw new InvalidJsonPayloadError();
+    }
+    lessonId = lessonId.toLowerCase();
+
+    const query = normalizeGetQuery(request);
+    tenantId = query.tenantId;
+    const result = await database(options).read({
+      actorUserId: user.id,
+      lessonId,
+      tenantId,
+    });
+
+    return Response.json(result, {
+      headers: { "Cache-Control": "private, no-store" },
+      status: 200,
+    });
+  } catch (error) {
+    const response = routeError(error);
+    captureRouteFailure(
+      error,
+      response,
+      {
+        lessonId: lessonId || undefined,
+        operation: "native_video_lesson_attachment_get",
+        route: "/api/video/lessons/[lessonId]/native-video",
+        tenantId,
+      },
+      options,
+    );
+    return response;
+  }
+}
+
 export async function handleNativeVideoLessonAttachmentPut(
   request: Request,
   context: NativeVideoLessonContext,
@@ -150,9 +212,15 @@ export async function handleNativeVideoLessonAttachmentPut(
 
     const body = normalizePutBody(await parseJsonBody<unknown>(request));
     tenantId = body.tenantId;
-    const result = await database(options).attach({
+    const authority = database(options);
+    await authority.attach({
       actorUserId: user.id,
       assetId: body.assetId,
+      lessonId,
+      tenantId,
+    });
+    const result = await authority.read({
+      actorUserId: user.id,
       lessonId,
       tenantId,
     });
@@ -198,7 +266,13 @@ export async function handleNativeVideoLessonAttachmentDelete(
 
     const body = normalizeDeleteBody(await parseJsonBody<unknown>(request));
     tenantId = body.tenantId;
-    const result = await database(options).detach({
+    const authority = database(options);
+    await authority.detach({
+      actorUserId: user.id,
+      lessonId,
+      tenantId,
+    });
+    const result = await authority.read({
       actorUserId: user.id,
       lessonId,
       tenantId,
@@ -227,6 +301,10 @@ export async function handleNativeVideoLessonAttachmentDelete(
 
 export async function PUT(request: Request, context: NativeVideoLessonContext) {
   return handleNativeVideoLessonAttachmentPut(request, context);
+}
+
+export async function GET(request: Request, context: NativeVideoLessonContext) {
+  return handleNativeVideoLessonAttachmentGet(request, context);
 }
 
 export async function DELETE(request: Request, context: NativeVideoLessonContext) {
