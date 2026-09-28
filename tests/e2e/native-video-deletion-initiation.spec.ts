@@ -351,4 +351,75 @@ test.describe("VIDEO-2B2 native video deletion initiation", () => {
     expect(provider).toContain('safeCode: "video_provider_delete_failed"');
     expect(read(routePath)).not.toContain("deleteVideo");
   });
+
+  test("14. captures only synthetic errors for mapped and unexpected deletion failures", async () => {
+    const privateDatabaseError = {
+      code: "P0001",
+      message: "private database deletion detail",
+    };
+    const unexpectedError = new Error("private runtime deletion detail");
+    const captures: Array<{
+      context?: Record<string, unknown>;
+      error: unknown;
+    }> = [];
+    const captureException = (
+      error: unknown,
+      captureContext?: Record<string, unknown>,
+    ) => captures.push({ context: captureContext, error });
+
+    const mapped = await handleNativeVideoDeletionRequest(
+      deletionRequest(),
+      context(),
+      {
+        authenticate: async () => ({ id: ownerId }),
+        captureException,
+        requestDeletion: async () => ({
+          data: null,
+          error: privateDatabaseError,
+        }),
+      },
+    );
+    const unexpected = await handleNativeVideoDeletionRequest(
+      deletionRequest(),
+      context(),
+      {
+        authenticate: async () => ({ id: ownerId }),
+        captureException,
+        requestDeletion: async () => {
+          throw unexpectedError;
+        },
+      },
+    );
+
+    expect(mapped.status).toBe(500);
+    expect(unexpected.status).toBe(500);
+    expect(captures.map(({ error }) => (error as Error).message)).toEqual([
+      "VIDEO_DELETION_REQUEST_FAILED",
+      "VIDEO_DELETION_UNEXPECTED_FAILURE",
+    ]);
+    expect(captures.map(({ error }) => error)).not.toContain(privateDatabaseError);
+    expect(captures.map(({ error }) => error)).not.toContain(unexpectedError);
+    expect(JSON.stringify(captures)).not.toContain("private database deletion detail");
+    expect(JSON.stringify(captures)).not.toContain("private runtime deletion detail");
+    expect(captures[0]?.context).toEqual({
+      assetId,
+      operation: "native_video_deletion_request",
+      route: "/api/video/assets/[assetId]",
+      tenantId,
+    });
+    expect(captures[1]?.context).toEqual({
+      assetId,
+      operation: "native_video_deletion_route",
+      route: "/api/video/assets/[assetId]",
+      tenantId,
+    });
+    expect(await responseBody(mapped)).toEqual({
+      code: "VIDEO_DELETION_REQUEST_FAILED",
+      error: "Video deletion could not be requested.",
+    });
+    expect(await responseBody(unexpected)).toEqual({
+      code: "VIDEO_DELETION_REQUEST_FAILED",
+      error: "Video deletion could not be requested.",
+    });
+  });
 });

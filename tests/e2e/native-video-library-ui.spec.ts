@@ -210,7 +210,7 @@ test.describe("VIDEO-2C2D1 video library", () => {
     expect(assetMatchesNativeVideoFilter(asset({ status: "failed" }), "attention")).toBe(true);
     expect(assetMatchesNativeVideoFilter(asset({ attention: "needs_review" }), "attention")).toBe(true);
     expect(assetMatchesNativeVideoFilter(asset({ status: "delete_pending" }), "deleting")).toBe(true);
-    expect(assetMatchesNativeVideoFilter(asset({ status: "deleted" }), "all")).toBe(true);
+    expect(assetMatchesNativeVideoFilter(asset({ status: "deleted" }), "all")).toBe(false);
 
     expect(getNativeVideoStatusLabel("upload_pending")).toBe("Waiting for upload");
     expect(getNativeVideoStatusLabel("processing")).toBe("Processing");
@@ -416,7 +416,7 @@ test.describe("VIDEO-2C2D1 video library", () => {
     expect(source).toContain("if (document.hidden) controller.pause()");
     expect(source).toContain("else controller.resume()");
     expect(source).toContain("controller.stopAll()");
-    expect(source).toContain("}, [tenantId]);");
+    expect(source).toContain("}, [applyCanonicalAsset, tenantId]);");
     expect(source).not.toContain("channel(");
     expect(source).not.toContain("postgres_changes");
   });

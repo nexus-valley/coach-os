@@ -58,6 +58,38 @@ export type NativeVideoLibraryFilter =
   | "attention"
   | "deleting";
 
+export type NativeVideoDeletionResult = {
+  assetId: string;
+  status: "delete_pending";
+};
+
+export type NativeVideoDeletionErrorCode =
+  | "VIDEO_INVALID_REQUEST"
+  | "VIDEO_AUTHENTICATION_REQUIRED"
+  | "VIDEO_DELETION_FORBIDDEN"
+  | "VIDEO_ASSET_NOT_FOUND"
+  | "VIDEO_ATTACHED_TO_LESSON"
+  | "VIDEO_DELETION_STATE_CONFLICT"
+  | "VIDEO_DELETION_REQUEST_FAILED";
+
+export class NativeVideoDeletionRequestError extends Error {
+  readonly ambiguous: boolean;
+  readonly code: NativeVideoDeletionErrorCode | null;
+  readonly status: number;
+
+  constructor(
+    status: number,
+    code: NativeVideoDeletionErrorCode | null,
+    ambiguous: boolean,
+  ) {
+    super("Native video deletion request failed.");
+    this.name = "NativeVideoDeletionRequestError";
+    this.status = status;
+    this.code = code;
+    this.ambiguous = ambiguous;
+  }
+}
+
 export class NativeVideoManagementRequestError extends Error {
   readonly status: number;
 
@@ -91,6 +123,17 @@ const capacityStates = new Set<NativeVideoCapacity["capacityState"]>([
   "warning",
   "critical",
   "full",
+]);
+const deletionCodesByStatus = new Map<number, Set<NativeVideoDeletionErrorCode>>([
+  [400, new Set(["VIDEO_INVALID_REQUEST"])],
+  [401, new Set(["VIDEO_AUTHENTICATION_REQUIRED"])],
+  [403, new Set(["VIDEO_DELETION_FORBIDDEN"])],
+  [404, new Set(["VIDEO_ASSET_NOT_FOUND"])],
+  [
+    409,
+    new Set(["VIDEO_ATTACHED_TO_LESSON", "VIDEO_DELETION_STATE_CONFLICT"]),
+  ],
+  [500, new Set(["VIDEO_DELETION_REQUEST_FAILED"])],
 ]);
 
 function asRecord(value: unknown) {
@@ -307,6 +350,123 @@ type RequestOptions = {
   signal?: AbortSignal;
 };
 
+function deletionRequestError(
+  status: number,
+  code: NativeVideoDeletionErrorCode | null,
+  ambiguous: boolean,
+): never {
+  throw new NativeVideoDeletionRequestError(status, code, ambiguous);
+}
+
+function normalizeDeletionInput(input: {
+  assetId: string;
+  tenantId: string;
+}) {
+  const row = asRecord(input);
+  if (
+    !row ||
+    !hasExactKeys(row, ["assetId", "tenantId"]) ||
+    typeof row.assetId !== "string" ||
+    typeof row.tenantId !== "string"
+  ) {
+    deletionRequestError(400, "VIDEO_INVALID_REQUEST", false);
+  }
+
+  const assetId = row.assetId.toLowerCase();
+  const tenantId = row.tenantId.toLowerCase();
+  if (!isCanonicalUuid(assetId) || !isCanonicalUuid(tenantId)) {
+    deletionRequestError(400, "VIDEO_INVALID_REQUEST", false);
+  }
+  return { assetId, tenantId };
+}
+
+function normalizeDeletionSuccess(
+  value: unknown,
+  expectedAssetId: string,
+): NativeVideoDeletionResult {
+  const row = asRecord(value);
+  if (
+    !row ||
+    !hasExactKeys(row, ["assetId", "status"]) ||
+    !isCanonicalUuid(row.assetId) ||
+    row.assetId !== expectedAssetId ||
+    row.status !== "delete_pending"
+  ) {
+    deletionRequestError(202, null, true);
+  }
+  return { assetId: row.assetId, status: "delete_pending" };
+}
+
+function throwDeletionResponseError(value: unknown, status: number): never {
+  const row = asRecord(value);
+  if (
+    row &&
+    hasExactKeys(row, ["code", "error"]) &&
+    typeof row.code === "string" &&
+    typeof row.error === "string"
+  ) {
+    const allowed = deletionCodesByStatus.get(status);
+    if (allowed?.has(row.code as NativeVideoDeletionErrorCode)) {
+      deletionRequestError(
+        status,
+        row.code as NativeVideoDeletionErrorCode,
+        status >= 500,
+      );
+    }
+  }
+  deletionRequestError(status, null, true);
+}
+
+export async function requestNativeVideoDeletion(
+  input: { assetId: string; tenantId: string },
+  options: RequestOptions = {},
+): Promise<NativeVideoDeletionResult> {
+  const normalized = normalizeDeletionInput(input);
+  let accessToken: string | null;
+  try {
+    accessToken = await (options.getAccessToken ?? getCurrentAccessToken)();
+  } catch {
+    deletionRequestError(401, "VIDEO_AUTHENTICATION_REQUIRED", false);
+  }
+  if (!accessToken) {
+    deletionRequestError(401, "VIDEO_AUTHENTICATION_REQUIRED", false);
+  }
+
+  let response: Response;
+  try {
+    response = await (options.fetchImpl ?? fetch)(
+      `/api/video/assets/${encodeURIComponent(normalized.assetId)}`,
+      {
+        body: JSON.stringify({ tenantId: normalized.tenantId }),
+        cache: "no-store",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        method: "DELETE",
+        signal: options.signal,
+      },
+    );
+  } catch {
+    deletionRequestError(0, null, true);
+  }
+
+  let body: unknown;
+  try {
+    body = await response.json();
+  } catch {
+    deletionRequestError(response.status, null, true);
+  }
+
+  if (response.status === 202) {
+    return normalizeDeletionSuccess(body, normalized.assetId);
+  }
+  if (response.ok) {
+    deletionRequestError(response.status, null, true);
+  }
+  throwDeletionResponseError(body, response.status);
+}
+
 async function requestJson(path: string, options: RequestOptions) {
   const accessToken = await (options.getAccessToken ?? getCurrentAccessToken)();
   if (!accessToken) throw new NativeVideoManagementRequestError(401);
@@ -385,10 +545,30 @@ export function mergeNativeVideoManagementPages(
   return merged;
 }
 
+export function getActiveNativeVideoAssets(
+  assets: NativeVideoManagementAsset[],
+) {
+  return assets.filter((asset) => asset.status !== "deleted");
+}
+
+export function isNativeVideoDeletionEligible(
+  asset: NativeVideoManagementAsset | undefined,
+  options: { submitting?: boolean; unresolved?: boolean } = {},
+) {
+  return Boolean(
+    asset &&
+      asset.status === "ready" &&
+      asset.attachments.length === 0 &&
+      !options.submitting &&
+      !options.unresolved,
+  );
+}
+
 export function assetMatchesNativeVideoFilter(
   asset: NativeVideoManagementAsset,
   filter: NativeVideoLibraryFilter,
 ) {
+  if (asset.status === "deleted") return false;
   if (filter === "all") return true;
   if (filter === "processing") {
     return asset.status === "upload_pending" || asset.status === "processing";
@@ -447,6 +627,7 @@ type PollingControllerOptions = {
   onAsset: (asset: NativeVideoManagementAsset) => void;
   onAuthFailure: () => void;
   onError: (status: number) => void;
+  onTimeout?: (assetId: string, status: NativeVideoAssetStatus) => void;
   requestAsset: (
     assetId: string,
     signal: AbortSignal,
@@ -481,7 +662,19 @@ export function createNativeVideoPollingController(
   function schedule(assetId: string) {
     const entry = entries.get(assetId);
     if (!entry || stopped || paused || entry.controller || entry.timer !== null) return;
-    const delay = getNativeVideoPollingDelay(now() - entry.startedAt);
+
+    if (!isNativeVideoPollingStatus(entry.status)) {
+      stopEntry(assetId);
+      return;
+    }
+
+    const elapsed = now() - entry.startedAt;
+    if (elapsed >= 600_000) {
+      options.onTimeout?.(assetId, entry.status);
+      stopEntry(assetId);
+      return;
+    }
+    const delay = getNativeVideoPollingDelay(elapsed);
     if (delay === null) {
       stopEntry(assetId);
       return;
@@ -591,5 +784,5 @@ export function createNativeVideoPollingController(
     await poll(assetId);
   }
 
-  return { pause, refresh, resume, stopAll, sync };
+  return { pause, refresh, resume, stop: stopEntry, stopAll, sync };
 }

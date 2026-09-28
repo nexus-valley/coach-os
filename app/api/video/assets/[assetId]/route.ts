@@ -50,6 +50,10 @@ type DeletionRequest = {
 
 type DeletionOptions = {
   authenticate?: (accessToken: string) => Promise<{ id: string }>;
+  captureException?: (
+    error: unknown,
+    context?: Record<string, unknown>,
+  ) => void;
   requestDeletion?: (
     input: DeletionRequest,
   ) => Promise<{ data: unknown; error: DatabaseError | null }>;
@@ -245,12 +249,15 @@ export async function handleNativeVideoDeletionRequest(
     if (result.error) {
       const response = deletionError(result.error);
       if (response.status >= 500) {
-        captureServerException(result.error, {
-          assetId,
-          operation: "native_video_deletion_request",
-          route: "/api/video/assets/[assetId]",
-          tenantId,
-        });
+        (options.captureException ?? captureServerException)(
+          new Error("VIDEO_DELETION_REQUEST_FAILED"),
+          {
+            assetId,
+            operation: "native_video_deletion_request",
+            route: "/api/video/assets/[assetId]",
+            tenantId,
+          },
+        );
       }
       return response;
     }
@@ -287,12 +294,15 @@ export async function handleNativeVideoDeletionRequest(
       );
     }
 
-    captureServerException(error, {
-      assetId: assetId || undefined,
-      operation: "native_video_deletion_route",
-      route: "/api/video/assets/[assetId]",
-      tenantId,
-    });
+    (options.captureException ?? captureServerException)(
+      new Error("VIDEO_DELETION_UNEXPECTED_FAILURE"),
+      {
+        assetId: assetId || undefined,
+        operation: "native_video_deletion_route",
+        route: "/api/video/assets/[assetId]",
+        tenantId,
+      },
+    );
     return jsonError(
       "VIDEO_DELETION_REQUEST_FAILED",
       "Video deletion could not be requested.",

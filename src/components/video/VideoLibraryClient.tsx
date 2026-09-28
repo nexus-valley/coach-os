@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import { Button } from "@/src/components/ui/Button";
 import { FeedbackAlert } from "@/src/components/ui/FeedbackAlert";
@@ -11,17 +18,22 @@ import { getCurrentTenant } from "@/src/lib/tenant";
 import {
   assetMatchesNativeVideoFilter,
   createNativeVideoPollingController,
+  getActiveNativeVideoAssets,
   getNativeVideoAsset,
   getNativeVideoAttentionLabel,
   getNativeVideoCapacity,
   getNativeVideoInventory,
   getNativeVideoManagementErrorMessage,
   getNativeVideoStatusLabel,
+  isNativeVideoDeletionEligible,
   mergeNativeVideoManagementPages,
   type NativeVideoCapacity,
+  type NativeVideoDeletionErrorCode,
   type NativeVideoLibraryFilter,
   type NativeVideoManagementAsset,
+  NativeVideoDeletionRequestError,
   NativeVideoManagementRequestError,
+  requestNativeVideoDeletion,
 } from "@/src/lib/video/nativeVideoManagementClient";
 
 const filters: Array<{ label: string; value: NativeVideoLibraryFilter }> = [
@@ -31,6 +43,11 @@ const filters: Array<{ label: string; value: NativeVideoLibraryFilter }> = [
   { label: "Needs attention", value: "attention" },
   { label: "Deleting", value: "deleting" },
 ];
+
+type DeleteNotice = {
+  message: string;
+  tone: "error" | "info" | "success" | "warning";
+};
 
 function getRequestStatus(error: unknown) {
   return error instanceof NativeVideoManagementRequestError ? error.status : 500;
@@ -220,6 +237,191 @@ function InventorySkeleton() {
   );
 }
 
+function DeleteVideoDialog({
+  filename,
+  onCancel,
+  onConfirm,
+  submitting,
+}: {
+  filename: string;
+  onCancel: () => void;
+  onConfirm: () => void;
+  submitting: boolean;
+}) {
+  const titleId = useId();
+  const descriptionId = useId();
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const cancelRef = useRef<HTMLButtonElement | null>(null);
+
+  useEffect(() => {
+    const returnFocus =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    if (submitting) dialogRef.current?.focus();
+    else cancelRef.current?.focus();
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        if (!submitting) onCancel();
+        return;
+      }
+      if (event.key !== "Tab") return;
+
+      const focusable = Array.from(
+        dialogRef.current?.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
+        ) ?? [],
+      );
+      if (focusable.length === 0) {
+        event.preventDefault();
+        dialogRef.current?.focus();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable.at(-1);
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last?.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first?.focus();
+      }
+    }
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      returnFocus?.focus();
+    };
+  }, [onCancel, submitting]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-[#0B1F33]/55 p-4 sm:items-center"
+      onMouseDown={(event) => {
+        if (!submitting && event.target === event.currentTarget) onCancel();
+      }}
+    >
+      <div
+        aria-describedby={descriptionId}
+        aria-labelledby={titleId}
+        aria-modal="true"
+        className="max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-lg border border-[#FECACA] bg-white p-5 shadow-xl sm:p-6"
+        ref={dialogRef}
+        role="dialog"
+        tabIndex={-1}
+      >
+        <h2 className="text-xl font-semibold text-[#0B1F33]" id={titleId}>
+          Delete video?
+        </h2>
+        <p
+          className="mt-3 break-words text-sm leading-6 text-[#475569]"
+          id={descriptionId}
+        >
+          Delete &quot;{filename}&quot; from CoachFort? This cannot be undone.
+          Storage remains in use until deletion is completed.
+        </p>
+        <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+          <button
+            className="inline-flex h-11 items-center justify-center rounded-lg border border-[#D8E8F0] bg-white px-5 text-sm font-semibold text-[#0B2A3D] shadow-sm transition hover:border-[#2ECBEA]/60 hover:bg-[#F3FAFD] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2ECBEA] disabled:cursor-not-allowed disabled:bg-[#E5EEF4] disabled:text-[#66788F]"
+            disabled={submitting}
+            onClick={onCancel}
+            ref={cancelRef}
+            type="button"
+          >
+            Cancel
+          </button>
+          <Button
+            isLoading={submitting}
+            loadingText="Deleting..."
+            onClick={onConfirm}
+            variant="destructive"
+          >
+            Delete video
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AssetActions({
+  asset,
+  longRunning,
+  onDelete,
+  onRefresh,
+  refreshing,
+  unresolved,
+}: {
+  asset: NativeVideoManagementAsset;
+  longRunning: boolean;
+  onDelete: () => void;
+  onRefresh: () => void;
+  refreshing: boolean;
+  unresolved: boolean;
+}) {
+  const explanationId = `video-delete-explanation-${asset.assetId}`;
+  const attached = asset.status === "ready" && asset.attachments.length > 0;
+  const eligible = isNativeVideoDeletionEligible(asset, { unresolved });
+
+  return (
+    <div className="flex min-w-0 flex-col items-stretch gap-2 md:items-end">
+      <button
+        className="min-h-10 rounded-md px-3 py-2 text-xs font-semibold text-[#145DA0] transition hover:bg-[#EAF7FC] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2ECBEA] disabled:text-[#94A3B8]"
+        disabled={refreshing}
+        onClick={onRefresh}
+        type="button"
+      >
+        {refreshing ? "Refreshing" : "Refresh item"}
+      </button>
+      {eligible ? (
+        <Button
+          className="w-full md:w-auto"
+          onClick={onDelete}
+          size="sm"
+          variant="destructive"
+        >
+          Delete video
+        </Button>
+      ) : null}
+      {attached ? (
+        <>
+          <Button
+            aria-describedby={explanationId}
+            className="w-full md:w-auto"
+            disabled
+            size="sm"
+            variant="destructive"
+          >
+            Delete video
+          </Button>
+          <p className="max-w-56 text-xs leading-5 text-[#64748B]" id={explanationId}>
+            Remove this video from its lessons before deleting it.
+          </p>
+        </>
+      ) : null}
+      {asset.status === "delete_pending" ? (
+        <p className="max-w-64 text-xs leading-5 text-[#64748B]">
+          Deletion is being completed. Storage capacity remains in use until it
+          is finished.
+        </p>
+      ) : null}
+      {longRunning && asset.status === "delete_pending" ? (
+        <p className="max-w-64 text-xs font-medium leading-5 text-[#9A5B13]">
+          Deletion is taking longer than expected. It will continue
+          automatically. Refresh this item later.
+        </p>
+      ) : null}
+      {unresolved ? (
+        <p className="max-w-64 text-xs font-medium leading-5 text-[#9A5B13]">
+          Refresh this item to confirm its current status before deleting it.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 export function VideoLibraryClient() {
   const [tenantId, setTenantId] = useState<string | null>(null);
   const [inactiveWorkspace, setInactiveWorkspace] = useState(false);
@@ -235,9 +437,26 @@ export function VideoLibraryClient() {
   const [inventoryError, setInventoryError] = useState<string | null>(null);
   const [capacityError, setCapacityError] = useState<string | null>(null);
   const [pollingWarning, setPollingWarning] = useState<string | null>(null);
+  const [deleteCandidateId, setDeleteCandidateId] = useState<string | null>(null);
+  const [deleteSubmittingAssetId, setDeleteSubmittingAssetId] = useState<
+    string | null
+  >(null);
+  const [deleteNotice, setDeleteNotice] = useState<DeleteNotice | null>(null);
+  const [deleteLongRunningAssetIds, setDeleteLongRunningAssetIds] = useState<
+    Set<string>
+  >(() => new Set());
+  const [unresolvedDeleteAssetIds, setUnresolvedDeleteAssetIds] = useState<
+    Set<string>
+  >(() => new Set());
   const assetsRef = useRef<NativeVideoManagementAsset[]>([]);
   const pollingRef = useRef<ReturnType<typeof createNativeVideoPollingController> | null>(null);
   const requestRef = useRef<AbortController | null>(null);
+  const deleteRequestRef = useRef<AbortController | null>(null);
+  const terminalDeleteIdsRef = useRef(new Set<string>());
+  const deleteOperationGenerationRef = useRef(0);
+  const tenantIdRef = useRef<string | null>(null);
+  const unresolvedDeleteAssetIdsRef = useRef(new Set<string>());
+  const deleteSubmittingAssetIdRef = useRef<string | null>(null);
   const mountedRef = useRef(true);
 
   useEffect(() => {
@@ -245,7 +464,155 @@ export function VideoLibraryClient() {
     return () => {
       mountedRef.current = false;
       requestRef.current?.abort();
+      deleteOperationGenerationRef.current += 1;
+      deleteRequestRef.current?.abort();
     };
+  }, []);
+
+  const clearUnresolvedDeleteAsset = useCallback((assetId: string) => {
+    const next = new Set(unresolvedDeleteAssetIdsRef.current);
+    next.delete(assetId);
+    unresolvedDeleteAssetIdsRef.current = next;
+    setUnresolvedDeleteAssetIds(next);
+  }, []);
+
+  const markUnresolvedDeleteAsset = useCallback((assetId: string) => {
+    const next = new Set(unresolvedDeleteAssetIdsRef.current);
+    next.add(assetId);
+    unresolvedDeleteAssetIdsRef.current = next;
+    setUnresolvedDeleteAssetIds(next);
+    setDeleteCandidateId((current) => (current === assetId ? null : current));
+    pollingRef.current?.stop(assetId);
+  }, []);
+
+  const clearDeleteLifecycleFlags = useCallback((assetId: string) => {
+    clearUnresolvedDeleteAsset(assetId);
+    setDeleteLongRunningAssetIds((current) => {
+      const next = new Set(current);
+      next.delete(assetId);
+      return next;
+    });
+  }, [clearUnresolvedDeleteAsset]);
+
+  const removeActiveAsset = useCallback((assetId: string) => {
+    const nextAssets = assetsRef.current.filter(
+      (asset) => asset.assetId !== assetId,
+    );
+    assetsRef.current = nextAssets;
+    setAssets(nextAssets);
+    pollingRef.current?.stop(assetId);
+    clearDeleteLifecycleFlags(assetId);
+    setDeleteCandidateId((current) => (current === assetId ? null : current));
+  }, [clearDeleteLifecycleFlags]);
+
+  const finalizeDeletedAsset = useCallback(
+    async (assetId: string, expectedTenantId: string) => {
+      if (
+        !mountedRef.current ||
+        tenantIdRef.current !== expectedTenantId ||
+        terminalDeleteIdsRef.current.has(assetId)
+      ) {
+        return;
+      }
+
+      terminalDeleteIdsRef.current.add(assetId);
+      pollingRef.current?.stop(assetId);
+      const nextAssets = assetsRef.current.filter(
+        (asset) => asset.assetId !== assetId,
+      );
+      assetsRef.current = nextAssets;
+      setAssets(nextAssets);
+      clearDeleteLifecycleFlags(assetId);
+      setDeleteCandidateId((current) => (current === assetId ? null : current));
+      setDeleteSubmittingAssetId((current) =>
+        current === assetId ? null : current,
+      );
+      if (deleteSubmittingAssetIdRef.current === assetId) {
+        deleteSubmittingAssetIdRef.current = null;
+      }
+
+      try {
+        const nextCapacity = await getNativeVideoCapacity(expectedTenantId);
+        if (
+          !mountedRef.current ||
+          tenantIdRef.current !== expectedTenantId
+        ) {
+          return;
+        }
+        setCapacity(nextCapacity);
+        setCapacityError(null);
+        setDeleteNotice({
+          message: "Video deleted. Storage capacity has been updated.",
+          tone: "success",
+        });
+      } catch {
+        if (
+          !mountedRef.current ||
+          tenantIdRef.current !== expectedTenantId
+        ) {
+          return;
+        }
+        setDeleteNotice({
+          message:
+            "Video deleted. Capacity will update the next time the library is refreshed.",
+          tone: "warning",
+        });
+      }
+    },
+    [clearDeleteLifecycleFlags],
+  );
+
+  const applyCanonicalAsset = useCallback(
+    async (asset: NativeVideoManagementAsset, expectedTenantId: string) => {
+      if (
+        !mountedRef.current ||
+        tenantIdRef.current !== expectedTenantId
+      ) {
+        return;
+      }
+      if (asset.status === "deleted") {
+        await finalizeDeletedAsset(asset.assetId, expectedTenantId);
+        return;
+      }
+
+      const existing = assetsRef.current.some(
+        (item) => item.assetId === asset.assetId,
+      );
+      if (!existing) return;
+      const nextAssets = assetsRef.current.map((item) =>
+        item.assetId === asset.assetId ? asset : item,
+      );
+      assetsRef.current = nextAssets;
+      setAssets(nextAssets);
+      clearDeleteLifecycleFlags(asset.assetId);
+      setDeleteCandidateId((current) => {
+        if (
+          current !== asset.assetId ||
+          deleteSubmittingAssetIdRef.current === asset.assetId
+        ) {
+          return current;
+        }
+        return isNativeVideoDeletionEligible(asset) ? current : null;
+      });
+      setPollingWarning(null);
+    },
+    [clearDeleteLifecycleFlags, finalizeDeletedAsset],
+  );
+
+  const applyAcceptedDeletePending = useCallback((assetId: string) => {
+    const nextAssets = assetsRef.current.map((asset) =>
+      asset.assetId === assetId
+        ? { ...asset, status: "delete_pending" as const }
+        : asset,
+    );
+    assetsRef.current = nextAssets;
+    setAssets(nextAssets);
+    setDeleteCandidateId((current) => (current === assetId ? null : current));
+    setDeleteLongRunningAssetIds((current) => {
+      const next = new Set(current);
+      next.delete(assetId);
+      return next;
+    });
   }, []);
 
   useEffect(() => {
@@ -264,6 +631,18 @@ export function VideoLibraryClient() {
         return;
       }
 
+      tenantIdRef.current = tenant.id;
+      deleteOperationGenerationRef.current += 1;
+      deleteRequestRef.current?.abort();
+      deleteRequestRef.current = null;
+      deleteSubmittingAssetIdRef.current = null;
+      unresolvedDeleteAssetIdsRef.current = new Set();
+      terminalDeleteIdsRef.current = new Set();
+      setDeleteCandidateId(null);
+      setDeleteSubmittingAssetId(null);
+      setDeleteNotice(null);
+      setDeleteLongRunningAssetIds(new Set());
+      setUnresolvedDeleteAssetIds(new Set());
       setTenantId(tenant.id);
       const [inventoryResult, capacityResult, operationalResult] = await Promise.allSettled([
         getNativeVideoInventory(
@@ -276,8 +655,9 @@ export function VideoLibraryClient() {
       if (!active || controller.signal.aborted) return;
 
       if (inventoryResult.status === "fulfilled") {
-        assetsRef.current = inventoryResult.value.items;
-        setAssets(inventoryResult.value.items);
+        const activeAssets = getActiveNativeVideoAssets(inventoryResult.value.items);
+        assetsRef.current = activeAssets;
+        setAssets(activeAssets);
         setNextCursor(inventoryResult.value.nextCursor);
       } else {
         setInventoryError(
@@ -302,6 +682,10 @@ export function VideoLibraryClient() {
     return () => {
       active = false;
       controller.abort();
+      tenantIdRef.current = null;
+      deleteOperationGenerationRef.current += 1;
+      deleteRequestRef.current?.abort();
+      deleteRequestRef.current = null;
       if (requestRef.current === controller) requestRef.current = null;
     };
   }, []);
@@ -310,18 +694,21 @@ export function VideoLibraryClient() {
     if (!tenantId) return;
     const controller = createNativeVideoPollingController({
       onAsset(asset) {
-        const nextAssets = assetsRef.current.map((item) =>
-          item.assetId === asset.assetId ? asset : item,
-        );
-        assetsRef.current = nextAssets;
-        setAssets(nextAssets);
-        setPollingWarning(null);
+        void applyCanonicalAsset(asset, tenantId);
       },
       onAuthFailure() {
         setPollingWarning("Your session has expired. Sign in again.");
       },
       onError(status) {
         setPollingWarning(getNativeVideoManagementErrorMessage(status));
+      },
+      onTimeout(assetId, status) {
+        if (status !== "delete_pending") return;
+        setDeleteLongRunningAssetIds((current) => {
+          const next = new Set(current);
+          next.add(assetId);
+          return next;
+        });
       },
       requestAsset(assetId, signal) {
         return getNativeVideoAsset({ assetId, tenantId }, { signal });
@@ -341,11 +728,15 @@ export function VideoLibraryClient() {
       controller.stopAll();
       if (pollingRef.current === controller) pollingRef.current = null;
     };
-  }, [tenantId]);
+  }, [applyCanonicalAsset, tenantId]);
 
   useEffect(() => {
-    pollingRef.current?.sync(assets);
-  }, [assets]);
+    pollingRef.current?.sync(
+      assets.filter(
+        (asset) => !unresolvedDeleteAssetIds.has(asset.assetId),
+      ),
+    );
+  }, [assets, unresolvedDeleteAssetIds]);
 
   const visibleAssets = useMemo(
     () => assets.filter((asset) => assetMatchesNativeVideoFilter(asset, filter)),
@@ -367,9 +758,22 @@ export function VideoLibraryClient() {
     ]);
     if (!controller.signal.aborted) {
       if (inventoryResult.status === "fulfilled") {
-        assetsRef.current = inventoryResult.value.items;
-        setAssets(inventoryResult.value.items);
+        const activeAssets = getActiveNativeVideoAssets(inventoryResult.value.items);
+        assetsRef.current = activeAssets;
+        setAssets(activeAssets);
         setNextCursor(inventoryResult.value.nextCursor);
+        unresolvedDeleteAssetIdsRef.current = new Set();
+        setUnresolvedDeleteAssetIds(new Set());
+        setDeleteLongRunningAssetIds(new Set());
+        setDeleteCandidateId((current) => {
+          if (!current || deleteSubmittingAssetIdRef.current === current) {
+            return current;
+          }
+          const candidate = activeAssets.find(
+            (asset) => asset.assetId === current,
+          );
+          return isNativeVideoDeletionEligible(candidate) ? current : null;
+        });
       } else {
         setInventoryError(
           getNativeVideoManagementErrorMessage(getRequestStatus(inventoryResult.reason)),
@@ -400,7 +804,10 @@ export function VideoLibraryClient() {
         { signal: controller.signal },
       );
       if (mountedRef.current) {
-        const nextAssets = mergeNativeVideoManagementPages(assetsRef.current, page.items);
+        const nextAssets = mergeNativeVideoManagementPages(
+          assetsRef.current,
+          getActiveNativeVideoAssets(page.items),
+        );
         assetsRef.current = nextAssets;
         setAssets(nextAssets);
         setNextCursor(page.nextCursor);
@@ -416,6 +823,10 @@ export function VideoLibraryClient() {
   }
 
   function upsertUploadedAsset(asset: NativeVideoManagementAsset) {
+    if (asset.status === "deleted") {
+      removeActiveAsset(asset.assetId);
+      return;
+    }
     const existingIndex = assetsRef.current.findIndex(
       (item) => item.assetId === asset.assetId,
     );
@@ -424,6 +835,19 @@ export function VideoLibraryClient() {
     else nextAssets.unshift(asset);
     assetsRef.current = nextAssets;
     setAssets(nextAssets);
+    setDeleteCandidateId((current) => {
+      if (
+        current !== asset.assetId ||
+        deleteSubmittingAssetIdRef.current === asset.assetId
+      ) {
+        return current;
+      }
+      return isNativeVideoDeletionEligible(asset, {
+        unresolved: unresolvedDeleteAssetIdsRef.current.has(asset.assetId),
+      })
+        ? current
+        : null;
+    });
   }
 
   async function refreshAsset(assetId: string) {
@@ -433,6 +857,361 @@ export function VideoLibraryClient() {
     await pollingRef.current.refresh(assetId);
     if (mountedRef.current) setRefreshingAssetId(null);
   }
+
+  function deleteOperationIsCurrent(
+    generation: number,
+    expectedTenantId: string,
+    controller: AbortController,
+  ) {
+    return (
+      mountedRef.current &&
+      !controller.signal.aborted &&
+      deleteOperationGenerationRef.current === generation &&
+      tenantIdRef.current === expectedTenantId
+    );
+  }
+
+  const closeDeleteConfirmation = useCallback(() => {
+    if (deleteSubmittingAssetIdRef.current === null) {
+      setDeleteCandidateId(null);
+    }
+  }, []);
+
+  function openDeleteConfirmation(assetId: string) {
+    const asset = assetsRef.current.find((item) => item.assetId === assetId);
+    if (
+      !isNativeVideoDeletionEligible(asset, {
+        submitting: deleteSubmittingAssetIdRef.current !== null,
+        unresolved: unresolvedDeleteAssetIdsRef.current.has(assetId),
+      })
+    ) {
+      return;
+    }
+    setDeleteNotice(null);
+    setDeleteCandidateId(assetId);
+  }
+
+  async function reconcileAmbiguousDeletion(
+    assetId: string,
+    expectedTenantId: string,
+    generation: number,
+    controller: AbortController,
+  ) {
+    try {
+      const asset = await getNativeVideoAsset(
+        { assetId, tenantId: expectedTenantId },
+        { signal: controller.signal },
+      );
+      if (!deleteOperationIsCurrent(generation, expectedTenantId, controller)) {
+        return;
+      }
+      await applyCanonicalAsset(asset, expectedTenantId);
+      if (!deleteOperationIsCurrent(generation, expectedTenantId, controller)) {
+        return;
+      }
+      setDeleteCandidateId(null);
+      if (asset.status === "ready") {
+        setDeleteNotice({
+          message:
+            "We couldn't confirm the deletion request. Review the current status before trying again.",
+          tone: "warning",
+        });
+      } else if (asset.status !== "deleted") {
+        setDeleteNotice({
+          message: "The video's current status has been refreshed.",
+          tone: "info",
+        });
+      }
+    } catch (error) {
+      if (!deleteOperationIsCurrent(generation, expectedTenantId, controller)) {
+        return;
+      }
+      const status = getRequestStatus(error);
+      setDeleteCandidateId(null);
+      if (status === 401) {
+        pollingRef.current?.stopAll();
+        setDeleteNotice({
+          message: "Your session has expired. Sign in again.",
+          tone: "error",
+        });
+        return;
+      }
+      if (status === 404) {
+        removeActiveAsset(assetId);
+        setDeleteNotice({
+          message: "This video is no longer available.",
+          tone: "info",
+        });
+        return;
+      }
+      markUnresolvedDeleteAsset(assetId);
+      setDeleteNotice({
+        message:
+          status === 403
+            ? "Video management is not available for this workspace or account."
+            : "We couldn't confirm the deletion request. Refresh this item before trying again.",
+        tone: "warning",
+      });
+    }
+  }
+
+  async function reconcileDeletionConflict(
+    assetId: string,
+    expectedTenantId: string,
+    generation: number,
+    controller: AbortController,
+    code: Extract<
+      NativeVideoDeletionErrorCode,
+      "VIDEO_ATTACHED_TO_LESSON" | "VIDEO_DELETION_STATE_CONFLICT"
+    >,
+  ) {
+    try {
+      const asset = await getNativeVideoAsset(
+        { assetId, tenantId: expectedTenantId },
+        { signal: controller.signal },
+      );
+      if (!deleteOperationIsCurrent(generation, expectedTenantId, controller)) {
+        return;
+      }
+      await applyCanonicalAsset(asset, expectedTenantId);
+      if (!deleteOperationIsCurrent(generation, expectedTenantId, controller)) {
+        return;
+      }
+      setDeleteCandidateId(null);
+      if (asset.status !== "deleted") {
+        setDeleteNotice({
+          message:
+            code === "VIDEO_ATTACHED_TO_LESSON"
+              ? "Remove this video from its lessons before deleting it."
+              : "This video's status changed. Review its current status before trying again.",
+          tone: "warning",
+        });
+      }
+    } catch (error) {
+      if (!deleteOperationIsCurrent(generation, expectedTenantId, controller)) {
+        return;
+      }
+      const status = getRequestStatus(error);
+      setDeleteCandidateId(null);
+      if (status === 401) {
+        pollingRef.current?.stopAll();
+        setDeleteNotice({
+          message: "Your session has expired. Sign in again.",
+          tone: "error",
+        });
+        return;
+      }
+      if (status === 404) {
+        removeActiveAsset(assetId);
+        setDeleteNotice({
+          message: "This video is no longer available.",
+          tone: "info",
+        });
+        return;
+      }
+      markUnresolvedDeleteAsset(assetId);
+      setDeleteNotice({
+        message:
+          status === 403
+            ? "Video management is not available for this workspace or account."
+            : "The video's current status could not be confirmed. Refresh this item before trying again.",
+        tone: "warning",
+      });
+    }
+  }
+
+  async function reconcileAcceptedDeletion(
+    assetId: string,
+    expectedTenantId: string,
+    generation: number,
+    controller: AbortController,
+  ) {
+    try {
+      const asset = await getNativeVideoAsset(
+        { assetId, tenantId: expectedTenantId },
+        { signal: controller.signal },
+      );
+      if (!deleteOperationIsCurrent(generation, expectedTenantId, controller)) {
+        return;
+      }
+      await applyCanonicalAsset(asset, expectedTenantId);
+      if (!deleteOperationIsCurrent(generation, expectedTenantId, controller)) {
+        return;
+      }
+      setDeleteCandidateId(null);
+      if (asset.status === "delete_pending") {
+        setDeleteNotice({
+          message:
+            "Deletion requested. Storage capacity remains in use until it is finished.",
+          tone: "info",
+        });
+      } else if (asset.status !== "deleted") {
+        setDeleteNotice({
+          message: "The video's current status has been refreshed.",
+          tone: "info",
+        });
+      }
+    } catch (error) {
+      if (!deleteOperationIsCurrent(generation, expectedTenantId, controller)) {
+        return;
+      }
+      const status = getRequestStatus(error);
+      setDeleteCandidateId(null);
+      if (status === 404) {
+        removeActiveAsset(assetId);
+        setDeleteNotice({
+          message: "This video is no longer available.",
+          tone: "info",
+        });
+        return;
+      }
+
+      applyAcceptedDeletePending(assetId);
+      if (status === 401) {
+        pollingRef.current?.stopAll();
+        setDeleteNotice({
+          message: "Your session has expired. Sign in again.",
+          tone: "error",
+        });
+        return;
+      }
+      if (status === 403) {
+        markUnresolvedDeleteAsset(assetId);
+        setDeleteNotice({
+          message: "Video management is not available for this workspace or account.",
+          tone: "warning",
+        });
+        return;
+      }
+
+      clearUnresolvedDeleteAsset(assetId);
+      setDeleteNotice({
+        message:
+          "Deletion was requested, but its current status could not be refreshed. CoachFort will keep checking.",
+        tone: "warning",
+      });
+    }
+  }
+
+  async function submitDelete() {
+    const assetId = deleteCandidateId;
+    const expectedTenantId = tenantIdRef.current;
+    if (
+      !assetId ||
+      !expectedTenantId ||
+      deleteSubmittingAssetIdRef.current !== null
+    ) {
+      return;
+    }
+
+    const candidate = assetsRef.current.find(
+      (asset) => asset.assetId === assetId,
+    );
+    if (
+      !isNativeVideoDeletionEligible(candidate, {
+        unresolved: unresolvedDeleteAssetIdsRef.current.has(assetId),
+      })
+    ) {
+      setDeleteCandidateId(null);
+      setDeleteNotice({
+        message:
+          "This video's status changed. Review its current status before trying again.",
+        tone: "warning",
+      });
+      return;
+    }
+
+    const generation = deleteOperationGenerationRef.current + 1;
+    deleteOperationGenerationRef.current = generation;
+    const controller = new AbortController();
+    deleteRequestRef.current?.abort();
+    deleteRequestRef.current = controller;
+    deleteSubmittingAssetIdRef.current = assetId;
+    setDeleteSubmittingAssetId(assetId);
+    setDeleteNotice(null);
+
+    try {
+      await requestNativeVideoDeletion(
+        { assetId, tenantId: expectedTenantId },
+        { signal: controller.signal },
+      );
+      if (!deleteOperationIsCurrent(generation, expectedTenantId, controller)) {
+        return;
+      }
+      await reconcileAcceptedDeletion(
+        assetId,
+        expectedTenantId,
+        generation,
+        controller,
+      );
+    } catch (error) {
+      if (!deleteOperationIsCurrent(generation, expectedTenantId, controller)) {
+        return;
+      }
+
+      if (
+        error instanceof NativeVideoDeletionRequestError &&
+        !error.ambiguous
+      ) {
+        setDeleteCandidateId(null);
+        if (error.code === "VIDEO_INVALID_REQUEST") {
+          setDeleteNotice({
+            message:
+              "The deletion request is invalid. Refresh the video library and try again.",
+            tone: "error",
+          });
+        } else if (error.code === "VIDEO_AUTHENTICATION_REQUIRED") {
+          pollingRef.current?.stopAll();
+          setDeleteNotice({
+            message: "Your session has expired. Sign in again.",
+            tone: "error",
+          });
+        } else if (error.code === "VIDEO_DELETION_FORBIDDEN") {
+          markUnresolvedDeleteAsset(assetId);
+          setDeleteNotice({
+            message: "You do not have permission to delete this video.",
+            tone: "error",
+          });
+        } else if (error.code === "VIDEO_ASSET_NOT_FOUND") {
+          removeActiveAsset(assetId);
+          setDeleteNotice({
+            message: "This video is no longer available.",
+            tone: "info",
+          });
+        } else if (
+          error.code === "VIDEO_ATTACHED_TO_LESSON" ||
+          error.code === "VIDEO_DELETION_STATE_CONFLICT"
+        ) {
+          await reconcileDeletionConflict(
+            assetId,
+            expectedTenantId,
+            generation,
+            controller,
+            error.code,
+          );
+        }
+      } else {
+        await reconcileAmbiguousDeletion(
+          assetId,
+          expectedTenantId,
+          generation,
+          controller,
+        );
+      }
+    } finally {
+      if (deleteOperationIsCurrent(generation, expectedTenantId, controller)) {
+        deleteSubmittingAssetIdRef.current = null;
+        setDeleteSubmittingAssetId(null);
+        if (deleteRequestRef.current === controller) {
+          deleteRequestRef.current = null;
+        }
+      }
+    }
+  }
+
+  const deleteCandidate = deleteCandidateId
+    ? assets.find((asset) => asset.assetId === deleteCandidateId)
+    : undefined;
 
   return (
     <div className="mx-auto w-full max-w-[1440px] space-y-8">
@@ -520,6 +1299,11 @@ export function VideoLibraryClient() {
             {pollingWarning}
           </FeedbackAlert>
         ) : null}
+        {deleteNotice ? (
+          <FeedbackAlert className="mt-5" tone={deleteNotice.tone}>
+            {deleteNotice.message}
+          </FeedbackAlert>
+        ) : null}
         {inventoryError ? (
           <FeedbackAlert className="mt-5" onRetry={() => void refreshAll()}>
             {inventoryError}
@@ -552,21 +1336,18 @@ export function VideoLibraryClient() {
                 <table className="w-full table-fixed border-collapse text-left">
                   <thead className="bg-[#F8FAFC] text-xs font-semibold uppercase tracking-[0.1em] text-[#64748B]">
                     <tr>
-                      <th className="w-[31%] px-5 py-3">Video</th>
+                      <th className="w-[27%] px-5 py-3">Video</th>
                       <th className="w-[18%] px-4 py-3">Status</th>
                       <th className="w-[10%] px-4 py-3">Duration</th>
                       <th className="w-[16%] px-4 py-3">Used in</th>
-                      <th className="w-[15%] px-4 py-3">Updated</th>
-                      <th className="w-[10%] px-4 py-3 text-right">Actions</th>
+                      <th className="w-[13%] px-4 py-3">Updated</th>
+                      <th className="w-[16%] px-4 py-3 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {visibleAssets.map((asset) => (
                       <tr
-                        className={[
-                          "border-t border-[#E2E8F0] align-top transition hover:bg-[#F8FCFE]",
-                          asset.status === "deleted" ? "bg-[#FAFAFA] opacity-70" : "",
-                        ].join(" ")}
+                        className="border-t border-[#E2E8F0] align-top transition hover:bg-[#F8FCFE]"
                         key={asset.assetId}
                       >
                         <td className="px-5 py-4">
@@ -578,14 +1359,14 @@ export function VideoLibraryClient() {
                         <td className="px-4 py-4"><UsageDetails asset={asset} /></td>
                         <td className="px-4 py-4 text-sm text-[#475569]">{formatUpdatedAt(asset.updatedAt)}</td>
                         <td className="px-4 py-4 text-right">
-                          <button
-                            className="rounded-md px-2 py-1.5 text-xs font-semibold text-[#145DA0] transition hover:bg-[#EAF7FC] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2ECBEA] disabled:text-[#94A3B8]"
-                            disabled={refreshingAssetId !== null}
-                            onClick={() => void refreshAsset(asset.assetId)}
-                            type="button"
-                          >
-                            {refreshingAssetId === asset.assetId ? "Refreshing" : "Refresh item"}
-                          </button>
+                          <AssetActions
+                            asset={asset}
+                            longRunning={deleteLongRunningAssetIds.has(asset.assetId)}
+                            onDelete={() => openDeleteConfirmation(asset.assetId)}
+                            onRefresh={() => void refreshAsset(asset.assetId)}
+                            refreshing={refreshingAssetId !== null}
+                            unresolved={unresolvedDeleteAssetIds.has(asset.assetId)}
+                          />
                         </td>
                       </tr>
                     ))}
@@ -595,13 +1376,7 @@ export function VideoLibraryClient() {
 
               <div className="divide-y divide-[#E2E8F0] md:hidden">
                 {visibleAssets.map((asset) => (
-                  <article
-                    className={[
-                      "p-5",
-                      asset.status === "deleted" ? "bg-[#FAFAFA] opacity-70" : "",
-                    ].join(" ")}
-                    key={asset.assetId}
-                  >
+                  <article className="p-5" key={asset.assetId}>
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <h3 className="break-words text-sm font-semibold text-[#0B1F33]">{asset.filename}</h3>
@@ -610,16 +1385,16 @@ export function VideoLibraryClient() {
                       <span className="shrink-0 text-sm font-semibold text-[#334155]">{formatDuration(asset.durationSeconds)}</span>
                     </div>
                     <div className="mt-4"><StatusBadge asset={asset} /></div>
-                    <div className="mt-4 flex items-end justify-between gap-4 border-t border-[#E2E8F0] pt-4">
+                    <div className="mt-4 grid gap-4 border-t border-[#E2E8F0] pt-4">
                       <UsageDetails asset={asset} />
-                      <button
-                        className="shrink-0 rounded-md px-2 py-1.5 text-xs font-semibold text-[#145DA0] hover:bg-[#EAF7FC] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2ECBEA] disabled:text-[#94A3B8]"
-                        disabled={refreshingAssetId !== null}
-                        onClick={() => void refreshAsset(asset.assetId)}
-                        type="button"
-                      >
-                        {refreshingAssetId === asset.assetId ? "Refreshing" : "Refresh item"}
-                      </button>
+                      <AssetActions
+                        asset={asset}
+                        longRunning={deleteLongRunningAssetIds.has(asset.assetId)}
+                        onDelete={() => openDeleteConfirmation(asset.assetId)}
+                        onRefresh={() => void refreshAsset(asset.assetId)}
+                        refreshing={refreshingAssetId !== null}
+                        unresolved={unresolvedDeleteAssetIds.has(asset.assetId)}
+                      />
                     </div>
                   </article>
                 ))}
@@ -642,6 +1417,15 @@ export function VideoLibraryClient() {
           </div>
         ) : null}
       </section>
+
+      {deleteCandidate ? (
+        <DeleteVideoDialog
+          filename={deleteCandidate.filename}
+          onCancel={closeDeleteConfirmation}
+          onConfirm={() => void submitDelete()}
+          submitting={deleteSubmittingAssetId === deleteCandidate.assetId}
+        />
+      ) : null}
     </div>
   );
 }
