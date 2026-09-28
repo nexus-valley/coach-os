@@ -12,13 +12,85 @@
   --coachos-surface: #ffffff;
   --coachos-surface-muted: #f7fcff;
   --foreground: #0b1f33;
+  --ui-action-primary: #145da0;
+  --ui-action-primary-hover: #0f4c81;
+  --ui-action-primary-subtle: #eaf7fc;
+  --ui-border-default: #d8e8f0;
+  --ui-border-strong: #bfd7e6;
+  --ui-canvas: #f3fafd;
+  --ui-focus: #0e7490;
+  --ui-focus-inverse: #78e4f3;
+  --ui-motion-easing: cubic-bezier(0.2, 0, 0, 1);
+  --ui-motion-fast: 120ms;
+  --ui-motion-standard: 180ms;
+  --ui-radius-overlay: 0.75rem;
+  --ui-radius-standard: 0.5rem;
+  --ui-safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --ui-safe-area-left: env(safe-area-inset-left, 0px);
+  --ui-safe-area-right: env(safe-area-inset-right, 0px);
+  --ui-safe-area-top: env(safe-area-inset-top, 0px);
+  --ui-shadow-elevated: 0 8px 24px rgba(11, 42, 61, 0.1);
+  --ui-shadow-overlay: 0 20px 48px rgba(11, 42, 61, 0.18);
+  --ui-shadow-surface: 0 1px 2px rgba(11, 42, 61, 0.06);
+  --ui-status-danger: #b91c1c;
+  --ui-status-danger-subtle: #fef2f2;
+  --ui-status-info: #0369a1;
+  --ui-status-info-subtle: #f0f9ff;
+  --ui-status-success: #047857;
+  --ui-status-success-subtle: #e8f8f3;
+  --ui-status-warning: #c2410c;
+  --ui-status-warning-subtle: #fff7ed;
+  --ui-surface: #ffffff;
+  --ui-surface-elevated: #ffffff;
+  --ui-surface-inverse: #0b2a3d;
+  --ui-surface-subtle: #f7fcff;
+  --ui-text-inverse: #ffffff;
+  --ui-text-muted: #5d7185;
+  --ui-text-primary: #0b1f33;
+  --ui-text-secondary: #425b76;
+  --ui-viewport-height: 100vh;
 }
 
 @theme inline {
+  --color-action-primary: var(--ui-action-primary);
+  --color-action-primary-hover: var(--ui-action-primary-hover);
+  --color-action-primary-subtle: var(--ui-action-primary-subtle);
   --color-background: var(--background);
+  --color-canvas: var(--ui-canvas);
+  --color-content-inverse: var(--ui-text-inverse);
+  --color-content-muted: var(--ui-text-muted);
+  --color-content-primary: var(--ui-text-primary);
+  --color-content-secondary: var(--ui-text-secondary);
+  --color-focus: var(--ui-focus);
+  --color-focus-inverse: var(--ui-focus-inverse);
   --color-foreground: var(--foreground);
+  --color-line: var(--ui-border-default);
+  --color-line-strong: var(--ui-border-strong);
+  --color-status-danger: var(--ui-status-danger);
+  --color-status-danger-subtle: var(--ui-status-danger-subtle);
+  --color-status-info: var(--ui-status-info);
+  --color-status-info-subtle: var(--ui-status-info-subtle);
+  --color-status-success: var(--ui-status-success);
+  --color-status-success-subtle: var(--ui-status-success-subtle);
+  --color-status-warning: var(--ui-status-warning);
+  --color-status-warning-subtle: var(--ui-status-warning-subtle);
+  --color-surface: var(--ui-surface);
+  --color-surface-elevated: var(--ui-surface-elevated);
+  --color-surface-inverse: var(--ui-surface-inverse);
+  --color-surface-subtle: var(--ui-surface-subtle);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --radius-overlay: var(--ui-radius-overlay);
+  --radius-ui: var(--ui-radius-standard);
+  --shadow-elevated: var(--ui-shadow-elevated);
+  --shadow-overlay: var(--ui-shadow-overlay);
+  --shadow-surface: var(--ui-shadow-surface);
+}
+
+@supports (height: 100dvh) {
+  :root {
+    --ui-viewport-height: 100dvh;
+  }
 }
 
 @media (prefers-color-scheme: dark) {
@@ -40,6 +112,34 @@ body {
 
 html {
   scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-delay: 0s !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-delay: 0s !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .coachos-float {
+    animation: none !important;
+    transform: none !important;
+  }
+
+  .animate-spin,
+  .coachos-spin {
+    animation-duration: 2s !important;
+    animation-iteration-count: infinite !important;
+  }
 }
 
 @keyframes coachosSpin {
