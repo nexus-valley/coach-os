@@ -1,17 +1,28 @@
 import Link from "next/link";
-import type { ReactNode } from "react";
+import type {
+  AnchorHTMLAttributes,
+  ButtonHTMLAttributes,
+  KeyboardEvent,
+  MouseEvent,
+  ReactNode,
+} from "react";
 
-type ButtonVariant =
-  | "destructive"
-  | "ghost"
-  | "outline"
-  | "premium"
-  | "primary"
-  | "secondary"
-  | "success";
-type ButtonSize = "sm" | "md" | "lg";
+import {
+  buttonControlClasses,
+  buttonVariantClasses,
+  type ButtonVariant,
+} from "./buttonStyles";
 
-type ButtonProps = {
+export type { ButtonVariant } from "./buttonStyles";
+
+export type ButtonSize = "sm" | "md" | "lg";
+
+type ButtonAnchorOnlyProps = Pick<
+  AnchorHTMLAttributes<HTMLAnchorElement>,
+  "download" | "rel" | "target"
+>;
+
+export type ButtonProps = {
   children: ReactNode;
   className?: string;
   fullWidth?: boolean;
@@ -22,32 +33,56 @@ type ButtonProps = {
   rightIcon?: ReactNode;
   size?: ButtonSize;
   variant?: ButtonVariant;
-} & React.ButtonHTMLAttributes<HTMLButtonElement>;
-
-const baseClasses =
-  "inline-flex items-center justify-center gap-2 rounded-lg font-semibold transition duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2ECBEA] disabled:pointer-events-none disabled:cursor-not-allowed disabled:border-[#D8E8F0] disabled:bg-[#E5EEF4] disabled:text-[#66788F] disabled:shadow-none";
-
-const variantClasses: Record<ButtonVariant, string> = {
-  destructive:
-    "border border-[#B91C1C]/20 bg-[#DC2626] text-white shadow-sm shadow-[#DC2626]/15 hover:-translate-y-0.5 hover:bg-[#B91C1C]",
-  outline:
-    "border border-[#BFD7E6] bg-transparent text-[#0B2A3D] hover:-translate-y-0.5 hover:border-[#145DA0]/45 hover:bg-white/70",
-  premium:
-    "border border-[#D9A32F]/30 bg-[#0B2A3D] text-white shadow-md shadow-[#0B2A3D]/15 hover:-translate-y-0.5 hover:bg-[#082236]",
-  primary:
-    "coachos-primary-button border border-[#145DA0]/20 bg-[#145DA0] text-white shadow-md shadow-[#145DA0]/15 hover:-translate-y-0.5 hover:bg-[#0F4C81]",
-  secondary:
-    "border border-[#D8E8F0] bg-white text-[#0B2A3D] shadow-sm hover:-translate-y-0.5 hover:border-[#2ECBEA]/60 hover:bg-[#F3FAFD]",
-  ghost: "text-[#5D7185] hover:bg-[#EAF7FC] hover:text-[#0B2A3D]",
-  success:
-    "border border-[#047857]/20 bg-[#059669] text-white shadow-sm shadow-[#059669]/15 hover:-translate-y-0.5 hover:bg-[#047857]",
-};
+} & ButtonHTMLAttributes<HTMLButtonElement> &
+  ButtonAnchorOnlyProps;
 
 const sizeClasses: Record<ButtonSize, string> = {
   sm: "h-10 px-4 text-sm",
   md: "h-11 px-5 text-sm",
   lg: "h-12 px-6 text-base",
 };
+
+const safeLinkAttributeNames = new Set([
+  "id",
+  "role",
+  "title",
+  "tabIndex",
+]);
+
+function pickSafeLinkAttributes(
+  props: ButtonHTMLAttributes<HTMLButtonElement>,
+) {
+  const attributes: Record<string, unknown> = {};
+
+  for (const [name, value] of Object.entries(props)) {
+    if (
+      safeLinkAttributeNames.has(name) ||
+      name.startsWith("aria-") ||
+      name.startsWith("data-")
+    ) {
+      attributes[name] = value;
+    }
+  }
+
+  delete attributes["aria-busy"];
+  delete attributes["aria-disabled"];
+
+  return attributes as AnchorHTMLAttributes<HTMLAnchorElement>;
+}
+
+function preventDisabledLinkPointerActivation(
+  event: MouseEvent<HTMLAnchorElement>,
+) {
+  event.preventDefault();
+}
+
+function preventDisabledLinkKeyboardActivation(
+  event: KeyboardEvent<HTMLAnchorElement>,
+) {
+  if (event.key === "Enter" || event.key === " ") {
+    event.preventDefault();
+  }
+}
 
 export function Button({
   children,
@@ -58,17 +93,19 @@ export function Button({
   isLoading = false,
   leftIcon,
   loadingText,
+  download,
+  rel,
   rightIcon,
   size = "md",
+  target,
   type = "button",
   variant = "primary",
-  ...props
+  ...nativeProps
 }: ButtonProps) {
   const isDisabled = disabled || isLoading;
-  const content = isLoading && loadingText ? loadingText : children;
   const classes = [
-    baseClasses,
-    variantClasses[variant],
+    buttonControlClasses,
+    buttonVariantClasses[variant],
     sizeClasses[size],
     fullWidth ? "w-full" : "",
     className,
@@ -76,29 +113,48 @@ export function Button({
     .filter(Boolean)
     .join(" ");
   const buttonContent = (
-    <>
-      {isLoading ? (
+    <span className="relative inline-grid min-w-0 grid-cols-1 grid-rows-1 items-center justify-items-center">
+      <span
+        className={`col-start-1 row-start-1 inline-flex min-w-0 items-center justify-center gap-2 ${isLoading ? "opacity-0" : "opacity-100"}`}
+      >
+        {leftIcon}
+        <span>{children}</span>
+        {rightIcon}
+      </span>
+      <span
+        aria-hidden="true"
+        className={`col-start-1 row-start-1 inline-flex min-w-0 items-center justify-center gap-2 ${isLoading ? "visible" : "invisible"}`}
+      >
         <span
           aria-hidden="true"
-          className="h-4 w-4 animate-spin rounded-full border-2 border-current border-r-transparent opacity-80"
+          className={`h-4 w-4 rounded-full border-2 border-current border-r-transparent opacity-80 ${isLoading ? "animate-spin" : ""}`}
         />
-      ) : (
-        leftIcon
-      )}
-      <span>{content}</span>
-      {!isLoading ? rightIcon : null}
-    </>
+        {loadingText ? <span>{loadingText}</span> : null}
+      </span>
+    </span>
   );
 
   if (href) {
+    const linkAttributes = pickSafeLinkAttributes(nativeProps);
+
     return (
       <Link
+        {...linkAttributes}
         aria-busy={isLoading || undefined}
         aria-disabled={isDisabled || undefined}
         className={classes}
+        download={download}
         href={href}
-        onClick={isDisabled ? (event) => event.preventDefault() : undefined}
-        tabIndex={isDisabled ? -1 : undefined}
+        onAuxClick={
+          isDisabled ? preventDisabledLinkPointerActivation : undefined
+        }
+        onClick={isDisabled ? preventDisabledLinkPointerActivation : undefined}
+        onKeyDown={
+          isDisabled ? preventDisabledLinkKeyboardActivation : undefined
+        }
+        rel={rel}
+        tabIndex={isDisabled ? -1 : linkAttributes.tabIndex}
+        target={target}
       >
         {buttonContent}
       </Link>
@@ -107,11 +163,11 @@ export function Button({
 
   return (
     <button
+      {...nativeProps}
       aria-busy={isLoading || undefined}
       className={classes}
       disabled={isDisabled}
       type={type}
-      {...props}
     >
       {buttonContent}
     </button>
