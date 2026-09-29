@@ -17,11 +17,16 @@ import { expect, test, type Page } from "@playwright/test";
 import tailwindcss from "@tailwindcss/postcss";
 import postcss from "postcss";
 import { createElement, createRef, type ReactElement } from "react";
+import ts from "typescript";
 
 import {
   Checkbox,
   type CheckboxProps,
 } from "../../src/components/ui/Checkbox";
+import {
+  FormField,
+  type FormFieldProps,
+} from "../../src/components/ui/FormField";
 import {
   Input,
   type InputProps,
@@ -46,6 +51,7 @@ import {
 const root = process.cwd();
 const globalsPath = join(root, "app", "globals.css");
 const checkboxPath = join(root, "src", "components", "ui", "Checkbox.tsx");
+const formFieldPath = join(root, "src", "components", "ui", "FormField.tsx");
 const inputPath = join(root, "src", "components", "ui", "Input.tsx");
 const selectPath = join(root, "src", "components", "ui", "Select.tsx");
 const radioGroupPath = join(
@@ -66,6 +72,7 @@ const textareaPath = join(root, "src", "components", "ui", "Textarea.tsx");
 
 const globalsSource = readFileSync(globalsPath, "utf8");
 const checkboxSource = readFileSync(checkboxPath, "utf8");
+const formFieldSource = readFileSync(formFieldPath, "utf8");
 const inputSource = readFileSync(inputPath, "utf8");
 const selectSource = readFileSync(selectPath, "utf8");
 const radioGroupSource = readFileSync(radioGroupPath, "utf8");
@@ -73,12 +80,42 @@ const stylesSource = readFileSync(stylesPath, "utf8");
 const textareaSource = readFileSync(textareaPath, "utf8");
 const primitiveSources = [
   checkboxSource,
+  formFieldSource,
   inputSource,
   radioGroupSource,
   selectSource,
   stylesSource,
   textareaSource,
 ];
+
+function typescriptSourceContract(source: string) {
+  const sourceFile = ts.createSourceFile(
+    "FormField.tsx",
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX,
+  );
+  const directives = sourceFile.statements.flatMap((statement) =>
+    ts.isExpressionStatement(statement) &&
+    ts.isStringLiteral(statement.expression)
+      ? [statement.expression.text]
+      : [],
+  );
+  const identifiers = new Set<string>();
+  const calls: { name: string; position: number }[] = [];
+
+  function visit(node: ts.Node) {
+    if (ts.isIdentifier(node)) identifiers.add(node.text);
+    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
+      calls.push({ name: node.expression.text, position: node.getStart() });
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(sourceFile);
+
+  return { calls, directives, identifiers };
+}
 
 const allowedInputTypes = [
   "date",
@@ -225,9 +262,40 @@ function choiceControlCompileAssertions() {
   ];
 }
 
+function formFieldCompileAssertions() {
+  const legacy = formFieldElement({
+    children: createElement(Input, { id: "legacy-control" }),
+    htmlFor: "legacy-control",
+    label: "Legacy field",
+  });
+  const input = formFieldElement({
+    children: (controlProps) =>
+      createElement(Input, { ...controlProps, type: "email" }),
+    label: "Email",
+    required: true,
+  });
+  const textarea = formFieldElement({
+    children: (controlProps) => createElement(Textarea, controlProps),
+    disabled: true,
+    label: "Notes",
+  });
+  const select = formFieldElement({
+    children: (controlProps) =>
+      createElement(
+        Select,
+        controlProps,
+        createElement("option", { value: "starter" }, "Starter"),
+      ),
+    label: "Plan",
+  });
+
+  return [legacy, input, textarea, select];
+}
+
 void inputTypeCompileAssertions;
 void refCompileAssertions;
 void choiceControlCompileAssertions;
+void formFieldCompileAssertions;
 
 const inputLayout = "h-11 px-3 leading-5";
 const textareaLayout = "min-h-28 resize-y px-3 py-3 leading-6";
@@ -360,6 +428,15 @@ function selectMarkup(props: SelectProps = {}) {
   );
 }
 
+function formFieldElement(props: FormFieldProps & { key?: string }) {
+  return createElement(FormField, props);
+}
+
+function tagAttribute(tag: string, name: string) {
+  const match = tag.match(new RegExp(`(?:^|\\s)${name}="([^"]*)"`));
+  return match?.[1];
+}
+
 async function setPrimitiveContent(page: Page, markup: string) {
   await page.setContent(`<style>${await compiledCss()}</style>${markup}`);
 }
@@ -369,6 +446,7 @@ let choiceHarnessDirectory: string | undefined;
 let choiceHarnessProcess: ChildProcess | undefined;
 let choiceHarnessRuntimeRootCreated = false;
 let choiceHarnessUrl: string | undefined;
+let formFieldSsrMarkup: string | undefined;
 
 function availableLoopbackPort() {
   return new Promise<number>((resolve, reject) => {
@@ -383,6 +461,26 @@ function availableLoopbackPort() {
         }
         resolve(address.port);
       });
+    });
+  });
+}
+
+function runHarnessCommand(command: string, args: string[], cwd: string) {
+  return new Promise<string>((resolve, reject) => {
+    const child = spawn(command, args, { cwd, windowsHide: true });
+    let output = "";
+    const captureOutput = (chunk: Buffer) => {
+      output = `${output}${chunk.toString()}`.slice(-12_000);
+    };
+    child.stdout?.on("data", captureOutput);
+    child.stderr?.on("data", captureOutput);
+    child.once("error", reject);
+    child.once("exit", (code) => {
+      if (code === 0) {
+        resolve(output);
+        return;
+      }
+      reject(new Error(`Temporary harness command exited ${code}.\n${output}`));
     });
   });
 }
@@ -438,6 +536,7 @@ async function stopChoiceHarness() {
 
   const directory = choiceHarnessDirectory;
   choiceHarnessDirectory = undefined;
+  formFieldSsrMarkup = undefined;
   choiceHarnessUrl = undefined;
   if (directory) {
     let cleanupError: unknown;
@@ -521,10 +620,15 @@ async function buildChoiceHarness() {
     mkdirSync(appDirectory, { recursive: true });
     mkdirSync(componentsDirectory, { recursive: true });
     copyFileSync(checkboxPath, join(componentsDirectory, "Checkbox.tsx"));
+    copyFileSync(formFieldPath, join(componentsDirectory, "FormField.tsx"));
+    copyFileSync(inputPath, join(componentsDirectory, "Input.tsx"));
     copyFileSync(
       radioGroupPath,
       join(componentsDirectory, "RadioGroup.tsx"),
     );
+    copyFileSync(selectPath, join(componentsDirectory, "Select.tsx"));
+    copyFileSync(stylesPath, join(componentsDirectory, "fieldControlStyles.ts"));
+    copyFileSync(textareaPath, join(componentsDirectory, "Textarea.tsx"));
 
     const repositoryPackage = JSON.parse(
       readFileSync(join(root, "package.json"), "utf8"),
@@ -729,6 +833,233 @@ export default function ChoiceHarnessPage() {
 }
 `,
     );
+    const formFieldAppDirectory = join(appDirectory, "form-field");
+    mkdirSync(formFieldAppDirectory, { recursive: true });
+    writeFileSync(
+      join(formFieldAppDirectory, "page.jsx"),
+      `"use client";
+
+import { FormField } from "../../src/components/ui/FormField";
+import { Input } from "../../src/components/ui/Input";
+
+export default function FormFieldHarnessPage() {
+  return (
+    <main id="form-field-hydration-root">
+      <FormField
+        description="Hydrated description"
+        error="Hydrated error"
+        label="Hydrated email"
+        required
+      >
+        {(controlProps) => (
+          <Input
+            {...controlProps}
+            data-hydration-control="true"
+            type="email"
+          />
+        )}
+      </FormField>
+    </main>
+  );
+}
+`,
+    );
+    writeFileSync(
+      join(choiceHarnessDirectory, "form-field-ssr.tsx"),
+      `import { writeFileSync } from "node:fs";
+import { renderToString } from "react-dom/server";
+
+import {
+  FormField,
+  type FormFieldControlProps,
+} from "./src/components/ui/FormField";
+import { Input } from "./src/components/ui/Input";
+import { Select } from "./src/components/ui/Select";
+import { Textarea } from "./src/components/ui/Textarea";
+
+function control(name: string) {
+  return function FormFieldSsrControl(controlProps: FormFieldControlProps) {
+    return <Input {...controlProps} name={name} />;
+  };
+}
+
+function matrix() {
+  return (
+    <main data-form-field-ssr>
+      <section data-case="legacy">
+        <FormField
+          className="caller-wrapper"
+          controlId="ignored-control-id"
+          description="Legacy description"
+          error="Legacy error"
+          htmlFor="legacy-control"
+          label="Legacy field"
+          required
+        >
+          <input
+            className="caller-control"
+            data-proof="untouched"
+            id="legacy-control"
+          />
+        </FormField>
+      </section>
+
+      <section data-case="command-group">
+        <FormField controlId="ignored-command-id" label="Starting visibility">
+          <div data-command-group="visibility">
+            <button type="button">Draft</button>
+            <button type="button">Published</button>
+          </div>
+          <p>Draft stays private.</p>
+        </FormField>
+      </section>
+
+      <section data-case="generated">
+        <FormField label="Field first">{control("first")}</FormField>
+        <FormField label="Field second">{control("second")}</FormField>
+      </section>
+
+      <section data-case="precedence">
+        <FormField htmlFor="html-for-control" label="HTML fallback">
+          {control("html-for")}
+        </FormField>
+        <FormField controlId="explicit-control" label="Explicit control">
+          {control("control-id")}
+        </FormField>
+        <FormField
+          controlId="winning-control"
+          htmlFor="losing-html-for"
+          label="Precedence"
+        >
+          {control("precedence")}
+        </FormField>
+      </section>
+
+      <section data-case="metadata">
+        <FormField
+          controlId="description-control"
+          description="Description only"
+          label="Description"
+        >
+          {control("description")}
+        </FormField>
+        <FormField controlId="error-control" error="Error only" label="Error">
+          {control("error")}
+        </FormField>
+        <FormField
+          controlId="both-control"
+          description="Both description"
+          error="Both error"
+          label="Both"
+        >
+          {control("both")}
+        </FormField>
+        <FormField controlId="neither-control" label="Neither">
+          {control("neither")}
+        </FormField>
+      </section>
+
+      <section data-case="spread">
+        <FormField controlId="input-spread" label="Email" required>
+          {(controlProps) => (
+            <Input {...controlProps} name="input-spread" type="email" />
+          )}
+        </FormField>
+        <FormField controlId="textarea-spread" disabled label="Notes">
+          {(controlProps) => (
+            <Textarea {...controlProps} name="textarea-spread" />
+          )}
+        </FormField>
+        <FormField controlId="select-spread" label="Plan">
+          {(controlProps) => (
+            <Select {...controlProps} name="select-spread">
+              <option value="starter">Starter</option>
+            </Select>
+          )}
+        </FormField>
+      </section>
+
+      <section data-case="tones">
+        <FormField
+          description="Light description"
+          error="Light error"
+          htmlFor="light-field"
+          label="Light field"
+          required
+        >
+          <input id="light-field" />
+        </FormField>
+        <FormField
+          description="Dark description"
+          error="Dark error"
+          htmlFor="dark-field"
+          label="Dark field"
+          required
+          tone="dark"
+        >
+          <input id="dark-field" />
+        </FormField>
+      </section>
+    </main>
+  );
+}
+
+const first = renderToString(matrix(), {
+  identifierPrefix: "deterministic-form-field-",
+});
+const second = renderToString(matrix(), {
+  identifierPrefix: "deterministic-form-field-",
+});
+const outputPath = process.argv[2];
+if (!outputPath) {
+  throw new Error("FormField SSR output path is required.");
+}
+writeFileSync(outputPath, JSON.stringify({ deterministic: first === second, html: first }));
+`,
+    );
+    writeFileSync(
+      join(choiceHarnessDirectory, "ssr-tsconfig.json"),
+      `${JSON.stringify(
+        {
+          compilerOptions: {
+            esModuleInterop: true,
+            jsx: "react-jsx",
+            module: "commonjs",
+            moduleResolution: "node",
+            noEmitOnError: true,
+            outDir: "ssr-dist",
+            rootDir: ".",
+            skipLibCheck: true,
+            strict: true,
+            target: "ES2020",
+            types: ["node"],
+          },
+          include: ["form-field-ssr.tsx", "src/components/ui/**/*.ts", "src/components/ui/**/*.tsx"],
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    const typeScriptCli = join(root, "node_modules", "typescript", "bin", "tsc");
+    await runHarnessCommand(
+      process.execPath,
+      [typeScriptCli, "--project", "ssr-tsconfig.json"],
+      choiceHarnessDirectory,
+    );
+    const ssrOutputPath = join(choiceHarnessDirectory, "form-field-ssr-output.json");
+    await runHarnessCommand(
+      process.execPath,
+      [join(choiceHarnessDirectory, "ssr-dist", "form-field-ssr.js"), ssrOutputPath],
+      choiceHarnessDirectory,
+    );
+    const ssrOutput = JSON.parse(readFileSync(ssrOutputPath, "utf8")) as {
+      deterministic: boolean;
+      html: string;
+    };
+    if (!ssrOutput.deterministic) {
+      throw new Error("FormField SSR output was not deterministic.");
+    }
+    formFieldSsrMarkup = ssrOutput.html;
 
     const nextPackageDirectory = join(root, "node_modules", "next");
     const nextPackage = JSON.parse(
@@ -796,6 +1127,18 @@ async function setChoiceContent(page: Page) {
       ),
     )
     .toBe(true);
+}
+
+async function openFormFieldSsr(page: Page) {
+  if (!formFieldSsrMarkup) {
+    throw new Error("FormField SSR harness was not generated.");
+  }
+
+  await page.setContent(
+    `<body data-deterministic="true">${formFieldSsrMarkup}</body>`,
+  );
+  await expect(page.locator("[data-form-field-ssr]")).toBeVisible();
+  await expect(page.locator("body")).toHaveAttribute("data-deterministic", "true");
 }
 
 async function renderCheckbox(
@@ -1745,5 +2088,301 @@ test.describe("UIX-1C3C choice controls", () => {
       expect(source).not.toContain("aria-live");
       expect(source).not.toContain('role="alert"');
     }
+  });
+});
+
+test.describe("UIX-1C3D FormField association", () => {
+  test("keeps FormField synchronous, shared, and environment-neutral", () => {
+    const contract = typescriptSourceContract(formFieldSource);
+    const useIdCalls = contract.calls.filter(({ name }) => name === "useId");
+    const modeDetectionPosition = formFieldSource.indexOf(
+      'typeof children === "function"',
+    );
+
+    expect(contract.directives).not.toContain("use client");
+    expect(useIdCalls).toHaveLength(1);
+    expect(useIdCalls[0]?.position).toBeLessThan(modeDetectionPosition);
+    for (const forbiddenIdentifier of [
+      "cloneElement",
+      "createContext",
+      "document",
+      "useCallback",
+      "useEffect",
+      "useLayoutEffect",
+      "useMemo",
+      "useState",
+      "window",
+    ]) {
+      expect(contract.identifiers.has(forbiddenIdentifier), forbiddenIdentifier).toBe(
+        false,
+      );
+    }
+    expect(formFieldSource).not.toContain("aria-required");
+    expect(formFieldSource).not.toMatch(/#[0-9a-f]{3,8}\b/i);
+    expect(formFieldSource).toContain(
+      '"block text-sm font-semibold text-content-primary"',
+    );
+    expect(formFieldSource).toContain('"text-xs leading-5 text-content-muted"');
+    expect(formFieldSource).toContain(
+      '"text-xs font-medium leading-5 text-status-danger"',
+    );
+    expect(formFieldSource).toContain('"ml-1 text-status-danger"');
+  });
+
+  test("preserves legacy children, IDs, associations, and wrapper order", async ({
+    page,
+  }) => {
+    await openFormFieldSsr(page);
+    const fixture = page.locator('[data-case="legacy"]');
+    const wrapper = fixture.locator(":scope > div");
+    const label = fixture.locator("label");
+    const control = fixture.locator('input[data-proof="untouched"]');
+    const paragraphs = fixture.locator("p");
+    await expect(wrapper).toHaveAttribute("class", "space-y-2 caller-wrapper");
+    await expect(label).toHaveAttribute("for", "legacy-control");
+    await expect(control).toHaveAttribute("id", "legacy-control");
+    await expect(control).toHaveAttribute("class", "caller-control");
+    await expect(control).not.toHaveAttribute("aria-describedby", /.+/);
+    await expect(control).not.toHaveAttribute("aria-errormessage", /.+/);
+    await expect(control).not.toHaveAttribute("aria-invalid", /.+/);
+    await expect(control).not.toHaveAttribute("disabled", "");
+    await expect(control).not.toHaveAttribute("required", "");
+    await expect(control).toHaveAccessibleName("Legacy field");
+    await expect(paragraphs.nth(0)).toHaveText("Legacy description");
+    await expect(paragraphs.nth(1)).toHaveText("Legacy error");
+    await expect(paragraphs.nth(0)).not.toHaveAttribute("id", /.+/);
+    await expect(paragraphs.nth(1)).not.toHaveAttribute("id", /.+/);
+    await expect(label.locator("span")).toHaveText("*");
+    await expect(label.locator("span")).toHaveAttribute("aria-hidden", "true");
+    expect(
+      await wrapper.locator(":scope > *").evaluateAll((elements) =>
+        elements.map((element) => element.tagName),
+      ),
+    ).toEqual(["LABEL", "P", "INPUT", "P"]);
+  });
+
+  test("preserves the no-htmlFor multi-child visibility command group", async ({
+    page,
+  }) => {
+    await openFormFieldSsr(page);
+    const fixture = page.locator('[data-case="command-group"]');
+    await expect(fixture.locator("label")).not.toHaveAttribute("for", /.+/);
+    await expect(fixture.locator('[data-command-group="visibility"] button'))
+      .toHaveCount(2);
+    await expect(fixture.getByText("Draft stays private.")).toBeVisible();
+    expect(await fixture.innerHTML()).not.toContain("ignored-command-id");
+  });
+
+  test("uses generated IDs deterministically and uniquely during SSR", async ({
+    page,
+  }) => {
+    await openFormFieldSsr(page);
+    const fixture = page.locator('[data-case="generated"]');
+    const firstId = await fixture.locator('[name="first"]').getAttribute("id");
+    const secondId = await fixture.locator('[name="second"]').getAttribute("id");
+    expect(firstId).toBeTruthy();
+    expect(secondId).toBeTruthy();
+    expect(firstId).not.toBe(secondId);
+    await expect(fixture.getByText("Field first")).toHaveAttribute("for", firstId!);
+    await expect(fixture.getByText("Field second")).toHaveAttribute("for", secondId!);
+    await expect(page.locator("body")).toHaveAttribute("data-deterministic", "true");
+  });
+
+  test("applies controlId, htmlFor, and generated precedence exactly", async ({
+    page,
+  }) => {
+    await openFormFieldSsr(page);
+    const fixture = page.locator('[data-case="precedence"]');
+    await expect(fixture.locator('[name="html-for"]')).toHaveAttribute(
+      "id",
+      "html-for-control",
+    );
+    await expect(fixture.getByText("HTML fallback")).toHaveAttribute(
+      "for",
+      "html-for-control",
+    );
+    await expect(fixture.locator('[name="control-id"]')).toHaveAttribute(
+      "id",
+      "explicit-control",
+    );
+    await expect(fixture.locator('[name="precedence"]')).toHaveAttribute(
+      "id",
+      "winning-control",
+    );
+    await expect(fixture.getByText("Precedence")).toHaveAttribute(
+      "for",
+      "winning-control",
+    );
+    expect(await fixture.innerHTML()).not.toContain("losing-html-for");
+  });
+
+  test("composes description and error metadata without live semantics", async ({
+    page,
+  }) => {
+    await openFormFieldSsr(page);
+    const fixture = page.locator('[data-case="metadata"]');
+    await expect(fixture.locator('[name="description"]')).toHaveAttribute(
+      "aria-describedby",
+      "description-control-description",
+    );
+    await expect(fixture.locator("#description-control-description")).toHaveText(
+      "Description only",
+    );
+    await expect(fixture.locator('[name="error"]')).toHaveAttribute(
+      "aria-describedby",
+      "error-control-error",
+    );
+    await expect(fixture.locator('[name="error"]')).toHaveAttribute(
+      "aria-errormessage",
+      "error-control-error",
+    );
+    await expect(fixture.locator('[name="error"]')).toHaveAttribute(
+      "aria-invalid",
+      "true",
+    );
+    await expect(fixture.locator('[name="both"]')).toHaveAttribute(
+      "aria-describedby",
+      "both-control-description both-control-error",
+    );
+    await expect(fixture.locator('[name="both"]')).toHaveAttribute(
+      "aria-errormessage",
+      "both-control-error",
+    );
+    await expect(fixture.locator('[name="neither"]')).not.toHaveAttribute(
+      "aria-describedby",
+      /.+/,
+    );
+    await expect(fixture.locator('[name="neither"]')).not.toHaveAttribute(
+      "aria-invalid",
+      /.+/,
+    );
+    await expect(fixture.locator("[role=alert], [aria-live], [aria-atomic]"))
+      .toHaveCount(0);
+  });
+
+  test("spreads native required and disabled metadata into production controls", async ({
+    page,
+  }) => {
+    await openFormFieldSsr(page);
+    const fixture = page.locator('[data-case="spread"]');
+    const input = fixture.locator('[name="input-spread"]');
+    const textarea = fixture.locator('[name="textarea-spread"]');
+    const select = fixture.locator('[name="select-spread"]');
+    await expect(input).toHaveAttribute("type", "email");
+    await expect(input).toHaveAttribute("required", "");
+    await expect(input).not.toHaveAttribute("aria-required", /.+/);
+    await expect(textarea).toBeDisabled();
+    await expect(textarea).not.toHaveAttribute("required", "");
+    await expect(select).not.toHaveAttribute("required", "");
+    await expect(select).not.toHaveAttribute("disabled", "");
+    await expect(select.locator("option")).toHaveText("Starter");
+  });
+
+  test("preserves frozen light and dark classes including the accessible marker", async ({
+    page,
+  }) => {
+    await openFormFieldSsr(page);
+    const fixture = page.locator('[data-case="tones"]');
+    const labels = fixture.locator("label");
+    const descriptions = fixture.locator("p");
+    await expect(labels.nth(0)).toHaveClass(
+      "block text-sm font-semibold text-content-primary",
+    );
+    await expect(labels.nth(0).locator("span")).toHaveClass(
+      "ml-1 text-status-danger",
+    );
+    await expect(descriptions.nth(0)).toHaveClass(
+      "text-xs leading-5 text-content-muted",
+    );
+    await expect(descriptions.nth(1)).toHaveClass(
+      "text-xs font-medium leading-5 text-status-danger",
+    );
+    await expect(labels.nth(1)).toHaveClass(
+      "block text-sm font-semibold text-slate-200",
+    );
+    await expect(labels.nth(1).locator("span")).toHaveClass(
+      "ml-1 text-status-danger",
+    );
+    await expect(descriptions.nth(2)).toHaveClass(
+      "text-xs leading-5 text-slate-300",
+    );
+    await expect(descriptions.nth(3)).toHaveClass(
+      "text-xs font-medium leading-5 text-red-300",
+    );
+  });
+
+  test("discovers FormField semantic utilities only through product roots", async ({
+    page,
+  }) => {
+    const compilation = await productCss();
+    const requiredCandidates = [
+      "text-content-primary",
+      "text-content-muted",
+      "text-status-danger",
+      "text-red-300",
+    ] as const;
+    const selectors = await page.evaluate(
+      (candidates) => candidates.map((candidate) => `.${CSS.escape(candidate)}`),
+      requiredCandidates,
+    );
+    for (const [index, candidate] of requiredCandidates.entries()) {
+      expect(compilation.css, candidate).toContain(selectors[index]);
+    }
+    expect(globalsSource).toContain('@source "../app";');
+    expect(globalsSource).toContain('@source "../src";');
+    expect(globalsSource).not.toContain('@source "../support-ops";');
+    expect(globalsSource).not.toContain('@source "../tests";');
+  });
+
+  test("keeps actual server and hydrated FormField relationships identical", async ({
+    page,
+  }) => {
+    if (!choiceHarnessUrl) {
+      throw new Error("Choice-control harness was not started.");
+    }
+    const url = `${choiceHarnessUrl}/form-field`;
+    const response = await fetch(url, { cache: "no-store" });
+    expect(response.status).toBe(200);
+    const serverHtml = await response.text();
+    const inputTag = serverHtml.match(
+      /<input(?=[^>]*data-hydration-control="true")[^>]*>/,
+    )?.[0];
+    const labelTag = serverHtml.match(/<label[^>]*>Hydrated email/)?.[0];
+    expect(inputTag).toBeTruthy();
+    expect(labelTag).toBeTruthy();
+    const server = {
+      describedBy: tagAttribute(inputTag!, "aria-describedby"),
+      errorMessage: tagAttribute(inputTag!, "aria-errormessage"),
+      id: tagAttribute(inputTag!, "id"),
+      labelFor: tagAttribute(labelTag!, "for"),
+    };
+    expect(server.id).toBeTruthy();
+    expect(server.labelFor).toBe(server.id);
+
+    let consoleErrors = 0;
+    let pageErrors = 0;
+    page.on("console", (message) => {
+      if (message.type() === "error") consoleErrors += 1;
+    });
+    page.on("pageerror", () => {
+      pageErrors += 1;
+    });
+    await page.goto(url, { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(250);
+    const hydrated = await page
+      .locator('[data-hydration-control="true"]')
+      .evaluate((control) => ({
+        describedBy: control.getAttribute("aria-describedby"),
+        errorMessage: control.getAttribute("aria-errormessage"),
+        id: control.id,
+      }));
+    const hydratedLabelFor = await page.locator("label").getAttribute("for");
+
+    expect(hydrated.id).toBe(server.id);
+    expect(hydratedLabelFor).toBe(server.labelFor);
+    expect(hydrated.describedBy).toBe(server.describedBy);
+    expect(hydrated.errorMessage).toBe(server.errorMessage);
+    expect(consoleErrors).toBe(0);
+    expect(pageErrors).toBe(0);
   });
 });
