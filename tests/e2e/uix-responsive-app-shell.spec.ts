@@ -270,7 +270,7 @@ test.describe("UIX-1D2A responsive AppShell", () => {
     );
   });
 
-  test("adds the reviewed local More contract without changing Student Portal", () => {
+  test("keeps AppShell-specific mechanics isolated while allowing shared portal foundations", () => {
     const moreStart = shellSource.indexOf("{mobileMoreOpen ? (");
     const moreBlock = shellSource.slice(moreStart);
 
@@ -287,12 +287,19 @@ test.describe("UIX-1D2A responsive AppShell", () => {
 
     for (const marker of [
       "workspace-main-content",
-      "ui-viewport-height",
-      "ui-safe-area-top",
-      "ui-safe-area-bottom",
+      "coachos-sidebar",
+      "mobile-more-navigation",
+      "Workspace navigation",
+      "calc(6rem+var(--ui-safe-area-bottom))",
     ]) {
       expect(portalSource).not.toContain(marker);
     }
+
+    expect(portalSource).toContain("min-h-[var(--ui-viewport-height)]");
+    expect(portalSource).toContain("pt-[var(--ui-safe-area-top)]");
+    expect(portalSource).toContain(
+      "pb-[calc(1.5rem+var(--ui-safe-area-bottom))]",
+    );
   });
 
   test("retains exactly 48 AppShell route consumers", () => {
