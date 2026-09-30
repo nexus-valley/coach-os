@@ -703,13 +703,19 @@ export function AppShell({ activeItem = "Home", children }: AppShellProps) {
 
   return (
     <div
-      className="coachos-light h-screen overflow-hidden text-[#0B2A3D]"
+      className="coachos-light h-[var(--ui-viewport-height)] overflow-hidden text-[#0B2A3D]"
       style={shellStyle}
     >
+      <a
+        className="fixed left-[calc(1rem+var(--ui-safe-area-left))] top-[calc(1rem+var(--ui-safe-area-top))] z-50 -translate-y-[calc(100%+3rem)] rounded-ui border border-line bg-surface px-4 py-3 text-sm font-semibold text-content-primary shadow-overlay transition-transform focus:translate-y-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+        href="#workspace-main-content"
+      >
+        Skip to main content
+      </a>
       <div className="pointer-events-none fixed inset-0 bg-[#F8FAFC]" />
 
-      <div className="relative flex h-screen overflow-hidden">
-        <aside className="coachos-sidebar hidden h-screen w-72 shrink-0 overflow-y-auto border-r border-[#2ECBEA]/15 bg-[#0B2A3D] px-4 py-5 text-white shadow-lg shadow-[#0B2A3D]/10 lg:block">
+      <div className="relative flex h-full overflow-hidden">
+        <aside className="coachos-sidebar hidden h-full w-72 shrink-0 overflow-y-auto border-r border-[#2ECBEA]/15 bg-[#0B2A3D] px-4 py-5 text-white shadow-lg shadow-[#0B2A3D]/10 lg:block">
           <Link
             className="flex items-center gap-3 rounded-xl px-2 py-2 transition hover:bg-white/5"
             href="/app"
@@ -787,9 +793,9 @@ export function AppShell({ activeItem = "Home", children }: AppShellProps) {
           </nav>
         </aside>
 
-        <div className="flex h-screen min-w-0 flex-1 flex-col overflow-y-auto pb-24 lg:pb-0">
-          <header className="sticky top-0 z-20 border-b border-[#D8E8F0] bg-white/90 text-[#0B2A3D] shadow-sm shadow-[#0B2A3D]/5 backdrop-blur-xl">
-            <div className="flex h-18 min-h-18 items-center justify-between gap-3 px-5 py-3 sm:px-6 lg:px-8">
+        <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-y-auto pb-[calc(6rem+var(--ui-safe-area-bottom))] lg:pb-0">
+          <header className="sticky top-0 z-20 border-b border-[#D8E8F0] bg-white/90 pt-[var(--ui-safe-area-top)] text-[#0B2A3D] shadow-sm shadow-[#0B2A3D]/5 backdrop-blur-xl">
+            <div className="flex h-18 min-h-18 items-center justify-between gap-3 pb-3 pl-[calc(1.25rem+var(--ui-safe-area-left))] pr-[calc(1.25rem+var(--ui-safe-area-right))] pt-3 sm:pl-[calc(1.5rem+var(--ui-safe-area-left))] sm:pr-[calc(1.5rem+var(--ui-safe-area-right))] lg:pl-[calc(2rem+var(--ui-safe-area-left))] lg:pr-[calc(2rem+var(--ui-safe-area-right))]">
               <div className="flex min-w-0 items-center gap-3">
                 {logoUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -838,7 +844,11 @@ export function AppShell({ activeItem = "Home", children }: AppShellProps) {
             </div>
           </header>
 
-          <main className="coachos-content flex-1 px-5 py-6 sm:px-6 lg:px-8 lg:py-8">
+          <main
+            className="coachos-content flex-1 scroll-mt-[calc(4.5rem+var(--ui-safe-area-top))] pb-6 pl-[calc(1.25rem+var(--ui-safe-area-left))] pr-[calc(1.25rem+var(--ui-safe-area-right))] pt-6 sm:pl-[calc(1.5rem+var(--ui-safe-area-left))] sm:pr-[calc(1.5rem+var(--ui-safe-area-right))] lg:pb-8 lg:pl-[calc(2rem+var(--ui-safe-area-left))] lg:pr-[calc(2rem+var(--ui-safe-area-right))] lg:pt-8"
+            id="workspace-main-content"
+            tabIndex={-1}
+          >
             {routeAccessLoaded &&
             ownerAdminGrace ? (
               <SubscriptionLifecycleBanner lifecycle={lifecyclePresentation} />
@@ -914,9 +924,10 @@ export function AppShell({ activeItem = "Home", children }: AppShellProps) {
         ) : null}
 
         <nav
+          aria-label="Workspace navigation"
           className={
             visibleNavItems.length > 0
-              ? "fixed inset-x-0 bottom-0 z-40 border-t border-[#D8E8F0] bg-white/95 px-3 py-3 shadow-2xl shadow-[#0B2A3D]/10 backdrop-blur-xl lg:hidden"
+              ? "fixed inset-x-0 bottom-0 z-40 border-t border-[#D8E8F0] bg-white/95 pb-[calc(0.75rem+var(--ui-safe-area-bottom))] pl-[calc(0.75rem+var(--ui-safe-area-left))] pr-[calc(0.75rem+var(--ui-safe-area-right))] pt-3 shadow-2xl shadow-[#0B2A3D]/10 backdrop-blur-xl lg:hidden"
               : "hidden"
           }
         >
