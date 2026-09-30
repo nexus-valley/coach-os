@@ -25,8 +25,10 @@ const shellClasses = {
   frame: "relative flex h-full overflow-hidden",
   sidebar:
     "coachos-sidebar hidden h-full w-72 shrink-0 overflow-y-auto border-r border-[#2ECBEA]/15 bg-[#0B2A3D] px-4 py-5 text-white shadow-lg shadow-[#0B2A3D]/10 lg:block",
-  scroller:
-    "flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-y-auto pb-[calc(6rem+var(--ui-safe-area-bottom))] lg:pb-0",
+  scrollerBase:
+    "flex h-full min-h-0 min-w-0 flex-1 flex-col pb-[calc(6rem+var(--ui-safe-area-bottom))] lg:pb-0",
+  scrollerClosed:
+    "flex h-full min-h-0 min-w-0 flex-1 flex-col pb-[calc(6rem+var(--ui-safe-area-bottom))] lg:pb-0 overflow-y-auto",
   header:
     "sticky top-0 z-20 border-b border-[#D8E8F0] bg-white/90 pt-[var(--ui-safe-area-top)] text-[#0B2A3D] shadow-sm shadow-[#0B2A3D]/5 backdrop-blur-xl",
   headerInner:
@@ -106,7 +108,7 @@ function shellMarkup(insets: Insets, viewportHeight?: "100vh") {
         <aside id="sidebar" class="${escapeHtml(shellClasses.sidebar)}">
           <div style="height:1800px">Sidebar navigation</div>
         </aside>
-        <div id="content-scroller" class="${escapeHtml(shellClasses.scroller)}">
+        <div id="content-scroller" class="${escapeHtml(shellClasses.scrollerClosed)}">
           <header id="team-header" class="${escapeHtml(shellClasses.header)}">
             <div id="header-inner" class="${escapeHtml(shellClasses.headerInner)}">
               <strong>CoachFort Regression 2026</strong>
@@ -236,10 +238,13 @@ test.describe("UIX-1D2A responsive AppShell", () => {
     expect(shellSource).toContain(`className="${shellClasses.root}"`);
     expect(shellSource).toContain(`className="${shellClasses.frame}"`);
     expect(shellSource).toContain(`className="${shellClasses.sidebar}"`);
-    expect(shellSource).toContain(`className="${shellClasses.scroller}"`);
+    expect(shellSource).toContain(`"${shellClasses.scrollerBase}"`);
+    expect(shellSource).toContain(
+      'mobileMoreOpen ? "overflow-y-hidden" : "overflow-y-auto"',
+    );
     expect(shellSource).not.toContain("h-screen");
-    expect(shellClasses.scroller).toContain("min-h-0");
-    expect(shellClasses.scroller).toContain("overflow-y-auto");
+    expect(shellClasses.scrollerBase).toContain("min-h-0");
+    expect(shellClasses.scrollerClosed).toContain("overflow-y-auto");
     expect(shellClasses.frame).toContain("overflow-hidden");
   });
 
@@ -265,18 +270,20 @@ test.describe("UIX-1D2A responsive AppShell", () => {
     );
   });
 
-  test("keeps More behavior and Student Portal mechanics outside D2A", () => {
+  test("adds the reviewed local More contract without changing Student Portal", () => {
     const moreStart = shellSource.indexOf("{mobileMoreOpen ? (");
-    const moreEnd = shellSource.indexOf("<nav", moreStart);
-    const moreBlock = shellSource.slice(moreStart, moreEnd);
+    const moreBlock = shellSource.slice(moreStart);
 
     expect(moreStart).toBeGreaterThan(0);
-    expect(moreBlock).toContain('aria-label="More workspace navigation"');
-    expect(moreBlock).toContain('onClick={() => setMobileMoreOpen(false)}');
-    expect(moreBlock).not.toContain('role="dialog"');
-    expect(moreBlock).not.toContain("aria-modal");
-    expect(moreBlock).not.toContain("onKeyDown");
-    expect(moreBlock).not.toContain("inert");
+    expect(moreBlock).toContain('role="dialog"');
+    expect(moreBlock).toContain('aria-modal="true"');
+    expect(moreBlock).toContain(
+      'aria-labelledby="mobile-more-navigation-title"',
+    );
+    expect(shellSource.match(/inert=\{mobileMoreOpen \? true : undefined\}/g)).toHaveLength(
+      2,
+    );
+    expect(shellSource).not.toContain('aria-hidden="true"');
 
     for (const marker of [
       "workspace-main-content",
@@ -323,6 +330,11 @@ test.describe("UIX-1D2A responsive AppShell", () => {
       "padding-bottom: calc(6rem + var(--ui-safe-area-bottom))",
       "padding-bottom: calc(0.75rem + var(--ui-safe-area-bottom))",
       "scroll-margin-top: calc(4.5rem + var(--ui-safe-area-top))",
+      "bottom: calc(6rem + var(--ui-safe-area-bottom))",
+      "left: calc(0.75rem + var(--ui-safe-area-left))",
+      "right: calc(0.75rem + var(--ui-safe-area-right))",
+      "max-height: min(68%, calc(var(--ui-viewport-height) - 7.5rem - var(--ui-safe-area-top) - var(--ui-safe-area-bottom)))",
+      "z-index: 60",
     ]) {
       expect(css, declaration).toContain(declaration);
     }

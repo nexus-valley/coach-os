@@ -2,7 +2,14 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 
 import { CoachFortBrandAsset } from "@/src/components/branding/CoachFortBrandAsset";
 import { NotificationBell } from "@/src/components/notifications/NotificationBell";
@@ -50,6 +57,26 @@ type NavItem = {
   label: string;
   mobileLabel?: string;
 };
+
+const mobileMoreFocusableSelector = [
+  "a[href]",
+  "button:not([disabled])",
+  "input:not([disabled])",
+  "select:not([disabled])",
+  "textarea:not([disabled])",
+  '[tabindex]:not([tabindex="-1"])',
+].join(",");
+
+function getVisibleMobileMoreControls(container: HTMLElement) {
+  return Array.from(
+    container.querySelectorAll<HTMLElement>(mobileMoreFocusableSelector),
+  ).filter(
+    (element) =>
+      !element.hidden &&
+      element.getAttribute("aria-hidden") !== "true" &&
+      element.getClientRects().length > 0,
+  );
+}
 
 const navItems = [
   { href: "/app", label: "Home" },
@@ -494,6 +521,98 @@ export function AppShell({ activeItem = "Home", children }: AppShellProps) {
     useState<SubscriptionLifecyclePresentation | null>(null);
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
   const [workspaceName, setWorkspaceName] = useState("CoachFort");
+  const mobileMoreCloseRef = useRef<HTMLButtonElement>(null);
+  const mobileMoreDialogRef = useRef<HTMLElement>(null);
+  const mobileMoreTriggerRef = useRef<HTMLButtonElement>(null);
+  const restoreMobileMoreFocusRef = useRef(false);
+
+  const closeMobileMore = useCallback((restoreTrigger: boolean) => {
+    restoreMobileMoreFocusRef.current = restoreTrigger;
+    setMobileMoreOpen(false);
+  }, []);
+
+  useEffect(() => {
+    if (mobileMoreOpen || !restoreMobileMoreFocusRef.current) {
+      return;
+    }
+
+    restoreMobileMoreFocusRef.current = false;
+    const frame = window.requestAnimationFrame(() => {
+      if (!window.matchMedia("(min-width: 1024px)").matches) {
+        mobileMoreTriggerRef.current?.focus();
+      }
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [mobileMoreOpen]);
+
+  useEffect(() => {
+    if (!mobileMoreOpen) {
+      return;
+    }
+
+    const focusFrame = window.requestAnimationFrame(() => {
+      mobileMoreCloseRef.current?.focus();
+    });
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        closeMobileMore(true);
+        return;
+      }
+
+      if (event.key !== "Tab") {
+        return;
+      }
+
+      const dialog = mobileMoreDialogRef.current;
+      if (!dialog) {
+        return;
+      }
+
+      const controls = getVisibleMobileMoreControls(dialog);
+      const firstControl = controls[0];
+      const lastControl = controls.at(-1);
+
+      if (!firstControl || !lastControl) {
+        event.preventDefault();
+        dialog.focus();
+        return;
+      }
+
+      if (!dialog.contains(document.activeElement)) {
+        event.preventDefault();
+        (event.shiftKey ? lastControl : firstControl).focus();
+        return;
+      }
+
+      if (event.shiftKey && document.activeElement === firstControl) {
+        event.preventDefault();
+        lastControl.focus();
+      } else if (!event.shiftKey && document.activeElement === lastControl) {
+        event.preventDefault();
+        firstControl.focus();
+      }
+    }
+
+    const desktopQuery = window.matchMedia("(min-width: 1024px)");
+    function handleDesktopChange(event: MediaQueryListEvent) {
+      if (event.matches) {
+        closeMobileMore(false);
+      }
+    }
+
+    document.addEventListener("keydown", handleKeyDown);
+    desktopQuery.addEventListener("change", handleDesktopChange);
+
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      document.removeEventListener("keydown", handleKeyDown);
+      desktopQuery.removeEventListener("change", handleDesktopChange);
+    };
+  }, [closeMobileMore, mobileMoreOpen]);
 
   useEffect(() => {
     let active = true;
@@ -709,12 +828,16 @@ export function AppShell({ activeItem = "Home", children }: AppShellProps) {
       <a
         className="fixed left-[calc(1rem+var(--ui-safe-area-left))] top-[calc(1rem+var(--ui-safe-area-top))] z-50 -translate-y-[calc(100%+3rem)] rounded-ui border border-line bg-surface px-4 py-3 text-sm font-semibold text-content-primary shadow-overlay transition-transform focus:translate-y-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
         href="#workspace-main-content"
+        inert={mobileMoreOpen ? true : undefined}
       >
         Skip to main content
       </a>
       <div className="pointer-events-none fixed inset-0 bg-[#F8FAFC]" />
 
-      <div className="relative flex h-full overflow-hidden">
+      <div
+        className="relative flex h-full overflow-hidden"
+        inert={mobileMoreOpen ? true : undefined}
+      >
         <aside className="coachos-sidebar hidden h-full w-72 shrink-0 overflow-y-auto border-r border-[#2ECBEA]/15 bg-[#0B2A3D] px-4 py-5 text-white shadow-lg shadow-[#0B2A3D]/10 lg:block">
           <Link
             className="flex items-center gap-3 rounded-xl px-2 py-2 transition hover:bg-white/5"
@@ -793,7 +916,12 @@ export function AppShell({ activeItem = "Home", children }: AppShellProps) {
           </nav>
         </aside>
 
-        <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-y-auto pb-[calc(6rem+var(--ui-safe-area-bottom))] lg:pb-0">
+        <div
+          className={[
+            "flex h-full min-h-0 min-w-0 flex-1 flex-col pb-[calc(6rem+var(--ui-safe-area-bottom))] lg:pb-0",
+            mobileMoreOpen ? "overflow-y-hidden" : "overflow-y-auto",
+          ].join(" ")}
+        >
           <header className="sticky top-0 z-20 border-b border-[#D8E8F0] bg-white/90 pt-[var(--ui-safe-area-top)] text-[#0B2A3D] shadow-sm shadow-[#0B2A3D]/5 backdrop-blur-xl">
             <div className="flex h-18 min-h-18 items-center justify-between gap-3 pb-3 pl-[calc(1.25rem+var(--ui-safe-area-left))] pr-[calc(1.25rem+var(--ui-safe-area-right))] pt-3 sm:pl-[calc(1.5rem+var(--ui-safe-area-left))] sm:pr-[calc(1.5rem+var(--ui-safe-area-right))] lg:pl-[calc(2rem+var(--ui-safe-area-left))] lg:pr-[calc(2rem+var(--ui-safe-area-right))]">
               <div className="flex min-w-0 items-center gap-3">
@@ -857,72 +985,6 @@ export function AppShell({ activeItem = "Home", children }: AppShellProps) {
           </main>
         </div>
 
-        {mobileMoreOpen ? (
-          <div className="fixed inset-0 z-30 bg-[#0B1F33]/30 backdrop-blur-[2px] lg:hidden">
-            <button
-              aria-label="Close navigation menu"
-              className="absolute inset-0 h-full w-full cursor-default"
-              onClick={() => setMobileMoreOpen(false)}
-              type="button"
-            />
-            <section
-              aria-label="More workspace navigation"
-              className="absolute inset-x-3 bottom-24 max-h-[68vh] overflow-hidden rounded-xl border border-[#D8E8F0] bg-white text-[#0B2A3D] shadow-2xl shadow-[#0B2A3D]/20"
-              id="mobile-more-navigation"
-            >
-              <div className="flex items-center justify-between border-b border-[#D8E8F0] px-4 py-3">
-                <div>
-                  <p className="text-sm font-semibold">More modules</p>
-                  <p className="text-xs text-[#475569]">
-                    Available for your current role and workspace.
-                  </p>
-                </div>
-                <button
-                  className="rounded-lg border border-[#D8E8F0] px-3 py-2 text-xs font-semibold text-[#425B76] transition hover:bg-[#F3FAFD] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2ECBEA]"
-                  onClick={() => setMobileMoreOpen(false)}
-                  type="button"
-                >
-                  Close
-                </button>
-              </div>
-              <div className="max-h-[52vh] overflow-y-auto p-3">
-                <div className="grid gap-2">
-                  {mobileOverflowNavItems.map((item) => {
-                    const active = item.label === activeItem;
-
-                    return (
-                      <Link
-                        aria-current={active ? "page" : undefined}
-                        className={[
-                          "flex items-center gap-3 rounded-lg border px-3 py-3 text-sm font-semibold transition",
-                          active
-                            ? "border-[#9ADDEA] bg-[#EAF8FC] text-[#0B2A3D]"
-                            : "border-transparent text-[#425B76] hover:border-[#D8E8F0] hover:bg-[#F6FBFE] hover:text-[#0B2A3D]",
-                        ].join(" ")}
-                        href={item.href}
-                        key={item.label}
-                        onClick={() => setMobileMoreOpen(false)}
-                      >
-                        <span
-                          className={[
-                            "flex h-9 w-9 items-center justify-center rounded-lg",
-                            active
-                              ? "bg-[#0B2A3D] text-[#2ECBEA]"
-                              : "bg-[#EAF7FC] text-[#145DA0]",
-                          ].join(" ")}
-                        >
-                          <NavIcon label={item.label} />
-                        </span>
-                        <span>{getNavItemLabel(item)}</span>
-                      </Link>
-                    );
-                  })}
-                </div>
-              </div>
-            </section>
-          </div>
-        ) : null}
-
         <nav
           aria-label="Workspace navigation"
           className={
@@ -973,13 +1035,18 @@ export function AppShell({ activeItem = "Home", children }: AppShellProps) {
               <button
                 aria-controls="mobile-more-navigation"
                 aria-expanded={mobileMoreOpen}
+                aria-haspopup="dialog"
                 className={[
                   "flex flex-col items-center justify-center gap-1 rounded-xl px-2 py-2 text-[11px] font-medium transition",
                   mobileMoreOpen || mobileOverflowActive
                     ? "bg-[#EAF7FC] text-[#06202A] shadow-lg shadow-[#145DA0]/20"
                     : "text-[#475569] hover:bg-[#EAF7FC] hover:text-[#0B2A3D]",
                 ].join(" ")}
-                onClick={() => setMobileMoreOpen((open) => !open)}
+                onClick={() => {
+                  restoreMobileMoreFocusRef.current = false;
+                  setMobileMoreOpen(true);
+                }}
+                ref={mobileMoreTriggerRef}
                 type="button"
               >
                 <span className="text-[10px] font-bold">
@@ -991,6 +1058,84 @@ export function AppShell({ activeItem = "Home", children }: AppShellProps) {
           </div>
         </nav>
       </div>
+
+      {mobileMoreOpen ? (
+        <div
+          className="fixed inset-0 z-[60] bg-[#0B1F33]/30 backdrop-blur-[2px] lg:hidden"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              closeMobileMore(true);
+            }
+          }}
+        >
+          <section
+            aria-labelledby="mobile-more-navigation-title"
+            aria-modal="true"
+            className="absolute bottom-[calc(6rem+var(--ui-safe-area-bottom))] left-[calc(0.75rem+var(--ui-safe-area-left))] right-[calc(0.75rem+var(--ui-safe-area-right))] flex max-h-[min(68%,calc(var(--ui-viewport-height)-7.5rem-var(--ui-safe-area-top)-var(--ui-safe-area-bottom)))] flex-col overflow-hidden rounded-xl border border-[#D8E8F0] bg-white text-[#0B2A3D] shadow-2xl shadow-[#0B2A3D]/20"
+            id="mobile-more-navigation"
+            ref={mobileMoreDialogRef}
+            role="dialog"
+            tabIndex={-1}
+          >
+            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[#D8E8F0] px-4 py-3">
+              <div className="min-w-0">
+                <h2
+                  className="text-sm font-semibold"
+                  id="mobile-more-navigation-title"
+                >
+                  More workspace navigation
+                </h2>
+                <p className="text-xs text-[#475569]">
+                  Available for your current role and workspace.
+                </p>
+              </div>
+              <button
+                aria-label="Close More navigation"
+                className="min-h-11 shrink-0 rounded-lg border border-[#D8E8F0] px-3 py-2 text-xs font-semibold text-[#425B76] transition hover:bg-[#F3FAFD] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2ECBEA]"
+                onClick={() => closeMobileMore(true)}
+                ref={mobileMoreCloseRef}
+                type="button"
+              >
+                Close
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3">
+              <div className="grid gap-2">
+                {mobileOverflowNavItems.map((item) => {
+                  const active = item.label === activeItem;
+
+                  return (
+                    <Link
+                      aria-current={active ? "page" : undefined}
+                      className={[
+                        "flex items-center gap-3 rounded-lg border px-3 py-3 text-sm font-semibold transition",
+                        active
+                          ? "border-[#9ADDEA] bg-[#EAF8FC] text-[#0B2A3D]"
+                          : "border-transparent text-[#425B76] hover:border-[#D8E8F0] hover:bg-[#F6FBFE] hover:text-[#0B2A3D]",
+                      ].join(" ")}
+                      href={item.href}
+                      key={item.label}
+                      onClick={() => closeMobileMore(active)}
+                    >
+                      <span
+                        className={[
+                          "flex h-9 w-9 items-center justify-center rounded-lg",
+                          active
+                            ? "bg-[#0B2A3D] text-[#2ECBEA]"
+                            : "bg-[#EAF7FC] text-[#145DA0]",
+                        ].join(" ")}
+                      >
+                        <NavIcon label={item.label} />
+                      </span>
+                      <span>{getNavItemLabel(item)}</span>
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          </section>
+        </div>
+      ) : null}
     </div>
   );
 }
