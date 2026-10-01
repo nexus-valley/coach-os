@@ -18,29 +18,38 @@ export function SectionHeader({
   return (
     <div
       className={[
-        "flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between",
+        "flex min-w-0 flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between",
         className,
       ]
         .filter(Boolean)
         .join(" ")}
     >
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1 sm:min-w-64">
         {eyebrow ? (
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#0E7490]">
+          <p className="text-xs font-semibold uppercase tracking-normal text-status-info">
             {eyebrow}
           </p>
         ) : null}
-        <h2 className="text-xl font-semibold tracking-normal text-[#0B1F33]">
+        <h2
+          className={[
+            "break-words text-xl font-semibold tracking-normal text-content-primary",
+            eyebrow ? "mt-2" : "",
+          ]
+            .filter(Boolean)
+            .join(" ")}
+        >
           {title}
         </h2>
         {description ? (
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-[#334155]">
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-content-secondary">
             {description}
           </p>
         ) : null}
       </div>
       {actions ? (
-        <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>
+        <div className="flex w-full min-w-0 max-w-full flex-col items-stretch gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+          {actions}
+        </div>
       ) : null}
     </div>
   );
