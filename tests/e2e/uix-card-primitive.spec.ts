@@ -12,6 +12,7 @@ import postcss from "postcss";
 import { createElement, type ReactElement } from "react";
 import ts from "typescript";
 
+import { Badge } from "../../src/components/ui/Badge";
 import { Card } from "../../src/components/ui/Card";
 import { StatCard } from "../../src/components/ui/StatCard";
 import { TableShell } from "../../src/components/ui/TableShell";
@@ -25,6 +26,11 @@ const screenshotDirectory = join(
   root,
   "support-ops",
   "uix-1e3b1-screenshots",
+);
+const statCardScreenshotDirectory = join(
+  root,
+  "support-ops",
+  "uix-1e3b2-screenshots",
 );
 
 const globalsSource = readFileSync(globalsPath, "utf8");
@@ -659,9 +665,9 @@ test.describe("UIX-1E3B1 Card primitive contract", () => {
     await expect(page.locator(".proof-stat-long")).toHaveCSS("padding", "20px");
     await expect(page.locator(".proof-stat-long p").nth(1)).toHaveCSS(
       "font-size",
-      "30px",
+      "24px",
     );
-    expect(statCardSource).toContain("text-3xl");
+    expect(statCardSource).toContain("text-2xl");
     expect(tableShellSource).toContain('"overflow-hidden bg-white"');
     expect(
       await page.locator(".proof-stat-long").evaluate(
@@ -712,4 +718,459 @@ test.describe("UIX-1E3B1 Card primitive contract", () => {
     expect(hasVisibleShadow("rgba(0, 0, 0, 0) 0px 0px 0px")).toBe(false);
     expect(hasVisibleShadow("rgba(0, 0, 0, 0.1) 0px 1px 2px")).toBe(true);
   });
+});
+
+type StatCardUse = {
+  file: string;
+  props: Record<
+    "className" | "description" | "label" | "status" | "trend" | "value",
+    boolean
+  >;
+};
+
+function statCardInventory() {
+  const uses: StatCardUse[] = [];
+  for (const file of [
+    ...sourceFiles(join(root, "app")),
+    ...sourceFiles(join(root, "src")),
+  ]) {
+    const source = readFileSync(file, "utf8");
+    const sourceFile = ts.createSourceFile(
+      file,
+      source,
+      ts.ScriptTarget.Latest,
+      true,
+      file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+    );
+    const visit = (node: ts.Node) => {
+      const opening = ts.isJsxElement(node)
+        ? node.openingElement
+        : ts.isJsxSelfClosingElement(node)
+          ? node
+          : null;
+      if (opening?.tagName.getText(sourceFile) === "StatCard") {
+        const hasProp = (name: string) =>
+          opening.attributes.properties.some(
+            (attribute) =>
+              ts.isJsxAttribute(attribute) &&
+              attribute.name.getText(sourceFile) === name,
+          );
+        uses.push({
+          file: relative(root, file).replaceAll("\\", "/"),
+          props: {
+            className: hasProp("className"),
+            description: hasProp("description"),
+            label: hasProp("label"),
+            status: hasProp("status"),
+            trend: hasProp("trend"),
+            value: hasProp("value"),
+          },
+        });
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(sourceFile);
+  }
+  return uses;
+}
+
+function renderStatCard(
+  props: Parameters<typeof StatCard>[0] & { className: string },
+) {
+  return serializeElement(StatCard(props));
+}
+
+function legacyStatCardReference() {
+  return serializeElement(
+    Card({
+      children: createElement(
+        "div",
+        null,
+        createElement(
+          "div",
+          { className: "flex items-start justify-between gap-4" },
+          createElement(
+            "p",
+            { className: "text-sm font-semibold text-[#334155]" },
+            "Recorded student revenue",
+          ),
+        ),
+        createElement(
+          "div",
+          { className: "mt-4 flex items-end gap-3" },
+          createElement(
+            "p",
+            {
+              className:
+                "legacy-value text-3xl font-semibold tracking-normal text-[#0B1F33]",
+            },
+            "INR 5,99,999.00",
+          ),
+        ),
+        createElement(
+          "p",
+          { className: "mt-3 text-sm leading-6 text-[#475569]" },
+          "Student payments recorded by your workspace.",
+        ),
+      ),
+      className: "legacy-reference",
+      padding: "md",
+    }),
+  );
+}
+
+function actualStatCardHarness() {
+  const status = Badge({ children: "Ready", tone: "success" });
+  const cases = [
+    renderStatCard({ className: "case-short", label: "Students", value: "100" }),
+    renderStatCard({
+      className: "case-long-label",
+      label: "Recorded student revenue",
+      value: "INR 5,99,999.00",
+    }),
+    renderStatCard({
+      className: "case-currency",
+      label: "Outstanding student payment balance",
+      value: "INR 5,99,999.00",
+    }),
+    renderStatCard({
+      className: "case-date",
+      label: "Last billing profile update",
+      value: "September 30, 2026",
+    }),
+    renderStatCard({
+      className: "case-description",
+      description:
+        "Complete the missing billing readiness and support fields before payment operations go live for this workspace.",
+      label: "Billing readiness",
+      value: "72%",
+    }),
+    renderStatCard({
+      className: "case-status",
+      label: "Workspace readiness",
+      status,
+      value: "Operational",
+    }),
+    renderStatCard({
+      className: "case-description-status",
+      description:
+        "Required onboarding fields are ready and remain available for owner and administrator review.",
+      label: "Commercial profile",
+      status,
+      value: "Complete",
+    }),
+    renderStatCard({
+      className: "case-trend",
+      label: "Attendance",
+      trend: createElement("span", { className: "text-status-success" }, "+4%"),
+      value: "96%",
+    }),
+    legacyStatCardReference(),
+  ];
+  return `<div class="proof-grid">${cases
+    .map(
+      (markup, index) =>
+        `<section class="proof-case" data-stat-case="${index}">${markup}</section>`,
+    )
+    .join("")}</div><style>
+      .proof-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px}
+      .proof-case{min-width:0}
+      @media(max-width:767px){.proof-grid{grid-template-columns:minmax(0,1fr)}}
+    </style>`;
+}
+
+async function computedTypography(page: Page, selector: string) {
+  return page.locator(selector).evaluate((element) => {
+    const style = getComputedStyle(element);
+    return {
+      color: style.color,
+      fontSize: style.fontSize,
+      fontWeight: style.fontWeight,
+      lineHeight: style.lineHeight,
+    };
+  });
+}
+
+const expectedStatCardFiles = {
+  "src/components/billing/BillingProfilePageClient.tsx": 3,
+  "src/components/dashboard/AdminDashboard.tsx": 4,
+  "src/components/dashboard/DashboardPageClient.tsx": 1,
+  "src/components/dashboard/OwnerDashboard.tsx": 4,
+  "src/components/dashboard/StaffDashboard.tsx": 4,
+  "src/components/dashboard/TrainerDashboard.tsx": 4,
+  "src/components/documents/DocumentCenterPage.tsx": 1,
+  "src/components/finance/FinanceCenterPage.tsx": 1,
+  "src/components/messages/MessagesPageClient.tsx": 1,
+  "src/components/portal/StudentPortalAssignments.tsx": 3,
+  "src/components/portal/StudentPortalCertificates.tsx": 1,
+  "src/components/portal/StudentPortalCourses.tsx": 3,
+  "src/components/portal/StudentPortalDashboard.tsx": 6,
+  "src/components/portal/StudentPortalDocuments.tsx": 3,
+  "src/components/portal/StudentPortalPayments.tsx": 3,
+  "src/components/portal/StudentPortalSessions.tsx": 2,
+};
+
+test.describe("UIX-1E3B2 StatCard density and semantic typography", () => {
+  test.describe.configure({ mode: "serial", timeout: 90_000 });
+
+  test.beforeAll(() => {
+    rmSync(statCardScreenshotDirectory, { force: true, recursive: true });
+    mkdirSync(statCardScreenshotDirectory, { recursive: true });
+  });
+
+  test("preserves the exact API and server-compatible boundary", () => {
+    expect(statCardSource).toContain("type StatCardProps = {");
+    for (const contract of [
+      "className?: string;",
+      "description?: ReactNode;",
+      "label: ReactNode;",
+      "status?: ReactNode;",
+      "trend?: ReactNode;",
+      "value: ReactNode;",
+    ]) {
+      expect(statCardSource).toContain(contract);
+    }
+    expect(statCardSource).not.toContain('"use client"');
+    expect(statCardSource).not.toMatch(/\buse(?:Effect|State|Memo|Ref)\b/);
+    expect(statCardSource).not.toMatch(
+      /\b(?:window|document|localStorage|sessionStorage)\b/,
+    );
+  });
+
+  test("retains the frozen Card dependency and 20px padding contract", () => {
+    expect(statCardSource).toContain('<Card className={className} padding="md">');
+    expect(statCardSource).not.toContain("variant=");
+    expect(statCardSource).not.toContain("interactive");
+    expect(cardSource).toContain('md: "p-5"');
+  });
+
+  test("locks the 44-use, 16-file consumer inventory", () => {
+    const uses = statCardInventory();
+    expect(uses).toHaveLength(44);
+    const byFile = Object.fromEntries(
+      [...new Set(uses.map((use) => use.file))]
+        .sort()
+        .map((file) => [file, uses.filter((use) => use.file === file).length]),
+    );
+    expect(byFile).toEqual(expectedStatCardFiles);
+  });
+
+  test("locks the exact prop-use inventory", () => {
+    const uses = statCardInventory();
+    const count = (prop: keyof StatCardUse["props"]) =>
+      uses.filter((use) => use.props[prop]).length;
+    expect({
+      className: count("className"),
+      description: count("description"),
+      label: count("label"),
+      status: count("status"),
+      trend: count("trend"),
+      value: count("value"),
+    }).toEqual({
+      className: 0,
+      description: 8,
+      label: 44,
+      status: 4,
+      trend: 0,
+      value: 44,
+    });
+  });
+
+  test("uses only the approved semantic typography contract", () => {
+    expect(statCardSource).toContain(
+      'className="text-sm font-semibold text-content-secondary"',
+    );
+    expect(statCardSource).toContain(
+      'className="text-2xl font-semibold tracking-normal text-content-primary"',
+    );
+    expect(statCardSource).toContain(
+      'className="mt-3 text-sm leading-6 text-content-secondary"',
+    );
+    expect(statCardSource).not.toMatch(/#[0-9a-f]{3,8}/i);
+    expect(statCardSource).not.toContain("text-3xl");
+    expect(statCardSource).not.toMatch(/(?:sm|md|lg|xl):text-/);
+  });
+
+  test("preserves status and trend compatibility without adding behavior", () => {
+    expect(statCardSource).toContain(
+      '{status ? <div className="shrink-0">{status}</div> : null}',
+    );
+    expect(statCardSource).toContain(
+      '{trend ? <div className="pb-1 text-sm font-semibold">{trend}</div> : null}',
+    );
+    for (const forbidden of [
+      "grid-cols-",
+      "container",
+      "onClick",
+      "tabIndex",
+      "aria-live",
+      "role=",
+      "shadow-",
+      "gradient",
+      "hover:",
+    ]) {
+      expect(statCardSource).not.toContain(forbidden);
+    }
+  });
+
+  test("compiles semantic classes through product-only Tailwind discovery", async () => {
+    const { css, dependencyFiles } = await compiledProductCss();
+    for (const className of [
+      "text-content-primary",
+      "text-content-secondary",
+      "text-2xl",
+      "text-sm",
+      "leading-6",
+      "p-5",
+    ]) {
+      expect(css).toMatch(new RegExp(`\\.${className}`));
+    }
+    expect(globalsSource).toContain('@source "../app";');
+    expect(globalsSource).toContain('@source "../src";');
+    expect(globalsSource).not.toContain("support-ops");
+    expect(globalsSource).not.toContain("tests");
+    expect(globalsSource).not.toContain("safelist");
+    expect(
+      dependencyFiles.some((file) => file.endsWith("StatCard.tsx")),
+    ).toBe(true);
+  });
+
+  test("computes exact typography and inherited Card geometry", async ({ page }) => {
+    await setProductContent(page, actualStatCardHarness());
+    const rootCard = page.locator(".case-description-status");
+    const surface = await computedSurface(page, ".case-description-status");
+    expect(surface).toMatchObject({
+      backgroundColor: "rgb(255, 255, 255)",
+      borderColor: "rgb(216, 232, 240)",
+      borderRadius: "8px",
+      hasVisibleShadow: false,
+      padding: "20px",
+    });
+    await expect(rootCard).toHaveCSS("border-width", "1px");
+    expect(
+      await computedTypography(
+        page,
+        ".case-description-status > div:first-child > p",
+      ),
+    ).toMatchObject({
+      color: "rgb(66, 91, 118)",
+      fontSize: "14px",
+      fontWeight: "600",
+    });
+    expect(
+      await computedTypography(
+        page,
+        ".case-description-status > div:nth-child(2) > p",
+      ),
+    ).toMatchObject({
+      color: "rgb(11, 31, 51)",
+      fontSize: "24px",
+      fontWeight: "600",
+    });
+    expect(
+      await computedTypography(page, ".case-description-status > p:last-child"),
+    ).toMatchObject({
+      color: "rgb(66, 91, 118)",
+      fontSize: "14px",
+      lineHeight: "24px",
+    });
+  });
+
+  test("keeps the visual delta limited to value size and semantic colors", async ({
+    page,
+  }) => {
+    await setProductContent(page, actualStatCardHarness());
+    await expect(page.locator(".legacy-value")).toHaveCSS("font-size", "30px");
+    await expect(
+      page.locator(".case-currency > div:nth-child(2) > p"),
+    ).toHaveCSS("font-size", "24px");
+    for (const selector of [".legacy-reference", ".case-currency"]) {
+      await expect(page.locator(selector)).toHaveCSS("padding", "20px");
+      await expect(page.locator(selector)).toHaveCSS("border-radius", "8px");
+      await expect(page.locator(selector)).toHaveCSS(
+        "background-color",
+        "rgb(255, 255, 255)",
+      );
+    }
+  });
+
+  test("renders representative long content without clipping", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await setProductContent(page, actualStatCardHarness());
+    for (const selector of [
+      ".case-long-label",
+      ".case-currency",
+      ".case-date",
+      ".case-description",
+      ".case-status",
+      ".case-description-status",
+      ".case-trend",
+    ]) {
+      expect(
+        await page.locator(selector).evaluate(
+          (element) => element.scrollWidth <= element.clientWidth + 1,
+        ),
+      ).toBe(true);
+    }
+    await expect(page.getByText("INR 5,99,999.00").first()).toBeVisible();
+    await expect(page.getByText("September 30, 2026")).toBeVisible();
+    await expect(page.getByText("Ready").first()).toBeVisible();
+    await expect(page.getByText("+4%")).toBeVisible();
+  });
+
+  test("keeps typography fixed across viewport widths", async ({ page }) => {
+    for (const width of [390, 768, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      await setProductContent(page, actualStatCardHarness());
+      await expect(
+        page.locator(".case-description-status > div:first-child > p"),
+      ).toHaveCSS("font-size", "14px");
+      await expect(
+        page.locator(".case-description-status > div:nth-child(2) > p"),
+      ).toHaveCSS("font-size", "24px");
+      await expect(
+        page.locator(".case-description-status > p:last-child"),
+      ).toHaveCSS("font-size", "14px");
+      await expect(
+        page.locator(".case-description-status > p:last-child"),
+      ).toHaveCSS("line-height", "24px");
+    }
+  });
+
+  for (const viewport of [
+    { name: "390x844", width: 390, height: 844 },
+    { name: "430x932", width: 430, height: 932 },
+    { name: "768x1024", width: 768, height: 1024 },
+    { name: "1024x768", width: 1024, height: 768 },
+    { name: "1440x900", width: 1440, height: 900 },
+  ]) {
+    test(`renders the actual StatCard graph without overflow at ${viewport.name}`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width: viewport.width, height: viewport.height });
+      await setProductContent(page, actualStatCardHarness());
+      await page.screenshot({
+        animations: "disabled",
+        fullPage: true,
+        path: join(statCardScreenshotDirectory, `${viewport.name}.png`),
+      });
+      expect(
+        await page.evaluate(() => ({
+          body: document.body.scrollWidth - document.body.clientWidth,
+          document:
+            document.documentElement.scrollWidth -
+            document.documentElement.clientWidth,
+        })),
+      ).toEqual({ body: 0, document: 0 });
+      expect(
+        await page.locator("[data-stat-case]").evaluateAll((elements) =>
+          elements.filter(
+            (element) =>
+              element.scrollWidth > element.clientWidth + 1 ||
+              element.scrollHeight > element.clientHeight + 1,
+          ).length,
+        ),
+      ).toBe(0);
+    });
+  }
 });

@@ -22,17 +22,17 @@ export function StatCard({
   return (
     <Card className={className} padding="md">
       <div className="flex items-start justify-between gap-4">
-        <p className="text-sm font-semibold text-[#334155]">{label}</p>
+        <p className="text-sm font-semibold text-content-secondary">{label}</p>
         {status ? <div className="shrink-0">{status}</div> : null}
       </div>
       <div className="mt-4 flex items-end gap-3">
-        <p className="text-3xl font-semibold tracking-normal text-[#0B1F33]">
+        <p className="text-2xl font-semibold tracking-normal text-content-primary">
           {value}
         </p>
         {trend ? <div className="pb-1 text-sm font-semibold">{trend}</div> : null}
       </div>
       {description ? (
-        <p className="mt-3 text-sm leading-6 text-[#475569]">{description}</p>
+        <p className="mt-3 text-sm leading-6 text-content-secondary">{description}</p>
       ) : null}
     </Card>
   );
