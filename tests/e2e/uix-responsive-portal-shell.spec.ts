@@ -532,7 +532,26 @@ test("uses labelled native navigation and one stable horizontal controller", () 
   expect(portalSource).toContain("const updatePortalNavOverflow = useCallback");
   expect(portalSource).toContain("rail.scrollLeft > 1");
   expect(portalSource).toContain("maximumScrollLeft - 1");
-  expect(portalSource).toContain("new ResizeObserver(revealActivePortalItem)");
+  expect(portalSource).toContain("const portalNavFrameRef = useRef<number | null>");
+  expect(portalSource).toContain(
+    "const schedulePortalNavReconciliation = useCallback",
+  );
+  expect(portalSource).toContain(
+    "new ResizeObserver(schedulePortalNavReconciliation)",
+  );
+  expect(portalSource).not.toContain(
+    "new ResizeObserver(revealActivePortalItem)",
+  );
+  expect(portalSource).toContain("schedulePortalNavReconciliation();");
+  expect(portalSource).toContain(
+    'window.addEventListener("resize", schedulePortalNavReconciliation)',
+  );
+  expect(portalSource).toContain(
+    'window.removeEventListener("resize", schedulePortalNavReconciliation)',
+  );
+  expect(portalSource).toContain(
+    "window.cancelAnimationFrame(portalNavFrameRef.current)",
+  );
   expect(portalSource).toContain("window.requestAnimationFrame");
   expect(portalSource).toContain("visiblePortalNavSignature");
   expect(portalSource).toContain("const edgeAllowance = 24");
@@ -755,16 +774,21 @@ test("reveals first, middle, and last active destinations without vertical movem
     const before = await page.evaluate(() => window.scrollY);
     await page.setViewportSize({ width: 430, height: 932 });
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.waitForTimeout(50);
     const active = page.getByRole("link", { name: label, exact: true });
     await expect(active).toHaveAttribute("aria-current", "page");
-    const visibility = await active.evaluate((element) => {
-      const nav = element.closest("nav")!;
-      const item = element.getBoundingClientRect();
-      const rail = nav.getBoundingClientRect();
-      return { left: item.left >= rail.left - 1, right: item.right <= rail.right + 1 };
-    });
-    expect(visibility, label).toEqual({ left: true, right: true });
+    await expect
+      .poll(() =>
+        active.evaluate((element) => {
+          const nav = element.closest("nav")!;
+          const item = element.getBoundingClientRect();
+          const rail = nav.getBoundingClientRect();
+          return {
+            left: item.left >= rail.left - 1,
+            right: item.right <= rail.right + 1,
+          };
+        }),
+      )
+      .toEqual({ left: true, right: true });
     expect(await page.evaluate(() => window.scrollY), label).toBe(before);
     expect(await page.locator('a[aria-current="page"]').count(), label).toBe(1);
   }
@@ -856,4 +880,89 @@ test("remeasures after async feature filtering and responsive resize", async ({ 
     expect(geometry.documentHorizontalOverflow, viewport.name).toBe(false);
     expect(await page.evaluate(() => window.scrollY), viewport.name).toBe(scrollY);
   }
+});
+
+test("reconciles Profile across repeated and broad responsive transitions", async ({
+  page,
+}) => {
+  await openPortal(page, "/portal/profile", "", viewports[1]);
+  await page.evaluate(() => {
+    document.documentElement.style.scrollBehavior = "auto";
+    window.scrollTo(0, 360);
+  });
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThanOrEqual(300);
+  const initialWindowScroll = await page.evaluate(() => window.scrollY);
+  const profile = page.getByRole("link", { name: "Profile", exact: true });
+
+  const expectProfileSettled = async (label: string) => {
+    await expect(profile, label).toHaveAttribute("aria-current", "page");
+    await expect
+      .poll(
+        () =>
+          page.evaluate(() => {
+            const rail = document.querySelector<HTMLElement>(
+              'nav[aria-label="Student portal navigation"]',
+            )!;
+            const active = rail.querySelector<HTMLElement>(
+              'a[aria-current="page"]',
+            )!;
+            const railRect = rail.getBoundingClientRect();
+            const activeRect = active.getBoundingClientRect();
+            return {
+              activeVisible:
+                activeRect.left >= railRect.left - 1 &&
+                activeRect.right <= railRect.right + 1,
+              documentHorizontalOverflow:
+                document.documentElement.scrollWidth >
+                document.documentElement.clientWidth,
+              leftFade: Boolean(
+                document.querySelector('[data-portal-nav-fade="left"]'),
+              ),
+              rightFade: Boolean(
+                document.querySelector('[data-portal-nav-fade="right"]'),
+              ),
+            };
+          }),
+        { message: label },
+      )
+      .toEqual({
+        activeVisible: true,
+        documentHorizontalOverflow: false,
+        leftFade: true,
+        rightFade: false,
+      });
+    expect(await page.evaluate(() => window.scrollY), label).toBe(
+      initialWindowScroll,
+    );
+  };
+
+  await expectProfileSettled("Profile at settled 430x932");
+
+  for (let transition = 1; transition <= 10; transition += 1) {
+    await page.setViewportSize(viewports[0]);
+    await expectProfileSettled(`Profile 430 to 390 transition ${transition}`);
+    if (transition < 10) {
+      await page.setViewportSize(viewports[1]);
+      await expectProfileSettled(`Profile 390 to 430 reset ${transition}`);
+    }
+  }
+
+  await page.setViewportSize(viewports[1]);
+  await expectProfileSettled("Profile 390 to 430");
+  await page.setViewportSize(viewports[0]);
+  await expectProfileSettled("Profile 390 to 430 to 390");
+
+  await page.setViewportSize(viewports[viewports.length - 1]);
+  await expectProfileSettled("Profile 390 to 1440");
+  await page.setViewportSize(viewports[0]);
+  await expectProfileSettled("Profile 390 to 1440 to 390");
+
+  await page.setViewportSize(viewports[1]);
+  await expectProfileSettled("Profile broad sequence at 430");
+  await page.setViewportSize(viewports[0]);
+  await expectProfileSettled("Profile broad sequence at first 390");
+  await page.setViewportSize(viewports[1]);
+  await expectProfileSettled("Profile broad sequence back at 430");
+  await page.setViewportSize(viewports[0]);
+  await expectProfileSettled("Profile 430 to 390 to 430 to 390");
 });

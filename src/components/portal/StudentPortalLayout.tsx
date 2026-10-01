@@ -85,6 +85,7 @@ export function StudentPortalLayout({
   const [featureAccessLoaded, setFeatureAccessLoaded] = useState(false);
   const [settings, setSettings] = useState<TenantSettings | null>(null);
   const portalNavRef = useRef<HTMLElement>(null);
+  const portalNavFrameRef = useRef<number | null>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
 
@@ -185,23 +186,36 @@ export function StudentPortalLayout({
     );
     updatePortalNavOverflow();
   }, [updatePortalNavOverflow]);
+  const schedulePortalNavReconciliation = useCallback(() => {
+    if (portalNavFrameRef.current !== null) {
+      window.cancelAnimationFrame(portalNavFrameRef.current);
+    }
+
+    portalNavFrameRef.current = window.requestAnimationFrame(() => {
+      portalNavFrameRef.current = null;
+      revealActivePortalItem();
+    });
+  }, [revealActivePortalItem]);
 
   useEffect(() => {
     const rail = portalNavRef.current;
-    const animationFrame = window.requestAnimationFrame(
-      revealActivePortalItem,
-    );
-    const resizeObserver = new ResizeObserver(revealActivePortalItem);
+    const resizeObserver = new ResizeObserver(schedulePortalNavReconciliation);
 
     if (rail) {
       resizeObserver.observe(rail);
     }
+    window.addEventListener("resize", schedulePortalNavReconciliation);
+    schedulePortalNavReconciliation();
 
     return () => {
-      window.cancelAnimationFrame(animationFrame);
+      window.removeEventListener("resize", schedulePortalNavReconciliation);
+      if (portalNavFrameRef.current !== null) {
+        window.cancelAnimationFrame(portalNavFrameRef.current);
+        portalNavFrameRef.current = null;
+      }
       resizeObserver.disconnect();
     };
-  }, [pathname, revealActivePortalItem, visiblePortalNavSignature]);
+  }, [pathname, schedulePortalNavReconciliation, visiblePortalNavSignature]);
   const activePortalItem = portalNavItems.find(
     (item) =>
       pathname === item.href ||
