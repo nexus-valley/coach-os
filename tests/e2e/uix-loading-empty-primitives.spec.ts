@@ -70,6 +70,7 @@ const emptyStateConsumerCounts = {
   "src/components/automations/AutomationsPageClient.tsx": 1,
   "src/components/cohorts/CohortsPageClient.tsx": 1,
   "src/components/community/CommunityPageClient.tsx": 2,
+  "src/components/courses/CoursesPageClient.tsx": 1,
   "src/components/documents/DocumentCenterPage.tsx": 1,
   "src/components/enrollment-requests/EnrollmentRequestsPageClient.tsx": 3,
   "src/components/enrollments/EnrollmentsPageClient.tsx": 1,
@@ -107,6 +108,7 @@ const emptyStatePlacementOwners = {
     "mx-auto max-w-7xl space-y-6",
     "mx-auto max-w-7xl space-y-6",
   ],
+  "src/components/courses/CoursesPageClient.tsx": ["flex flex-col gap-8"],
   "src/components/documents/DocumentCenterPage.tsx": ["space-y-4"],
   "src/components/enrollment-requests/EnrollmentRequestsPageClient.tsx": [
     null,
@@ -639,7 +641,7 @@ test.describe("UIX-1C4C Skeleton and EmptyState", () => {
 
   test("preserves exact consumer boundaries", () => {
     expect(consumerInventory("Skeleton")).toEqual({ fileCount: 11, uses: 55 });
-    expect(consumerInventory("EmptyState")).toEqual({ fileCount: 25, uses: 33 });
+    expect(consumerInventory("EmptyState")).toEqual({ fileCount: 26, uses: 34 });
   });
 
   test("reviews every EmptyState consumer and preserves its frozen call contract", () => {
@@ -651,8 +653,8 @@ test.describe("UIX-1C4C Skeleton and EmptyState", () => {
       ]),
     );
     expect(counts).toEqual(emptyStateConsumerCounts);
-    expect(inventory).toHaveLength(33);
-    expect(new Set(inventory.map((use) => use.file)).size).toBe(25);
+    expect(inventory).toHaveLength(34);
+    expect(new Set(inventory.map((use) => use.file)).size).toBe(26);
     expect(inventory.every((use) => use.size === null)).toBe(true);
     expect(inventory.every((use) => !use.classNameProp)).toBe(true);
 

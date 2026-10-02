@@ -49,6 +49,7 @@ const expectedPageHeaderFiles = [
   "src/components/announcements/AnnouncementsPageClient.tsx",
   "src/components/billing/BillingProfilePageClient.tsx",
   "src/components/community/CommunityPageClient.tsx",
+  "src/components/courses/CoursesPageClient.tsx",
   "src/components/dashboard/DashboardPageClient.tsx",
   "src/components/documents/DocumentCenterPage.tsx",
   "src/components/enrollment-requests/EnrollmentRequestsPageClient.tsx",
@@ -432,9 +433,9 @@ test.describe("UIX-1E2 PageHeader and SectionHeader", () => {
 
   test("preserves the exact current consumer inventories", () => {
     expect(consumerInventory("PageHeader")).toEqual({
-      fileCount: 24,
+      fileCount: 25,
       files: [...expectedPageHeaderFiles],
-      uses: 25,
+      uses: 26,
     });
     expect(consumerInventory("SectionHeader")).toEqual({
       fileCount: 26,

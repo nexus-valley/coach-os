@@ -412,14 +412,14 @@ test.describe("UIX-1E3B1 Card primitive contract", () => {
     expect(element.props.onClick).toBeUndefined();
   });
 
-  test("locks the 374-call inventory, variants, padding, and zero interactive use", () => {
+  test("locks the 373-call inventory, variants, padding, and zero interactive use", () => {
     const uses = cardInventory();
-    expect(uses).toHaveLength(374);
+    expect(uses).toHaveLength(373);
     expect(new Set(uses.map((use) => use.file)).size).toBe(84);
 
     const variant = (value: string) =>
       uses.filter((use) => use.variant.source === value).length;
-    expect(uses.filter((use) => use.variant.kind === "absent")).toHaveLength(372);
+    expect(uses.filter((use) => use.variant.kind === "absent")).toHaveLength(371);
     expect(variant("default")).toBe(0);
     expect(variant("subtle")).toBe(1);
     expect(variant("elevated")).toBe(1);
@@ -435,11 +435,11 @@ test.describe("UIX-1E3B1 Card primitive contract", () => {
       "src/components/billing/BillingProfilePageClient.tsx",
     ]);
 
-    expect(uses.filter((use) => use.padding.kind === "absent")).toHaveLength(371);
+    expect(uses.filter((use) => use.padding.kind === "absent")).toHaveLength(367);
     expect(uses.filter((use) => use.padding.source === "none")).toHaveLength(0);
     expect(uses.filter((use) => use.padding.source === "sm")).toHaveLength(0);
-    expect(uses.filter((use) => use.padding.source === "md")).toHaveLength(2);
-    expect(uses.filter((use) => use.padding.source === "lg")).toHaveLength(1);
+    expect(uses.filter((use) => use.padding.source === "md")).toHaveLength(4);
+    expect(uses.filter((use) => use.padding.source === "lg")).toHaveLength(2);
     expect(uses.filter((use) => use.padding.kind === "dynamic")).toHaveLength(0);
     expect(
       uses.filter(
@@ -893,6 +893,7 @@ async function computedTypography(page: Page, selector: string) {
 
 const expectedStatCardFiles = {
   "src/components/billing/BillingProfilePageClient.tsx": 3,
+  "src/components/courses/CoursesPageClient.tsx": 3,
   "src/components/dashboard/AdminDashboard.tsx": 4,
   "src/components/dashboard/DashboardPageClient.tsx": 1,
   "src/components/dashboard/OwnerDashboard.tsx": 4,
@@ -944,9 +945,9 @@ test.describe("UIX-1E3B2 StatCard density and semantic typography", () => {
     expect(cardSource).toContain('md: "p-5"');
   });
 
-  test("locks the 44-use, 16-file consumer inventory", () => {
+  test("locks the 47-use, 17-file consumer inventory", () => {
     const uses = statCardInventory();
-    expect(uses).toHaveLength(44);
+    expect(uses).toHaveLength(47);
     const byFile = Object.fromEntries(
       [...new Set(uses.map((use) => use.file))]
         .sort()
@@ -969,10 +970,10 @@ test.describe("UIX-1E3B2 StatCard density and semantic typography", () => {
     }).toEqual({
       className: 0,
       description: 8,
-      label: 44,
+      label: 47,
       status: 4,
       trend: 0,
-      value: 44,
+      value: 47,
     });
   });
 

@@ -7,10 +7,14 @@ import { useEffect, useState } from "react";
 import { Badge } from "@/src/components/ui/Badge";
 import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
+import { EmptyState } from "@/src/components/ui/EmptyState";
 import { FeedbackAlert } from "@/src/components/ui/FeedbackAlert";
 import { FormField } from "@/src/components/ui/FormField";
+import { PageContainer } from "@/src/components/ui/PageContainer";
+import { PageHeader } from "@/src/components/ui/PageHeader";
 import { SectionHeader } from "@/src/components/ui/SectionHeader";
 import { Skeleton } from "@/src/components/ui/Skeleton";
+import { StatCard } from "@/src/components/ui/StatCard";
 import {
   createCourse,
   getCoursesForTenant,
@@ -267,73 +271,51 @@ export function CoursesPageClient() {
   const draftCourses = courses.filter((course) => course.status === "draft").length;
 
   return (
-    <div className="mx-auto max-w-7xl">
-      <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
-        <div>
-          <Badge tone="owner">Programs</Badge>
-          <h1 className="mt-4 text-3xl font-semibold tracking-normal text-[#0B1F33] sm:text-4xl">
-            Create, publish, and share programs
-          </h1>
-          <p className="mt-3 max-w-3xl text-base leading-7 text-[#425B76]">
-            Build each coaching offer, prepare the page students will see, and
-            follow enrollment requests through to access.
-          </p>
-        </div>
-        {canManage ? (
-          <Button onClick={() => setFormOpen(true)} size="lg" type="button">
-            Create program
-          </Button>
-        ) : null}
-      </div>
+    <PageContainer className="flex flex-col gap-8" width="full">
+      <PageHeader
+        actions={
+          canManage ? (
+            <Button onClick={() => setFormOpen(true)} size="lg" type="button">
+              Create program
+            </Button>
+          ) : undefined
+        }
+        description="Build each coaching offer, prepare the page students will see, and follow enrollment requests through to access."
+        eyebrow="Programs"
+        title="Create, publish, and share programs"
+      />
 
-      <Card className="mt-8 border-[#D8E8F0] bg-white p-5 text-[#0B1F33] shadow-sm shadow-[#0B2A3D]/5 sm:p-6">
-        <div className="grid gap-5 lg:grid-cols-[1.1fr_1.4fr] lg:items-center">
-          <div>
-            <p className="text-sm font-medium text-[#5D7185]">Current workspace</p>
-            <p className="mt-1 text-xl font-semibold">
-              {tenant?.name ?? "Loading workspace..."}
-            </p>
-            <p className="mt-3 text-sm leading-6 text-[#425B76]">
-              Open a program to prepare its public request page, preview what
-              students will see, and review enrollment requests.
-            </p>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-3">
-            <div className="rounded-lg border border-[#D8E8F0] bg-[#F6FBFE] p-4">
-              <p className="text-2xl font-semibold">{courses.length}</p>
-              <p className="mt-1 text-sm text-[#5D7185]">Total programs</p>
-            </div>
-            <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
-              <p className="text-2xl font-semibold text-emerald-800">
-                {publishedCourses}
-              </p>
-              <p className="mt-1 text-sm text-emerald-700">Published</p>
-            </div>
-            <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
-              <p className="text-2xl font-semibold text-amber-800">
-                {draftCourses}
-              </p>
-              <p className="mt-1 text-sm text-amber-700">Private drafts</p>
-            </div>
-          </div>
-        </div>
-      </Card>
+      <section
+        aria-label="Program overview"
+        className="grid gap-4 sm:grid-cols-3 xl:grid-cols-[1.4fr_repeat(3,minmax(0,1fr))]"
+      >
+        <Card className="sm:col-span-3 xl:col-span-1" padding="md">
+          <p className="text-sm font-medium text-content-secondary">
+            Current workspace
+          </p>
+          <p className="mt-1 text-xl font-semibold text-content-primary">
+            {tenant?.name ?? "Loading workspace..."}
+          </p>
+          <p className="mt-3 text-sm leading-6 text-content-secondary">
+            Open a program to prepare its public request page, preview what
+            students will see, and review enrollment requests.
+          </p>
+        </Card>
+        <StatCard label="Total programs" value={courses.length} />
+        <StatCard label="Published" value={publishedCourses} />
+        <StatCard label="Private drafts" value={draftCourses} />
+      </section>
 
       {error ? (
-        <div className="mt-6">
-          <FeedbackAlert onRetry={() => window.location.reload()}>
-            {error}
-          </FeedbackAlert>
-        </div>
+        <FeedbackAlert onRetry={() => window.location.reload()}>
+          {error}
+        </FeedbackAlert>
       ) : null}
 
       {loading ? (
-        <section className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {[0, 1, 2].map((item) => (
-            <Card
-              className="border-[#D8E8F0] bg-white p-6"
-              key={item}
-            >
+            <Card key={item} padding="lg">
               <span className="sr-only">Loading program</span>
               <Skeleton className="h-6 w-24 bg-[#D8E8F0]" />
               <Skeleton className="mt-8 h-8 w-3/4 bg-[#D8E8F0]" />
@@ -344,22 +326,18 @@ export function CoursesPageClient() {
           ))}
         </section>
       ) : courses.length === 0 ? (
-        <Card className="mt-6 border-dashed border-[#BFD7E6] bg-white p-7 text-center text-[#0B1F33] shadow-sm sm:p-10">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg bg-[#EAF7FC] text-sm font-bold text-[#0E7490]">
-            01
-          </div>
-          <h2 className="mt-5 text-2xl font-semibold">Create your first program</h2>
-          <p className="mx-auto mt-3 max-w-2xl text-sm leading-6 text-[#425B76]">
-            Start with the offer students will request. After creation, add the
-            public summary, pricing or payment guidance, and shareable page.
-          </p>
-          <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
-            {canManage ? (
+        <EmptyState
+          action={
+            canManage ? (
               <Button onClick={() => setFormOpen(true)} type="button">
                 Create program
               </Button>
-            ) : null}
-            {canManage ? (
+            ) : undefined
+          }
+          description="Start with the offer students will request. After creation, add the public summary, pricing or payment guidance, and shareable page."
+          icon="01"
+          secondaryAction={
+            canManage ? (
               <Button
                 href="/app/settings/public-site"
                 type="button"
@@ -367,11 +345,12 @@ export function CoursesPageClient() {
               >
                 Configure public page
               </Button>
-            ) : null}
-          </div>
-        </Card>
+            ) : undefined
+          }
+          title="Create your first program"
+        />
       ) : (
-        <section className="mt-6">
+        <section className="flex flex-col gap-6">
           <SectionHeader
             actions={
               draftCourses > 0 ? (
@@ -380,14 +359,8 @@ export function CoursesPageClient() {
                 <Badge tone="success">All programs published</Badge>
               )
             }
-            className="mb-4"
-            description={
-              <span className="text-[#425B76]">
-                Open a program to prepare its public page, preview the student
-                experience, and follow enrollment requests.
-              </span>
-            }
-            title={<span className="text-[#0B1F33]">Your programs</span>}
+            description="Open a program to prepare its public page, preview the student experience, and follow enrollment requests."
+            title="Your programs"
           />
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {courses.map((course) => {
@@ -399,14 +372,15 @@ export function CoursesPageClient() {
 
               return (
                 <Card
-                  className="h-full border-[#D8E8F0] bg-white p-5 text-[#0B1F33] shadow-sm shadow-[#0B2A3D]/5"
+                  className="h-full"
                   key={course.id}
+                  padding="md"
                 >
                   <article className="flex h-full min-h-72 flex-col justify-between">
                     <div>
                       <div className="flex items-start justify-between gap-4">
                         <StatusBadge status={course.status} />
-                        <span className="text-xs text-[#71839A]">
+                        <span className="text-xs text-content-muted">
                           {formatDate(course.created_at)}
                         </span>
                       </div>
@@ -430,15 +404,15 @@ export function CoursesPageClient() {
                       <h3 className="mt-6 text-2xl font-semibold leading-tight">
                         {course.title}
                       </h3>
-                      <p className="mt-3 line-clamp-3 text-sm leading-6 text-[#425B76]">
+                      <p className="mt-3 line-clamp-3 text-sm leading-6 text-content-secondary">
                         {course.description || "No description added yet."}
                       </p>
-                      <p className="mt-4 rounded-lg border border-[#D8E8F0] bg-[#F6FBFE] p-3 text-sm leading-6 text-[#425B76]">
-                        <span className="font-semibold text-[#0B1F33]">Next:</span>{" "}
+                      <p className="mt-4 rounded-ui border border-line bg-surface-subtle p-3 text-sm leading-6 text-content-secondary">
+                        <span className="font-semibold text-content-primary">Next:</span>{" "}
                         {getProgramNextStep(course, canManage)}
                       </p>
                     </div>
-                    <div className="mt-6 flex flex-wrap gap-2 border-t border-[#D8E8F0] pt-5">
+                    <div className="mt-6 flex flex-wrap gap-2 border-t border-line pt-5">
                       <Button href={`/app/courses/${course.id}`} size="sm">
                         {canManage ? "Manage program" : "View program"}
                       </Button>
@@ -570,6 +544,6 @@ export function CoursesPageClient() {
           </Card>
         </div>
       ) : null}
-    </div>
+    </PageContainer>
   );
 }
