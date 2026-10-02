@@ -202,8 +202,9 @@ export function EnrollmentsPageClient() {
         </div>
       ) : null}
 
-      {loading ? (
-        <section className="mt-6 grid gap-4">
+      <div className="mt-6">
+        {loading ? (
+        <section className="grid gap-4">
           {[0, 1, 2].map((item) => (
             <Card
               className="h-24 animate-pulse border-white/10 bg-[#101214]"
@@ -224,7 +225,7 @@ export function EnrollmentsPageClient() {
         <>
           <section
             aria-label="Enrollment relationships"
-            className="mt-6 grid gap-3 md:hidden"
+            className="grid gap-3 md:hidden"
           >
             {filteredEnrollments.map((enrollment) => (
               <Card
@@ -286,7 +287,7 @@ export function EnrollmentsPageClient() {
             ))}
           </section>
 
-          <Card className="mt-6 hidden overflow-hidden border-white/10 bg-[#101214] text-white shadow-2xl shadow-black/10 md:block">
+          <Card className="hidden overflow-hidden border-white/10 bg-[#101214] text-white shadow-2xl shadow-black/10 md:block">
             <div className="min-w-[780px]">
               <div
                 className={[
@@ -347,7 +348,8 @@ export function EnrollmentsPageClient() {
             </div>
           </Card>
         </>
-      )}
+        )}
+      </div>
     </div>
   );
 }

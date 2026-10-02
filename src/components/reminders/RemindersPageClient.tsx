@@ -437,8 +437,9 @@ export function RemindersPageClient() {
         </div>
       ) : null}
 
-      {loading ? (
-        <section className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      <div className="mt-6">
+        {loading ? (
+        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {[0, 1, 2].map((item) => (
             <Card
               className="h-56 animate-pulse border-white/10 bg-[#101214]"
@@ -459,7 +460,7 @@ export function RemindersPageClient() {
           title="No reminders found"
         />
       ) : (
-        <section className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {filteredReminders.map((reminder) => {
             const overdue = isOverdue(reminder);
 
@@ -567,7 +568,8 @@ export function RemindersPageClient() {
             );
           })}
         </section>
-      )}
+        )}
+      </div>
 
       {formOpen ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-black/70 px-4 py-4 backdrop-blur-sm sm:items-center">

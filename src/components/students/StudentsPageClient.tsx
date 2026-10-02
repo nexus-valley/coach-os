@@ -579,7 +579,8 @@ export function StudentsPageClient() {
         statusCounts={statusCounts}
       />
 
-      {error ? (
+      <div className="mt-6">
+        {error ? (
         <EmptyState
           action={{ label: "Try again", onClick: () => void loadDirectory() }}
           description="No student information was changed. Reload the directory to try again."
@@ -590,7 +591,7 @@ export function StudentsPageClient() {
         <div
           aria-label="Loading student directory"
           aria-live="polite"
-          className="mt-6 space-y-3"
+          className="space-y-3"
         >
           <Skeleton className="h-16 w-full" />
           <Skeleton className="h-16 w-full" />
@@ -610,7 +611,7 @@ export function StudentsPageClient() {
         />
       ) : (
         <TableShell
-          className="mt-6 border-[#CBD5E1] shadow-sm shadow-slate-950/5"
+          className="border-[#CBD5E1] shadow-sm shadow-slate-950/5"
           description={`${visibleRows.length} of ${rows.length} student${rows.length === 1 ? "" : "s"} in this view`}
           title="Student directory"
         >
@@ -703,7 +704,8 @@ export function StudentsPageClient() {
             ))}
           </div>
         </TableShell>
-      )}
+        )}
+      </div>
 
       {formOpen && canCreateStudent ? (
         <div className="fixed inset-0 z-50 flex min-h-full items-end justify-center overflow-y-auto bg-[#0B1F33]/70 px-4 py-4 backdrop-blur-sm sm:items-center">

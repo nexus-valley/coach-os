@@ -22,9 +22,9 @@ export type EmptyStateProps = {
 
 const containerClasses = {
   compact:
-    "mt-4 rounded-ui border border-line bg-surface p-5 text-content-primary shadow-surface",
+    "rounded-ui border border-line bg-surface p-5 text-content-primary shadow-surface",
   default:
-    "mt-6 rounded-ui border border-line bg-surface p-8 text-content-primary shadow-surface",
+    "rounded-ui border border-line bg-surface p-8 text-content-primary shadow-surface",
 };
 
 const titleClasses = {

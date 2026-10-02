@@ -363,8 +363,9 @@ export function AssignmentsPageClient() {
       {error ? <div className="mt-6"><FeedbackAlert>{error}</FeedbackAlert></div> : null}
       {success ? <div className="mt-6"><FeedbackAlert tone="success">{success}</FeedbackAlert></div> : null}
 
-      {initializing || listLoading ? (
-        <section aria-label="Loading assignments" className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">{[0, 1, 2].map((item) => <Card className="h-64 animate-pulse border-[#D8E8F0] bg-white" key={item}><span className="sr-only">Loading assignments</span></Card>)}</section>
+      <div className="mt-6">
+        {initializing || listLoading ? (
+        <section aria-label="Loading assignments" className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{[0, 1, 2].map((item) => <Card className="h-64 animate-pulse border-[#D8E8F0] bg-white" key={item}><span className="sr-only">Loading assignments</span></Card>)}</section>
       ) : assignmentPage.items.length === 0 ? (
         <EmptyState
           action={noMatches ? { label: "Reset filters", onClick: resetFilters } : canManage ? { label: "Create Assignment", onClick: () => void openCreateForm() } : undefined}
@@ -374,7 +375,7 @@ export function AssignmentsPageClient() {
         />
       ) : (
         <>
-          <section className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {assignmentPage.items.map((assignment) => {
               const submitted = assignment.submissionCounts.submitted + assignment.submissionCounts.reviewed + assignment.submissionCounts.late;
               return (
@@ -400,7 +401,8 @@ export function AssignmentsPageClient() {
             <Button disabled={!assignmentPage.hasNext} onClick={() => setPage((value) => value + 1)} type="button" variant="secondary">Next</Button>
           </nav>
         </>
-      )}
+        )}
+      </div>
 
       {formOpen ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-[#0B2A3D]/70 px-4 py-4 backdrop-blur-sm sm:items-center">

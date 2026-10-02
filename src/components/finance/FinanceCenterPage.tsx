@@ -974,11 +974,13 @@ export function FinanceCenterPage() {
               ))}
             </div>
           ) : (
-            <EmptyState
-              description="Create invoices for enrolled students and track balances here."
-              icon="INR"
-              title="No sales invoices yet"
-            />
+            <div className="pt-6">
+              <EmptyState
+                description="Create invoices for enrolled students and track balances here."
+                icon="INR"
+                title="No sales invoices yet"
+              />
+            </div>
           )}
         </Card>
 

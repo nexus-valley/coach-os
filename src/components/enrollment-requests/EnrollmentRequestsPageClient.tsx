@@ -619,7 +619,8 @@ export function EnrollmentRequestsPageClient({
         </div>
       </section>
 
-      {error ? (
+      <div className="mt-6">
+        {error ? (
         <EmptyState
           action={{ label: "Try again", onClick: () => void load() }}
           description="Your request information is unchanged. Reload this view to try again."
@@ -627,7 +628,7 @@ export function EnrollmentRequestsPageClient({
           title={error}
         />
       ) : loading ? (
-        <div className="mt-6 space-y-3" aria-label="Loading enrollment requests">
+        <div className="space-y-3" aria-label="Loading enrollment requests">
           <Skeleton className="h-16 w-full" />
           <Skeleton className="h-16 w-full" />
           <Skeleton className="h-16 w-full" />
@@ -643,7 +644,7 @@ export function EnrollmentRequestsPageClient({
         />
       ) : (
         <TableShell
-          className="mt-6 border-[#CBD5E1] shadow-sm shadow-slate-950/5"
+          className="border-[#CBD5E1] shadow-sm shadow-slate-950/5"
           description={`${filteredRequests.length} request${filteredRequests.length === 1 ? "" : "s"} in this view`}
           title="Request inbox"
         >
@@ -764,7 +765,8 @@ export function EnrollmentRequestsPageClient({
             })}
           </div>
         </TableShell>
-      )}
+        )}
+      </div>
 
       {selectedRequest ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-[#071521]/70 p-3 backdrop-blur-sm sm:items-center sm:p-6">

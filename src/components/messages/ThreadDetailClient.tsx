@@ -298,14 +298,15 @@ export function ThreadDetailClient({ threadId }: ThreadDetailClientProps) {
           description="Messages stay tenant-scoped and student-facing through the existing support chat RPCs."
           title="Conversation"
         />
-        {messages.length === 0 ? (
-          <EmptyState
-            description="No messages have been sent in this chat yet."
-            icon="M"
-            title="No messages"
-          />
-        ) : (
-          <div className="space-y-4">
+        <div className="mt-6">
+          {messages.length === 0 ? (
+            <EmptyState
+              description="No messages have been sent in this chat yet."
+              icon="M"
+              title="No messages"
+            />
+          ) : (
+            <div className="space-y-4">
             {messages.map((message) => (
               <div
                 className={[
@@ -342,8 +343,9 @@ export function ThreadDetailClient({ threadId }: ThreadDetailClientProps) {
                 </p>
               </div>
             ))}
-          </div>
-        )}
+            </div>
+          )}
+        </div>
       </Card>
 
       <Card className="p-5">

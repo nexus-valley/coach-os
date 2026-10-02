@@ -330,8 +330,9 @@ export function SessionsPageClient() {
       {error ? <div className="mt-5"><FeedbackAlert onRetry={() => window.location.reload()}>{error}</FeedbackAlert></div> : null}
       {success ? <div className="mt-5"><FeedbackAlert tone="success">{success}</FeedbackAlert></div> : null}
 
-      {loading ? (
-        <div className="mt-6 grid gap-4 md:grid-cols-2">{[0, 1, 2, 3].map((item) => <Card className="h-52 animate-pulse border-[#D8E8F0] bg-white" key={item}><span className="sr-only">Loading live classes</span></Card>)}</div>
+      <div className="mt-6">
+        {loading ? (
+        <div className="grid gap-4 md:grid-cols-2">{[0, 1, 2, 3].map((item) => <Card className="h-52 animate-pulse border-[#D8E8F0] bg-white" key={item}><span className="sr-only">Loading live classes</span></Card>)}</div>
       ) : filteredSessions.length === 0 ? (
         <EmptyState
           action={filtersActive ? { label: "Reset filters", onClick: resetFilters } : canSchedule ? { label: "Schedule live class", onClick: openCreateForm } : undefined}
@@ -340,7 +341,7 @@ export function SessionsPageClient() {
           title={filtersActive ? "No matching live classes" : "No live classes yet"}
         />
       ) : (
-        <div className="mt-7 space-y-9">
+        <div className="space-y-9">
           {groups.filter((group) => group.sessions.length > 0).map((group) => (
             <section aria-labelledby={`session-group-${group.key}`} key={group.key}>
               <div className="flex flex-wrap items-end justify-between gap-3 border-b border-[#D8E8F0] pb-3">
@@ -351,7 +352,8 @@ export function SessionsPageClient() {
             </section>
           ))}
         </div>
-      )}
+        )}
+      </div>
 
       {formOpen ? (
         <SessionDialog description="Times are entered in the selected session timezone. Program and cohort choices stay correlated." disabled={saving} onClose={() => setFormOpen(false)} title="Schedule live class">

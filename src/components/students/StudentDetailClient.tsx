@@ -969,14 +969,15 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
           </p>
         </div>
 
-        {allRelationships.length === 0 ? (
-          <EmptyState
-            description="No program enrollment relationship has been created for this student."
-            eyebrow="Programs"
-            title="No program relationships"
-          />
-        ) : (
-          <div className="mt-5 space-y-7">
+        <div className="mt-5">
+          {allRelationships.length === 0 ? (
+            <EmptyState
+              description="No program enrollment relationship has been created for this student."
+              eyebrow="Programs"
+              title="No program relationships"
+            />
+          ) : (
+            <div className="space-y-7">
             <RelationshipGroup
               emptyCopy="No active or paused program relationships."
               label="Current"
@@ -995,8 +996,9 @@ export function StudentDetailClient({ studentId }: StudentDetailClientProps) {
               relationships={detail.historyRelationships}
               studentStatus={student.status}
             />
-          </div>
-        )}
+            </div>
+          )}
+        </div>
 
         {detail.unmatchedCohorts.length > 0 ? (
           <Card className="mt-6 border-amber-200 bg-amber-50 p-5 text-[#0B1F33]">

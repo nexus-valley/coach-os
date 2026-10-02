@@ -347,8 +347,9 @@ export function CohortsPageClient() {
         </div>
       ) : null}
 
-      {loading ? (
-        <section className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      <div className="mt-6">
+        {loading ? (
+        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {[0, 1, 2].map((item) => (
             <Card
               className="border-white/10 bg-[#101214] p-6"
@@ -379,7 +380,7 @@ export function CohortsPageClient() {
           title="No cohorts created yet"
         />
       ) : (
-        <section className="mt-6">
+        <section>
           <SectionHeader
             actions={
               <Badge className="border-white/15 bg-white/10 text-white">
@@ -461,7 +462,8 @@ export function CohortsPageClient() {
             ))}
           </div>
         </section>
-      )}
+        )}
+      </div>
 
       {formOpen ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-black/70 px-4 py-4 backdrop-blur-sm sm:items-center">

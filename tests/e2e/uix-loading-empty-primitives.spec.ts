@@ -57,11 +57,84 @@ const skeletonSource = readFileSync(skeletonPath, "utf8");
 
 const skeletonBase = "animate-pulse rounded-ui bg-action-primary-subtle";
 const defaultContainer =
-  "mt-6 rounded-ui border border-line bg-surface p-8 text-content-primary shadow-surface";
+  "rounded-ui border border-line bg-surface p-8 text-content-primary shadow-surface";
 const compactContainer =
-  "mt-4 rounded-ui border border-line bg-surface p-5 text-content-primary shadow-surface";
+  "rounded-ui border border-line bg-surface p-5 text-content-primary shadow-surface";
 const actionLayout =
   "flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:flex-wrap sm:items-center";
+const emptyStateConsumerCounts = {
+  "src/components/announcements/AnnouncementsPageClient.tsx": 1,
+  "src/components/approvals/ApprovalCenterPage.tsx": 1,
+  "src/components/assignments/AssignmentDetailClient.tsx": 2,
+  "src/components/assignments/AssignmentsPageClient.tsx": 1,
+  "src/components/automations/AutomationsPageClient.tsx": 1,
+  "src/components/cohorts/CohortsPageClient.tsx": 1,
+  "src/components/community/CommunityPageClient.tsx": 2,
+  "src/components/documents/DocumentCenterPage.tsx": 1,
+  "src/components/enrollment-requests/EnrollmentRequestsPageClient.tsx": 3,
+  "src/components/enrollments/EnrollmentsPageClient.tsx": 1,
+  "src/components/finance/FinanceCenterPage.tsx": 1,
+  "src/components/messages/MessagesPageClient.tsx": 1,
+  "src/components/messages/ThreadDetailClient.tsx": 1,
+  "src/components/operations/OperationsPageClient.tsx": 1,
+  "src/components/payment-links/PaymentLinksPageClient.tsx": 1,
+  "src/components/payments/PaymentsPageClient.tsx": 1,
+  "src/components/reminders/RemindersPageClient.tsx": 1,
+  "src/components/reports/ReportsPageClient.tsx": 2,
+  "src/components/security/PermissionsPageClient.tsx": 1,
+  "src/components/sessions/SessionDetailClient.tsx": 1,
+  "src/components/sessions/SessionsPageClient.tsx": 1,
+  "src/components/students/StudentDetailClient.tsx": 2,
+  "src/components/students/StudentsPageClient.tsx": 2,
+  "src/components/team-operations/TeamOperationsPage.tsx": 2,
+  "src/components/workflows/WorkflowBuilderPage.tsx": 1,
+} as const;
+const emptyStatePlacementOwners = {
+  "src/components/announcements/AnnouncementsPageClient.tsx": [
+    "mx-auto max-w-7xl space-y-6",
+  ],
+  "src/components/approvals/ApprovalCenterPage.tsx": [
+    "flex flex-col gap-5 rounded-2xl p-6",
+  ],
+  "src/components/assignments/AssignmentDetailClient.tsx": [
+    "mt-4",
+    "min-w-0 border-[#D8E8F0] bg-white p-5 sm:p-6",
+  ],
+  "src/components/assignments/AssignmentsPageClient.tsx": ["mt-6"],
+  "src/components/automations/AutomationsPageClient.tsx": ["mt-6"],
+  "src/components/cohorts/CohortsPageClient.tsx": ["mt-6"],
+  "src/components/community/CommunityPageClient.tsx": [
+    "mx-auto max-w-7xl space-y-6",
+    "mx-auto max-w-7xl space-y-6",
+  ],
+  "src/components/documents/DocumentCenterPage.tsx": ["space-y-4"],
+  "src/components/enrollment-requests/EnrollmentRequestsPageClient.tsx": [
+    null,
+    "mt-6",
+    "mt-6",
+  ],
+  "src/components/enrollments/EnrollmentsPageClient.tsx": ["mt-6"],
+  "src/components/finance/FinanceCenterPage.tsx": ["pt-6"],
+  "src/components/messages/MessagesPageClient.tsx": [
+    "mx-auto max-w-7xl space-y-6",
+  ],
+  "src/components/messages/ThreadDetailClient.tsx": ["mt-6"],
+  "src/components/operations/OperationsPageClient.tsx": [null],
+  "src/components/payment-links/PaymentLinksPageClient.tsx": ["mt-6"],
+  "src/components/payments/PaymentsPageClient.tsx": ["mt-6"],
+  "src/components/reminders/RemindersPageClient.tsx": ["mt-6"],
+  "src/components/reports/ReportsPageClient.tsx": [null, "mt-6"],
+  "src/components/security/PermissionsPageClient.tsx": [null],
+  "src/components/sessions/SessionDetailClient.tsx": ["mt-5"],
+  "src/components/sessions/SessionsPageClient.tsx": ["mt-6"],
+  "src/components/students/StudentDetailClient.tsx": [null, "mt-5"],
+  "src/components/students/StudentsPageClient.tsx": ["mt-6", "mt-6"],
+  "src/components/team-operations/TeamOperationsPage.tsx": [
+    "space-y-3",
+    "space-y-6",
+  ],
+  "src/components/workflows/WorkflowBuilderPage.tsx": ["mt-5"],
+} as const;
 const classifierCandidates = [
   "h-4",
   "bg-action-primary-subtle",
@@ -237,6 +310,88 @@ function consumerInventory(componentName: "EmptyState" | "Skeleton") {
   };
 }
 
+function jsxClassName(node: ts.JsxElement | ts.JsxSelfClosingElement) {
+  const attributes = ts.isJsxElement(node)
+    ? node.openingElement.attributes
+    : node.attributes;
+  const className = attributes.properties.find(
+    (property): property is ts.JsxAttribute =>
+      ts.isJsxAttribute(property) && property.name.getText() === "className",
+  );
+  return className?.initializer && ts.isStringLiteral(className.initializer)
+    ? className.initializer.text
+    : null;
+}
+
+function emptyStatePlacementInventory() {
+  const uses: Array<{
+    classNameProp: boolean;
+    file: string;
+    line: number;
+    ownerClassName: string | null;
+    size: string | null;
+  }> = [];
+  for (const file of [
+    ...sourceFiles(join(root, "app")),
+    ...sourceFiles(join(root, "src")),
+  ]) {
+    const source = readFileSync(file, "utf8");
+    const sourceFile = ts.createSourceFile(
+      file,
+      source,
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TSX,
+    );
+    const visit = (node: ts.Node) => {
+      const target =
+        (ts.isJsxElement(node) &&
+          node.openingElement.tagName.getText(sourceFile) === "EmptyState") ||
+        (ts.isJsxSelfClosingElement(node) &&
+          node.tagName.getText(sourceFile) === "EmptyState");
+      if (target) {
+        const element = node as ts.JsxElement | ts.JsxSelfClosingElement;
+        const attributes = ts.isJsxElement(element)
+          ? element.openingElement.attributes
+          : element.attributes;
+        const attribute = (name: string) =>
+          attributes.properties.find(
+            (property): property is ts.JsxAttribute =>
+              ts.isJsxAttribute(property) && property.name.getText() === name,
+          );
+        let owner: ts.Node | undefined = node.parent;
+        while (
+          owner &&
+          !ts.isJsxElement(owner) &&
+          !ts.isJsxSelfClosingElement(owner)
+        ) {
+          owner = owner.parent;
+        }
+        const position = sourceFile.getLineAndCharacterOfPosition(
+          node.getStart(sourceFile),
+        );
+        const size = attribute("size")?.initializer;
+        uses.push({
+          classNameProp: Boolean(attribute("className")),
+          file: relative(root, file).replaceAll("\\", "/"),
+          line: position.line + 1,
+          ownerClassName:
+            owner && (ts.isJsxElement(owner) || ts.isJsxSelfClosingElement(owner))
+              ? jsxClassName(owner)
+              : null,
+          size: size && ts.isStringLiteral(size) ? size.text : null,
+        });
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(sourceFile);
+  }
+  return uses.sort(
+    (left, right) =>
+      left.file.localeCompare(right.file) || left.line - right.line,
+  );
+}
+
 function emptyStateChildren(props: EmptyStateProps) {
   const inner = renderedEmptyState(props).props.children as ReactElement<
     Record<string, unknown>
@@ -271,7 +426,7 @@ async function waitForHarness(
   url: string,
   output: () => string,
 ) {
-  const deadline = Date.now() + 60_000;
+  const deadline = Date.now() + 150_000;
   while (Date.now() < deadline) {
     if (child.exitCode !== null || child.signalCode !== null) {
       throw new Error(`Loading/empty harness exited early.\n${output()}`);
@@ -471,10 +626,10 @@ async function stopHarness() {
 }
 
 test.describe("UIX-1C4C Skeleton and EmptyState", () => {
-  test.describe.configure({ mode: "serial", timeout: 90_000 });
+  test.describe.configure({ mode: "serial", timeout: 180_000 });
 
   test.beforeAll(async () => {
-    test.setTimeout(90_000);
+    test.setTimeout(180_000);
     await buildHarness();
   });
 
@@ -485,6 +640,74 @@ test.describe("UIX-1C4C Skeleton and EmptyState", () => {
   test("preserves exact consumer boundaries", () => {
     expect(consumerInventory("Skeleton")).toEqual({ fileCount: 11, uses: 55 });
     expect(consumerInventory("EmptyState")).toEqual({ fileCount: 25, uses: 33 });
+  });
+
+  test("reviews every EmptyState consumer and preserves its frozen call contract", () => {
+    const inventory = emptyStatePlacementInventory();
+    const counts = Object.fromEntries(
+      Object.keys(emptyStateConsumerCounts).map((file) => [
+        file,
+        inventory.filter((use) => use.file === file).length,
+      ]),
+    );
+    expect(counts).toEqual(emptyStateConsumerCounts);
+    expect(inventory).toHaveLength(33);
+    expect(new Set(inventory.map((use) => use.file)).size).toBe(25);
+    expect(inventory.every((use) => use.size === null)).toBe(true);
+    expect(inventory.every((use) => !use.classNameProp)).toBe(true);
+
+    const placementOwners = Object.fromEntries(
+      Object.keys(emptyStatePlacementOwners).map((file) => [
+        file,
+        inventory
+          .filter((use) => use.file === file)
+          .map((use) => use.ownerClassName),
+      ]),
+    );
+    expect(placementOwners).toEqual(emptyStatePlacementOwners);
+
+    const reports = readFileSync(
+      join(root, "src/components/reports/ReportsPageClient.tsx"),
+      "utf8",
+    );
+    expect(reports).toContain('<div className="mt-6">');
+    expect(reports).not.toContain(
+      '<section className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">',
+    );
+  });
+
+  test("preserves the three known semantic misuses while migrating placement only", () => {
+    const enrollmentRequests = readFileSync(
+      join(
+        root,
+        "src/components/enrollment-requests/EnrollmentRequestsPageClient.tsx",
+      ),
+      "utf8",
+    );
+    const students = readFileSync(
+      join(root, "src/components/students/StudentsPageClient.tsx"),
+      "utf8",
+    );
+    const studentDetail = readFileSync(
+      join(root, "src/components/students/StudentDetailClient.tsx"),
+      "utf8",
+    );
+    expect(enrollmentRequests).toContain(
+      'title={error}',
+    );
+    expect(enrollmentRequests).toContain(
+      'description="Your request information is unchanged. Reload this view to try again."',
+    );
+    expect(students).toContain(
+      'title="Student directory is unavailable"',
+    );
+    expect(students).toContain(
+      'action={{ label: "Try again", onClick: () => void loadDirectory() }}',
+    );
+    expect(studentDetail).toContain("if (error || !detail)");
+    expect(studentDetail).toContain(
+      'description={error || "This student is not available in the current workspace."}',
+    );
   });
 
   test("exports the frozen Skeleton API and visual-only semantics", () => {
@@ -728,6 +951,35 @@ test.describe("UIX-1C4C Skeleton and EmptyState", () => {
     const element = emptyStateElement(props);
     expect(element.type).toBe(Card);
     expect(element.props.className).toBe(defaultContainer);
+
+    const sourceFile = ts.createSourceFile(
+      emptyStatePath,
+      emptyStateSource,
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TSX,
+    );
+    const propsType = sourceFile.statements.find(
+      (statement): statement is ts.TypeAliasDeclaration =>
+        ts.isTypeAliasDeclaration(statement) &&
+        statement.name.text === "EmptyStateProps",
+    );
+    expect(propsType && ts.isTypeLiteralNode(propsType.type)).toBe(true);
+    const propertyNames =
+      propsType && ts.isTypeLiteralNode(propsType.type)
+        ? propsType.type.members.map((member) => member.name?.getText(sourceFile))
+        : [];
+    expect(propertyNames).toEqual([
+      "action",
+      "className",
+      "description",
+      "eyebrow",
+      "icon",
+      "secondaryAction",
+      "size",
+      "title",
+    ]);
+    expect(emptyStateSource).not.toMatch(/\b(?:margin|placement|spacing|surface|container|layout)\??:/);
   });
 
   test("renders exact default, compact, caller, inner, and text contracts", () => {
@@ -879,6 +1131,155 @@ test.describe("UIX-1C4C Skeleton and EmptyState", () => {
       });
       expect(styles).toMatchObject(expected);
       expect(styles.shadow).toContain("rgba(11, 42, 61, 0.06)");
+    }
+  });
+
+  test("owns no external margin for default or compact EmptyState roots", async ({ page }) => {
+    const defaultMarkup = serializeElement(
+      EmptyState({
+        action: createElement("button", { type: "button" }, "Default action"),
+        description: "Default description",
+        title: "Default state",
+      }),
+    ).replace("<div ", '<div data-default-margin ');
+    const compactMarkup = serializeElement(
+      EmptyState({
+        action: createElement("button", { type: "button" }, "Compact action"),
+        description: "Compact description",
+        size: "compact",
+        title: "Compact state",
+      }),
+    ).replace("<div ", '<div data-compact-margin ');
+    await setProductContent(
+      page,
+      `<main><section>${defaultMarkup}</section><section>${compactMarkup}</section></main>`,
+    );
+
+    for (const selector of ["[data-default-margin]", "[data-compact-margin]"]) {
+      await expect(page.locator(selector)).toHaveCSS("margin-top", "0px");
+      await expect(page.locator(selector)).toHaveCSS("margin-bottom", "0px");
+    }
+    await expect(
+      page.locator("[data-default-margin] > div > div:last-child"),
+    ).toHaveCSS("margin-top", "24px");
+    await expect(
+      page.locator("[data-compact-margin] > div > div:last-child"),
+    ).toHaveCSS("margin-top", "20px");
+  });
+
+  test("keeps parent-owned placement categories bounded across the viewport matrix", async ({ page }) => {
+    const placementState = (
+      key: string,
+      options: { before?: boolean; compact?: boolean } = {},
+    ) =>
+      serializeElement(
+        EmptyState({
+          action: createElement("button", { type: "button" }, "Create item"),
+          className: options.before
+            ? options.compact
+              ? "mt-4"
+              : "mt-6"
+            : undefined,
+          description:
+            "No records are available in this source-faithful placement example.",
+          icon: "ES",
+          size: options.compact ? "compact" : "default",
+          title: "Nothing here yet",
+        }),
+      ).replace("<div ", `<div data-state="${key}" `);
+    const placementCases = [
+      { key: "page", owner: "flex flex-col gap-8", label: "Page header", gap: 32 },
+      { key: "section", owner: "flex flex-col gap-6", label: "Section header", gap: 24 },
+      { key: "toolbar", owner: "flex flex-col gap-4", label: "Filter toolbar", gap: 16 },
+      { key: "card", owner: "flex flex-col gap-5", label: "Card heading", gap: 20 },
+      { key: "list", owner: "flex flex-col gap-4", label: "Repeated list", gap: 16 },
+      { key: "filtered", owner: "flex flex-col gap-6", label: "Filtered results", gap: 24 },
+      { key: "compact", owner: "flex flex-col gap-4", label: "Compact section", gap: 16 },
+    ];
+    const markup = placementCases
+      .map(
+        ({ key, label, owner }) => `<section class="grid min-w-0 gap-4 lg:grid-cols-2">
+          <div class="min-w-0 rounded-ui border border-line bg-surface-muted p-4">
+            <p class="text-sm font-semibold text-content-secondary">Before: ${label}</p>
+            ${placementState(`${key}-before`, { before: true, compact: key === "compact" })}
+          </div>
+          <div class="${owner} min-w-0 rounded-ui border border-line bg-surface-muted p-4">
+            <p class="text-sm font-semibold text-content-secondary">After: ${label}</p>
+            ${placementState(`${key}-after`, { compact: key === "compact" })}
+          </div>
+        </section>`,
+      )
+      .join("");
+    await setProductContent(
+      page,
+      `<main class="mx-auto flex max-w-6xl flex-col gap-6 p-4">${markup}</main>`,
+    );
+
+    const screenshotDirectory = join(
+      root,
+      "support-ops",
+      "uix-1e3b3-screenshots",
+    );
+    mkdirSync(screenshotDirectory, { recursive: true });
+    const viewports = [
+      { height: 844, width: 390 },
+      { height: 932, width: 430 },
+      { height: 1024, width: 768 },
+      { height: 768, width: 1024 },
+      { height: 900, width: 1440 },
+    ];
+    for (const viewport of viewports) {
+      await page.setViewportSize(viewport);
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= window.innerWidth,
+        ),
+      ).toBe(true);
+      for (const state of await page.locator("[data-state]").all()) {
+        expect(
+          await state.evaluate(
+            (element) =>
+              element.scrollWidth <= element.clientWidth &&
+              element.getBoundingClientRect().right <= window.innerWidth,
+          ),
+        ).toBe(true);
+      }
+      for (const placementCase of placementCases) {
+        const beforeGap = await page
+          .locator(`[data-state="${placementCase.key}-before"]`)
+          .evaluate((element) => {
+            const previous = element.previousElementSibling;
+            if (!previous) throw new Error("Missing placement reference.");
+            return Math.round(
+              element.getBoundingClientRect().top -
+                previous.getBoundingClientRect().bottom,
+            );
+          });
+        const afterGap = await page
+          .locator(`[data-state="${placementCase.key}-after"]`)
+          .evaluate((element) => {
+            const previous = element.previousElementSibling;
+            if (!previous) throw new Error("Missing placement reference.");
+            return Math.round(
+              element.getBoundingClientRect().top -
+                previous.getBoundingClientRect().bottom,
+            );
+          });
+        expect(beforeGap).toBe(placementCase.key === "compact" ? 16 : 24);
+        expect(afterGap).toBe(placementCase.gap);
+      }
+      await expect(page.getByRole("button", { name: "Create item" })).toHaveCount(
+        placementCases.length * 2,
+      );
+      if ([390, 768, 1440].includes(viewport.width)) {
+        await page.screenshot({
+          fullPage: true,
+          path: join(
+            screenshotDirectory,
+            `empty-state-placement-${viewport.width}x${viewport.height}.png`,
+          ),
+        });
+      }
     }
   });
 

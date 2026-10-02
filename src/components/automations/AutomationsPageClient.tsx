@@ -553,8 +553,9 @@ export function AutomationsPageClient() {
         </div>
       ) : null}
 
-      {loading ? (
-        <section className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      <div className="mt-6">
+        {loading ? (
+        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {[0, 1, 2].map((item) => (
             <Card
               className="h-64 animate-pulse border-white/10 bg-[#101214]"
@@ -576,7 +577,7 @@ export function AutomationsPageClient() {
           title="No automation rules found"
         />
       ) : (
-        <section className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {filteredRules.map((rule) => (
             <Card
               className="flex min-h-80 flex-col justify-between border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/10"
@@ -637,7 +638,8 @@ export function AutomationsPageClient() {
             </Card>
           ))}
         </section>
-      )}
+        )}
+      </div>
 
       <section className="mt-8">
         <Card className="border-white/10 bg-[#101214] p-6 text-white">

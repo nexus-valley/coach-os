@@ -436,8 +436,9 @@ export function ReportsPageClient() {
         })}
       </section>
 
-      {loading ? (
-        <section className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="mt-6">
+        {loading ? (
+        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {[0, 1, 2, 3].map((item) => (
             <Card
               className="h-36 animate-pulse border-[#D8E8F0] bg-white"
@@ -448,7 +449,7 @@ export function ReportsPageClient() {
           ))}
         </section>
       ) : visibleSection ? (
-        <section className="mt-6 space-y-6">
+        <section className="space-y-6">
           <div>
             <Badge className="border-[#14B8C6]/30 bg-[#14B8C6]/10 text-[#0E7490]">
               {visibleActiveTab.label}
@@ -488,7 +489,8 @@ export function ReportsPageClient() {
           icon="RP"
           title="No analytics available"
         />
-      )}
+        )}
+      </div>
     </div>
   );
 }

@@ -767,8 +767,9 @@ export function WorkflowBuilderPage() {
             </div>
           </div>
 
-          {templates.length ? (
-            <div className="mt-5 space-y-4">
+          <div className="mt-5">
+            {templates.length ? (
+              <div className="space-y-4">
               {templates.map((template) => (
                 <div
                   className="rounded-2xl border border-[#D8E8F0] bg-white p-4"
@@ -843,22 +844,23 @@ export function WorkflowBuilderPage() {
                   ) : null}
                 </div>
               ))}
-            </div>
-          ) : (
-            <EmptyState
-              action={
-                canManage
-                  ? {
-                      label: "Create workflow",
-                      onClick: () => openCreateForm(),
-                    }
-                  : undefined
-              }
-              description="No workflow templates are visible yet."
-              icon="WF"
-              title="No workflows yet"
-            />
-          )}
+              </div>
+            ) : (
+              <EmptyState
+                action={
+                  canManage
+                    ? {
+                        label: "Create workflow",
+                        onClick: () => openCreateForm(),
+                      }
+                    : undefined
+                }
+                description="No workflow templates are visible yet."
+                icon="WF"
+                title="No workflows yet"
+              />
+            )}
+          </div>
         </Card>
 
         <Card className="rounded-2xl p-6">

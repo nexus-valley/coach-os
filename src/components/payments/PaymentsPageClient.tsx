@@ -317,8 +317,9 @@ export function PaymentsPageClient() {
         </div>
       ) : null}
 
-      {loading ? (
-        <section className="mt-6 grid gap-4">
+      <div className="mt-6">
+        {loading ? (
+        <section className="grid gap-4">
           {[0, 1, 2].map((item) => (
             <Card
               className="h-24 animate-pulse border-white/10 bg-[#101214]"
@@ -336,7 +337,7 @@ export function PaymentsPageClient() {
           title="No payments found"
         />
       ) : (
-        <Card className="mt-6 overflow-hidden border-white/10 bg-[#101214] text-white shadow-2xl shadow-black/10">
+        <Card className="overflow-hidden border-white/10 bg-[#101214] text-white shadow-2xl shadow-black/10">
           <div className="overflow-x-auto">
             <div className="min-w-[1040px]">
               <div
@@ -451,7 +452,8 @@ export function PaymentsPageClient() {
             </div>
           </div>
         </Card>
-      )}
+        )}
+      </div>
     </div>
   );
 }

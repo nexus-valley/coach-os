@@ -552,8 +552,9 @@ export function PaymentLinksPageClient() {
         </div>
       ) : null}
 
-      {loading ? (
-        <section className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      <div className="mt-6">
+        {loading ? (
+        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {[0, 1, 2].map((item) => (
             <Card
               className="h-64 animate-pulse border-white/10 bg-[#101214]"
@@ -571,7 +572,7 @@ export function PaymentLinksPageClient() {
           title="No payment links found"
         />
       ) : (
-        <section className="mt-6 grid gap-4 xl:grid-cols-2">
+        <section className="grid gap-4 xl:grid-cols-2">
           {filteredLinks.map((link) => (
             <Card
               className="border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/10"
@@ -690,7 +691,8 @@ export function PaymentLinksPageClient() {
             </Card>
           ))}
         </section>
-      )}
+        )}
+      </div>
 
       {formOpen ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-black/70 px-4 py-4 backdrop-blur-sm sm:items-center">

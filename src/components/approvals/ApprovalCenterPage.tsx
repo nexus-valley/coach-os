@@ -574,12 +574,12 @@ export function ApprovalCenterPage() {
       ) : null}
 
       <section className="grid gap-6 xl:grid-cols-[1fr_0.9fr]">
-        <Card className="rounded-2xl p-6">
+        <Card className="flex flex-col gap-5 rounded-2xl p-6">
           <h2 className="text-xl font-semibold text-[#0B1F33]">
             Pending approvals
           </h2>
           {grouped.pending.length ? (
-            <div className="mt-5 space-y-4">
+            <div className="space-y-4">
               {grouped.pending.map(renderApprovalCard)}
             </div>
           ) : (

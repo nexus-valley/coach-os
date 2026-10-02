@@ -446,7 +446,9 @@ export function SessionDetailClient({ sessionId }: SessionDetailClientProps) {
           <Card className="border-[#D8E8F0] bg-white p-4"><p className="text-2xl font-semibold text-[#0B1F33]">{attendancePercent === null ? "No data" : `${attendancePercent}%`}</p><p className="mt-1 text-sm text-[#64748B]">Current attendance</p></Card>
           <Card className="border-[#D8E8F0] bg-white p-4"><p className="text-2xl font-semibold text-[#0B1F33]">{historicalRows.length}</p><p className="mt-1 text-sm text-[#64748B]">Historical records</p></Card>
         </div>
-        {currentRows.length === 0 ? <EmptyState description={session.status === "canceled" ? "Canceled classes do not accept new attendance." : "No students currently meet the active roster rules for this class."} icon="AT" title="No current roster" /> : <div className="mt-5 divide-y divide-[#D8E8F0] overflow-hidden rounded-lg border border-[#D8E8F0]">{currentRows.map((item) => <AttendanceRow draftValue={draft[item.student.id]} editable={Boolean(canMark)} historical={false} item={item} key={item.student.id} onChange={(value) => updateDraft(item, value)} />)}</div>}
+        <div className="mt-5">
+          {currentRows.length === 0 ? <EmptyState description={session.status === "canceled" ? "Canceled classes do not accept new attendance." : "No students currently meet the active roster rules for this class."} icon="AT" title="No current roster" /> : <div className="divide-y divide-[#D8E8F0] overflow-hidden rounded-lg border border-[#D8E8F0]">{currentRows.map((item) => <AttendanceRow draftValue={draft[item.student.id]} editable={Boolean(canMark)} historical={false} item={item} key={item.student.id} onChange={(value) => updateDraft(item, value)} />)}</div>}
+        </div>
       </section>
 
       <section className="mt-8" aria-labelledby="history-heading">
