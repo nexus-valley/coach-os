@@ -50,7 +50,9 @@ import { Card } from "@/src/components/ui/Card";
 import { EmptyState } from "@/src/components/ui/EmptyState";
 import { FeedbackAlert } from "@/src/components/ui/FeedbackAlert";
 import { FormField } from "@/src/components/ui/FormField";
+import { PageContainer } from "@/src/components/ui/PageContainer";
 import { PageHeader } from "@/src/components/ui/PageHeader";
+import { PageToolbar } from "@/src/components/ui/PageToolbar";
 
 type StatusFilter = AcademyAnnouncementStatus | "all";
 type AudienceFilter = AnnouncementAudience | "all";
@@ -505,13 +507,35 @@ export function AnnouncementsPageClient() {
   const selectClass = "h-11 w-full rounded-lg border border-[#CBD5E1] bg-white px-3 text-sm text-[#0B1F33] outline-none focus:border-[#2ECBEA] focus:ring-4 focus:ring-[#2ECBEA]/10";
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6">
+    <PageContainer className="flex flex-col gap-8" width="full">
       <PageHeader
-        actions={<div className="flex flex-wrap gap-2"><Button disabled={loading} onClick={() => void loadList()} type="button" variant="secondary">Refresh</Button>{capabilities.canCreate ? <Button onClick={openCreateForm} type="button">New announcement</Button> : null}</div>}
+        actions={capabilities.canCreate ? <Button onClick={openCreateForm} type="button">New announcement</Button> : undefined}
         description="Share focused updates with all Students, a Program, or a Cohort. Drafts stay private until published."
         eyebrow="Student communication"
         title="Announcements"
       />
+
+      <PageToolbar
+        actions={<Button disabled={loading} onClick={() => void loadList()} type="button" variant="secondary">Refresh</Button>}
+        label="Announcement controls"
+      >
+        <FormField className="w-full sm:w-56" htmlFor="announcement-status-filter" label="Status">
+          <select className={selectClass} id="announcement-status-filter" onChange={(event) => {
+            const next = event.target.value as StatusFilter;
+            filtersRef.current.status = next;
+            setStatusFilter(next);
+            void loadList({ status: next });
+          }} value={statusFilter}>{statusFilters.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select>
+        </FormField>
+        <FormField className="w-full sm:w-56" htmlFor="announcement-audience-filter" label="Audience">
+          <select className={selectClass} id="announcement-audience-filter" onChange={(event) => {
+            const next = event.target.value as AudienceFilter;
+            filtersRef.current.audience = next;
+            setAudienceFilter(next);
+            void loadList({ audience: next });
+          }} value={audienceFilter}>{audienceFilters.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select>
+        </FormField>
+      </PageToolbar>
 
       <div aria-live="polite" className="space-y-3">
         {actionError ? <FeedbackAlert onRetry={() => void loadList()}>{actionError}</FeedbackAlert> : null}
@@ -521,27 +545,6 @@ export function AnnouncementsPageClient() {
       </div>
 
       {!loading && (role === "staff" || role === "trainer") && !capabilities.canCreate ? <FeedbackAlert tone="info">You can browse announcements within your current scope. Creating and managing announcements requires an active messaging delegation and an applicable assignment.</FeedbackAlert> : null}
-
-      <Card className="p-4 sm:p-5">
-        <div className="grid gap-4 sm:grid-cols-2">
-          <FormField htmlFor="announcement-status-filter" label="Status">
-            <select className={selectClass} id="announcement-status-filter" onChange={(event) => {
-              const next = event.target.value as StatusFilter;
-              filtersRef.current.status = next;
-              setStatusFilter(next);
-              void loadList({ status: next });
-            }} value={statusFilter}>{statusFilters.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select>
-          </FormField>
-          <FormField htmlFor="announcement-audience-filter" label="Audience">
-            <select className={selectClass} id="announcement-audience-filter" onChange={(event) => {
-              const next = event.target.value as AudienceFilter;
-              filtersRef.current.audience = next;
-              setAudienceFilter(next);
-              void loadList({ audience: next });
-            }} value={audienceFilter}>{audienceFilters.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select>
-          </FormField>
-        </div>
-      </Card>
 
       {loading ? (
         <section aria-busy="true" aria-label="Loading announcements" className="grid gap-4 lg:grid-cols-2">{[0, 1, 2, 3].map((item) => <Card className="h-64 animate-pulse bg-[#F4F8FB]" key={item}><span className="sr-only">Loading</span></Card>)}</section>
@@ -611,6 +614,6 @@ export function AnnouncementsPageClient() {
           <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end"><Button disabled={mutating} onClick={() => setConfirming(null)} type="button" variant="secondary">Cancel</Button><Button isLoading={mutating} loadingText="Working..." onClick={() => void handleConfirmedAction()} type="button" variant={confirming.action === "delete" ? "destructive" : "primary"}>{confirming.action === "publish" ? "Publish" : confirming.action === "archive" ? "Archive" : "Delete Draft"}</Button></div>
         </AccessibleDialog>
       ) : null}
-    </div>
+    </PageContainer>
   );
 }

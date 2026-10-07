@@ -92,7 +92,7 @@ const emptyStateConsumerCounts = {
 } as const;
 const emptyStatePlacementOwners = {
   "src/components/announcements/AnnouncementsPageClient.tsx": [
-    "mx-auto max-w-7xl space-y-6",
+    "flex flex-col gap-8",
   ],
   "src/components/approvals/ApprovalCenterPage.tsx": [
     "flex flex-col gap-5 rounded-2xl p-6",

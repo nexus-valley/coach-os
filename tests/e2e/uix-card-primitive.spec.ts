@@ -412,14 +412,14 @@ test.describe("UIX-1E3B1 Card primitive contract", () => {
     expect(element.props.onClick).toBeUndefined();
   });
 
-  test("locks the 373-call inventory, variants, padding, and zero interactive use", () => {
+  test("locks the 372-call inventory, variants, padding, and zero interactive use", () => {
     const uses = cardInventory();
-    expect(uses).toHaveLength(373);
+    expect(uses).toHaveLength(372);
     expect(new Set(uses.map((use) => use.file)).size).toBe(84);
 
     const variant = (value: string) =>
       uses.filter((use) => use.variant.source === value).length;
-    expect(uses.filter((use) => use.variant.kind === "absent")).toHaveLength(371);
+    expect(uses.filter((use) => use.variant.kind === "absent")).toHaveLength(370);
     expect(variant("default")).toBe(0);
     expect(variant("subtle")).toBe(1);
     expect(variant("elevated")).toBe(1);
@@ -435,7 +435,7 @@ test.describe("UIX-1E3B1 Card primitive contract", () => {
       "src/components/billing/BillingProfilePageClient.tsx",
     ]);
 
-    expect(uses.filter((use) => use.padding.kind === "absent")).toHaveLength(367);
+    expect(uses.filter((use) => use.padding.kind === "absent")).toHaveLength(366);
     expect(uses.filter((use) => use.padding.source === "none")).toHaveLength(0);
     expect(uses.filter((use) => use.padding.source === "sm")).toHaveLength(0);
     expect(uses.filter((use) => use.padding.source === "md")).toHaveLength(4);

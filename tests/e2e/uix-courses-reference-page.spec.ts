@@ -474,11 +474,14 @@ test.describe("UIX-1E5A Courses reference page", () => {
     expect(coursesSource).not.toMatch(/\.from\(|\.rpc\(|fetch\(/);
   });
 
-  test("installs exactly one PageContainer consumer and no PageToolbar consumer", () => {
+  test("preserves Courses within the approved PageContainer and PageToolbar inventory", () => {
     expect(productConsumers("PageContainer")).toEqual([
+      "src/components/announcements/AnnouncementsPageClient.tsx",
       "src/components/courses/CoursesPageClient.tsx",
     ]);
-    expect(productConsumers("PageToolbar")).toEqual([]);
+    expect(productConsumers("PageToolbar")).toEqual([
+      "src/components/announcements/AnnouncementsPageClient.tsx",
+    ]);
   });
 
   test("leaves every frozen shared primitive byte-identical", () => {
