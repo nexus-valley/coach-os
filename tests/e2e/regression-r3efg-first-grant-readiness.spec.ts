@@ -484,14 +484,85 @@ test.describe("REGRESSION-R3E/R3F/R3G first-grant readiness", () => {
     for (const value of [
       "first_grant.grants = 0",
       "first_grant.grant_events = 0",
-      "first_grant.regression_classifications = 0",
       "first_grant.assignment_markers = 0",
     ]) {
       expect(gate).toContain(value);
     }
+    const firstGrant = between(
+      r3g,
+      "first_grant_state as (",
+      "historical_regression_tenant as (",
+    );
+    expect(firstGrant).not.toContain("tenant_fixture_classifications");
+    expect(gate).not.toContain("first_grant.regression_classifications");
   });
 
-  test("33. R3G preserves the exact expired fixture without reclassification", () => {
+  test("33. R3G requires the exact historical UX-8G3B1 classification baseline", () => {
+    const historicalTenant = between(
+      r3g,
+      "historical_regression_tenant as (",
+      "historical_regression_classification as (",
+    );
+    const historical = between(
+      r3g,
+      "historical_regression_classification as (",
+      "informational_commercial_evidence as (",
+    );
+    const gate = between(r3g, "gate as (", ")\nselect jsonb_build_object(");
+
+    expect(historicalTenant).toContain("29a33701-82ed-4c7f-8042-0a1af8296ce5");
+    expect(historical).toContain("tenant.slug = 'coachfort-regression'");
+    expect(historical).toContain(
+      "tenant.name = 'CoachFort Regression Coaching'",
+    );
+    expect(historical).toContain("classification.fixture_type = 'regression'");
+    expect(historical).toMatch(
+      /select count\(\*\)[\s\S]*classification\.fixture_type = 'regression'\) = 1\s+as exact_regression_classification_count/,
+    );
+    expect(historical).toContain(
+      "not classification.automated_customer_communications_enabled",
+    );
+    expect(historical).toContain(
+      "coachfort_internal.tenant_has_noncommercial_regression_evidence(",
+    );
+    expect(historical).toContain(
+      "not coachfort_internal.tenant_allows_automated_customer_communications(",
+    );
+    expect(historical).not.toContain("tenant_payment_orders");
+    expect(historical).not.toContain("manual_subscription_activation_audits");
+    expect(historical).toMatch(
+      /tenant_noncommercial_access_grants grant_row[\s\S]*grant_row\.tenant_id = historical\.tenant_id[\s\S]*historical_grant_count_zero/,
+    );
+    expect(historical).toMatch(
+      /tenant_noncommercial_access_events event_row[\s\S]*event_row\.tenant_id = historical\.tenant_id[\s\S]*historical_grant_event_count_zero/,
+    );
+    expect(historical).toMatch(
+      /tenant_subscription_assignments assignment[\s\S]*assignment\.tenant_id = historical\.tenant_id[\s\S]*assignment\.status = 'noncommercial'[\s\S]*assignment\.source = 'platform_noncommercial'[\s\S]*assignment\.noncommercial_grant_id is not null[\s\S]*historical_noncommercial_assignment_markers_zero/,
+    );
+    expect(historical).not.toContain("f93faeee-b177-497e-854e-5052497914b9");
+
+    for (const field of [
+      "historical.exact_regression_classification_count",
+      "historical.historical_classification_present",
+      "historical.historical_tenant_present",
+      "historical.historical_tenant_identity_exact",
+      "historical.communications_disabled",
+      "historical.r3b_regression_evidence_true",
+      "historical.r3e_communications_blocked",
+      "historical.historical_grant_count_zero",
+      "historical.historical_grant_event_count_zero",
+      "historical.historical_noncommercial_assignment_markers_zero",
+      "historical.no_unexpected_regression_classifications",
+    ]) {
+      expect(gate).toContain(field);
+    }
+    expect(historical).toContain("classification.tenant_id <> historical.tenant_id");
+    expect(r3g).toContain(
+      "'historical_regression_classification', to_jsonb(historical)",
+    );
+  });
+
+  test("34. R3G preserves the exact expired fixture without reclassification", () => {
     expect(r3g).toContain("f93faeee-b177-497e-854e-5052497914b9");
     expect(r3g).toContain("assignment.status = 'trial'");
     expect(r3g).toContain("assignment.source = 'system'");
@@ -499,13 +570,23 @@ test.describe("REGRESSION-R3E/R3F/R3G first-grant readiness", () => {
     expect(r3g).toContain("effective_state_expired");
     expect(r3g).toContain("operational_denied");
     expect(r3g).toContain("no_regression_classification");
+    const fixtureState = between(
+      r3g,
+      "expired_fixture_state as (",
+      "gate as (",
+    );
+    expect(fixtureState).not.toContain("29a33701-82ed-4c7f-8042-0a1af8296ce5");
     const gate = between(r3g, "gate as (", ")\nselect jsonb_build_object(");
     for (const field of [
       "fixture.tenant_present",
+      "fixture.exact_current_assignment",
       "fixture.assignment_unchanged",
       "fixture.effective_state_expired",
+      "fixture.trial_period_elapsed",
       "fixture.operational_denied",
       "fixture.no_grant",
+      "fixture.no_grant_event",
+      "fixture.no_regression_classification",
       "fixture.no_payment_order",
       "fixture.no_payment_attempt",
       "fixture.no_invoice",
@@ -519,7 +600,7 @@ test.describe("REGRESSION-R3E/R3F/R3G first-grant readiness", () => {
     }
   });
 
-  test("34. R3G scopes all commercial-evidence checks to the expired fixture", () => {
+  test("35. R3G scopes all commercial-evidence checks to the expired fixture", () => {
     const fixtureState = between(
       r3g,
       "expired_fixture_state as (",
@@ -546,7 +627,7 @@ test.describe("REGRESSION-R3E/R3F/R3G first-grant readiness", () => {
     expect(r3g).toContain("'expired_fixture', to_jsonb(fixture)");
   });
 
-  test("35. R3G verifies the exact payment trigger event contract", () => {
+  test("36. R3G verifies the exact payment trigger event contract", () => {
     expect(r3g).toContain("trigger.tgtype = 23");
     expect(r3g).toContain("trigger.tgattr::text = tenant_id_attribute.attnum::text");
     expect(r3g).toContain("trigger.tgnargs = 0");
@@ -554,7 +635,7 @@ test.describe("REGRESSION-R3E/R3F/R3G first-grant readiness", () => {
     expect(r3g).toContain("and payment_trigger.exact_payment_boundary");
   });
 
-  test("36. R3G pins all communication functions to reviewed source and security", () => {
+  test("37. R3G pins all communication functions to reviewed source and security", () => {
     const communicationHashes = {
       "coachfort_internal.subscription_lifecycle_reminder_candidates":
         "f053633e4dff8622de7e1e556f492a53a349c6aa0d01a91810131369be7b658f",
@@ -574,7 +655,7 @@ test.describe("REGRESSION-R3E/R3F/R3G first-grant readiness", () => {
     expect(r3g).toContain("no_unexpected_execute_acl");
   });
 
-  test("37. communication integration checks tolerate formatting whitespace", () => {
+  test("38. communication integration checks tolerate formatting whitespace", () => {
     expect(r3g).toContain("communication_sources as (");
     expect(r3g).toContain("'[[:space:]]+'");
     expect(r3g).toContain("candidate_uses_fixture_policy");
@@ -583,14 +664,14 @@ test.describe("REGRESSION-R3E/R3F/R3G first-grant readiness", () => {
     expect(r3g).not.toContain("lower(pg_get_functiondef");
   });
 
-  test("38. application code contains no hardcoded regression identity", () => {
+  test("39. application code contains no hardcoded regression identity", () => {
     const appSource = `${coachSubscription}\n${platformConsole}`.toLowerCase();
     expect(appSource).not.toContain("f93faeee-b177-497e-854e-5052497914b9");
     expect(appSource).not.toContain("coachfort regression 2026");
     expect(appSource).not.toContain("@coachfort.demo");
   });
 
-  test("39. consolidated work introduces no migration or provider mutation", () => {
+  test("40. consolidated work introduces no migration or provider mutation", () => {
     expect(existsSync(join(root, "supabase/regression_r3efg_first_grant.sql"))).toBe(false);
     expect(coachSubscription).not.toContain("createRazorpayOrder");
     expect(platformConsole).not.toContain("createRazorpayOrder");
