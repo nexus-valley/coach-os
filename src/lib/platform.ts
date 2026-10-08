@@ -59,6 +59,8 @@ export type PlatformTenantSummary = {
 export type PlatformTenantSubscriptionSummary = {
   amount: number | null;
   billing_cycle: string | null;
+  commercial_reporting_excluded: boolean;
+  commercial_reporting_exclusion: "noncommercial_regression" | null;
   currency: string | null;
   current_period_end: string | null;
   payment_status: PlatformPaymentStatus | null;
