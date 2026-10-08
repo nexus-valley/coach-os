@@ -96,10 +96,12 @@ export async function getBillingSummary(tenantId: string) {
     billingDocuments,
     billingProfile,
     currentSubscriptionStatus,
-    planRecommendation: getPlanUpgradeRecommendation(
-      usageForRecommendation,
-      subscription?.plan_code,
-    ),
+    planRecommendation: subscription
+      ? getPlanUpgradeRecommendation(
+          usageForRecommendation,
+          subscription.plan_code,
+        )
+      : null,
     subscription,
   };
 }
