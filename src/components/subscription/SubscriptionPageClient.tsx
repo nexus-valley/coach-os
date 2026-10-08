@@ -41,6 +41,7 @@ import {
   getTenantSubscriptionLifecycle,
 } from "@/src/lib/subscriptionLifecycle";
 import {
+  deriveNoncommercialAccessPresentation,
   deriveSubscriptionLifecyclePresentation,
   getSubscriptionPlanRequestMode,
   type SubscriptionPlanRequestMode,
@@ -1359,6 +1360,104 @@ export function SubscriptionPageClient() {
   const planChoiceNeeded =
     lifecyclePresentation.state === "trial_expired" ||
     lifecyclePresentation.state === "subscription_required";
+  const noncommercialEvidence =
+    lifecycle?.storedStatus === "noncommercial" ||
+    assignment?.status === "noncommercial" ||
+    assignment?.source === "platform_noncommercial";
+
+  if (noncommercialEvidence) {
+    const noncommercialPresentation = deriveNoncommercialAccessPresentation(
+      operationalState,
+      lifecycleError !== null,
+    );
+    const activeNoncommercialAccess =
+      noncommercialPresentation.state === "active";
+
+    return (
+      <div className="mx-auto max-w-7xl">
+        <PageHeader
+          actions={
+            <Badge tone={activeNoncommercialAccess ? "success" : "warning"}>
+              {noncommercialPresentation.badge}
+            </Badge>
+          }
+          description={noncommercialPresentation.description}
+          eyebrow="CoachFort access"
+          title="Subscription"
+        />
+
+        <Card
+          className={
+            activeNoncommercialAccess
+              ? "mt-6 border-teal-400/30 bg-teal-400/10 p-6 text-teal-50"
+              : "mt-6 border-amber-400/30 bg-amber-400/10 p-6 text-amber-50"
+          }
+        >
+          <Badge tone={activeNoncommercialAccess ? "success" : "warning"}>
+            {noncommercialPresentation.badge}
+          </Badge>
+          <h2 className="mt-4 text-2xl font-semibold">
+            {noncommercialPresentation.title}
+          </h2>
+          <p className="mt-2 max-w-3xl text-sm leading-6 opacity-80">
+            {noncommercialPresentation.description}
+          </p>
+          <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <ReadOnlyField label="Workspace" value={tenant?.name ?? ""} />
+            <ReadOnlyField
+              label={noncommercialPresentation.planLabel}
+              value={currentPlanName ?? "Growth"}
+            />
+            <ReadOnlyField label="Billing required" value="No" />
+            <ReadOnlyField label="Renewal required" value="No" />
+            <ReadOnlyField
+              label="Workspace access"
+              value={noncommercialPresentation.workspaceAccess}
+            />
+          </div>
+        </Card>
+
+        <CanonicalEntitlementSummary
+          entitlement={canonicalEntitlementState}
+          error={canonicalEntitlementError}
+        />
+
+        <Card className="mt-6 border-white/10 bg-[#101214] p-6 text-white shadow-2xl shadow-black/10">
+          <h3 className="text-2xl font-semibold">Workspace usage</h3>
+          <p className="mt-2 text-sm leading-6 text-slate-400">
+            Current workspace usage compared with Growth product limits.
+          </p>
+          {!activeNoncommercialAccess ? (
+            <div className="mt-5 rounded-3xl border border-white/10 bg-[#15181b] p-5 text-sm text-slate-400" role="status">
+              {noncommercialPresentation.state === "unavailable"
+                ? "Usage is unavailable while workspace access status cannot be confirmed."
+                : "Usage is unavailable while workspace access is paused."}
+            </div>
+          ) : usageError || !usage ? (
+            <div className="mt-5 rounded-3xl border border-amber-400/30 bg-amber-400/10 p-5 text-sm text-amber-100" role="status">
+              Workspace usage is temporarily unavailable. No usage totals have been substituted.
+            </div>
+          ) : usageLimits.length === 0 ? (
+            <div className="mt-5 rounded-3xl border border-white/10 bg-[#15181b] p-5 text-sm text-slate-400" role="status">
+              Usage limits are not available for this product access.
+            </div>
+          ) : (
+            <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {usageLimits.map(({ limit, resource }) => (
+                <UsageCard
+                  key={resource}
+                  limit={canonicalResourceLimit(limit.limit_value)}
+                  resource={resource}
+                  used={usage[resource]}
+                  warning={warningResources.has(resource)}
+                />
+              ))}
+            </div>
+          )}
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-7xl">

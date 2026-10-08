@@ -32,6 +32,10 @@ import {
   type PlatformTenantSummary,
 } from "@/src/lib/platform";
 import {
+  derivePlatformTenantCommercialControlState,
+  isPlatformCommercialReportingExcluded,
+} from "@/src/lib/platformCommercialControlState";
+import {
   platformBillingCurrencies,
   type PlatformBillingCurrency,
   type PlatformBillingReadiness,
@@ -101,6 +105,7 @@ type SubscriptionStatusFilter =
   | "active"
   | "all"
   | "cancelled"
+  | "noncommercial"
   | "not_set"
   | "past_due"
   | "suspended"
@@ -269,6 +274,12 @@ function statusTone(value: string | null | undefined) {
   }
 
   return "light" as const;
+}
+
+function platformSubscriptionStatus(tenant: PlatformTenantSummary) {
+  return isPlatformCommercialReportingExcluded(tenant.subscription)
+    ? "noncommercial"
+    : tenant.subscription.status ?? "not_set";
 }
 
 function numberOrNull(value: string) {
@@ -534,6 +545,8 @@ export function PlatformOwnerConsolePage() {
   const [saving, setSaving] = useState(false);
   const [selectedTenantDetail, setSelectedTenantDetail] =
     useState<PlatformTenantDetail | null>(null);
+  const [selectedTenantDetailLoading, setSelectedTenantDetailLoading] =
+    useState(false);
   const [selectedTenantId, setSelectedTenantId] = useState<string | null>(null);
   const [sort, setSort] = useState<TenantSort>("newest");
   const [statusFilter, setStatusFilter] = useState<SubscriptionStatusFilter>("all");
@@ -548,6 +561,7 @@ export function PlatformOwnerConsolePage() {
     useState<UpgradeRequestStatusFilter>("all");
   const [upgradeRequestsTenantOnly, setUpgradeRequestsTenantOnly] = useState(false);
   const initialLoadStarted = useRef(false);
+  const selectedTenantIdRef = useRef<string | null>(null);
 
   const totalTeamMembers = useMemo(
     () =>
@@ -560,8 +574,10 @@ export function PlatformOwnerConsolePage() {
 
     return [...tenants]
       .filter((tenant) => {
-        const subscriptionStatus = tenant.subscription.status ?? "not_set";
-        const paymentStatus = tenant.subscription.payment_status ?? "not_set";
+        const subscriptionStatus = platformSubscriptionStatus(tenant);
+        const paymentStatus = isPlatformCommercialReportingExcluded(tenant.subscription)
+          ? "not_required"
+          : tenant.subscription.payment_status ?? "not_set";
         const matchesQuery =
           !normalizedQuery ||
           tenant.name.toLowerCase().includes(normalizedQuery) ||
@@ -595,6 +611,22 @@ export function PlatformOwnerConsolePage() {
     [selectedTenantId, tenants],
   );
 
+  const beginTenantSelection = useCallback((tenantId: string | null) => {
+    selectedTenantIdRef.current = tenantId;
+    setSelectedTenantId(tenantId);
+    setSelectedTenantDetail(null);
+    setSelectedTenantDetailLoading(tenantId !== null);
+    setSubscriptionForm(buildSubscriptionForm(null));
+    setCanonicalEntitlementState(null);
+    setCanonicalEntitlementError(null);
+    setCanonicalAssignmentForm(emptyCanonicalAssignmentForm);
+    setCanonicalAssignmentConfirmed(false);
+    setCanonicalAssignmentError(null);
+    setBillingReadiness(null);
+    setBillingReadinessError(null);
+    setBillingReadinessLoading(false);
+  }, []);
+
   const loadCanonicalEntitlements = useCallback(async (tenantId: string | null) => {
     setCanonicalEntitlementError(null);
 
@@ -603,6 +635,9 @@ export function PlatformOwnerConsolePage() {
         getPlatformPlanCatalog(),
         tenantId ? getTenantEntitlementState(tenantId) : Promise.resolve(null),
       ]);
+      if (tenantId && selectedTenantIdRef.current !== tenantId) {
+        return null;
+      }
       setCanonicalPlanCatalog(catalogData);
       setCanonicalEntitlementState(entitlementData);
       setCanonicalAssignmentForm(buildCanonicalAssignmentForm(entitlementData));
@@ -610,6 +645,9 @@ export function PlatformOwnerConsolePage() {
       setCanonicalAssignmentError(null);
       return entitlementData;
     } catch (error) {
+      if (tenantId && selectedTenantIdRef.current !== tenantId) {
+        return null;
+      }
       setCanonicalEntitlementState(null);
       setCanonicalAssignmentForm(emptyCanonicalAssignmentForm);
       setCanonicalAssignmentConfirmed(false);
@@ -639,13 +677,16 @@ export function PlatformOwnerConsolePage() {
       setBillingReadiness(null);
       setBillingReadinessLoading(true);
       try {
-        setBillingReadiness(
-          await getPlatformBillingReadiness(tenantId, currency),
-        );
+        const readiness = await getPlatformBillingReadiness(tenantId, currency);
+        if (selectedTenantIdRef.current !== tenantId) return;
+        setBillingReadiness(readiness);
       } catch {
+        if (selectedTenantIdRef.current !== tenantId) return;
         setBillingReadinessError("Billing readiness could not be checked.");
       } finally {
-        setBillingReadinessLoading(false);
+        if (selectedTenantIdRef.current === tenantId) {
+          setBillingReadinessLoading(false);
+        }
       }
     },
     [],
@@ -680,8 +721,14 @@ export function PlatformOwnerConsolePage() {
               : (status as PlatformUpgradeRequestStatus),
           tenantId: tenantOnly ? tenantId : null,
         });
+        if (tenantOnly && tenantId && selectedTenantIdRef.current !== tenantId) {
+          return;
+        }
         setUpgradeRequests(requests);
       } catch (error) {
+        if (tenantOnly && tenantId && selectedTenantIdRef.current !== tenantId) {
+          return;
+        }
         setUpgradeRequests([]);
         setUpgradeRequestError(normalizePlatformError(error));
       }
@@ -691,13 +738,18 @@ export function PlatformOwnerConsolePage() {
 
   const loadTenantDetail = useCallback(async (tenantId: string) => {
     const detail = await getPlatformTenantDetail(tenantId);
+    if (selectedTenantIdRef.current !== tenantId) {
+      return null;
+    }
     setSelectedTenantDetail(detail);
     setSubscriptionForm(buildSubscriptionForm(detail));
+    return detail;
   }, []);
 
   const loadPlatform = useCallback(async () => {
     setActionError(null);
     setLoading(true);
+    let requestedTenantId: string | null = null;
 
     try {
       const context = await getPlatformAdminContext();
@@ -707,7 +759,7 @@ export function PlatformOwnerConsolePage() {
         setDashboard(null);
         setTenants([]);
         setPlans([]);
-        setSelectedTenantDetail(null);
+        beginTenantSelection(null);
         setCanonicalPlanCatalog([]);
         setCanonicalEntitlementState(null);
         setCanonicalEntitlementError(null);
@@ -729,11 +781,10 @@ export function PlatformOwnerConsolePage() {
         selectedTenantId && tenantData.some((tenant) => tenant.id === selectedTenantId)
           ? selectedTenantId
           : tenantData[0]?.id ?? null;
-      setSelectedTenantId(nextTenantId);
+      requestedTenantId = nextTenantId;
+      beginTenantSelection(nextTenantId);
 
-      if (nextTenantId) {
-        await loadTenantDetail(nextTenantId);
-      }
+      const detail = nextTenantId ? await loadTenantDetail(nextTenantId) : null;
       const [entitlement] = await Promise.all([
         loadCanonicalEntitlements(nextTenantId),
         loadUpgradeRequests({
@@ -745,17 +796,30 @@ export function PlatformOwnerConsolePage() {
       ]);
       const readinessCurrency = getBillingReadinessCurrency(entitlement);
       setBillingReadinessCurrency(readinessCurrency);
-      await loadBillingReadiness({
-        currency: readinessCurrency,
-        role: context.role,
-        tenantId: nextTenantId,
-      });
+      if (isPlatformCommercialReportingExcluded(detail?.subscription)) {
+        setBillingReadiness(null);
+        setBillingReadinessError(null);
+        setBillingReadinessLoading(false);
+      } else {
+        await loadBillingReadiness({
+          currency: readinessCurrency,
+          role: context.role,
+          tenantId: nextTenantId,
+        });
+      }
     } catch (error) {
       setActionError(normalizePlatformError(error));
     } finally {
+      if (
+        requestedTenantId !== null &&
+        selectedTenantIdRef.current === requestedTenantId
+      ) {
+        setSelectedTenantDetailLoading(false);
+      }
       setLoading(false);
     }
   }, [
+    beginTenantSelection,
     loadCanonicalEntitlements,
     loadBillingReadiness,
     loadTenantDetail,
@@ -773,10 +837,10 @@ export function PlatformOwnerConsolePage() {
 
   const handleSelectTenant = async (tenantId: string) => {
     setActionError(null);
-    setSelectedTenantId(tenantId);
+    beginTenantSelection(tenantId);
 
     try {
-      const [, entitlement] = await Promise.all([
+      const [detail, entitlement] = await Promise.all([
         loadTenantDetail(tenantId),
         loadCanonicalEntitlements(tenantId),
         loadUpgradeRequests({
@@ -786,21 +850,44 @@ export function PlatformOwnerConsolePage() {
           tenantOnly: upgradeRequestsTenantOnly,
         }),
       ]);
+      if (selectedTenantIdRef.current !== tenantId || !detail) return;
       const readinessCurrency = getBillingReadinessCurrency(entitlement);
       setBillingReadinessCurrency(readinessCurrency);
-      await loadBillingReadiness({
-        currency: readinessCurrency,
-        role: adminContext?.role,
-        tenantId,
-      });
+      if (isPlatformCommercialReportingExcluded(detail.subscription)) {
+        setBillingReadiness(null);
+        setBillingReadinessError(null);
+        setBillingReadinessLoading(false);
+      } else {
+        await loadBillingReadiness({
+          currency: readinessCurrency,
+          role: adminContext?.role,
+          tenantId,
+        });
+      }
     } catch (error) {
-      setActionError(normalizePlatformError(error));
+      if (selectedTenantIdRef.current === tenantId) {
+        setActionError(normalizePlatformError(error));
+      }
+    } finally {
+      if (selectedTenantIdRef.current === tenantId) {
+        setSelectedTenantDetailLoading(false);
+      }
     }
   };
 
   const handleBillingReadinessCurrencyChange = (
     currency: PlatformBillingCurrency,
   ) => {
+    const selectionState = derivePlatformTenantCommercialControlState({
+      detail: selectedTenantDetail,
+      detailLoading: selectedTenantDetailLoading,
+      directorySubscription: selectedTenant?.subscription,
+      selectedTenantId,
+    });
+    if (!selectionState.commercialControlsReady) {
+      return;
+    }
+
     setBillingReadinessCurrency(currency);
     void loadBillingReadiness({
       currency,
@@ -1082,6 +1169,15 @@ export function PlatformOwnerConsolePage() {
     );
   }
 
+  const selectedTenantControlState = derivePlatformTenantCommercialControlState({
+    detail: selectedTenantDetail,
+    detailLoading: selectedTenantDetailLoading,
+    directorySubscription: selectedTenant?.subscription,
+    selectedTenantId,
+  });
+  const commercialTenantControlsReady =
+    selectedTenantControlState.commercialControlsReady;
+
   return (
     <main className="min-h-screen bg-[#F6FAFC] text-[#0B1F33]">
       <div className="mx-auto flex max-w-7xl flex-col gap-6 p-4 sm:p-6">
@@ -1131,7 +1227,7 @@ export function PlatformOwnerConsolePage() {
               selectedTenantName={selectedTenant?.name}
             />
 
-            {canManagePlans(adminContext.role) ? (
+            {canManagePlans(adminContext.role) && commercialTenantControlsReady ? (
               <BillingReadinessPanel
                 currency={billingReadinessCurrency}
                 error={billingReadinessError}
@@ -1157,23 +1253,25 @@ export function PlatformOwnerConsolePage() {
               selectedTenantName={selectedTenant?.name}
             />
 
-            <CanonicalAssignmentControlsPanel
-              adminRole={adminContext.role}
-              catalog={canonicalPlanCatalog}
-              confirmed={canonicalAssignmentConfirmed}
-              detail={selectedTenantDetail}
-              entitlement={canonicalEntitlementState}
-              error={canonicalAssignmentError}
-              form={canonicalAssignmentForm}
-              saving={saving}
-              selectedTenantId={selectedTenantId}
-              selectedTenantName={selectedTenant?.name}
-              setConfirmed={setCanonicalAssignmentConfirmed}
-              setForm={setCanonicalAssignmentForm}
-              onSave={handleSaveCanonicalAssignment}
-            />
+            {commercialTenantControlsReady ? (
+              <CanonicalAssignmentControlsPanel
+                adminRole={adminContext.role}
+                catalog={canonicalPlanCatalog}
+                confirmed={canonicalAssignmentConfirmed}
+                detail={selectedTenantDetail}
+                entitlement={canonicalEntitlementState}
+                error={canonicalAssignmentError}
+                form={canonicalAssignmentForm}
+                saving={saving}
+                selectedTenantId={selectedTenantId}
+                selectedTenantName={selectedTenant?.name}
+                setConfirmed={setCanonicalAssignmentConfirmed}
+                setForm={setCanonicalAssignmentForm}
+                onSave={handleSaveCanonicalAssignment}
+              />
+            ) : null}
 
-            {canManagePlans(adminContext.role) ? (
+            {canManagePlans(adminContext.role) && commercialTenantControlsReady ? (
               <ManualActivationPanel
                 adminRole={adminContext.role}
                 canonicalPlanCatalog={canonicalPlanCatalog}
@@ -1192,38 +1290,42 @@ export function PlatformOwnerConsolePage() {
               />
             ) : null}
 
-            <UpgradeRequestReviewPanel
-              adminRole={adminContext.role}
-              error={upgradeRequestError}
-              requests={upgradeRequests}
-              selectedTenantId={selectedTenantId}
-              selectedTenantName={selectedTenant?.name}
-              saving={saving}
-              statusFilter={upgradeRequestStatusFilter}
-              tenantOnly={upgradeRequestsTenantOnly}
-              onReviewRequest={handleReviewUpgradeRequest}
-              onStatusFilterChange={handleUpgradeRequestStatusFilterChange}
-              onTenantOnlyChange={handleUpgradeRequestTenantFilterChange}
-              onRefresh={() =>
-                void loadUpgradeRequests({
-                  role: adminContext.role,
-                  status: upgradeRequestStatusFilter,
-                  tenantId: selectedTenantId,
-                  tenantOnly: upgradeRequestsTenantOnly,
-                })
-              }
-            />
+            {commercialTenantControlsReady ? (
+              <UpgradeRequestReviewPanel
+                adminRole={adminContext.role}
+                error={upgradeRequestError}
+                requests={upgradeRequests}
+                selectedTenantId={selectedTenantId}
+                selectedTenantName={selectedTenant?.name}
+                saving={saving}
+                statusFilter={upgradeRequestStatusFilter}
+                tenantOnly={upgradeRequestsTenantOnly}
+                onReviewRequest={handleReviewUpgradeRequest}
+                onStatusFilterChange={handleUpgradeRequestStatusFilterChange}
+                onTenantOnlyChange={handleUpgradeRequestTenantFilterChange}
+                onRefresh={() =>
+                  void loadUpgradeRequests({
+                    role: adminContext.role,
+                    status: upgradeRequestStatusFilter,
+                    tenantId: selectedTenantId,
+                    tenantOnly: upgradeRequestsTenantOnly,
+                  })
+                }
+              />
+            ) : null}
 
-            <SubscriptionPanel
-              adminRole={adminContext.role}
-              form={subscriptionForm}
-              plans={plans}
-              saving={saving}
-              selectedTenantId={selectedTenantId}
-              setForm={setSubscriptionForm}
-              onCaptureUsage={handleCaptureUsage}
-              onSave={handleSaveSubscription}
-            />
+            {commercialTenantControlsReady ? (
+              <SubscriptionPanel
+                adminRole={adminContext.role}
+                form={subscriptionForm}
+                plans={plans}
+                saving={saving}
+                selectedTenantId={selectedTenantId}
+                setForm={setSubscriptionForm}
+                onCaptureUsage={handleCaptureUsage}
+                onSave={handleSaveSubscription}
+              />
+            ) : null}
 
             <div className="grid gap-6 lg:grid-cols-2">
               <SupportNotesPanel
@@ -1385,7 +1487,7 @@ function TenantDirectory({
             onChange={(value) => setStatusFilter(value as SubscriptionStatusFilter)}
             value={statusFilter}
           >
-            {["all", "not_set", ...subscriptionStatuses].map((status) => (
+            {["all", "noncommercial", "not_set", ...subscriptionStatuses].map((status) => (
               <option key={status} value={status}>
                 {formatLabel(status)}
               </option>
@@ -1439,12 +1541,21 @@ function TenantDirectory({
                   <p className="truncate text-sm text-[#5D7185]">/{tenant.slug}</p>
                 </div>
                 <div className="flex shrink-0 flex-col items-end gap-2">
-                  <Badge tone={statusTone(tenant.subscription.status)}>
-                    {formatLabel(tenant.subscription.status)}
-                  </Badge>
-                  <Badge tone={statusTone(tenant.subscription.payment_status)}>
-                    {formatLabel(tenant.subscription.payment_status)}
-                  </Badge>
+                  {isPlatformCommercialReportingExcluded(tenant.subscription) ? (
+                    <>
+                      <Badge tone="admin">Regression workspace</Badge>
+                      <Badge tone="success">No billing required</Badge>
+                    </>
+                  ) : (
+                    <>
+                      <Badge tone={statusTone(tenant.subscription.status)}>
+                        {formatLabel(tenant.subscription.status)}
+                      </Badge>
+                      <Badge tone={statusTone(tenant.subscription.payment_status)}>
+                        {formatLabel(tenant.subscription.payment_status)}
+                      </Badge>
+                    </>
+                  )}
                 </div>
               </div>
               <div className="mt-3 grid grid-cols-3 gap-2 text-xs text-[#5D7185]">
@@ -1453,7 +1564,11 @@ function TenantDirectory({
                 <span>{tenant.team_members_count} team</span>
               </div>
               <div className="mt-3 flex flex-wrap gap-2 text-xs text-[#5D7185]">
-                <span>Plan: {tenant.subscription.plan_name ?? "Not set"}</span>
+                <span>
+                  {isPlatformCommercialReportingExcluded(tenant.subscription)
+                    ? "Noncommercial Growth plan"
+                    : `Plan: ${tenant.subscription.plan_name ?? "Not set"}`}
+                </span>
                 <span>Last activity: {toDisplayDate(tenant.last_activity_at)}</span>
               </div>
             </button>
@@ -1481,6 +1596,10 @@ function TenantDetailPanel({
     );
   }
 
+  const commercialReportingExcluded = isPlatformCommercialReportingExcluded(
+    detail.subscription,
+  );
+
   return (
     <Card className="p-5">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -1496,12 +1615,21 @@ function TenantDetailPanel({
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Badge tone={statusTone(detail.subscription.status)}>
-            {formatLabel(detail.subscription.status)}
-          </Badge>
-          <Badge tone={statusTone(detail.subscription.payment_status)}>
-            {formatLabel(detail.subscription.payment_status)}
-          </Badge>
+          {commercialReportingExcluded ? (
+            <>
+              <Badge tone="admin">Regression workspace</Badge>
+              <Badge tone="success">No billing required</Badge>
+            </>
+          ) : (
+            <>
+              <Badge tone={statusTone(detail.subscription.status)}>
+                {formatLabel(detail.subscription.status)}
+              </Badge>
+              <Badge tone={statusTone(detail.subscription.payment_status)}>
+                {formatLabel(detail.subscription.payment_status)}
+              </Badge>
+            </>
+          )}
         </div>
       </div>
 
@@ -1513,36 +1641,50 @@ function TenantDetailPanel({
       </div>
 
       <div className="mt-5 grid gap-4 lg:grid-cols-2">
-        <InfoPanel title="Subscription">
-          <InfoRow label="Plan" value={detail.subscription.plan_name ?? "Not set"} />
-          <InfoRow label="Billing cycle" value={formatLabel(detail.subscription.billing_cycle)} />
-          <InfoRow
-            label="Amount"
-            value={toCurrency(
-              detail.subscription.amount,
-              detail.subscription.currency ?? "INR",
-            )}
-          />
-          <InfoRow
-            label="Current period starts"
-            value={toDisplayDate(detail.subscription.current_period_start)}
-          />
-          <InfoRow label="Trial ends" value={toDisplayDate(detail.subscription.trial_ends_at)} />
-          <InfoRow
-            label="Current period ends"
-            value={toDisplayDate(detail.subscription.current_period_end)}
-          />
-          <InfoRow
-            label="Billing notes"
-            value={detail.subscription.notes_present ? "Present" : "Not set"}
-          />
-          <div className="mt-3 rounded-2xl border border-[#D8E8F0] bg-[#F6FAFD] p-3 text-xs leading-5 text-[#5D7185]">
-            Manual activation payment reference, idempotency key, and operator
-            note are not exposed in this tenant detail response yet. For paid
-            customers, verify period dates here and keep the external activation
-            record until audit/reference fields are added to the platform UI.
-          </div>
-        </InfoPanel>
+        {commercialReportingExcluded ? (
+          <InfoPanel title="Noncommercial regression">
+            <InfoRow label="Plan" value="Growth" />
+            <InfoRow label="Billing required" value="No" />
+            <InfoRow label="Renewal required" value="No" />
+            <InfoRow label="Commercial reporting" value="Excluded" />
+            <p className="mt-3 rounded-2xl border border-[#BFDBFE] bg-[#EFF6FF] p-3 text-xs leading-5 text-[#1E40AF]">
+              This durable classification excludes commercial reporting and
+              commercial mutation controls. Current workspace access is determined
+              separately by canonical lifecycle authority.
+            </p>
+          </InfoPanel>
+        ) : (
+          <InfoPanel title="Subscription">
+            <InfoRow label="Plan" value={detail.subscription.plan_name ?? "Not set"} />
+            <InfoRow label="Billing cycle" value={formatLabel(detail.subscription.billing_cycle)} />
+            <InfoRow
+              label="Amount"
+              value={toCurrency(
+                detail.subscription.amount,
+                detail.subscription.currency ?? "INR",
+              )}
+            />
+            <InfoRow
+              label="Current period starts"
+              value={toDisplayDate(detail.subscription.current_period_start)}
+            />
+            <InfoRow label="Trial ends" value={toDisplayDate(detail.subscription.trial_ends_at)} />
+            <InfoRow
+              label="Current period ends"
+              value={toDisplayDate(detail.subscription.current_period_end)}
+            />
+            <InfoRow
+              label="Billing notes"
+              value={detail.subscription.notes_present ? "Present" : "Not set"}
+            />
+            <div className="mt-3 rounded-2xl border border-[#D8E8F0] bg-[#F6FAFD] p-3 text-xs leading-5 text-[#5D7185]">
+              Manual activation payment reference, idempotency key, and operator
+              note are not exposed in this tenant detail response yet. For paid
+              customers, verify period dates here and keep the external activation
+              record until audit/reference fields are added to the platform UI.
+            </div>
+          </InfoPanel>
+        )}
 
         <InfoPanel title="Latest Usage Snapshot">
           {detail.latest_usage_snapshot ? (

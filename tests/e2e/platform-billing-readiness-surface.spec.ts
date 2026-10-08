@@ -104,7 +104,9 @@ test.describe("UX-8G4B1B Platform billing readiness surface", () => {
     expect(route).toContain("403");
     expect(route).toContain("401");
     expect(route).not.toContain('.from("tenant_members")');
-    expect(consolePage).toContain("canManagePlans(adminContext.role) ? (");
+    expect(consolePage).toContain(
+      "canManagePlans(adminContext.role) && commercialTenantControlsReady ? (",
+    );
     expect(consolePage).toContain("<BillingReadinessPanel");
   });
 

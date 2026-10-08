@@ -26,6 +26,7 @@ export type SubscriptionLifecyclePresentationState =
   | "expired_paid"
   | "grace"
   | "needs_attention"
+  | "noncommercial"
   | "subscription_required"
   | "trial_active"
   | "trial_expired";
@@ -41,6 +42,59 @@ export type SubscriptionLifecyclePresentation = {
   state: SubscriptionLifecyclePresentationState;
   title: string;
 };
+
+export type NoncommercialAccessPresentationState =
+  | "active"
+  | "inactive"
+  | "unavailable";
+
+export type NoncommercialAccessPresentation = {
+  badge: string;
+  description: string;
+  planLabel: string;
+  state: NoncommercialAccessPresentationState;
+  title: string;
+  workspaceAccess: string;
+};
+
+export function deriveNoncommercialAccessPresentation(
+  operationalState: TenantOperationalState | null,
+  lifecycleUnavailable = false,
+): NoncommercialAccessPresentation {
+  if (lifecycleUnavailable || !operationalState) {
+    return {
+      badge: "Regression access status unavailable",
+      description:
+        "Current workspace access could not be confirmed. No commercial billing action is available.",
+      planLabel: "Regression plan",
+      state: "unavailable",
+      title: "Growth plan retained for regression record",
+      workspaceAccess: "Unavailable",
+    };
+  }
+
+  if (!operationalState.operationalAllowed) {
+    return {
+      badge: "Regression access inactive",
+      description:
+        "This workspace retains its noncommercial regression record, but current workspace access is paused. No billing or renewal is required.",
+      planLabel: "Regression plan",
+      state: "inactive",
+      title: "Growth plan retained for regression record",
+      workspaceAccess: "Paused",
+    };
+  }
+
+  return {
+    badge: "Regression access",
+    description:
+      "This workspace has Growth product access with no billing or renewal required.",
+    planLabel: "Product access",
+    state: "active",
+    title: "Growth product access",
+    workspaceAccess: "Available",
+  };
+}
 
 export type SubscriptionPlanRequestMode = "change" | "selection";
 
@@ -121,6 +175,19 @@ function presentation(
         secondaryActionLabel: null,
         state,
         title: "Workspace active",
+      };
+    case "noncommercial":
+      return {
+        accessThrough: null,
+        badge: "Regression access",
+        description:
+          "Your workspace has Growth product access with no billing or renewal required.",
+        primaryActionHref: null,
+        primaryActionLabel: null,
+        secondaryActionHref: null,
+        secondaryActionLabel: null,
+        state,
+        title: "Regression access",
       };
     case "trial_active":
       return {
@@ -210,6 +277,10 @@ export function deriveSubscriptionLifecyclePresentation(
   }
 
   if (operationalState.operationalAllowed) {
+    if (lifecycle?.storedStatus === "noncommercial") {
+      return presentation("noncommercial");
+    }
+
     if (lifecycle?.storedStatus === "trial") {
       return presentation("trial_active", lifecycle.trialEndsAt);
     }
@@ -243,7 +314,7 @@ export function deriveSubscriptionLifecyclePresentation(
 export function isInactiveLifecycleState(
   state: SubscriptionLifecyclePresentationState,
 ) {
-  return !["active", "grace", "trial_active"].includes(state);
+  return !["active", "grace", "noncommercial", "trial_active"].includes(state);
 }
 
 export function getSubscriptionPlanRequestMode(
